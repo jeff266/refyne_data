@@ -1,0 +1,45 @@
+{
+  "name": "enrichment-switcher-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "worker:webhooks": "npx tsx scripts/start-webhook-worker.ts"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.1.0",
+    "@dnd-kit/sortable": "^8.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@supabase/supabase-js": "^2.105.4",
+    "bullmq": "^5.76.9",
+    "chrono-node": "^2.9.1",
+    "ioredis": "^5.10.1",
+    "jsonata": "^2.2.0",
+    "lucide-react": "^0.378.0",
+    "next": "14.2.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^3.8.1",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/jsonata": "^1.3.1",
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.2",
+    "@types/react-dom": "^18.3.0",
+    "@vitest/coverage-v8": "^4.1.6",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "puppeteer": "^25.0.2",
+    "tailwindcss": "^3.4.3",
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.6"
+  }
+}
