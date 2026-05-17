@@ -70,15 +70,22 @@ async function testComplianceScanWithIndex(companyIndex: CompanyIndex): Promise<
 
     // Store score history if Supabase configured
     if (isSupabaseConfigured() && supabase) {
-      const compliantPercentage = Math.round((fieldsProcessed / (recordsScanned * COMPANY_FIELDS.length)) * 100);
-      await supabase.from('compliance_score_history').upsert({
+      const totalFields = recordsScanned * COMPANY_FIELDS.length;
+      const compliantPercentage = Math.round((fieldsProcessed / totalFields) * 100);
+      const { error } = await supabase.from('compliance_score_history').insert({
         org_id: ORG_ID,
         score: compliantPercentage,
-        records_scanned: recordsScanned,
-        fields_processed: fieldsProcessed,
-        created_at: new Date().toISOString(),
-      }, { onConflict: 'org_id,created_at' });
-      console.log(`✓ Score written to compliance_score_history: ${compliantPercentage}%`);
+        compliant: fieldsProcessed,
+        stale: 0,
+        unprocessed: totalFields - fieldsProcessed,
+        total: totalFields,
+        computed_at: new Date().toISOString(),
+      });
+      if (error) {
+        console.warn(`⚠ Failed to write compliance score: ${error.message}`);
+      } else {
+        console.log(`✓ Score written to compliance_score_history: ${compliantPercentage}%`);
+      }
     }
 
     console.log(`✓ Processed ${fieldsProcessed} fields in ${durationMs}ms`);
