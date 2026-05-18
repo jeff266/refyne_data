@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build line items
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+    const lineItems = [
       { price: priceId, quantity: 1 },
     ];
 
