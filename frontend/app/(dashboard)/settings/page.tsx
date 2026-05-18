@@ -2,6 +2,7 @@
 
 import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, PrimaryBtn, GhostBtn } from '@/components/refyne';
+import { AlwaysOnSettings } from '@/components/always-on/AlwaysOnSettings';
 
 // TODO: wire to API - GET/PUT /api/settings
 export default function SettingsPage() {
@@ -10,6 +11,12 @@ export default function SettingsPage() {
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 4 }}>Settings</h1>
         <p style={{ fontSize: 13, color: C.text3 }}>Configure your Refyne workspace</p>
+      </div>
+
+      {/* Always On */}
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 16 }}>Always On</h2>
+        <AlwaysOnSettings />
       </div>
 
       {/* General Settings */}
