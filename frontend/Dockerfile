@@ -3,4 +3,4 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-CMD ["npx", "tsx", "scripts/start-digest-worker.ts"]
+CMD ["npx", "tsx", "--tsconfig", "tsconfig.json", "scripts/start-digest-worker.ts"]
