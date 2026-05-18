@@ -1,0 +1,97 @@
+# Phone Number Formatter
+# Formats phone numbers to standard international formats
+
+id: phone
+version: 1.0.0
+name: Phone Number Formatter
+description: Formats phone numbers to standard formats. US format +1 (XXX) XXX-XXXX, with international detection
+category: contact-fields
+author: revops-impact
+
+applies_to:
+  fields:
+    - company.phone
+    - person.phone
+    - person.mobile
+  entity: company
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: "null"
+
+  - id: already-formatted
+    description: Pass through already well-formatted numbers
+    when: $match(value, /^\+1 \(\d{3}\) \d{3}-\d{4}$/).matched
+    transform: value
+
+  - id: detect-uk
+    description: Detect and format UK numbers
+    when: |
+      (
+        $digits := $replace(value, /\D/, "");
+        $starts44 := $substring($digits, 0, 2) = "44";
+        $starts0 := $substring(value, 0, 1) = "0" and $length($digits) = 11;
+        $starts44 or $starts0
+      )
+    transform: $format_phone(value, "UK")
+
+  - id: format-us-default
+    description: Format as US number by default
+    transform: $format_phone(value, "US")
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string returns null
+    input: ""
+    expected: null
+
+  - name: Formats 10-digit US number
+    input: "4155551234"
+    expected: "+1 (415) 555-1234"
+
+  - name: Formats US number with country code
+    input: "14155551234"
+    expected: "+1 (415) 555-1234"
+
+  - name: Formats US number with dashes
+    input: "415-555-1234"
+    expected: "+1 (415) 555-1234"
+
+  - name: Formats US number with dots
+    input: "415.555.1234"
+    expected: "+1 (415) 555-1234"
+
+  - name: Formats US number with parentheses
+    input: "(415) 555-1234"
+    expected: "+1 (415) 555-1234"
+
+  - name: Passes through already formatted
+    input: "+1 (415) 555-1234"
+    expected: "+1 (415) 555-1234"
+
+  - name: Formats UK number with 44
+    input: "+44 20 7946 0958"
+    expected: "+44 20 7946 0958"
+
+  - name: Handles number with spaces
+    input: "415 555 1234"
+    expected: "+1 (415) 555-1234"
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - phone
+  - contact
+  - formatting

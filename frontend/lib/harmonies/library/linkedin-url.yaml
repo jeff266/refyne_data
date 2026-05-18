@@ -1,0 +1,207 @@
+# LinkedIn URL Normalizer
+# Extracts and normalizes LinkedIn URLs
+
+id: linkedin-url
+version: 1.0.0
+name: LinkedIn URL Normalizer
+description: Normalizes LinkedIn URLs, extracts company/person identifiers, and standardizes URL format
+category: social
+author: revops-impact
+
+applies_to:
+  fields:
+    - company.linkedin_url
+    - person.linkedin_url
+  entity: company
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: "null"
+
+  - id: not-linkedin
+    description: Return null for non-LinkedIn URLs
+    when: $not($contains($lowercase(value), "linkedin"))
+    transform: "null"
+
+  - id: parse-company-url
+    description: Parse LinkedIn company URLs
+    when: $contains($lowercase(value), "/company/")
+    transform: |
+      (
+        $lower := $lowercase($trim(value));
+        $match := $match($lower, /\/company\/([a-z0-9\-]+)/);
+        $identifier := $match ? $match.groups[0] : null;
+        $identifier ? {
+          "url": "https://www.linkedin.com/company/" & $identifier,
+          "type": "company",
+          "identifier": $identifier,
+          "is_valid": true
+        } : {
+          "url": $trim(value),
+          "type": "unknown",
+          "is_valid": false
+        }
+      )
+
+  - id: parse-school-url
+    description: Parse LinkedIn school URLs
+    when: $contains($lowercase(value), "/school/")
+    transform: |
+      (
+        $lower := $lowercase($trim(value));
+        $match := $match($lower, /\/school\/([a-z0-9\-]+)/);
+        $identifier := $match ? $match.groups[0] : null;
+        $identifier ? {
+          "url": "https://www.linkedin.com/school/" & $identifier,
+          "type": "school",
+          "identifier": $identifier,
+          "is_valid": true
+        } : {
+          "url": $trim(value),
+          "type": "unknown",
+          "is_valid": false
+        }
+      )
+
+  - id: parse-person-url
+    description: Parse LinkedIn person profile URLs
+    when: $contains($lowercase(value), "/in/")
+    transform: |
+      (
+        $lower := $lowercase($trim(value));
+        $match := $match($lower, /\/in\/([a-z0-9\-]+)/);
+        $identifier := $match ? $match.groups[0] : null;
+        $identifier ? {
+          "url": "https://www.linkedin.com/in/" & $identifier,
+          "type": "person",
+          "identifier": $identifier,
+          "is_valid": true
+        } : {
+          "url": $trim(value),
+          "type": "unknown",
+          "is_valid": false
+        }
+      )
+
+  - id: parse-sales-navigator
+    description: Handle Sales Navigator URLs
+    when: $contains($lowercase(value), "/sales/")
+    transform: |
+      (
+        $lower := $lowercase($trim(value));
+        $leadMatch := $match($lower, /\/lead\/([a-z0-9\-,]+)/);
+        $accountMatch := $match($lower, /\/account\/([a-z0-9\-,]+)/);
+        $type := $leadMatch ? "sales-nav-lead" : $accountMatch ? "sales-nav-account" : "sales-nav";
+        $identifier := $leadMatch ? $leadMatch.groups[0] : $accountMatch ? $accountMatch.groups[0] : null;
+        {
+          "url": $trim(value),
+          "type": $type,
+          "identifier": $identifier,
+          "is_sales_navigator": true,
+          "is_valid": $identifier != null
+        }
+      )
+
+  - id: default-linkedin
+    description: Default LinkedIn URL handling
+    transform: |
+      {
+        "url": $trim(value),
+        "type": "unknown",
+        "is_valid": false
+      }
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string returns null
+    input: ""
+    expected: null
+
+  - name: Non-LinkedIn URL returns null
+    input: "https://twitter.com/acme"
+    expected: null
+
+  - name: Parses company URL
+    input: "https://www.linkedin.com/company/acme-corp/"
+    expected:
+      url: "https://www.linkedin.com/company/acme-corp"
+      type: "company"
+      identifier: "acme-corp"
+      is_valid: true
+
+  - name: Parses company URL with query params
+    input: "https://linkedin.com/company/salesforce?trk=abc123"
+    expected:
+      url: "https://www.linkedin.com/company/salesforce"
+      type: "company"
+      identifier: "salesforce"
+      is_valid: true
+
+  - name: Parses person profile URL
+    input: "https://www.linkedin.com/in/john-doe-123456/"
+    expected:
+      url: "https://www.linkedin.com/in/john-doe-123456"
+      type: "person"
+      identifier: "john-doe-123456"
+      is_valid: true
+
+  - name: Parses school URL
+    input: "https://www.linkedin.com/school/stanford-university/"
+    expected:
+      url: "https://www.linkedin.com/school/stanford-university"
+      type: "school"
+      identifier: "stanford-university"
+      is_valid: true
+
+  - name: Handles Sales Navigator lead URL
+    input: "https://www.linkedin.com/sales/lead/ACwAAADx1234"
+    expected:
+      url: "https://www.linkedin.com/sales/lead/ACwAAADx1234"
+      type: "sales-nav-lead"
+      identifier: "acwaaadx1234"
+      is_sales_navigator: true
+      is_valid: true
+
+  - name: Normalizes URL casing
+    input: "HTTPS://WWW.LINKEDIN.COM/COMPANY/ACME"
+    expected:
+      url: "https://www.linkedin.com/company/acme"
+      type: "company"
+      identifier: "acme"
+      is_valid: true
+
+  - name: Handles URL without scheme
+    input: "linkedin.com/company/acme-corp"
+    expected:
+      url: "https://www.linkedin.com/company/acme-corp"
+      type: "company"
+      identifier: "acme-corp"
+      is_valid: true
+
+  - name: Handles URL with www but no scheme
+    input: "www.linkedin.com/company/acme-corp"
+    expected:
+      url: "https://www.linkedin.com/company/acme-corp"
+      type: "company"
+      identifier: "acme-corp"
+      is_valid: true
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - linkedin
+  - social
+  - url
+  - normalization

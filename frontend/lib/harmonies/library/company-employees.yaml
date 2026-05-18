@@ -1,0 +1,141 @@
+# Company Employee Count Normalizer
+# Parses employee count strings into numbers or ranges
+
+id: company-employees
+version: 1.0.0
+name: Company Employee Count Normalizer
+description: Parses employee counts from formats like "50-100", "~500", "500+" into numeric values or structured ranges
+category: firmographics
+author: revops-impact
+
+applies_to:
+  fields:
+    - company.employee_count
+    - company.employee_band
+  entity: company
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: "null"
+
+  - id: number-passthrough
+    description: Pass through numbers unchanged
+    when: $type(value) = "number"
+    transform: value
+
+  - id: parse-range
+    description: Parse range formats like "50-100" or "50 - 100"
+    when: $contains(value, "-") and $type(value) = "string"
+    transform: |
+      (
+        $parts := $split($replace(value, /[^0-9\-]/, "-"), "-");
+        $min := $number($parts[0]);
+        $max := $number($parts[$count($parts) - 1]);
+        $min != null and $max != null ? {
+          "min": $min,
+          "max": $max,
+          "midpoint": $floor(($min + $max) / 2)
+        } : $parse_number(value)
+      )
+
+  - id: parse-approximate
+    description: Parse approximate formats like "~500" or "approximately 500"
+    when: |
+      $type(value) = "string" and (
+        $contains(value, "~") or
+        $contains($lowercase(value), "approx") or
+        $contains($lowercase(value), "about")
+      )
+    transform: |
+      (
+        $cleaned := $replace(value, /[^0-9KkMm]/, "");
+        $parse_number($cleaned)
+      )
+
+  - id: parse-plus-format
+    description: Parse "500+" format as minimum
+    when: $contains(value, "+") and $type(value) = "string"
+    transform: |
+      (
+        $cleaned := $replace(value, /[^0-9KkMm]/, "");
+        $num := $parse_number($cleaned);
+        $num != null ? {
+          "min": $num,
+          "max": null,
+          "display": $string($num) & "+"
+        } : null
+      )
+
+  - id: parse-standard
+    description: Parse standard numeric formats
+    transform: $parse_number(value)
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string returns null
+    input: ""
+    expected: null
+
+  - name: Number passes through
+    input: 500
+    expected: 500
+
+  - name: Parses simple range
+    input: "50-100"
+    expected:
+      min: 50
+      max: 100
+      midpoint: 75
+
+  - name: Parses range with spaces
+    input: "100 - 500"
+    expected:
+      min: 100
+      max: 500
+      midpoint: 300
+
+  - name: Parses approximate with tilde
+    input: "~500"
+    expected: 500
+
+  - name: Parses plus format
+    input: "1000+"
+    expected:
+      min: 1000
+      max: null
+      display: "1000+"
+
+  - name: Parses comma-separated
+    input: "10,000"
+    expected: 10000
+
+  - name: Parses K abbreviation
+    input: "5K"
+    expected: 5000
+
+  - name: Handles band string
+    input: "501-1000"
+    expected:
+      min: 501
+      max: 1000
+      midpoint: 750
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - company
+  - employees
+  - firmographics
+  - headcount

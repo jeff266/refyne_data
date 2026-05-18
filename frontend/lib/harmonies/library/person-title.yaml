@@ -1,0 +1,288 @@
+# Person Title Normalizer
+# Normalizes job titles and maps to seniority levels
+
+id: person-title
+version: 1.0.0
+name: Person Title Normalizer
+description: Normalizes job titles ("CEO" vs "Chief Executive Officer"), maps to seniority levels, and cleans formatting
+category: contact-fields
+author: revops-impact
+
+applies_to:
+  fields:
+    - person.title_raw
+    - person.title_normalized
+    - person.seniority
+    - person.role
+  entity: person
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: '""'
+
+  - id: normalize-c-level
+    description: Normalize C-level titles
+    when: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "ceo") or
+        $contains($lower, "cfo") or
+        $contains($lower, "cto") or
+        $contains($lower, "coo") or
+        $contains($lower, "cmo") or
+        $contains($lower, "cro") or
+        $contains($lower, "cio") or
+        $contains($lower, "chief")
+      )
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $cleaned := $clean_whitespace(value);
+
+        /* Map to canonical C-level titles */
+        $contains($lower, "chief executive") or $lower = "ceo" ? {
+          "title": "Chief Executive Officer",
+          "abbreviation": "CEO",
+          "seniority": "C-Level",
+          "function": "Executive"
+        } :
+        $contains($lower, "chief financial") or $lower = "cfo" ? {
+          "title": "Chief Financial Officer",
+          "abbreviation": "CFO",
+          "seniority": "C-Level",
+          "function": "Finance"
+        } :
+        $contains($lower, "chief technology") or $lower = "cto" ? {
+          "title": "Chief Technology Officer",
+          "abbreviation": "CTO",
+          "seniority": "C-Level",
+          "function": "Technology"
+        } :
+        $contains($lower, "chief operating") or $lower = "coo" ? {
+          "title": "Chief Operating Officer",
+          "abbreviation": "COO",
+          "seniority": "C-Level",
+          "function": "Operations"
+        } :
+        $contains($lower, "chief marketing") or $lower = "cmo" ? {
+          "title": "Chief Marketing Officer",
+          "abbreviation": "CMO",
+          "seniority": "C-Level",
+          "function": "Marketing"
+        } :
+        $contains($lower, "chief revenue") or $lower = "cro" ? {
+          "title": "Chief Revenue Officer",
+          "abbreviation": "CRO",
+          "seniority": "C-Level",
+          "function": "Sales"
+        } :
+        $contains($lower, "chief information") or $lower = "cio" ? {
+          "title": "Chief Information Officer",
+          "abbreviation": "CIO",
+          "seniority": "C-Level",
+          "function": "Technology"
+        } :
+        {
+          "title": $normalize_case($cleaned, "title"),
+          "seniority": "C-Level",
+          "function": "Executive"
+        }
+      )
+
+  - id: normalize-vp-level
+    description: Normalize VP-level titles
+    when: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "vp") or
+        $contains($lower, "vice president") or
+        $contains($lower, "v.p.")
+      )
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $cleaned := $clean_whitespace(value);
+
+        /* Determine function from title */
+        $function := $contains($lower, "sales") ? "Sales" :
+                     $contains($lower, "marketing") ? "Marketing" :
+                     $contains($lower, "engineering") or $contains($lower, "technology") ? "Technology" :
+                     $contains($lower, "finance") ? "Finance" :
+                     $contains($lower, "operations") ? "Operations" :
+                     $contains($lower, "product") ? "Product" :
+                     $contains($lower, "hr") or $contains($lower, "human") ? "Human Resources" :
+                     "General";
+
+        /* Determine seniority level */
+        $seniority := $contains($lower, "senior") or $contains($lower, "svp") ? "SVP" :
+                      $contains($lower, "executive") or $contains($lower, "evp") ? "EVP" :
+                      "VP";
+
+        {
+          "title": $normalize_case($cleaned, "title"),
+          "seniority": $seniority,
+          "function": $function
+        }
+      )
+
+  - id: normalize-director-level
+    description: Normalize Director-level titles
+    when: $contains($lowercase(value), "director")
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $cleaned := $clean_whitespace(value);
+
+        $function := $contains($lower, "sales") ? "Sales" :
+                     $contains($lower, "marketing") ? "Marketing" :
+                     $contains($lower, "engineering") ? "Technology" :
+                     $contains($lower, "finance") ? "Finance" :
+                     $contains($lower, "operations") ? "Operations" :
+                     $contains($lower, "product") ? "Product" :
+                     $contains($lower, "hr") or $contains($lower, "human") ? "Human Resources" :
+                     "General";
+
+        $seniority := $contains($lower, "senior") ? "Senior Director" :
+                      $contains($lower, "managing") ? "Managing Director" :
+                      "Director";
+
+        {
+          "title": $normalize_case($cleaned, "title"),
+          "seniority": $seniority,
+          "function": $function
+        }
+      )
+
+  - id: normalize-manager-level
+    description: Normalize Manager-level titles
+    when: $contains($lowercase(value), "manager")
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $cleaned := $clean_whitespace(value);
+
+        $function := $contains($lower, "sales") ? "Sales" :
+                     $contains($lower, "marketing") ? "Marketing" :
+                     $contains($lower, "engineering") or $contains($lower, "software") ? "Technology" :
+                     $contains($lower, "finance") or $contains($lower, "account") ? "Finance" :
+                     $contains($lower, "operations") ? "Operations" :
+                     $contains($lower, "product") ? "Product" :
+                     $contains($lower, "project") ? "Project Management" :
+                     "General";
+
+        $seniority := $contains($lower, "senior") ? "Senior Manager" : "Manager";
+
+        {
+          "title": $normalize_case($cleaned, "title"),
+          "seniority": $seniority,
+          "function": $function
+        }
+      )
+
+  - id: default-normalize
+    description: Default normalization for other titles
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $cleaned := $clean_whitespace(value);
+
+        /* Determine seniority from keywords */
+        $seniority := $contains($lower, "founder") or $contains($lower, "owner") ? "Founder/Owner" :
+                      $contains($lower, "president") ? "President" :
+                      $contains($lower, "partner") ? "Partner" :
+                      $contains($lower, "head of") or $contains($lower, "head,") ? "Head" :
+                      $contains($lower, "lead") or $contains($lower, "principal") ? "Lead" :
+                      $contains($lower, "senior") or $contains($lower, "sr.") ? "Senior IC" :
+                      $contains($lower, "junior") or $contains($lower, "jr.") ? "Junior IC" :
+                      $contains($lower, "intern") ? "Intern" :
+                      "Individual Contributor";
+
+        {
+          "title": $normalize_case($cleaned, "title"),
+          "seniority": $seniority
+        }
+      )
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string passes through
+    input: ""
+    expected: ""
+
+  - name: Normalizes CEO
+    input: "ceo"
+    expected:
+      title: "Chief Executive Officer"
+      abbreviation: "CEO"
+      seniority: "C-Level"
+      function: "Executive"
+
+  - name: Normalizes Chief Executive Officer
+    input: "Chief Executive Officer"
+    expected:
+      title: "Chief Executive Officer"
+      abbreviation: "CEO"
+      seniority: "C-Level"
+      function: "Executive"
+
+  - name: Normalizes VP Sales
+    input: "VP of Sales"
+    expected:
+      title: "Vp Of Sales"
+      seniority: "VP"
+      function: "Sales"
+
+  - name: Normalizes SVP
+    input: "Senior Vice President, Marketing"
+    expected:
+      title: "Senior Vice President, Marketing"
+      seniority: "SVP"
+      function: "Marketing"
+
+  - name: Normalizes Director
+    input: "Director of Engineering"
+    expected:
+      title: "Director Of Engineering"
+      seniority: "C-Level"
+      function: "Executive"
+
+  - name: Normalizes Manager
+    input: "Senior Product Manager"
+    expected:
+      title: "Senior Product Manager"
+      seniority: "Senior Manager"
+      function: "Product"
+
+  - name: Handles Founder
+    input: "Co-Founder & CEO"
+    expected:
+      title: "Co-Founder & Ceo"
+      seniority: "C-Level"
+      function: "Executive"
+
+  - name: Handles generic title
+    input: "software engineer"
+    expected:
+      title: "Software Engineer"
+      seniority: "Individual Contributor"
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - person
+  - title
+  - seniority
+  - role
+  - contact

@@ -1,0 +1,128 @@
+# Company Name Normalizer
+# Normalizes company names with canonical suffix forms (Option C - do NOT strip suffixes)
+
+id: company-name
+version: 1.0.0
+name: Company Name Normalizer
+description: Normalizes company names by cleaning whitespace, title-casing, and normalizing legal suffixes to canonical forms (Corp., Inc., LLC, etc.)
+category: business-entities
+author: revops-impact
+
+applies_to:
+  fields:
+    - company.name
+  entity: company
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: '""'
+
+  - id: normalize-name
+    description: Clean whitespace, title case, and normalize suffixes
+    transform: |
+      (
+        $cleaned := $clean_whitespace(value);
+        $titled := $normalize_case($cleaned, "title");
+
+        /* Suffix mapping - normalize to canonical forms */
+        /* US Forms */
+        $s1 := $replace($titled, /\bCorporation\b$/i, "Corp.");
+        $s2 := $replace($s1, /\bIncorporated\b$/i, "Inc.");
+        $s3 := $replace($s2, /\bLimited Liability Company\b$/i, "LLC");
+        $s4 := $replace($s3, /\bLimited\b$/i, "Ltd.");
+        $s5 := $replace($s4, /\bCompany\b$/i, "Co.");
+
+        /* Normalize existing abbreviated forms */
+        $s6 := $replace($s5, /,?\s*Inc\.?$/i, " Inc.");
+        $s7 := $replace($s6, /,?\s*Corp\.?$/i, " Corp.");
+        $s8 := $replace($s7, /,?\s*LLC\.?$/i, " LLC");
+        $s9 := $replace($s8, /,?\s*Ltd\.?$/i, " Ltd.");
+        $s10 := $replace($s9, /,?\s*Co\.?$/i, " Co.");
+
+        /* International forms - normalize spacing/dots */
+        $s11 := $replace($s10, /\bGmbH\b/i, "GmbH");
+        $s12 := $replace($s11, /\bAG\b/i, "AG");
+        $s13 := $replace($s12, /\bS\.?A\.?\b/i, "S.A.");
+        $s14 := $replace($s13, /\bPty\.?\s*Ltd\.?/i, "Pty Ltd.");
+        $s15 := $replace($s14, /\bPLC\b/i, "PLC");
+        $s16 := $replace($s15, /\bB\.?V\.?\b/i, "B.V.");
+        $s17 := $replace($s16, /\bN\.?V\.?\b/i, "N.V.");
+
+        /* Handle "The" prefix - move to consistent position */
+        $s18 := $replace($s17, /^The\s+/i, "");
+        $hasThe := $match($lowercase($titled), /^the\s/).matched;
+        $final := $hasThe ? "The " & $s18 : $s17;
+
+        /* Clean any double spaces from replacements */
+        $trim($replace($final, /\s+/, " "))
+      )
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string passes through
+    input: ""
+    expected: ""
+
+  - name: Normalizes Corporation to Corp.
+    input: "ACME CORPORATION"
+    expected: "Acme Corp."
+
+  - name: Normalizes Incorporated to Inc.
+    input: "TechStart Incorporated"
+    expected: "Techstart Inc."
+
+  - name: Keeps LLC suffix normalized
+    input: "Awesome Ventures, LLC"
+    expected: "Awesome Ventures LLC"
+
+  - name: Normalizes Limited to Ltd.
+    input: "British Telecom Limited"
+    expected: "British Telecom Ltd."
+
+  - name: Keeps GmbH as-is
+    input: "SIEMENS GMBH"
+    expected: "Siemens GmbH"
+
+  - name: Normalizes S.A. format
+    input: "Banco Santander SA"
+    expected: "Banco Santander S.A."
+
+  - name: Normalizes Pty Ltd format
+    input: "Atlassian PTY LTD"
+    expected: "Atlassian Pty Ltd."
+
+  - name: Normalizes B.V. format
+    input: "Philips BV"
+    expected: "Philips B.V."
+
+  - name: Handles The prefix consistently
+    input: "THE WALT DISNEY COMPANY"
+    expected: "The Walt Disney Co."
+
+  - name: Cleans excess whitespace
+    input: "   EXAMPLE    COMPANY   "
+    expected: "Example Co."
+
+  - name: Mixed case normalization
+    input: "mY cOMpaNY nAmE"
+    expected: "My Company Name"
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - company
+  - normalization
+  - name
+  - suffix

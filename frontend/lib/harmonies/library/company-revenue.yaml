@@ -1,0 +1,112 @@
+# Company Revenue Parser
+# Parses revenue strings into numeric values
+
+id: company-revenue
+version: 1.0.0
+name: Company Revenue Parser
+description: Parses revenue from various formats like "$15M", "15,000,000", "15 million" into numeric values
+category: firmographics
+author: revops-impact
+
+applies_to:
+  fields:
+    - company.annual_revenue
+  entity: company
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: "null"
+
+  - id: number-passthrough
+    description: Pass through numbers unchanged
+    when: $type(value) = "number"
+    transform: value
+
+  - id: parse-with-words
+    description: Handle word-based amounts (million, billion, etc)
+    when: |
+      $type(value) = "string" and (
+        $contains($lowercase(value), "thousand") or
+        $contains($lowercase(value), "million") or
+        $contains($lowercase(value), "billion") or
+        $contains($lowercase(value), "trillion")
+      )
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $cleaned := $replace($lower, /[^0-9.\-]/, " ");
+        $num := $number($trim($split($cleaned, " ")[0]));
+
+        $multiplier := $contains($lower, "trillion") ? 1000000000000 :
+                       $contains($lower, "billion") ? 1000000000 :
+                       $contains($lower, "million") ? 1000000 :
+                       $contains($lower, "thousand") ? 1000 : 1;
+
+        $num * $multiplier
+      )
+
+  - id: parse-standard-formats
+    description: Parse $15M, 15K, 1,500,000 formats
+    transform: $parse_number(value)
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string returns null
+    input: ""
+    expected: null
+
+  - name: Number passes through
+    input: 1500000
+    expected: 1500000
+
+  - name: Parses $15M format
+    input: "$15M"
+    expected: 15000000
+
+  - name: Parses $1.5B format
+    input: "$1.5B"
+    expected: 1500000000
+
+  - name: Parses comma-separated format
+    input: "15,000,000"
+    expected: 15000000
+
+  - name: Parses with currency symbol
+    input: "$500K"
+    expected: 500000
+
+  - name: Parses euro format
+    input: "2.5M"
+    expected: 2500000
+
+  - name: Parses word format - million
+    input: "15 million"
+    expected: 15000000
+
+  - name: Parses word format - billion
+    input: "2.5 billion"
+    expected: 2500000000
+
+  - name: Handles decimal amounts
+    input: "$1,234.56"
+    expected: 1234.56
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - company
+  - revenue
+  - firmographics
+  - parsing

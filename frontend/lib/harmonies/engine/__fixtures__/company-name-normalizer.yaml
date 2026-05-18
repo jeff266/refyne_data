@@ -1,0 +1,73 @@
+# Test fixture: Company Name Normalizer
+# Used for testing the HarmonyExecutor
+
+id: company-name-normalizer
+version: 1.0.0
+name: Company Name Normalizer
+description: Normalizes company names by cleaning whitespace, title-casing, and removing common suffixes
+category: business-entities
+author: test
+
+applies_to:
+  fields:
+    - company.name
+  entity: company
+
+sources: []  # All sources
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: '""'
+
+  - id: strip-suffix-inc
+    description: Remove Inc. suffix and normalize
+    when: '$contains($lowercase(value), "inc.")'
+    transform: '$normalize_case($trim($replace(value, /,?\s*inc\.?$/i, "")), "title")'
+
+  - id: strip-suffix-llc
+    description: Remove LLC suffix and normalize
+    when: '$contains($lowercase(value), "llc")'
+    transform: '$normalize_case($trim($replace(value, /,?\s*llc\.?$/i, "")), "title")'
+
+  - id: default-normalize
+    description: Default normalization - clean whitespace and title case
+    transform: '$normalize_case($clean_whitespace(value), "title")'
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string passes through
+    input: ""
+    expected: ""
+
+  - name: Strips Inc. suffix
+    input: "ACME Corporation, Inc."
+    expected: "Acme Corporation"
+
+  - name: Strips LLC suffix
+    input: "TechStart LLC"
+    expected: "Techstart"
+
+  - name: Normalizes standard name
+    input: "   EXAMPLE   COMPANY   "
+    expected: "Example Company"
+
+  - name: Mixed case normalization
+    input: "mY cOMpaNY nAmE"
+    expected: "My Company Name"
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - company
+  - normalization
+  - name

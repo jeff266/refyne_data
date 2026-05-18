@@ -1,0 +1,143 @@
+# Email Normalizer
+# Normalizes email addresses
+
+id: email
+version: 1.0.0
+name: Email Normalizer
+description: Normalizes email addresses by lowercasing, validating format, and extracting domain
+category: contact-fields
+author: revops-impact
+
+applies_to:
+  fields:
+    - person.email
+  entity: person
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: "null"
+
+  - id: invalid-email
+    description: Return null for clearly invalid emails
+    when: |
+      (
+        $cleaned := $trim(value);
+        $not($contains($cleaned, "@")) or
+        $contains($cleaned, " ") or
+        $length($cleaned) < 5
+      )
+    transform: "null"
+
+  - id: normalize-email
+    description: Normalize valid email addresses
+    transform: |
+      (
+        $cleaned := $trim(value);
+        $lower := $lowercase($cleaned);
+
+        /* Extract parts */
+        $parts := $split($lower, "@");
+        $local := $parts[0];
+        $domainPart := $parts[1];
+
+        /* Validate domain has at least one dot */
+        $validDomain := $contains($domainPart, ".");
+
+        $validDomain ? {
+          "email": $lower,
+          "local_part": $local,
+          "domain": $domainPart,
+          "is_personal": (
+            $contains($domainPart, "gmail") or
+            $contains($domainPart, "yahoo") or
+            $contains($domainPart, "hotmail") or
+            $contains($domainPart, "outlook.com") or
+            $contains($domainPart, "aol") or
+            $contains($domainPart, "icloud")
+          ),
+          "is_valid": true
+        } : {
+          "email": $lower,
+          "is_valid": false,
+          "error": "Invalid domain format"
+        }
+      )
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string returns null
+    input: ""
+    expected: null
+
+  - name: Normalizes standard email
+    input: "John.Doe@Example.COM"
+    expected:
+      email: "john.doe@example.com"
+      local_part: "john.doe"
+      domain: "example.com"
+      is_personal: false
+      is_valid: true
+
+  - name: Identifies personal email
+    input: "john.doe@gmail.com"
+    expected:
+      email: "john.doe@gmail.com"
+      local_part: "john.doe"
+      domain: "gmail.com"
+      is_personal: true
+      is_valid: true
+
+  - name: Handles plus addressing
+    input: "john+newsletter@example.com"
+    expected:
+      email: "john+newsletter@example.com"
+      local_part: "john+newsletter"
+      domain: "example.com"
+      is_personal: false
+      is_valid: true
+
+  - name: Returns null for no @ symbol
+    input: "not-an-email"
+    expected: null
+
+  - name: Returns null for spaces
+    input: "john doe@example.com"
+    expected: null
+
+  - name: Handles subdomain
+    input: "support@mail.company.io"
+    expected:
+      email: "support@mail.company.io"
+      local_part: "support"
+      domain: "mail.company.io"
+      is_personal: false
+      is_valid: true
+
+  - name: Trims whitespace
+    input: "  john@example.com  "
+    expected:
+      email: "john@example.com"
+      local_part: "john"
+      domain: "example.com"
+      is_personal: false
+      is_valid: true
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - email
+  - contact
+  - validation
+  - normalization

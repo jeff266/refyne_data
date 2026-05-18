@@ -1,0 +1,354 @@
+# Company Industry Taxonomy Mapper
+# Maps industry strings to canonical taxonomy
+
+id: company-industry
+version: 1.0.0
+name: Company Industry Taxonomy Mapper
+description: Maps various industry strings to a canonical taxonomy, handles SIC/NAICS codes
+category: industry
+author: revops-impact
+
+applies_to:
+  fields:
+    - company.industry
+    - company.industry_raw
+  entity: company
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: '""'
+
+  # HubSpot Healthcare industry enums
+  - id: hubspot-healthcare
+    description: Map HubSpot healthcare industry enum values
+    when: value in ["HOSPITAL_HEALTH_CARE", "MENTAL_HEALTH_CARE", "HEALTH_WELLNESS_FITNESS", "MEDICAL_PRACTICE", "ALTERNATIVE_MEDICINE"]
+    transform: '"Healthcare"'
+
+  - id: hubspot-healthcare-specialties
+    description: Map HubSpot healthcare specialty enum values
+    when: value in ["MEDICAL_DEVICE", "PHARMACEUTICALS", "BIOTECHNOLOGY", "VETERINARY"]
+    transform: |
+      value = "MEDICAL_DEVICE" ? "Healthcare - Medical Devices" :
+      value = "PHARMACEUTICALS" ? "Healthcare - Pharmaceuticals" :
+      value = "BIOTECHNOLOGY" ? "Healthcare - Biotechnology" :
+      "Healthcare - Veterinary"
+
+  # HubSpot Technology industry enums
+  - id: hubspot-technology
+    description: Map HubSpot technology industry enum values
+    when: value in ["COMPUTER_SOFTWARE", "COMPUTER_HARDWARE", "COMPUTER_NETWORKING", "COMPUTER_GAMES", "INTERNET", "SEMICONDUCTORS", "TELECOMMUNICATIONS", "WIRELESS", "NANOTECHNOLOGY", "E_LEARNING"]
+    transform: |
+      value = "COMPUTER_SOFTWARE" ? "Technology" :
+      value = "COMPUTER_HARDWARE" ? "Technology - Hardware" :
+      value = "COMPUTER_NETWORKING" ? "Technology - Networking" :
+      value = "COMPUTER_GAMES" ? "Technology - Gaming" :
+      value = "INTERNET" ? "Technology - Internet" :
+      value = "SEMICONDUCTORS" ? "Technology - Semiconductors" :
+      value = "TELECOMMUNICATIONS" ? "Technology - Telecommunications" :
+      value = "WIRELESS" ? "Technology - Wireless" :
+      value = "NANOTECHNOLOGY" ? "Technology - Nanotechnology" :
+      "Technology - E-Learning"
+
+  - id: hubspot-it-services
+    description: Map HubSpot IT services enum
+    when: value = "INFORMATION_TECHNOLOGY_SERVICES"
+    transform: '"IT Services"'
+
+  # HubSpot Financial Services industry enums
+  - id: hubspot-financial
+    description: Map HubSpot financial services industry enum values
+    when: value in ["FINANCIAL_SERVICES", "BANKING", "INSURANCE", "INVESTMENT_BANKING", "INVESTMENT_MANAGEMENT", "CAPITAL_MARKETS", "VENTURE_CAPITAL_PRIVATE_EQUITY", "ACCOUNTING"]
+    transform: |
+      value = "FINANCIAL_SERVICES" ? "Financial Services" :
+      value = "BANKING" ? "Financial Services - Banking" :
+      value = "INSURANCE" ? "Financial Services - Insurance" :
+      value = "INVESTMENT_BANKING" ? "Financial Services - Investment Banking" :
+      value = "INVESTMENT_MANAGEMENT" ? "Financial Services - Investment" :
+      value = "CAPITAL_MARKETS" ? "Financial Services - Capital Markets" :
+      value = "VENTURE_CAPITAL_PRIVATE_EQUITY" ? "Financial Services - Venture Capital" :
+      "Financial Services - Accounting"
+
+  # HubSpot Retail & Consumer industry enums
+  - id: hubspot-retail
+    description: Map HubSpot retail industry enum values
+    when: value in ["RETAIL", "CONSUMER_GOODS", "CONSUMER_ELECTRONICS", "CONSUMER_SERVICES", "APPAREL_FASHION", "COSMETICS", "LUXURY_GOODS_JEWELRY", "SPORTING_GOODS", "FURNITURE", "SUPERMARKETS", "WHOLESALE"]
+    transform: |
+      value = "RETAIL" ? "Retail" :
+      value = "CONSUMER_GOODS" ? "Retail - Consumer Goods" :
+      value = "CONSUMER_ELECTRONICS" ? "Retail - Consumer Electronics" :
+      value = "CONSUMER_SERVICES" ? "Consumer Services" :
+      value = "APPAREL_FASHION" ? "Retail - Fashion" :
+      value = "COSMETICS" ? "Retail - Cosmetics" :
+      value = "LUXURY_GOODS_JEWELRY" ? "Retail - Luxury Goods" :
+      value = "SPORTING_GOODS" ? "Retail - Sporting Goods" :
+      value = "FURNITURE" ? "Retail - Furniture" :
+      value = "SUPERMARKETS" ? "Retail - Supermarkets" :
+      "Wholesale"
+
+  # HubSpot Professional Services industry enums
+  - id: hubspot-professional-services
+    description: Map HubSpot professional services industry enum values
+    when: value in ["MANAGEMENT_CONSULTING", "LAW_PRACTICE", "LEGAL_SERVICES", "HUMAN_RESOURCES", "STAFFING_RECRUITING", "PROFESSIONAL_TRAINING_COACHING", "MARKET_RESEARCH", "OUTSOURCING_OFFSHORING", "TRANSLATION_LOCALIZATION"]
+    transform: |
+      value = "MANAGEMENT_CONSULTING" ? "Professional Services - Consulting" :
+      value = "LAW_PRACTICE" ? "Professional Services - Legal" :
+      value = "LEGAL_SERVICES" ? "Professional Services - Legal" :
+      value = "HUMAN_RESOURCES" ? "Professional Services - HR" :
+      value = "STAFFING_RECRUITING" ? "Professional Services - Staffing" :
+      value = "PROFESSIONAL_TRAINING_COACHING" ? "Professional Services - Training" :
+      value = "MARKET_RESEARCH" ? "Professional Services - Market Research" :
+      value = "OUTSOURCING_OFFSHORING" ? "Professional Services - Outsourcing" :
+      "Professional Services - Translation"
+
+  # HubSpot ALL_CAPS fallback - convert to title case with spaces
+  - id: hubspot-enum-fallback
+    description: Convert unknown HubSpot ALL_CAPS enum values to title case
+    when: $match(value, /^[A-Z][A-Z0-9_]+$/).matched
+    transform: |
+      (
+        $spaced := $replace(value, /_/, " ");
+        $normalize_case($spaced, "title")
+      )
+
+  - id: map-technology
+    description: Map technology-related industries
+    when: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "software") or
+        $contains($lower, "saas") or
+        $contains($lower, "technology") or
+        $contains($lower, "tech") or
+        $contains($lower, "it services") or
+        $contains($lower, "information technology") or
+        $contains($lower, "computer")
+      )
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "saas") ? "Software - SaaS" :
+        $contains($lower, "software") ? "Software" :
+        $contains($lower, "it services") or $contains($lower, "information technology") ? "IT Services" :
+        "Technology"
+      )
+
+  - id: map-finance
+    description: Map financial services industries
+    when: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "financ") or
+        $contains($lower, "bank") or
+        $contains($lower, "insurance") or
+        $contains($lower, "investment") or
+        $contains($lower, "fintech")
+      )
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "fintech") ? "Financial Services - Fintech" :
+        $contains($lower, "bank") ? "Financial Services - Banking" :
+        $contains($lower, "insurance") ? "Financial Services - Insurance" :
+        $contains($lower, "investment") ? "Financial Services - Investment" :
+        "Financial Services"
+      )
+
+  - id: map-healthcare
+    description: Map healthcare industries
+    when: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "health") or
+        $contains($lower, "medical") or
+        $contains($lower, "pharma") or
+        $contains($lower, "biotech") or
+        $contains($lower, "hospital")
+      )
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "biotech") ? "Healthcare - Biotechnology" :
+        $contains($lower, "pharma") ? "Healthcare - Pharmaceuticals" :
+        $contains($lower, "hospital") ? "Healthcare - Hospitals" :
+        $contains($lower, "medical device") ? "Healthcare - Medical Devices" :
+        "Healthcare"
+      )
+
+  - id: map-manufacturing
+    description: Map manufacturing industries
+    when: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "manufactur") or
+        $contains($lower, "industrial") or
+        $contains($lower, "machinery") or
+        $contains($lower, "automotive")
+      )
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "automotive") ? "Manufacturing - Automotive" :
+        $contains($lower, "machinery") ? "Manufacturing - Machinery" :
+        "Manufacturing"
+      )
+
+  - id: map-retail
+    description: Map retail industries
+    when: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "retail") or
+        $contains($lower, "e-commerce") or
+        $contains($lower, "ecommerce") or
+        $contains($lower, "consumer goods")
+      )
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $contains($lower, "e-commerce") or $contains($lower, "ecommerce") ? "Retail - E-commerce" :
+        "Retail"
+      )
+
+  - id: sic-naics-lookup
+    description: Handle SIC/NAICS codes (return code with label if known)
+    when: $match(value, /^[0-9]{2,6}$/).matched
+    transform: |
+      (
+        $code := value;
+        $len := $length($code);
+
+        /* Common SIC codes (4 digits) */
+        $code = "7372" ? "Software - Prepackaged Software (SIC: 7372)" :
+        $code = "7371" ? "Software - Computer Programming Services (SIC: 7371)" :
+        $code = "6022" ? "Financial Services - Banking (SIC: 6022)" :
+        $code = "6411" ? "Financial Services - Insurance (SIC: 6411)" :
+
+        /* Common NAICS codes (6 digits) */
+        $code = "541511" ? "Software - Custom Computer Programming (NAICS: 541511)" :
+        $code = "541512" ? "IT Services - Computer Systems Design (NAICS: 541512)" :
+        $code = "522110" ? "Financial Services - Banking (NAICS: 522110)" :
+
+        /* Return code if not mapped */
+        "Industry Code: " & $code
+      )
+
+  - id: default-titlecase
+    description: Default - clean and title case
+    transform: $normalize_case($clean_whitespace(value), "title")
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string passes through
+    input: ""
+    expected: ""
+
+  # HubSpot enum value tests
+  - name: HubSpot HOSPITAL_HEALTH_CARE maps to Healthcare
+    input: "HOSPITAL_HEALTH_CARE"
+    expected: "Healthcare"
+
+  - name: HubSpot MENTAL_HEALTH_CARE maps to Healthcare
+    input: "MENTAL_HEALTH_CARE"
+    expected: "Healthcare"
+
+  - name: HubSpot PHARMACEUTICALS maps to Healthcare - Pharmaceuticals
+    input: "PHARMACEUTICALS"
+    expected: "Healthcare - Pharmaceuticals"
+
+  - name: HubSpot BIOTECHNOLOGY maps to Healthcare - Biotechnology
+    input: "BIOTECHNOLOGY"
+    expected: "Healthcare - Biotechnology"
+
+  - name: HubSpot FINANCIAL_SERVICES maps to Financial Services
+    input: "FINANCIAL_SERVICES"
+    expected: "Financial Services"
+
+  - name: HubSpot BANKING maps to Financial Services - Banking
+    input: "BANKING"
+    expected: "Financial Services - Banking"
+
+  - name: HubSpot COMPUTER_SOFTWARE maps to Technology
+    input: "COMPUTER_SOFTWARE"
+    expected: "Technology"
+
+  - name: HubSpot INFORMATION_TECHNOLOGY_SERVICES maps to IT Services
+    input: "INFORMATION_TECHNOLOGY_SERVICES"
+    expected: "IT Services"
+
+  - name: HubSpot CONSUMER_SERVICES maps to Consumer Services
+    input: "CONSUMER_SERVICES"
+    expected: "Consumer Services"
+
+  - name: HubSpot RETAIL maps to Retail
+    input: "RETAIL"
+    expected: "Retail"
+
+  - name: HubSpot MANAGEMENT_CONSULTING maps to Professional Services - Consulting
+    input: "MANAGEMENT_CONSULTING"
+    expected: "Professional Services - Consulting"
+
+  - name: HubSpot unknown enum converts to title case
+    input: "UNKNOWN_NEW_INDUSTRY"
+    expected: "Unknown_new_industry"
+
+  # Legacy text-based tests
+  - name: Maps SaaS to Software - SaaS
+    input: "SaaS"
+    expected: "Software - SaaS"
+
+  - name: Maps software variations
+    input: "Computer Software"
+    expected: "Software"
+
+  - name: Maps fintech
+    input: "Financial Technology (Fintech)"
+    expected: "Technology"
+
+  - name: Maps banking
+    input: "Commercial Banking"
+    expected: "Financial Services - Banking"
+
+  - name: Maps healthcare
+    input: "Healthcare Services"
+    expected: "Healthcare"
+
+  - name: Maps biotech
+    input: "Biotechnology Research"
+    expected: "Technology"
+
+  - name: Maps e-commerce
+    input: "E-Commerce / Online Retail"
+    expected: "Retail - E-commerce"
+
+  - name: Handles SIC code
+    input: "7372"
+    expected: "7372"
+
+  - name: Handles NAICS code
+    input: "541511"
+    expected: "541511"
+
+  - name: Title cases unknown industry
+    input: "underwater basket weaving"
+    expected: "Underwater Basket Weaving"
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - company
+  - industry
+  - taxonomy
+  - sic
+  - naics
