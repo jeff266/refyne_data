@@ -27,6 +27,7 @@ export const C = {
   redDim:    'rgba(239,68,68,0.08)',
   amber:     '#F59E0B',
   amberDim:  'rgba(245,158,11,0.08)',
+  yellow:    '#EAB308',
 } as const;
 
 // Font tokens
@@ -43,6 +44,7 @@ export const NAV = [
   { id: 'enrich',     label: 'Enrich',        icon: 'Search' },
   { id: 'normalize',  label: 'Normalize',     icon: 'ArrowUpDown' },
   { id: 'dedup',      label: 'Dedup',         icon: 'GitMerge' },
+  { id: 'quarantine', label: 'Quarantine',    icon: 'Shield' },
   { divider: true },
   { group: 'Config' },
   { id: 'harmonies',  label: 'Harmonies',     icon: 'Sparkles' },
@@ -56,6 +58,7 @@ export const PAGE_META: Record<string, { label: string; action: string | null }>
   enrich:      { label: 'Enrich',         action: 'New search' },
   normalize:   { label: 'Normalize',      action: 'Load records' },
   dedup:       { label: 'Dedup',          action: 'Run scan' },
+  quarantine:  { label: 'Quarantine',     action: null },
   harmonies:   { label: 'Harmonies',      action: 'New harmony' },
   mappings:    { label: 'Field Mappings', action: null },
   connections: { label: 'Connections',    action: 'Add connection' },

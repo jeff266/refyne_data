@@ -1,18 +1,69 @@
 'use client';
 
+import { useState } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, PrimaryBtn, GhostBtn } from '@/components/refyne';
 import { AlwaysOnSettings } from '@/components/always-on/AlwaysOnSettings';
+import { MembersTab } from '@/components/settings/MembersTab';
+import { PoliciesTab } from '@/components/settings/PoliciesTab';
 
-// TODO: wire to API - GET/PUT /api/settings
+type TabType = 'general' | 'members' | 'policies';
+
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<TabType>('general');
+
   return (
-    <div style={{ padding: '28px 32px', fontFamily: F.sans, maxWidth: 720 }}>
+    <div style={{ padding: '28px 32px', fontFamily: F.sans, maxWidth: 920 }}>
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 4 }}>Settings</h1>
         <p style={{ fontSize: 13, color: C.text3 }}>Configure your Refyne workspace</p>
       </div>
 
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${C.border}`, marginBottom: 24 }}>
+        <Tab active={activeTab === 'general'} onClick={() => setActiveTab('general')}>
+          General
+        </Tab>
+        <Tab active={activeTab === 'members'} onClick={() => setActiveTab('members')}>
+          Members
+        </Tab>
+        <Tab active={activeTab === 'policies'} onClick={() => setActiveTab('policies')}>
+          Policies
+        </Tab>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'general' && <GeneralTab />}
+      {activeTab === 'members' && <MembersTab />}
+      {activeTab === 'policies' && <PoliciesTab />}
+    </div>
+  );
+}
+
+function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: 'none',
+        border: 'none',
+        padding: '0 0 12px 0',
+        fontSize: 13,
+        fontWeight: active ? 600 : 400,
+        color: active ? C.text : C.text3,
+        borderBottom: active ? `2px solid ${C.indigo}` : '2px solid transparent',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function GeneralTab() {
+  return (
+    <div style={{ maxWidth: 720 }}>
       {/* Always On */}
       <div style={{ marginBottom: 32 }}>
         <h2 style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 16 }}>Always On</h2>
