@@ -7,14 +7,16 @@ export interface OrgContext {
   orgId: string;
   orgRole: OrgRole;
   userId: string;
+  userEmail?: string;
 }
 
 export function getOrgContext(): OrgContext {
-  const { orgId, orgRole, userId } = auth();
+  const { orgId, orgRole, userId, sessionClaims } = auth();
   if (!orgId || !userId) {
     throw new Error('UNAUTHENTICATED');
   }
-  return { orgId, orgRole: orgRole as OrgRole, userId };
+  const userEmail = sessionClaims?.email as string | undefined;
+  return { orgId, orgRole: orgRole as OrgRole, userId, userEmail };
 }
 
 export function requireAdmin(): OrgContext {
