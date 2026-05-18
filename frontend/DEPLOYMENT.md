@@ -32,6 +32,13 @@ ssh root@31.220.63.174
 - Environment file: `/data/coolify/source/.env`
 - Docker compose: `/data/coolify/source/docker-compose.yml`
 - Installation log: `/data/coolify/source/installation-20260518-023618.log`
+- Environment backup: `/Users/jeffignacio/coolify-env-backup.txt`
+
+**Coolify Credentials:**
+- App ID: `1d0b51df95e148bd20b686f2c35bff26`
+- DB Password: `hr1OWaYhPAO/Z2RNPbpEEhpRznS0lblwQoh7jcWBf7I=`
+- Redis Password: `r0Rgb4NPj2p77puNQO6sOtcIas39uDZMM50hAiYcYt4=`
+- Upstash Redis: `master-sunfish-128407.upstash.io`
 
 ### Useful Commands
 
@@ -72,8 +79,8 @@ ssh root@31.220.63.174 'ufw allow 8000/tcp && ufw allow 22/tcp && ufw allow 80/t
 
 ```bash
 # Upstash Redis (BullMQ queue)
-# Get from: https://upstash.com → Your Redis DB → Connect
-UPSTASH_REDIS_URL=rediss://your-actual-upstash-url
+# Already configured - master-sunfish-128407.upstash.io
+UPSTASH_REDIS_URL="rediss://default:gQAAAAAAAfWXAAIgcDI1NTU0ZTk3OWNiMmQ0Nzk0YmQyYWU3ODBlNDhkODY1Ng@master-sunfish-128407.upstash.io:6379"
 
 # Supabase Database (use SERVICE ROLE KEY, not anon key!)
 # Get from: Supabase project settings → API → service_role key
