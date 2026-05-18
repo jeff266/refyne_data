@@ -4,86 +4,13 @@ import type { AlwaysOnConfig } from '@/lib/always-on/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
- * GET /api/always-on/config
- *
- * Returns Always On configuration.
- * Creates default row if none exists.
- * Auth: any role
- */
-export async function GET(request: NextRequest) {
-  // Add auth check
-  let ctx;
-  try { ctx = getOrgContext(); }
-  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
-
-  try {
-    const orgId = ctx.orgId;
-
-    if (!isSupabaseConfigured() || !supabase) {
-      return NextResponse.json(
-        { error: 'Database not configured' },
-        { status: 503 }
-      );
-    }
-
-    // Try to get existing config
-    let { data: config, error } = await supabase
-      .from('always_on_config')
-      .select('*')
-      .eq('org_id', orgId)
-      .single();
-
-    // If no config exists, create default
-    if (error && error.code === 'PGRST116') {
-      const { data: newConfig, error: createError } = await supabase
-        .from('always_on_config')
-        .insert({
-          org_id: orgId,
-          scan_time_utc: '06:00:00',
-          digest_enabled: true,
-          email_recipients: [],
-          slack_enabled: false,
-          send_on_no_change: false,
-          score_delta_threshold: 3,
-          auto_merge_grade_a: false,
-        })
-        .select()
-        .single();
-
-      if (createError) {
-        console.error('Failed to create default config:', createError);
-        return NextResponse.json(
-          { error: 'Failed to create config' },
-          { status: 500 }
-        );
-      }
-
-      config = newConfig;
-    } else if (error) {
-      console.error('Failed to fetch config:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch config' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      config: mapConfigFromDb(config!),
-    });
-  } catch (error) {
-    console.error('Failed to get Always On config:', error);
-    return NextResponse.json(
-      { error: 'Failed to get config' },
-      { status: 500 }
-    );
-  }
-}
-
-/**
  * PUT /api/always-on/config
  *
  * Updates Always On configuration.
- * Auth: admin only (TODO: implement auth check)
+ * Auth: any role
+ *
+ * Note: GET handler removed - use GET /api/always-on/status instead,
+ * which returns config along with enabled state, last run, and next run time.
  */
 export async function PUT(request: NextRequest) {
   // Add auth check
