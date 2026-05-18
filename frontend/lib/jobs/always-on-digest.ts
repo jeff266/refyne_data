@@ -11,6 +11,7 @@ import { supabase } from '../db/supabase';
 import { sendDigestEmail } from '../always-on/send-digest';
 import { postToSlack } from '../always-on/slack-payload';
 import { getSubscribers } from '../notifications/get-recipients';
+import { getAccessToken } from '../hubspot/get-access-token';
 
 /**
  * Process a digest job.
@@ -173,10 +174,10 @@ async function processConnection(
 
     const scoreBefore = lastRun?.score_after || null;
 
-    // 3. Get connection details for access token
+    // 3. Get connection details for has_export_scope
     const { data: connection } = await supabase
       .from('hubspot_connections')
-      .select('encrypted_token, has_export_scope')
+      .select('has_export_scope')
       .eq('id', connectionId)
       .single();
 
@@ -184,7 +185,10 @@ async function processConnection(
       throw new Error(`Connection ${connectionId} not found`);
     }
 
-    // 4. Determine scan mode
+    // 4. Get access token (automatically handles OAuth refresh)
+    const accessToken = await getAccessToken(orgId);
+
+    // 5. Determine scan mode
     // Use incremental mode for scheduled runs if there's a previous run
     // Use full scan for manual triggers or weekly schedule (day of week 0 = Sunday)
     const now = new Date();
@@ -201,10 +205,10 @@ async function processConnection(
 
     console.log(`[Digest] Running ${scanMode} compliance scan${since ? ` (since ${since.toISOString()})` : ''}`);
 
-    // 5. Run compliance scan
+    // 6. Run compliance scan
     const { score: scoreAfter, recordsScanned } = await runComplianceScan(
       orgId,
-      connection.encrypted_token,
+      accessToken,
       connection.has_export_scope || false,
       {
         mode: scanMode,
@@ -212,10 +216,10 @@ async function processConnection(
       }
     );
 
-    // 6. Run incremental dedup scan
+    // 7. Run incremental dedup scan
     const { newPairs, gradeACounts } = await runDedupScan(orgId, lastRun?.run_at);
 
-    // 7. Compute delta
+    // 8. Compute delta
     const scoreDelta = scoreBefore !== null ? scoreAfter - scoreBefore : null;
 
     // Check if we should skip sending
@@ -246,13 +250,13 @@ async function processConnection(
       };
     }
 
-    // 6. Compute remediation items
+    // 9. Compute remediation items
     const remediationItems = await computeRemediationItems(orgId);
 
-    // 7. Fetch harmony breakdown
+    // 10. Fetch harmony breakdown
     const harmonyBreakdown = await getHarmonyBreakdown(orgId, connectionId);
 
-    // 8. Get insights count
+    // 11. Get insights count
     const { count: insightsCount } = await supabase
       .from('compliance_insights')
       .select('id', { count: 'exact', head: true })
@@ -260,7 +264,7 @@ async function processConnection(
 
     const newInsightsCount = insightsCount || 0;
 
-    // 9. Build digest payload
+    // 12. Build digest payload
     const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://refyne.io'}/dashboard`;
     const dedupUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://refyne.io'}/dedup`;
     const settingsUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://refyne.io'}/settings`;
@@ -289,7 +293,7 @@ async function processConnection(
       settingsUrl,
     };
 
-    // 10. Send email digest
+    // 13. Send email digest
     let digestSent = false;
     if (config.digest_enabled) {
       try {
@@ -307,7 +311,7 @@ async function processConnection(
       }
     }
 
-    // 11. Send Slack alert
+    // 14. Send Slack alert
     let slackSent = false;
     if (config.slack_enabled && config.slack_webhook_url) {
       try {
@@ -318,7 +322,7 @@ async function processConnection(
       }
     }
 
-    // 12. Auto-merge Grade A pairs
+    // 15. Auto-merge Grade A pairs
     if (config.auto_merge_grade_a && gradeACounts.A > 0) {
       try {
         // Get all pending Grade A pair IDs from this run
@@ -354,7 +358,7 @@ async function processConnection(
       }
     }
 
-    // 13. Update digest_run with results
+    // 16. Update digest_run with results
     await supabase
       .from('digest_runs')
       .update({
