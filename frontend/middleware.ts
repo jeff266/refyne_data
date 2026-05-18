@@ -2,6 +2,12 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 // Public routes that don't require authentication
 const isPublicRoute = createRouteMatcher([
+  '/',
+  '/pricing',
+  '/privacy',
+  '/terms',
+  '/docs',
+  '/unsubscribed',
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/api/webhooks(.*)', // Webhooks use signature validation, not session cookies
