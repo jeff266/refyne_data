@@ -5,12 +5,14 @@ import { C } from '@/lib/design-tokens';
 interface ToggleProps {
   on: boolean;
   onToggle: () => void;
+  disabled?: boolean;
 }
 
-export function Toggle({ on, onToggle }: ToggleProps) {
+export function Toggle({ on, onToggle, disabled }: ToggleProps) {
   return (
     <div
       onClick={(e) => {
+        if (disabled) return;
         e.stopPropagation();
         onToggle();
       }}
@@ -19,11 +21,12 @@ export function Toggle({ on, onToggle }: ToggleProps) {
         height: 18,
         borderRadius: 9,
         background: on ? C.indigo : C.hover,
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
         position: 'relative',
         transition: 'background 0.2s',
         flexShrink: 0,
         border: `1px solid ${on ? C.indigoBrd : C.border2}`,
+        opacity: disabled ? 0.5 : 1,
       }}
     >
       <div

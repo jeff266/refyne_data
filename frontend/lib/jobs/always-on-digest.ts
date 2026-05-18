@@ -252,12 +252,12 @@ async function processConnection(
     const harmonyBreakdown = await getHarmonyBreakdown(orgId, connectionId);
 
     // 8. Get insights count
-    const { data: insights } = await supabase
+    const { count: insightsCount } = await supabase
       .from('compliance_insights')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', orgId);
 
-    const newInsightsCount = insights || 0;
+    const newInsightsCount = insightsCount || 0;
 
     // 9. Build digest payload
     const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://refyne.io'}/dashboard`;
@@ -394,7 +394,11 @@ async function processConnection(
 async function runComplianceScan(
   orgId: string,
   accessToken: string,
-  hasExportScope: boolean
+  hasExportScope: boolean,
+  options?: {
+    since?: Date;
+    mode?: 'full' | 'incremental';
+  }
 ): Promise<{
   score: number;
   recordsScanned: number;
@@ -404,7 +408,7 @@ async function runComplianceScan(
   const { getScore } = await import('../compliance/compliance-score');
 
   // Run the scan (this is the same logic that POST /api/compliance/scan enqueues)
-  const scanResult = await runScan(orgId, accessToken, hasExportScope);
+  const scanResult = await runScan(orgId, accessToken, hasExportScope, options);
 
   // Get the computed score
   const scoreData = await getScore(orgId);
@@ -517,7 +521,7 @@ async function computeRemediationItems(orgId: string): Promise<RemediationItem[]
 
     const harmonyName = insight.harmonyId
       ? getHarmonyById(insight.harmonyId)?.spec.name || insight.harmonyId
-      : insight.field;
+      : insight.field || 'Unknown';
 
     candidates.push({
       harmonyId: insight.harmonyId,

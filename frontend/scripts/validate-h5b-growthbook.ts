@@ -588,7 +588,7 @@ async function main() {
 
   // Run tests
   const results: {
-    test1: Awaited<ReturnType<typeof testComplianceScan>>;
+    test1: Awaited<ReturnType<typeof testComplianceScanWithIndex>>;
     test2: Awaited<ReturnType<typeof testNormalizationPipeline>>;
     test3: Awaited<ReturnType<typeof testDedupScan>>;
     test4: Awaited<ReturnType<typeof testExportApi>>;
