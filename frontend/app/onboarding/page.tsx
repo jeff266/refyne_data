@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useOrganization, useOrganizationList, useUser } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn } from '@/components/refyne/PrimaryBtn';
 import { GhostBtn } from '@/components/refyne/GhostBtn';
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useUser();
   const { organization } = useOrganization();
   const { createOrganization, setActive, userMemberships } = useOrganizationList({
@@ -17,6 +18,9 @@ export default function OnboardingPage() {
   const [workspaceName, setWorkspaceName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Get intended plan from query params (from pricing page CTA)
+  const intendedPlan = searchParams?.get('plan') || null;
 
   // Redirect to dashboard if user already has an active organization
   useEffect(() => {
@@ -62,6 +66,21 @@ export default function OnboardingPage() {
 
       // Set as active organization
       await setActive({ organization: org.id });
+
+      // Store intended plan in user's publicMetadata (if plan was selected from pricing page)
+      if (intendedPlan && user) {
+        try {
+          await user.update({
+            publicMetadata: {
+              ...user.publicMetadata,
+              intendedPlan,
+            },
+          });
+        } catch (metadataError) {
+          console.error('Failed to store intended plan:', metadataError);
+          // Don't block onboarding if metadata update fails
+        }
+      }
 
       // Redirect to connections to set up HubSpot
       router.push('/connections');
@@ -114,9 +133,23 @@ export default function OnboardingPage() {
         <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 8, color: C.text }}>
           Welcome to Refyne
         </h1>
-        <p style={{ fontSize: 14, color: C.text2, marginBottom: 32 }}>
+        <p style={{ fontSize: 14, color: C.text2, marginBottom: intendedPlan ? 16 : 32 }}>
           Get started by creating or joining a workspace
         </p>
+
+        {intendedPlan && (
+          <div style={{
+            padding: '12px 16px',
+            background: C.indigoDim,
+            border: `1px solid ${C.indigoBrd}`,
+            borderRadius: 8,
+            marginBottom: 32,
+          }}>
+            <div style={{ fontSize: 13, color: C.text2 }}>
+              Selected plan: <span style={{ fontWeight: 600, color: C.indigoLt, textTransform: 'capitalize' }}>{intendedPlan}</span>
+            </div>
+          </div>
+        )}
 
         {existingOrgs.length > 0 && (
           <div style={{ marginBottom: 32 }}>

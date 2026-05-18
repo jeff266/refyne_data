@@ -150,7 +150,7 @@ export default function PricingPage() {
               </div>
 
               <Link
-                href="/connections"
+                href={plan.name === 'Enterprise' ? 'mailto:jeff@revopsimpact.us?subject=Enterprise inquiry' : `/sign-up?plan=${plan.name.toLowerCase()}`}
                 style={{
                   display: 'block',
                   width: '100%',
@@ -166,7 +166,7 @@ export default function PricingPage() {
                   transition: 'all 0.2s',
                 }}
               >
-                Get started
+                {plan.name === 'Enterprise' ? 'Contact sales' : 'Get started'}
               </Link>
             </div>
           ))}
