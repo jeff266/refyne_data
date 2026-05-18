@@ -7,10 +7,12 @@ import { C, F } from '@/lib/design-tokens';
 
 export default function PricingPage() {
   const [isAnnual, setIsAnnual] = useState(false);
+  const [planType, setPlanType] = useState<'team' | 'individual'>('team');
 
-  const plans = [
+  const teamPlans = [
     {
       name: 'Starter',
+      plan: 'starter',
       monthlyPrice: 149,
       annualPrice: 119,
       records: 'up to 25,000 records',
@@ -18,6 +20,7 @@ export default function PricingPage() {
     },
     {
       name: 'Growth',
+      plan: 'growth',
       monthlyPrice: 249,
       annualPrice: 199,
       records: 'up to 75,000 records',
@@ -25,6 +28,7 @@ export default function PricingPage() {
     },
     {
       name: 'Scale',
+      plan: 'scale',
       monthlyPrice: 399,
       annualPrice: 319,
       records: 'up to 200,000 records',
@@ -32,12 +36,34 @@ export default function PricingPage() {
     },
     {
       name: 'Enterprise',
+      plan: 'enterprise',
       monthlyPrice: null,
       annualPrice: null,
       records: '200,000+',
       highlighted: false,
     },
   ];
+
+  const individualPlans = [
+    {
+      name: 'Prospect Solo',
+      plan: 'prospect_solo',
+      monthlyPrice: 49,
+      annualPrice: null,
+      records: 'Individual prospecting',
+      highlighted: false,
+    },
+    {
+      name: 'Prospect Team',
+      plan: 'prospect_team',
+      monthlyPrice: 99,
+      annualPrice: null,
+      records: 'Team prospecting',
+      highlighted: true,
+    },
+  ];
+
+  const plans = planType === 'team' ? teamPlans : individualPlans;
 
   return (
     <MarketingLayout>
@@ -51,41 +77,79 @@ export default function PricingPage() {
             Choose the plan that fits your data volume
           </p>
 
-          {/* Billing toggle */}
-          <div style={{ display: 'inline-flex', gap: 8, padding: 4, background: C.surface, borderRadius: 8, border: `1px solid ${C.border}` }}>
+          {/* Plan type toggle */}
+          <div style={{ display: 'inline-flex', gap: 8, padding: 4, background: C.surface, borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 24 }}>
             <button
-              onClick={() => setIsAnnual(false)}
+              onClick={() => setPlanType('team')}
               style={{
                 padding: '8px 20px',
                 fontSize: 14,
                 fontWeight: 500,
-                background: !isAnnual ? C.indigo : 'transparent',
-                color: !isAnnual ? 'white' : C.text2,
+                background: planType === 'team' ? C.indigo : 'transparent',
+                color: planType === 'team' ? 'white' : C.text2,
                 border: 'none',
                 borderRadius: 6,
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
             >
-              Monthly
+              Team
             </button>
             <button
-              onClick={() => setIsAnnual(true)}
+              onClick={() => setPlanType('individual')}
               style={{
                 padding: '8px 20px',
                 fontSize: 14,
                 fontWeight: 500,
-                background: isAnnual ? C.indigo : 'transparent',
-                color: isAnnual ? 'white' : C.text2,
+                background: planType === 'individual' ? C.indigo : 'transparent',
+                color: planType === 'individual' ? 'white' : C.text2,
                 border: 'none',
                 borderRadius: 6,
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
             >
-              Annual <span style={{ color: isAnnual ? C.green : C.text3, marginLeft: 4 }}>Save 20%</span>
+              Individual
             </button>
           </div>
+
+          {/* Billing toggle (only for Team plans) */}
+          {planType === 'team' && (
+            <div style={{ display: 'inline-flex', gap: 8, padding: 4, background: C.surface, borderRadius: 8, border: `1px solid ${C.border}` }}>
+              <button
+                onClick={() => setIsAnnual(false)}
+                style={{
+                  padding: '8px 20px',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  background: !isAnnual ? C.indigo : 'transparent',
+                  color: !isAnnual ? 'white' : C.text2,
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setIsAnnual(true)}
+                style={{
+                  padding: '8px 20px',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  background: isAnnual ? C.indigo : 'transparent',
+                  color: isAnnual ? 'white' : C.text2,
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                Annual <span style={{ color: isAnnual ? C.green : C.text3, marginLeft: 4 }}>Save 20%</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Plan cards */}
@@ -132,11 +196,11 @@ export default function PricingPage() {
                   <>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                       <span style={{ fontSize: 36, fontWeight: 600, color: C.text }}>
-                        ${isAnnual ? plan.annualPrice : plan.monthlyPrice}
+                        ${isAnnual && plan.annualPrice ? plan.annualPrice : plan.monthlyPrice}
                       </span>
                       <span style={{ fontSize: 14, color: C.text2 }}>/mo</span>
                     </div>
-                    {isAnnual && (
+                    {isAnnual && plan.annualPrice && (
                       <div style={{ fontSize: 13, color: C.text3, marginTop: 4, textDecoration: 'line-through' }}>
                         ${plan.monthlyPrice}/mo
                       </div>
@@ -150,7 +214,7 @@ export default function PricingPage() {
               </div>
 
               <Link
-                href={plan.name === 'Enterprise' ? 'mailto:jeff@revopsimpact.us?subject=Enterprise inquiry' : `/sign-up?plan=${plan.name.toLowerCase()}`}
+                href={plan.name === 'Enterprise' ? 'mailto:jeff@revopsimpact.us?subject=Enterprise inquiry' : `/sign-up?plan=${plan.plan}`}
                 style={{
                   display: 'block',
                   width: '100%',

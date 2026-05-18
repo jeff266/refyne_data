@@ -7,8 +7,9 @@ import { AlwaysOnSettings } from '@/components/always-on/AlwaysOnSettings';
 import { MembersTab } from '@/components/settings/MembersTab';
 import { PoliciesTab } from '@/components/settings/PoliciesTab';
 import { NotificationsTab } from '@/components/settings/NotificationsTab';
+import { BillingTab } from '@/components/settings/BillingTab';
 
-type TabType = 'general' | 'members' | 'policies' | 'notifications';
+type TabType = 'general' | 'members' | 'policies' | 'notifications' | 'billing';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('general');
@@ -34,6 +35,9 @@ export default function SettingsPage() {
         <Tab active={activeTab === 'notifications'} onClick={() => setActiveTab('notifications')}>
           Notifications
         </Tab>
+        <Tab active={activeTab === 'billing'} onClick={() => setActiveTab('billing')}>
+          Billing
+        </Tab>
       </div>
 
       {/* Tab Content */}
@@ -41,6 +45,7 @@ export default function SettingsPage() {
       {activeTab === 'members' && <MembersTab />}
       {activeTab === 'policies' && <PoliciesTab />}
       {activeTab === 'notifications' && <NotificationsTab />}
+      {activeTab === 'billing' && <BillingTab />}
     </div>
   );
 }
