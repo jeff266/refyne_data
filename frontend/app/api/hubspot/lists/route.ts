@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getConnection, HubSpotClient } from '@/lib/hubspot';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/hubspot/lists
@@ -7,9 +8,13 @@ import { getConnection, HubSpotClient } from '@/lib/hubspot';
  * Get company lists from the connected HubSpot portal.
  */
 export async function GET(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
-    // TODO: Get org ID from auth context
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
 
     const connection = await getConnection(orgId);
 

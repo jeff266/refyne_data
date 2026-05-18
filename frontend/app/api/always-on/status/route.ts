@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { AlwaysOnStatus } from '@/lib/always-on/types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/always-on/status
@@ -9,8 +10,13 @@ import type { AlwaysOnStatus } from '@/lib/always-on/types';
  * Auth: any role
  */
 export async function GET(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
 
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json({

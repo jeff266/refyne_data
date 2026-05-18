@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDrilldown, type DrilldownFilters, type ComplianceStatus, type RecordType } from '@/lib/compliance';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/compliance/records
  *
  * Paginated drill-down into normalized records.
  * Query params:
- *   - orgId: Organization ID (required)
  *   - harmonyId: Filter by Harmony ID
  *   - field: Filter by field name
  *   - status: Filter by status ('compliant' | 'stale' | 'unprocessed')
@@ -15,16 +15,14 @@ import { getDrilldown, type DrilldownFilters, type ComplianceStatus, type Record
  *   - pageSize: Records per page (default: 50, max: 100)
  */
 export async function GET(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     const { searchParams } = new URL(request.url);
-    const orgId = searchParams.get('orgId');
-
-    if (!orgId) {
-      return NextResponse.json(
-        { error: 'Missing orgId parameter' },
-        { status: 400 }
-      );
-    }
+    const orgId = ctx.orgId;
 
     const filters: DrilldownFilters = {
       harmonyId: searchParams.get('harmonyId') || undefined,

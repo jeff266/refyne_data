@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { BulkApproveRequest, BulkApproveResponse } from '@/lib/dedup/types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * POST /api/dedup/pairs/bulk-approve
@@ -9,6 +10,11 @@ import type { BulkApproveRequest, BulkApproveResponse } from '@/lib/dedup/types'
  * Editor or admin role required.
  */
 export async function POST(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
@@ -17,8 +23,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const orgId = request.headers.get('x-org-id') || 'default';
-    // TODO: Check editor or admin role
+    const orgId = ctx.orgId;
 
     const body = await request.json() as BulkApproveRequest;
 

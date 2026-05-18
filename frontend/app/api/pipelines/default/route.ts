@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/pipelines/default
@@ -7,9 +8,12 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
  * Returns the default pipeline for the organization.
  */
 export async function GET(request: NextRequest) {
-  try {
-    const orgId = request.headers.get('x-org-id') || 'default';
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 
+  try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json({ harmony_ids: [] });
     }
@@ -17,7 +21,7 @@ export async function GET(request: NextRequest) {
     const { data: pipeline } = await supabase
       .from('pipelines')
       .select('harmony_ids')
-      .eq('org_id', orgId)
+      .eq('org_id', ctx.orgId)
       .eq('is_default', true)
       .single();
 

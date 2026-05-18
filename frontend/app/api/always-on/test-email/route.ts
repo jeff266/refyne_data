@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { sendDigestEmail } from '@/lib/always-on/send-digest';
 import type { DigestPayload } from '@/lib/always-on/types';
 import type { AlwaysOnTestEmailResponse } from '@/lib/always-on/types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * POST /api/always-on/test-email
@@ -12,8 +13,13 @@ import type { AlwaysOnTestEmailResponse } from '@/lib/always-on/types';
  * Auth: admin only (TODO: implement auth check)
  */
 export async function POST(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
 
     // TODO: Get requesting user's email from auth
     // For now, use a test email or the first recipient in config

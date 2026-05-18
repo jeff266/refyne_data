@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enqueueScan, runComplianceScan } from '@/lib/compliance';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * POST /api/compliance/scan
@@ -8,23 +9,21 @@ import { enqueueScan, runComplianceScan } from '@/lib/compliance';
  * Returns jobId. Non-blocking - returns immediately.
  *
  * Body: {
- *   orgId: string,
  *   accessToken: string,
  *   hasExportScope?: boolean,
  *   sync?: boolean  // If true, runs synchronously (for testing)
  * }
  */
 export async function POST(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     const body = await request.json();
-    const { orgId, accessToken, hasExportScope, sync } = body;
-
-    if (!orgId) {
-      return NextResponse.json(
-        { error: 'Missing orgId in request body' },
-        { status: 400 }
-      );
-    }
+    const { accessToken, hasExportScope, sync } = body;
+    const orgId = ctx.orgId;
 
     if (!accessToken) {
       return NextResponse.json(

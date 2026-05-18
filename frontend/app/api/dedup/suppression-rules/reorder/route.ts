@@ -5,6 +5,7 @@ import {
   type SuppressionRuleRow,
   type ReorderRulesRequest,
 } from '@/lib/dedup/types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * POST /api/dedup/suppression-rules/reorder
@@ -13,6 +14,11 @@ import {
  * Admin role only.
  */
 export async function POST(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
@@ -21,9 +27,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Get org ID and role from auth context (Clerk)
-    const orgId = request.headers.get('x-org-id') || 'default';
-    // TODO: Check admin role
+    const orgId = ctx.orgId;
 
     const body = await request.json() as ReorderRulesRequest;
 

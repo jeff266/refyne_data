@@ -7,6 +7,7 @@ import {
   getMappingSummary,
   getPropertiesToFetch,
 } from '@/lib/hubspot';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 interface RouteParams {
   params: Promise<{
@@ -28,14 +29,18 @@ export async function GET(
   request: NextRequest,
   { params }: RouteParams
 ) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     const { listId } = await params;
     const searchParams = request.nextUrl.searchParams;
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : undefined;
     const preview = searchParams.get('preview') === 'true';
 
-    // TODO: Get org ID from auth context
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
 
     const connection = await getConnection(orgId);
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateToken, saveConnection, getConnection, deleteConnection, HubSpotClient } from '@/lib/hubspot';
 import { upsertSchemaFieldMappings } from '@/lib/hubspot/repository';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/hubspot/connect
@@ -8,9 +9,13 @@ import { upsertSchemaFieldMappings } from '@/lib/hubspot/repository';
  * Get current HubSpot connection status for the org.
  */
 export async function GET(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
-    // TODO: Get org ID from auth context
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
 
     const connection = await getConnection(orgId);
 
@@ -45,6 +50,11 @@ export async function GET(request: NextRequest) {
  * Body: { token: string }
  */
 export async function POST(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     const body = await request.json();
     const { token } = body;
@@ -69,8 +79,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Get org ID from auth context
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
 
     // TODO: Encrypt the token before storing
     // For now, storing plain text (should use AES-256-GCM in production)
@@ -137,9 +146,13 @@ export async function POST(request: NextRequest) {
  * Disconnect HubSpot from the org.
  */
 export async function DELETE(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
-    // TODO: Get org ID from auth context
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
 
     const deleted = await deleteConnection(orgId);
 

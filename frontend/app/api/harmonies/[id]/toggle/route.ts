@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * POST /api/harmonies/:id/toggle
@@ -10,9 +11,13 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     const harmonyId = params.id;
-    const orgId = request.headers.get('x-org-id') || 'default';
 
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
@@ -25,7 +30,7 @@ export async function POST(
     const { data: existing } = await supabase
       .from('pipelines')
       .select('harmony_ids')
-      .eq('org_id', orgId)
+      .eq('org_id', ctx.orgId)
       .eq('is_default', true)
       .single();
 
@@ -41,7 +46,7 @@ export async function POST(
     const { error } = await supabase
       .from('pipelines')
       .upsert({
-        org_id: orgId,
+        org_id: ctx.orgId,
         name: 'Default Pipeline',
         harmony_ids: newIds,
         is_default: true,

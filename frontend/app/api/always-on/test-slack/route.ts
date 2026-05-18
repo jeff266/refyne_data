@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { postToSlack } from '@/lib/always-on/slack-payload';
 import type { DigestPayload } from '@/lib/always-on/types';
 import type { AlwaysOnTestSlackResponse } from '@/lib/always-on/types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * POST /api/always-on/test-slack
@@ -11,8 +12,13 @@ import type { AlwaysOnTestSlackResponse } from '@/lib/always-on/types';
  * Auth: admin only (TODO: implement auth check)
  */
 export async function POST(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
 
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(

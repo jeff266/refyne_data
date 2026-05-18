@@ -7,6 +7,7 @@ import {
   getMappingSummary,
   getPropertiesToFetch,
 } from '@/lib/hubspot';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/hubspot/companies
@@ -19,6 +20,11 @@ import {
  * - preview: If true, only return first page with summary
  */
 export async function GET(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const limit = searchParams.get('limit')
@@ -26,8 +32,7 @@ export async function GET(request: NextRequest) {
       : 100;
     const preview = searchParams.get('preview') === 'true';
 
-    // TODO: Get org ID from auth context
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
 
     const connection = await getConnection(orgId);
 

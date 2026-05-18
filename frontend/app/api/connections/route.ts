@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/connections
@@ -7,15 +8,21 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
  * Returns list of all HubSpot connections with stats.
  */
 export async function GET() {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json({ connections: [] });
     }
 
-    // Get all connections
+    // Get all connections for this org
     const { data: connections, error } = await supabase
       .from('hubspot_connections')
-      .select('org_id, portal_id, portal_name, created_at, updated_at');
+      .select('org_id, portal_id, portal_name, created_at, updated_at')
+      .eq('org_id', ctx.orgId);
 
     if (error) {
       console.error('Failed to fetch connections:', error);
@@ -29,7 +36,7 @@ export async function GET() {
         const { count } = await supabase!
           .from('normalized_records')
           .select('*', { count: 'exact', head: true })
-          .eq('org_id', conn.org_id)
+          .eq('org_id', ctx.orgId)
           .eq('record_type', 'company');
 
         // Calculate time since last update

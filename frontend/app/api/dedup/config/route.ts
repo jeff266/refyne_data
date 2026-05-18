@@ -6,6 +6,7 @@ import {
   type DedupConfigRow,
   type DedupConfigUpdate,
 } from '@/lib/dedup/types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 // Valid canonical fields for core_display_fields
 const VALID_CORE_FIELDS = new Set([
@@ -21,6 +22,11 @@ const VALID_CORE_FIELDS = new Set([
  * Creates default row if none exists (upsert behavior).
  */
 export async function GET(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
@@ -29,8 +35,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // TODO: Get org ID from auth context (Clerk)
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
 
     // Try to get existing config
     const { data: existing, error: selectError } = await supabase
@@ -84,6 +89,11 @@ export async function GET(request: NextRequest) {
  * Admin role only.
  */
 export async function PUT(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
@@ -92,13 +102,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // TODO: Get org ID and role from auth context (Clerk)
-    const orgId = request.headers.get('x-org-id') || 'default';
-    // TODO: Check admin role
-    // const role = request.headers.get('x-org-role');
-    // if (role !== 'admin') {
-    //   return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    // }
+    const orgId = ctx.orgId;
 
     const body = await request.json() as DedupConfigUpdate;
 

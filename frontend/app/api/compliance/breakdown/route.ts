@@ -1,26 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBreakdownByHarmony, getBreakdownByField } from '@/lib/compliance';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/compliance/breakdown
  *
  * Returns per-Harmony or per-field breakdown table data.
  * Query params:
- *   - orgId: Organization ID (required)
  *   - by: 'harmony' | 'field' (default: 'harmony')
  */
 export async function GET(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     const { searchParams } = new URL(request.url);
-    const orgId = searchParams.get('orgId');
+    const orgId = ctx.orgId;
     const by = searchParams.get('by') || 'harmony';
-
-    if (!orgId) {
-      return NextResponse.json(
-        { error: 'Missing orgId parameter' },
-        { status: 400 }
-      );
-    }
 
     if (by !== 'harmony' && by !== 'field') {
       return NextResponse.json(

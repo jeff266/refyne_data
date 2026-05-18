@@ -6,6 +6,7 @@ import {
   type UpdateSuppressionRuleRequest,
   type RuleCondition,
 } from '@/lib/dedup/types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 // Valid operators for conditions
 const VALID_OPERATORS = new Set([
@@ -47,6 +48,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
@@ -56,10 +62,7 @@ export async function PUT(
     }
 
     const { id } = params;
-
-    // TODO: Get org ID and role from auth context (Clerk)
-    const orgId = request.headers.get('x-org-id') || 'default';
-    // TODO: Check admin role
+    const orgId = ctx.orgId;
 
     // Verify rule exists and belongs to org
     const { data: existing, error: selectError } = await supabase
@@ -194,6 +197,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
@@ -203,10 +211,7 @@ export async function DELETE(
     }
 
     const { id } = params;
-
-    // TODO: Get org ID and role from auth context (Clerk)
-    const orgId = request.headers.get('x-org-id') || 'default';
-    // TODO: Check admin role
+    const orgId = ctx.orgId;
 
     // Get the rule first (to return suppressedCount and verify ownership)
     const { data: existing, error: selectError } = await supabase

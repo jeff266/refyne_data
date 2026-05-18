@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { rowToPair, type DedupPairRow, type SingleApproveRequest } from '@/lib/dedup/types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * POST /api/dedup/pairs/:id/approve
@@ -12,6 +13,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
@@ -21,8 +27,7 @@ export async function POST(
     }
 
     const { id } = params;
-    const orgId = request.headers.get('x-org-id') || 'default';
-    // TODO: Check editor or admin role
+    const orgId = ctx.orgId;
 
     // Verify pair exists and is pending
     const { data: existing, error: selectError } = await supabase

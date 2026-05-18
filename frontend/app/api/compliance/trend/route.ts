@@ -1,26 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTrend } from '@/lib/compliance';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/compliance/trend
  *
  * Returns score history for the trend line.
  * Query params:
- *   - orgId: Organization ID (required)
  *   - days: Number of days to look back (default: 30)
  */
 export async function GET(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     const { searchParams } = new URL(request.url);
-    const orgId = searchParams.get('orgId');
+    const orgId = ctx.orgId;
     const days = parseInt(searchParams.get('days') || '30', 10);
-
-    if (!orgId) {
-      return NextResponse.json(
-        { error: 'Missing orgId parameter' },
-        { status: 400 }
-      );
-    }
 
     if (days < 1 || days > 365) {
       return NextResponse.json(

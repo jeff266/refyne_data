@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { AlwaysOnToggleRequest, AlwaysOnToggleResponse } from '@/lib/always-on/types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * POST /api/always-on/toggle
@@ -9,8 +10,13 @@ import type { AlwaysOnToggleRequest, AlwaysOnToggleResponse } from '@/lib/always
  * Auth: admin only (TODO: implement auth check)
  */
 export async function POST(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
     const body: AlwaysOnToggleRequest = await request.json();
 
     if (!isSupabaseConfigured() || !supabase) {

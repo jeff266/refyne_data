@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enqueueDigestJob } from '@/lib/queue/digest-queue';
 import type { AlwaysOnTriggerRequest, AlwaysOnTriggerResponse } from '@/lib/always-on/types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * POST /api/always-on/trigger
@@ -9,8 +10,13 @@ import type { AlwaysOnTriggerRequest, AlwaysOnTriggerResponse } from '@/lib/alwa
  * Auth: admin only (TODO: implement auth check)
  */
 export async function POST(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
-    const orgId = request.headers.get('x-org-id') || 'default';
+    const orgId = ctx.orgId;
     const body: AlwaysOnTriggerRequest = await request.json();
 
     const { connectionId } = body;

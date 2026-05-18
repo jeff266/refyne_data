@@ -1,24 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveInsights, dismissInsight } from '@/lib/compliance';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/compliance/insights
  *
  * Returns active (non-dismissed) insight cards for the organization.
- * Query params:
- *   - orgId: Organization ID (required)
  */
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const orgId = searchParams.get('orgId');
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 
-    if (!orgId) {
-      return NextResponse.json(
-        { error: 'Missing orgId parameter' },
-        { status: 400 }
-      );
-    }
+  try {
+    const orgId = ctx.orgId;
 
     const insights = await getActiveInsights(orgId);
 
@@ -39,6 +35,11 @@ export async function GET(request: NextRequest) {
  * Body: { insightId: string }
  */
 export async function POST(request: NextRequest) {
+  // Add auth check
+  let ctx;
+  try { ctx = getOrgContext(); }
+  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
   try {
     const body = await request.json();
     const { insightId, action } = body;
