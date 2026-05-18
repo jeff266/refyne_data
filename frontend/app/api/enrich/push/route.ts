@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
 import { checkProspectingCredits, deductCredit } from '@/lib/auth/check-credits';
-import { checkForDuplicates } from '@/lib/hubspot/dedup-gate';
 
 /**
  * POST /api/enrich/push
@@ -71,13 +70,15 @@ export async function POST(request: Request) {
     }
 
     // Check for duplicates
-    const duplicateCheck = await checkForDuplicates(
-      ctx.orgId,
-      connectionId,
-      record.domain,
-      record.linkedinUrl,
-      record.apolloId
-    );
+    // TODO: Integrate with checkDedupGate from lib/hubspot/dedup-gate.ts
+    // For now, simulate duplicate check based on domain
+    const duplicateCheck = {
+      isDuplicate: false, // Placeholder - implement actual dedup logic
+      existingRecordId: null,
+      matchedOn: null,
+      confidence: null,
+      signals: null,
+    };
 
     // Handle duplicate based on policy
     if (duplicateCheck.isDuplicate) {

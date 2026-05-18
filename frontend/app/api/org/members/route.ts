@@ -68,6 +68,7 @@ export async function POST(request: Request) {
 
     const invitation = await client.organizations.createOrganizationInvitation({
       organizationId: ctx.orgId,
+      inviterUserId: ctx.userId,
       emailAddress: email,
       role,
     });

@@ -241,10 +241,8 @@ export default function QuarantinePage() {
           }}
           onClick={() => setSelectedRecord(null)}
         >
-          <Card
-            style={{ width: 480, padding: 24 }}
-            onClick={(e: React.MouseEvent) => e.stopPropagation()}
-          >
+          <div onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <Card style={{ width: 480, padding: 24 }}>
             <h3 style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 16 }}>
               Reject Record
             </h3>
@@ -275,6 +273,7 @@ export default function QuarantinePage() {
               <PrimaryBtn onClick={() => handleReject(selectedRecord.id)}>Confirm Rejection</PrimaryBtn>
             </div>
           </Card>
+          </div>
         </div>
       )}
     </div>
