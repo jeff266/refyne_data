@@ -67,20 +67,8 @@ export default function OnboardingPage() {
       // Set as active organization
       await setActive({ organization: org.id });
 
-      // Store intended plan in user's publicMetadata (if plan was selected from pricing page)
-      if (intendedPlan && user) {
-        try {
-          await user.update({
-            publicMetadata: {
-              ...user.publicMetadata,
-              intendedPlan,
-            },
-          });
-        } catch (metadataError) {
-          console.error('Failed to store intended plan:', metadataError);
-          // Don't block onboarding if metadata update fails
-        }
-      }
+      // TODO: Store intended plan for analytics/conversion tracking
+      // Could be stored in workspace_entitlements or sent to analytics service
 
       // Redirect to connections to set up HubSpot
       router.push('/connections');
