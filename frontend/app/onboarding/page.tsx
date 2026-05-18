@@ -31,6 +31,11 @@ export default function OnboardingPage() {
       return;
     }
 
+    if (!createOrganization || !setActive) {
+      setError('Unable to create organization');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -67,6 +72,11 @@ export default function OnboardingPage() {
   };
 
   const handleSelectOrganization = async (orgId: string) => {
+    if (!setActive) {
+      setError('Unable to switch organization');
+      return;
+    }
+
     setLoading(true);
     try {
       await setActive({ organization: orgId });
@@ -101,7 +111,7 @@ export default function OnboardingPage() {
           width: '100%',
         }}
       >
-        <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 8, color: C.text1 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 8, color: C.text }}>
           Welcome to Refyne
         </h1>
         <p style={{ fontSize: 14, color: C.text2, marginBottom: 32 }}>
@@ -110,7 +120,7 @@ export default function OnboardingPage() {
 
         {existingOrgs.length > 0 && (
           <div style={{ marginBottom: 32 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, color: C.text1 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, color: C.text }}>
               Join existing workspace
             </h2>
             {existingOrgs.map((membership) => (
@@ -126,7 +136,7 @@ export default function OnboardingPage() {
                 }}
                 onClick={() => handleSelectOrganization(membership.organization.id)}
               >
-                <div style={{ fontSize: 14, color: C.text1, fontWeight: 500 }}>
+                <div style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>
                   {membership.organization.name}
                 </div>
                 <div style={{ fontSize: 12, color: C.text3 }}>
@@ -138,7 +148,7 @@ export default function OnboardingPage() {
         )}
 
         <div>
-          <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, color: C.text1 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, color: C.text }}>
             Create new workspace
           </h2>
 
@@ -155,7 +165,7 @@ export default function OnboardingPage() {
               border: `1px solid ${C.border}`,
               borderRadius: 4,
               fontSize: 14,
-              color: C.text1,
+              color: C.text,
               marginBottom: 16,
               fontFamily: F.sans,
             }}
