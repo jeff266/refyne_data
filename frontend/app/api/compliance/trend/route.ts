@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTrend } from '@/lib/compliance';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+
 
 /**
  * GET /api/compliance/trend
@@ -14,6 +16,19 @@ export async function GET(request: NextRequest) {
   let ctx;
   try { ctx = getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+  // Feature gate: compliance
+  try {
+    await requireFeature(ctx.orgId, 'compliance');
+  } catch (error) {
+    const gateError = parseFeatureGateError(error);
+    if (gateError) {
+      return NextResponse.json(
+        { error: 'feature_gated', feature: gateError.feature, currentPlan: gateError.currentPlan },
+        { status: 403 }
+      );
+    }
+    throw error;
+  }
 
   try {
     const { searchParams } = new URL(request.url);
