@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { logAuditEvent } from '@/lib/auth/audit-logger';
+import { getBillingContext } from '@/lib/billing/check-feature';
+import { getPlanFeatures, getNextPlanWithMoreSeats } from '@/lib/billing/plan-features';
 
 /**
  * GET /api/org/members
@@ -66,6 +68,36 @@ export async function POST(request: Request) {
     }
 
     const client = await clerkClient();
+
+    // Check seat limits for non-viewer invitations
+    if (role !== 'org:viewer') {
+      const billing = await getBillingContext(ctx.orgId);
+      const features = getPlanFeatures(billing.plan, billing.alwaysOnAddon);
+
+      // Get current member count
+      const { data: members } = await client.organizations.getOrganizationMembershipList({
+        organizationId: ctx.orgId,
+      });
+
+      // Count non-viewer members
+      const nonViewerCount = members.filter(
+        (m) => m.role === 'org:admin' || m.role === 'org:operator'
+      ).length;
+
+      // Check if at limit
+      if (nonViewerCount >= features.max_operators) {
+        const upgradeTo = getNextPlanWithMoreSeats(billing.plan);
+        return NextResponse.json(
+          {
+            error: 'seat_limit_reached',
+            current: nonViewerCount,
+            limit: features.max_operators,
+            upgradeTo,
+          },
+          { status: 409 }
+        );
+      }
+    }
 
     const invitation = await client.organizations.createOrganizationInvitation({
       organizationId: ctx.orgId,

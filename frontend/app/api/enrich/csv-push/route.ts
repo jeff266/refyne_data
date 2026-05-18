@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
 import { checkProspectingCredits, deductCredit } from '@/lib/auth/check-credits';
+import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 
 /**
  * POST /api/enrich/csv-push
@@ -15,6 +16,20 @@ export async function POST(request: Request) {
     ctx = requireOperatorOrAbove();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  // Feature gate: prospect
+  try {
+    await requireFeature(ctx.orgId, 'prospect');
+  } catch (error) {
+    const gateError = parseFeatureGateError(error);
+    if (gateError) {
+      return NextResponse.json(
+        { error: 'feature_gated', feature: gateError.feature, currentPlan: gateError.currentPlan },
+        { status: 403 }
+      );
+    }
+    throw error;
   }
 
   try {

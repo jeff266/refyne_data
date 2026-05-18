@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { rowToPair, type DedupPairRow } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 
 /**
  * GET /api/dedup/pairs/:id
@@ -18,6 +19,20 @@ export async function GET(
   let ctx;
   try { ctx = getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
+  // Feature gate: dedup
+  try {
+    await requireFeature(ctx.orgId, 'dedup');
+  } catch (error) {
+    const gateError = parseFeatureGateError(error);
+    if (gateError) {
+      return NextResponse.json(
+        { error: 'feature_gated', feature: gateError.feature, currentPlan: gateError.currentPlan },
+        { status: 403 }
+      );
+    }
+    throw error;
+  }
 
   try {
     if (!isSupabaseConfigured() || !supabase) {

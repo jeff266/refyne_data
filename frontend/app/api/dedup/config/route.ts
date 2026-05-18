@@ -7,6 +7,7 @@ import {
   type DedupConfigUpdate,
 } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 
 // Valid canonical fields for core_display_fields
 const VALID_CORE_FIELDS = new Set([
@@ -26,6 +27,20 @@ export async function GET(request: NextRequest) {
   let ctx;
   try { ctx = getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
+  // Feature gate: dedup
+  try {
+    await requireFeature(ctx.orgId, 'dedup');
+  } catch (error) {
+    const gateError = parseFeatureGateError(error);
+    if (gateError) {
+      return NextResponse.json(
+        { error: 'feature_gated', feature: gateError.feature, currentPlan: gateError.currentPlan },
+        { status: 403 }
+      );
+    }
+    throw error;
+  }
 
   try {
     if (!isSupabaseConfigured() || !supabase) {
@@ -93,6 +108,20 @@ export async function PUT(request: NextRequest) {
   let ctx;
   try { ctx = getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
+  // Feature gate: dedup
+  try {
+    await requireFeature(ctx.orgId, 'dedup');
+  } catch (error) {
+    const gateError = parseFeatureGateError(error);
+    if (gateError) {
+      return NextResponse.json(
+        { error: 'feature_gated', feature: gateError.feature, currentPlan: gateError.currentPlan },
+        { status: 403 }
+      );
+    }
+    throw error;
+  }
 
   try {
     if (!isSupabaseConfigured() || !supabase) {
