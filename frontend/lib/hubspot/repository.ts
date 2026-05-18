@@ -105,19 +105,56 @@ export async function saveConnection(
 
 /**
  * Delete HubSpot connection for an org.
+ *
+ * For OAuth connections, revokes the access token at HubSpot before disconnecting.
+ * Sets connection_status to 'disconnected' and zeros out tokens (does not delete the row).
  */
 export async function deleteConnection(orgId: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) {
     return false;
   }
 
+  // Get connection first to check for OAuth tokens
+  const { data: connection } = await supabase
+    .from('hubspot_connections')
+    .select('*')
+    .eq('org_id', orgId)
+    .single();
+
+  // Revoke OAuth token at HubSpot if it's an OAuth connection
+  if (connection?.access_token) {
+    try {
+      const response = await fetch(
+        `https://api.hubapi.com/oauth/v1/refresh-tokens/${connection.refresh_token}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      if (!response.ok) {
+        console.warn('[deleteConnection] Failed to revoke token at HubSpot (non-fatal):', await response.text());
+      } else {
+        console.log('[deleteConnection] OAuth token revoked successfully');
+      }
+    } catch (error) {
+      console.warn('[deleteConnection] Error revoking token at HubSpot (non-fatal):', error);
+    }
+  }
+
+  // Update connection: set status to disconnected and zero out tokens
   const { error } = await supabase
     .from('hubspot_connections')
-    .delete()
+    .update({
+      connection_status: 'disconnected',
+      access_token: null,
+      refresh_token: null,
+      token_expires_at: null,
+      disconnected_at: new Date().toISOString(),
+    })
     .eq('org_id', orgId);
 
   if (error) {
-    console.error('Failed to delete HubSpot connection:', error);
+    console.error('Failed to disconnect HubSpot connection:', error);
     return false;
   }
 

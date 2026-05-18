@@ -1,43 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
 import { validateToken, saveConnection, getConnection, deleteConnection, HubSpotClient } from '@/lib/hubspot';
 import { upsertSchemaFieldMappings } from '@/lib/hubspot/repository';
-import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { supabase } from '@/lib/db/supabase';
+import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/hubspot/connect
  *
- * Get current HubSpot connection status for the org.
+ * Initiates HubSpot OAuth flow by generating a CSRF state token
+ * and redirecting to HubSpot's authorization URL.
+ *
+ * Auth: admin only
  */
-export async function GET(request: NextRequest) {
-  // Add auth check
+export async function GET() {
   let ctx;
-  try { ctx = getOrgContext(); }
-  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+  try {
+    ctx = requireAdmin();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
 
   try {
-    const orgId = ctx.orgId;
+    const clientId = process.env.HUBSPOT_CLIENT_ID;
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/hubspot/callback`;
 
-    const connection = await getConnection(orgId);
-
-    if (!connection) {
-      return NextResponse.json({
-        connected: false,
-        portalId: null,
-        scopes: null,
-      });
+    if (!clientId) {
+      return NextResponse.json(
+        { error: 'HubSpot OAuth not configured' },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({
-      connected: true,
-      portalId: connection.portalId,
-      scopes: connection.scopes,
-      hasExportScope: connection.hasExportScope,
-      connectedAt: connection.createdAt,
-    });
+    if (!supabase) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 500 }
+      );
+    }
+
+    // Generate cryptographically random state (32 bytes hex = 64 characters)
+    const state = randomBytes(32).toString('hex');
+
+    // Store state in database for CSRF protection
+    const { error } = await supabase
+      .from('hubspot_oauth_states')
+      .insert({
+        state,
+        org_id: ctx.orgId,
+        created_by: ctx.userId,
+      });
+
+    if (error) {
+      console.error('Failed to store OAuth state:', error);
+      return NextResponse.json(
+        { error: 'Failed to initiate OAuth flow' },
+        { status: 500 }
+      );
+    }
+
+    // Build HubSpot OAuth URL
+    const scopes = [
+      'crm.objects.companies.read',
+      'crm.objects.companies.write',
+      'crm.export',
+      'oauth',
+    ];
+
+    const authUrl = new URL('https://app.hubspot.com/oauth/authorize');
+    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('scope', scopes.join(' '));
+    authUrl.searchParams.set('state', state);
+
+    // Redirect to HubSpot
+    return NextResponse.redirect(authUrl.toString());
   } catch (error) {
-    console.error('Failed to get HubSpot connection:', error);
+    console.error('OAuth connect error:', error);
     return NextResponse.json(
-      { error: 'Failed to get connection status' },
+      { error: 'Failed to initiate OAuth flow' },
       { status: 500 }
     );
   }
