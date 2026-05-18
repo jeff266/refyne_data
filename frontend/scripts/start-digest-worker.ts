@@ -20,9 +20,9 @@ import {
   stopDigestWorker,
   getDigestQueueStats,
   enqueueDigestJob,
-} from '@/lib/queue/digest-queue';
-import { isRedisConfigured } from '@/lib/queue/redis';
-import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+} from '../lib/queue/digest-queue';
+import { isRedisConfigured } from '../lib/queue/redis';
+import { supabase, isSupabaseConfigured } from '../lib/db/supabase';
 
 async function main() {
   console.log('═'.repeat(60));
