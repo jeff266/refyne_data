@@ -317,27 +317,66 @@ export async function executeEnrichmentPull(
     const pullStart = performance.now();
     let response: ProviderResponse | ProviderResponse[] | null = null;
 
-    // For search providers (Serper, Yelp, GraphIQ), use search if term/location provided
-    if (
-      (input.query.term || input.query.location || input.query.capabilities) &&
-      provider.search
-    ) {
-      const searchQuery = buildSearchQuery(input.query);
-      response = await provider.search(searchQuery);
-    } else if (input.query.domain || input.query.name) {
-      // Use enrichCompany for domain/name queries
-      const companyQuery = buildCompanyQuery(input.query);
-      response = await provider.enrichCompany(companyQuery);
+    // Route Serper and GraphIQ through server-side API for credit metering
+    const isServerSideProvider = input.provider === 'serper' || input.provider === 'graphiq';
+
+    if (isServerSideProvider) {
+      // Determine action
+      const action = (input.query.term || input.query.location || input.query.capabilities)
+        ? 'search'
+        : 'enrichCompany';
+
+      const query = action === 'search'
+        ? buildSearchQuery(input.query)
+        : buildCompanyQuery(input.query);
+
+      // Call server-side API
+      const apiUrl = `/api/enrich/providers/${input.provider}`;
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, query }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        return {
+          success: false,
+          error: {
+            code: res.status === 429 ? 'credit_limit_reached' : 'api_error',
+            message: error.error || 'Provider API call failed',
+            details: error,
+          },
+          timing: { totalMs: performance.now() - startTime },
+        };
+      }
+
+      const result = await res.json();
+      response = result.data;
     } else {
-      return {
-        success: false,
-        error: {
-          code: 'invalid_input',
-          message: 'Query must include domain, name, or search term',
-          details: { query: input.query },
-        },
-        timing: { totalMs: performance.now() - startTime },
-      };
+      // BYOK providers (Apollo, ZoomInfo, etc.) - call directly from client
+      // For search providers (Serper, Yelp, GraphIQ), use search if term/location provided
+      if (
+        (input.query.term || input.query.location || input.query.capabilities) &&
+        provider.search
+      ) {
+        const searchQuery = buildSearchQuery(input.query);
+        response = await provider.search(searchQuery);
+      } else if (input.query.domain || input.query.name) {
+        // Use enrichCompany for domain/name queries
+        const companyQuery = buildCompanyQuery(input.query);
+        response = await provider.enrichCompany(companyQuery);
+      } else {
+        return {
+          success: false,
+          error: {
+            code: 'invalid_input',
+            message: 'Query must include domain, name, or search term',
+            details: { query: input.query },
+          },
+          timing: { totalMs: performance.now() - startTime },
+        };
+      }
     }
 
     pullMs = performance.now() - pullStart;
