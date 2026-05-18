@@ -6,8 +6,9 @@ import { Card, Toggle, PrimaryBtn, GhostBtn } from '@/components/refyne';
 import { AlwaysOnSettings } from '@/components/always-on/AlwaysOnSettings';
 import { MembersTab } from '@/components/settings/MembersTab';
 import { PoliciesTab } from '@/components/settings/PoliciesTab';
+import { NotificationsTab } from '@/components/settings/NotificationsTab';
 
-type TabType = 'general' | 'members' | 'policies';
+type TabType = 'general' | 'members' | 'policies' | 'notifications';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('general');
@@ -30,12 +31,16 @@ export default function SettingsPage() {
         <Tab active={activeTab === 'policies'} onClick={() => setActiveTab('policies')}>
           Policies
         </Tab>
+        <Tab active={activeTab === 'notifications'} onClick={() => setActiveTab('notifications')}>
+          Notifications
+        </Tab>
       </div>
 
       {/* Tab Content */}
       {activeTab === 'general' && <GeneralTab />}
       {activeTab === 'members' && <MembersTab />}
       {activeTab === 'policies' && <PoliciesTab />}
+      {activeTab === 'notifications' && <NotificationsTab />}
     </div>
   );
 }
