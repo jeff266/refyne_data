@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
+import { logAuditEvent } from '@/lib/auth/audit-logger';
 
 /**
  * GET /api/org/settings
@@ -67,6 +68,13 @@ export async function PUT(request: Request) {
       );
     }
 
+    // Fetch before state for audit log
+    const { data: beforeSettings } = await supabase
+      .from('workspace_entitlements')
+      .select('allow_operator_push, duplicate_push_policy, external_agencies_enabled')
+      .eq('clerk_org_id', ctx.orgId)
+      .single();
+
     const updates: any = {};
     if (typeof allow_operator_push === 'boolean') {
       updates.allow_operator_push = allow_operator_push;
@@ -89,6 +97,14 @@ export async function PUT(request: Request) {
       console.error('Failed to update org settings:', error);
       return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
     }
+
+    // Audit log (fire and forget)
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      action: 'policy_changed',
+      metadata: { before: beforeSettings, after: updates },
+    });
 
     return NextResponse.json({ settings });
   } catch (error) {

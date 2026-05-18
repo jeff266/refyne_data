@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { wouldRemoveLastAdmin } from '@/lib/auth/admin-guard';
+import { logAuditEvent } from '@/lib/auth/audit-logger';
 
 /**
  * DELETE /api/org/members/[userId]
@@ -61,6 +62,15 @@ export async function DELETE(
     await client.organizations.deleteOrganizationMembership({
       organizationId: ctx.orgId,
       userId,
+    });
+
+    // Audit log (fire and forget)
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      action: 'member_removed',
+      targetId: userId,
+      metadata: { email: membership.publicUserData?.identifier },
     });
 
     return NextResponse.json({ message: 'Member removed successfully' });

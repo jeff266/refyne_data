@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
+import { logAuditEvent } from '@/lib/auth/audit-logger';
 
 /**
  * GET /api/limits
@@ -108,6 +109,15 @@ export async function POST(request: Request) {
       console.error('Failed to create/update limit:', error);
       return NextResponse.json({ error: 'Failed to create/update limit' }, { status: 500 });
     }
+
+    // Audit log (fire and forget)
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      action: 'limit_changed',
+      targetId: limit.id,
+      metadata: { applies_to, credits_per_period, period },
+    });
 
     return NextResponse.json({ limit }, { status: 201 });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
+import { logAuditEvent } from '@/lib/auth/audit-logger';
 
 /**
  * GET /api/org/members
@@ -71,6 +72,14 @@ export async function POST(request: Request) {
       inviterUserId: ctx.userId,
       emailAddress: email,
       role,
+    });
+
+    // Audit log (fire and forget)
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      action: 'member_invited',
+      metadata: { email, role },
     });
 
     return NextResponse.json({

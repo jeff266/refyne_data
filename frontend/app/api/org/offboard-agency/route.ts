@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
+import { logAuditEvent } from '@/lib/auth/audit-logger';
 
 /**
  * POST /api/org/offboard-agency
@@ -86,6 +87,18 @@ export async function POST(request: Request) {
         console.error('Failed to disable external agencies:', error);
       }
     }
+
+    // Audit log (fire and forget)
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      action: 'agency_offboarded',
+      metadata: {
+        userIds: agencyUserIds,
+        removed: results.removedMembers.length,
+        failed: results.failedRemovals.length,
+      },
+    });
 
     return NextResponse.json({
       message: 'Agency offboarding completed',

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { wouldRemoveLastAdmin } from '@/lib/auth/admin-guard';
+import { logAuditEvent } from '@/lib/auth/audit-logger';
 
 /**
  * PUT /api/org/members/[userId]/role
@@ -57,11 +58,23 @@ export async function PUT(
       }
     }
 
+    // Capture before state
+    const beforeRole = currentMember.role;
+
     // Update the role
     await client.organizations.updateOrganizationMembership({
       organizationId: ctx.orgId,
       userId,
       role,
+    });
+
+    // Audit log (fire and forget)
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      action: 'role_changed',
+      targetId: userId,
+      metadata: { before: beforeRole, after: role },
     });
 
     return NextResponse.json({
