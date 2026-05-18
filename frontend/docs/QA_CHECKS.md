@@ -42,11 +42,30 @@ Run this check before marking any integration or API-wiring task complete.
 
 Zero MISSING routes. INTENTIONAL and STALE orphans are acceptable but must be explicitly labeled, not silently ignored.
 
+### Route Classification Reference
+
+Routes with zero references fall into three categories:
+
+**INTENTIONAL** - Route is built, UI planned but not yet implemented:
+- `POST /api/compliance/insights` - Compliance insights generation endpoint
+- `GET /api/compliance/records` - Compliance record retrieval
+- `GET /api/compliance/alerts` - Compliance alert listing
+- `POST /api/compliance/alerts` - Compliance alert creation
+- `GET /api/compliance/scan` - Manual compliance scan status
+- `POST /api/compliance/scan` - Trigger manual compliance scan
+- `POST /api/hubspot/connect` - PAT-based connection method (active until OAuth ships)
+
+**DEFERRED** - Route was superseded by newer implementation:
+- `GET /api/always-on/config` - Removed 2026-05-18, superseded by `/api/always-on/status`
+
+**MISSING** - Route has designed UI but was never wired up (should not exist - flag as bug)
+
 ### Notes
 
 - Dynamic route segments (e.g. `/api/harmonies/[id]`) should match against any reference containing the base path (`/api/harmonies/`)
 - Do not count references inside `*.test.ts` files as frontend coverage
 - Run the check using bash tools rather than loading all files into context
+- Update the classification reference above when adding new orphaned routes or removing old ones
 
 ### Script
 
