@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { OrganizationSwitcher } from '@clerk/nextjs';
 import { ChevronRight, Command, RefreshCw, Plus } from 'lucide-react';
 import { C, F, PAGE_META } from '@/lib/design-tokens';
 import { PrimaryBtn } from './PrimaryBtn';
@@ -31,9 +32,27 @@ export function TopBar() {
           fontFamily: F.sans,
         }}
       >
-        <span style={{ fontSize: 11, color: C.text3, fontFamily: F.mono }}>
-          Frontera Health
-        </span>
+        <OrganizationSwitcher
+          appearance={{
+            elements: {
+              rootBox: {
+                display: 'flex',
+                alignItems: 'center',
+              },
+              organizationSwitcherTrigger: {
+                padding: '4px 8px',
+                border: 'none',
+                background: 'none',
+                color: C.text3,
+                fontSize: '11px',
+                fontFamily: F.mono,
+                '&:hover': {
+                  color: C.text2,
+                },
+              },
+            },
+          }}
+        />
         <ChevronRight size={12} color={C.text3} />
         <span
           style={{

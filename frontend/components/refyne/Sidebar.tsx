@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { UserButton } from '@clerk/nextjs';
 import {
   LayoutDashboard,
   Search,
@@ -143,6 +144,30 @@ export function Sidebar() {
       </nav>
 
       <div style={{ borderTop: `1px solid ${C.border}`, padding: '8px 8px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 8px',
+            marginBottom: 8,
+          }}
+        >
+          <UserButton
+            appearance={{
+              elements: {
+                userButtonAvatarBox: {
+                  width: '24px',
+                  height: '24px',
+                },
+                userButtonPopoverCard: {
+                  background: C.sidebar,
+                  border: `1px solid ${C.border}`,
+                },
+              },
+            }}
+          />
+        </div>
         <Link
           href="/settings"
           style={{
