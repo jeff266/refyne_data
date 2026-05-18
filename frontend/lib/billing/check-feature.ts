@@ -111,23 +111,23 @@ export async function deductEnrichCredit(
     .eq('org_id', orgId);
 
   // Fire and forget audit log
-  supabase
-    .from('credit_transactions')
-    .insert({
-      org_id: orgId,
-      user_id: userId,
-      type: 'deduct',
-      amount: count,
-      action,
-      provider,
-      balance_after: limit - newUsed,
-    })
-    .then(() => {
-      // Audit log insertion complete
-    })
-    .catch((err) => {
+  void (async () => {
+    try {
+      await supabase
+        .from('credit_transactions')
+        .insert({
+          org_id: orgId,
+          user_id: userId,
+          type: 'deduct',
+          amount: count,
+          action,
+          provider,
+          balance_after: limit - newUsed,
+        });
+    } catch (err) {
       console.error('Failed to log credit transaction:', err);
-    });
+    }
+  })();
 
   return { allowed: true, remaining: limit - newUsed };
 }
