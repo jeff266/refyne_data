@@ -343,8 +343,10 @@ export async function executeEnrichmentPull(
         return {
           success: false,
           error: {
-            code: res.status === 429 ? 'credit_limit_reached' : 'api_error',
-            message: error.error || 'Provider API call failed',
+            code: 'provider_error',
+            message: res.status === 429
+              ? `Credit limit reached: ${error.error || 'No credits remaining'}`
+              : error.error || 'Provider API call failed',
             details: error,
           },
           timing: { totalMs: performance.now() - startTime },
