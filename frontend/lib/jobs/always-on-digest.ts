@@ -10,6 +10,7 @@ import type { DigestPayload, RemediationItem, HarmonyBreakdownItem } from '../al
 import { supabase } from '../db/supabase';
 import { sendDigestEmail } from '../always-on/send-digest';
 import { postToSlack } from '../always-on/slack-payload';
+import { getSubscribers } from '../notifications/get-recipients';
 
 /**
  * Process a digest job.
@@ -290,10 +291,17 @@ async function processConnection(
 
     // 10. Send email digest
     let digestSent = false;
-    if (config.digest_enabled && config.email_recipients?.length > 0) {
+    if (config.digest_enabled) {
       try {
-        await sendDigestEmail(digestPayload, config.email_recipients, orgId);
-        digestSent = true;
+        // Get subscribers from notification_subscriptions table
+        const recipients = await getSubscribers(orgId, 'always_on_digest');
+
+        if (recipients.length > 0) {
+          await sendDigestEmail(digestPayload, recipients, orgId);
+          digestSent = true;
+        } else {
+          console.log(`No subscribers for always_on_digest in org=${orgId}`);
+        }
       } catch (error) {
         console.error('Failed to send digest email:', error);
       }
