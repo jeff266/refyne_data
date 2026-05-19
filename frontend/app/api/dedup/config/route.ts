@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     if (selectError && selectError.code !== 'PGRST116') {
       // PGRST116 = no rows returned (expected for new orgs)
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/config' });
+      captureWithOrgContext(selectError, ctx.orgId, { route: '/api/dedup/config' });
       console.error('Failed to get dedup config:', selectError);
       return NextResponse.json(
         { error: 'Failed to get config' },
