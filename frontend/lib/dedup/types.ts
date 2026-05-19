@@ -449,6 +449,7 @@ export interface BulkRejectResponse {
 
 export interface SingleApproveRequest {
   fieldSelections?: Record<string, FieldSelection>;
+  survivingRecordId?: string;
 }
 
 export interface SingleApproveResponse {

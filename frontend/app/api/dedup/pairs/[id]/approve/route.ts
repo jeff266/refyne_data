@@ -70,12 +70,16 @@ export async function POST(
 
     const body = await request.json() as SingleApproveRequest;
 
+    // Determine surviving record ID
+    let survivingRecordId = body.survivingRecordId || existing.record_a_id;
+
     // Update pair to approved
     const { data: updated, error: updateError } = await supabase
       .from('dedup_pairs')
       .update({
         status: 'approved',
         field_selections: body.fieldSelections || null,
+        surviving_record_id: survivingRecordId,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)

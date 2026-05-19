@@ -4,13 +4,12 @@ import { rowToPair, type DedupPairRow } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
 
 /**
  * GET /api/dedup/pairs/:id
  *
- * Returns a single pair with basic record data.
- * Note: Live HubSpot data fetch requires decryption of stored token.
- * For now, returns record IDs only. UI handles missing data gracefully.
+ * Returns a single pair with full company details from HubSpot.
  */
 export async function GET(
   request: NextRequest,
@@ -63,31 +62,62 @@ export async function GET(
 
     const pairData = rowToPair(pair as DedupPairRow);
 
-    // Try to get cached/normalized record data from normalized_records table
-    let recordAData: Record<string, unknown> | null = null;
-    let recordBData: Record<string, unknown> | null = null;
+    // Fetch full company details from HubSpot
+    let recordA = null;
+    let recordB = null;
 
-    // Check for normalized records (from previous sync)
-    const { data: normalizedRecords } = await supabase
-      .from('normalized_records')
-      .select('hubspot_id, canonical')
-      .eq('org_id', orgId)
-      .in('hubspot_id', [pairData.recordAId, pairData.recordBId]);
+    try {
+      const accessToken = await getAccessToken(orgId);
 
-    if (normalizedRecords) {
-      for (const rec of normalizedRecords) {
-        if (rec.hubspot_id === pairData.recordAId) {
-          recordAData = rec.canonical as Record<string, unknown>;
-        } else if (rec.hubspot_id === pairData.recordBId) {
-          recordBData = rec.canonical as Record<string, unknown>;
-        }
+      // Properties to fetch for review
+      const properties = [
+        'name',
+        'domain',
+        'phone',
+        'industry',
+        'city',
+        'state',
+        'hubspot_owner_id',
+        'createdate',
+        'hs_lastmodifieddate',
+        'num_associated_contacts',
+        'num_associated_deals',
+      ];
+
+      // Fetch both companies in parallel
+      const [resA, resB] = await Promise.all([
+        fetch(`https://api.hubapi.com/crm/v3/objects/companies/${pairData.recordAId}?properties=${properties.join(',')}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+        fetch(`https://api.hubapi.com/crm/v3/objects/companies/${pairData.recordBId}?properties=${properties.join(',')}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+      ]);
+
+      if (resA.ok) {
+        const dataA = await resA.json();
+        recordA = {
+          id: dataA.id,
+          properties: dataA.properties,
+        };
       }
+
+      if (resB.ok) {
+        const dataB = await resB.json();
+        recordB = {
+          id: dataB.id,
+          properties: dataB.properties,
+        };
+      }
+    } catch (error) {
+      console.error('[GET /api/dedup/pairs/[id]] Failed to fetch HubSpot data:', error);
+      // Continue without HubSpot data - UI can handle null values
     }
 
     return NextResponse.json({
       pair: pairData,
-      recordAData,
-      recordBData,
+      recordA,
+      recordB,
     });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/[id]' });

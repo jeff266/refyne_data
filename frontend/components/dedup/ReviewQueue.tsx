@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, ChevronDown, Check, ExternalLink, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Check, ExternalLink, X, AlertCircle, RefreshCw } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, GhostBtn, PrimaryBtn } from '@/components/refyne';
 import { ScanningState } from './ScanningState';
@@ -11,7 +12,6 @@ import type {
   PairStatus,
   PairsCounts,
   FiredSignal,
-  FieldSelection,
 } from '@/lib/dedup/types';
 
 // ─────────────────────────────────────────────────────────────
@@ -317,135 +317,6 @@ function SelectionBar({
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Detail Panel (Accordion Content)
-// ─────────────────────────────────────────────────────────────
-
-interface DetailPanelProps {
-  pair: DedupPair;
-  recordAData: Record<string, unknown> | null;
-  recordBData: Record<string, unknown> | null;
-  onApprove: (fieldSelections?: Record<string, FieldSelection>) => void;
-  onReject: () => void;
-  onSkip: () => void;
-  loading: boolean;
-}
-
-function DetailPanel({
-  pair,
-  recordAData,
-  recordBData,
-  onApprove,
-  onReject,
-  onSkip,
-  loading,
-}: DetailPanelProps) {
-  // Core fields to display
-  const DISPLAY_FIELDS = [
-    { key: 'name', label: 'Name' },
-    { key: 'domain', label: 'Domain' },
-    { key: 'industry', label: 'Industry' },
-    { key: 'phone', label: 'Phone' },
-    { key: 'numberofemployees', label: 'Employees' },
-    { key: 'city', label: 'City' },
-    { key: 'website', label: 'Website' },
-  ];
-
-  const formatValue = (val: unknown): string => {
-    if (val === null || val === undefined || val === '') return '—';
-    return String(val);
-  };
-
-  return (
-    <div style={{ padding: '20px 24px', background: C.bg, borderTop: `1px solid ${C.border}` }}>
-      {/* Loading state */}
-      {(!recordAData || !recordBData) && (
-        <div style={{ padding: 20, textAlign: 'center', color: C.text3 }}>
-          Loading record details...
-        </div>
-      )}
-
-      {recordAData && recordBData && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-          {/* Record A */}
-          <div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 16,
-              fontSize: 11,
-              color: C.text3,
-              fontWeight: 600,
-              textTransform: 'uppercase',
-            }}>
-              Record A
-              <RecordLink hubspotId={pair.recordAId} />
-            </div>
-            {DISPLAY_FIELDS.map(({ key, label }) => (
-              <div key={key} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, color: C.text3, marginBottom: 2 }}>{label}</div>
-                <div style={{ fontSize: 12, fontFamily: F.mono, color: C.text }}>
-                  {formatValue(recordAData[key])}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Record B */}
-          <div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 16,
-              fontSize: 11,
-              color: C.text3,
-              fontWeight: 600,
-              textTransform: 'uppercase',
-            }}>
-              Record B
-              <RecordLink hubspotId={pair.recordBId} />
-            </div>
-            {DISPLAY_FIELDS.map(({ key, label }) => (
-              <div key={key} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, color: C.text3, marginBottom: 2 }}>{label}</div>
-                <div style={{ fontSize: 12, fontFamily: F.mono, color: C.text2 }}>
-                  {formatValue(recordBData[key])}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Signals */}
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 11, color: C.text3, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase' }}>
-          Matching signals
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {pair.signalsFired.map((sig, i) => (
-            <SignalTag key={i} signal={sig} />
-          ))}
-        </div>
-      </div>
-
-      {/* Action buttons */}
-      <div style={{ display: 'flex', gap: 10, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-        <PrimaryBtn onClick={() => onApprove()} disabled={loading}>
-          Merge →
-        </PrimaryBtn>
-        <GhostBtn onClick={onReject} disabled={loading}>
-          Not a Duplicate
-        </GhostBtn>
-        <GhostBtn onClick={onSkip} disabled={loading}>
-          Skip
-        </GhostBtn>
-      </div>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────
 // Main Component
@@ -456,6 +327,8 @@ interface ReviewQueueProps {
 }
 
 export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
+  const router = useRouter();
+
   // Data state
   const [pairs, setPairs] = useState<DedupPair[]>([]);
   const [counts, setCounts] = useState<PairsCounts>({
@@ -475,11 +348,6 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expandedRecordData, setExpandedRecordData] = useState<{
-    a: Record<string, unknown> | null;
-    b: Record<string, unknown> | null;
-  }>({ a: null, b: null });
 
   // Action state
   const [actionLoading, setActionLoading] = useState(false);
@@ -524,47 +392,6 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
   useEffect(() => {
     fetchPairs();
   }, [fetchPairs]);
-
-  // ─────────────────────────────────────────────────────────────
-  // Fetch expanded pair details
-  // ─────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!expandedId) {
-      setExpandedRecordData({ a: null, b: null });
-      return;
-    }
-
-    const fetchDetails = async () => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-
-      try {
-        const res = await fetch(`/api/dedup/pairs/${expandedId}`, {
-          headers: { 'x-org-id': orgId },
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-
-        if (res.ok) {
-          const data = await res.json();
-          setExpandedRecordData({
-            a: data.recordAData || null,
-            b: data.recordBData || null,
-          });
-        } else {
-          // Show error state
-          setExpandedRecordData({ a: {}, b: {} });
-        }
-      } catch (err) {
-        clearTimeout(timeout);
-        // Timeout or network error - show error state
-        setExpandedRecordData({ a: {}, b: {} });
-      }
-    };
-
-    fetchDetails();
-  }, [expandedId, orgId]);
 
   // ─────────────────────────────────────────────────────────────
   // Selection handlers
@@ -643,82 +470,6 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
       fetchPairs();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reject pairs');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleSingleApprove = async (id: string, fieldSelections?: Record<string, FieldSelection>) => {
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/dedup/pairs/${id}/approve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-org-id': orgId,
-        },
-        body: JSON.stringify({ fieldSelections }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to approve pair');
-      }
-
-      setExpandedId(null);
-      fetchPairs();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to approve pair');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleSingleReject = async (id: string) => {
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/dedup/pairs/${id}/reject`, {
-        method: 'POST',
-        headers: { 'x-org-id': orgId },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to reject pair');
-      }
-
-      setExpandedId(null);
-      fetchPairs();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reject pair');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleSkip = async (id: string) => {
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/dedup/pairs/${id}/skip`, {
-        method: 'POST',
-        headers: { 'x-org-id': orgId },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to skip pair');
-      }
-
-      // Move to next pair
-      const currentIndex = pairs.findIndex(p => p.id === id);
-      if (currentIndex < pairs.length - 1) {
-        setExpandedId(pairs[currentIndex + 1].id);
-      } else {
-        setExpandedId(null);
-      }
-      fetchPairs();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to skip pair');
     } finally {
       setActionLoading(false);
     }
@@ -875,7 +626,7 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
         {/* Table header */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '40px 40px 80px 1fr 1fr 160px 100px',
+          gridTemplateColumns: '40px 80px 1fr 1fr 160px 100px',
           gap: 0,
           borderBottom: `1px solid ${C.border}`,
           padding: '10px 20px',
@@ -888,7 +639,6 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
               onChange={handleSelectAll}
             />
           </div>
-          <div />
           <div style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Grade</div>
           <div style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Record A</div>
           <div style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>Record B</div>
@@ -919,91 +669,74 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
 
         {/* Pair rows */}
         {!loading && pairs.map((pair) => (
-          <div key={pair.id}>
-            {/* Collapsed row */}
-            <div
-              onClick={() => setExpandedId(expandedId === pair.id ? null : pair.id)}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '40px 40px 80px 1fr 1fr 160px 100px',
-                gap: 0,
-                padding: '12px 20px',
-                borderBottom: expandedId === pair.id ? 'none' : `1px solid ${C.border}`,
-                cursor: 'pointer',
-                background: expandedId === pair.id ? C.surface : 'transparent',
-                alignItems: 'center',
-              }}
-            >
-              {/* Checkbox */}
-              <div onClick={(e) => e.stopPropagation()}>
-                {pair.status === 'pending' && (
-                  <Checkbox
-                    checked={selectedIds.has(pair.id)}
-                    onChange={(checked) => handleSelectOne(pair.id, checked)}
-                  />
-                )}
-              </div>
-
-              {/* Expand toggle */}
-              <div style={{ color: C.text3 }}>
-                {expandedId === pair.id ? (
-                  <ChevronDown size={14} />
-                ) : (
-                  <ChevronRight size={14} />
-                )}
-              </div>
-
-              {/* Grade */}
-              <div>
-                <GradeBadge grade={pair.grade} />
-              </div>
-
-              {/* Record A */}
-              <div>
-                <div style={{ color: C.text, fontWeight: 500, fontSize: 12, marginBottom: 4 }}>
-                  {pair.recordAName || `Record #${pair.recordAId}`}
-                </div>
-                <RecordLink hubspotId={pair.recordAId} />
-              </div>
-
-              {/* Record B */}
-              <div>
-                <div style={{ color: C.text2, fontSize: 12, marginBottom: 4 }}>
-                  {pair.recordBName || `Record #${pair.recordBId}`}
-                </div>
-                <RecordLink hubspotId={pair.recordBId} />
-              </div>
-
-              {/* Signals */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {pair.signalsFired.slice(0, 2).map((sig, i) => (
-                  <SignalTag key={i} signal={sig} />
-                ))}
-                {pair.signalsFired.length > 2 && (
-                  <span style={{ fontSize: 10, color: C.text3 }}>
-                    +{pair.signalsFired.length - 2}
-                  </span>
-                )}
-              </div>
-
-              {/* Confidence */}
-              <div>
-                <ConfidenceBar value={pair.confidence} />
-              </div>
+          <div
+            key={pair.id}
+            onClick={() => router.push(`/dedup/pairs/${pair.id}`)}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '40px 80px 1fr 1fr 160px 100px',
+              gap: 0,
+              padding: '12px 20px',
+              borderBottom: `1px solid ${C.border}`,
+              cursor: 'pointer',
+              background: 'transparent',
+              alignItems: 'center',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = C.hover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            {/* Checkbox */}
+            <div onClick={(e) => e.stopPropagation()}>
+              {pair.status === 'pending' && (
+                <Checkbox
+                  checked={selectedIds.has(pair.id)}
+                  onChange={(checked) => handleSelectOne(pair.id, checked)}
+                />
+              )}
             </div>
 
-            {/* Expanded detail panel */}
-            {expandedId === pair.id && (
-              <DetailPanel
-                pair={pair}
-                recordAData={expandedRecordData.a}
-                recordBData={expandedRecordData.b}
-                onApprove={(fs) => handleSingleApprove(pair.id, fs)}
-                onReject={() => handleSingleReject(pair.id)}
-                onSkip={() => handleSkip(pair.id)}
-                loading={actionLoading}
-              />
-            )}
+            {/* Grade */}
+            <div>
+              <GradeBadge grade={pair.grade} />
+            </div>
+
+            {/* Record A */}
+            <div>
+              <div style={{ color: C.text, fontWeight: 500, fontSize: 12, marginBottom: 4 }}>
+                {pair.recordAName || `Record #${pair.recordAId}`}
+              </div>
+              <RecordLink hubspotId={pair.recordAId} />
+            </div>
+
+            {/* Record B */}
+            <div>
+              <div style={{ color: C.text2, fontSize: 12, marginBottom: 4 }}>
+                {pair.recordBName || `Record #${pair.recordBId}`}
+              </div>
+              <RecordLink hubspotId={pair.recordBId} />
+            </div>
+
+            {/* Signals */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {pair.signalsFired.slice(0, 2).map((sig, i) => (
+                <SignalTag key={i} signal={sig} />
+              ))}
+              {pair.signalsFired.length > 2 && (
+                <span style={{ fontSize: 10, color: C.text3 }}>
+                  +{pair.signalsFired.length - 2}
+                </span>
+              )}
+            </div>
+
+            {/* Confidence */}
+            <div>
+              <ConfidenceBar value={pair.confidence} />
+            </div>
           </div>
         ))}
 
