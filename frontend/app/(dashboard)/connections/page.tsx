@@ -230,10 +230,12 @@ export default function ConnectionsPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
             {availableProviders.map((provider) => (
-              <Card key={provider.id} style={{ padding: 16, cursor: 'pointer' }} onClick={() => setShowAddDialog(true)}>
-                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{provider.name}</div>
-                <div style={{ fontSize: 12, color: C.text3 }}>{provider.description}</div>
-              </Card>
+              <div key={provider.id} style={{ cursor: 'pointer' }} onClick={() => setShowAddDialog(true)}>
+                <Card style={{ padding: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{provider.name}</div>
+                  <div style={{ fontSize: 12, color: C.text3 }}>{provider.description}</div>
+                </Card>
+              </div>
             ))}
           </div>
         </div>
