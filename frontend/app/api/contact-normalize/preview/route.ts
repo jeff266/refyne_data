@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     const { client } = clientResult;
 
     // Load harmonies
-    const harmonies = harmonyIds.map((id) => getHarmonyById(id)).filter(Boolean);
+    const harmonies = harmonyIds.map((id) => getHarmonyById(id)).filter((h): h is NonNullable<typeof h> => h !== null && h !== undefined);
     if (harmonies.length === 0) {
       return NextResponse.json(
         { error: 'No valid harmonies found' },
