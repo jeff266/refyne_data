@@ -296,7 +296,7 @@ export class HubSpotClient {
    * @param isSearchApi - Whether this is a CRM Search API call (separate rate limit)
    * @param attempt - Current retry attempt (0-indexed)
    */
-  private async request<T>(
+  public async request<T>(
     path: string,
     options: RequestInit = {},
     isSearchApi = false,
