@@ -1,48 +1,141 @@
 'use client';
 
-import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { useState } from 'react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, ReferenceLine } from 'recharts';
 import { C, F } from '@/lib/design-tokens';
 
 interface TrendChartProps {
-  data: Array<{ m: string; v: number }>;
+  data: Array<{ m: string; v: number; date?: string; event?: string }>;
+  benchmark?: number;
 }
 
-export function TrendChart({ data }: TrendChartProps) {
-  return (
-    <ResponsiveContainer width="100%" height={120}>
-      <AreaChart data={data}>
-        <defs>
-          <linearGradient id="ig" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={C.indigo} stopOpacity={0.2} />
-            <stop offset="95%" stopColor={C.indigo} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <XAxis
-          dataKey="m"
-          tick={{ fill: C.text3, fontSize: 10, fontFamily: F.mono }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip
-          contentStyle={{
+type Period = '1m' | '3m' | '6m' | 'all';
+
+export function TrendChart({ data, benchmark }: TrendChartProps) {
+  const [period, setPeriod] = useState<Period>('6m');
+
+  // Filter data based on period
+  const getFilteredData = () => {
+    if (period === 'all') return data;
+    const monthsMap: Record<Period, number> = { '1m': 1, '3m': 3, '6m': 6, 'all': 999 };
+    const months = monthsMap[period];
+    return data.slice(-months);
+  };
+
+  const filteredData = getFilteredData();
+
+  // Calculate Y-axis domain
+  const values = filteredData.map(d => d.v);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const yMin = Math.floor(Math.max(0, minValue - 10) / 10) * 10;
+  const yMax = Math.ceil(Math.min(100, maxValue + 10) / 10) * 10;
+
+  // Custom tooltip
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const point = payload[0].payload;
+      return (
+        <div
+          style={{
             background: C.surface,
             border: `1px solid ${C.border2}`,
             borderRadius: 8,
-            color: C.text,
-            fontSize: 11,
-            fontFamily: F.mono,
+            padding: '8px 12px',
           }}
-          cursor={{ stroke: C.border2, strokeWidth: 1 }}
-        />
-        <Area
-          type="monotone"
-          dataKey="v"
-          stroke={C.indigo}
-          strokeWidth={1.5}
-          fill="url(#ig)"
-          dot={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+        >
+          <div style={{ fontSize: 11, fontFamily: F.mono, color: C.text, marginBottom: 4 }}>
+            {point.date || point.m} — {point.v}%
+          </div>
+          {point.event && (
+            <div style={{ fontSize: 10, color: C.text3 }}>
+              {point.event}
+            </div>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['1m', '3m', '6m', 'all'] as Period[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              style={{
+                padding: '4px 8px',
+                background: period === p ? C.indigo : 'transparent',
+                border: `1px solid ${period === p ? C.indigo : C.border2}`,
+                borderRadius: 4,
+                color: period === p ? '#fff' : C.text3,
+                fontSize: 10,
+                fontFamily: F.mono,
+                cursor: 'pointer',
+                textTransform: 'uppercase',
+              }}
+            >
+              {p === 'all' ? 'All time' : `${p.substring(0, 1)} month${p === '1m' ? '' : 's'}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <ResponsiveContainer width="100%" height={140}>
+        <AreaChart data={filteredData} margin={{ left: 10, right: 10 }}>
+          <defs>
+            <linearGradient id="ig" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={C.indigo} stopOpacity={0.2} />
+              <stop offset="95%" stopColor={C.indigo} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis
+            dataKey="m"
+            tick={{ fill: C.text3, fontSize: 10, fontFamily: F.mono }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            domain={[yMin, yMax]}
+            ticks={[yMin, Math.round((yMin + yMax) / 2), yMax]}
+            tick={{ fill: C.text3, fontSize: 10, fontFamily: F.mono }}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(value) => `${value}%`}
+          />
+          <Tooltip content={<CustomTooltip />} />
+
+          {/* Benchmark line */}
+          {benchmark && (
+            <ReferenceLine
+              y={benchmark}
+              stroke={C.text3}
+              strokeDasharray="3 3"
+              strokeWidth={1}
+              label={{
+                value: `Similar portals avg: ${benchmark}%`,
+                position: 'insideTopRight',
+                fill: C.text3,
+                fontSize: 9,
+                fontFamily: F.mono,
+              }}
+            />
+          )}
+
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke={C.indigo}
+            strokeWidth={2}
+            fill="url(#ig)"
+            dot={{ fill: C.indigo, r: 3 }}
+            activeDot={{ r: 5 }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
