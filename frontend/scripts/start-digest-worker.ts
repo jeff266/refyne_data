@@ -34,6 +34,10 @@ import {
 import { isRedisConfigured } from '../lib/queue/redis';
 import { supabase, isSupabaseConfigured } from '../lib/db/supabase';
 import { checkMissedJobs } from '../lib/monitoring/check-missed-jobs';
+import {
+  startCompanyDedupScanWorker,
+  stopCompanyDedupScanWorker,
+} from '../lib/dedup/company-dedup-scanner';
 
 async function main() {
   console.log('═'.repeat(60));
@@ -54,16 +58,26 @@ async function main() {
     process.exit(1);
   }
 
-  // Start the worker
+  // Start the digest worker
   console.log('\nStarting digest worker...');
   const worker = startDigestWorker();
 
   if (!worker) {
-    console.error('❌ Failed to start worker');
+    console.error('❌ Failed to start digest worker');
     process.exit(1);
   }
 
   console.log('✅ Digest worker started successfully\n');
+
+  // Start the company dedup scan worker
+  console.log('Starting company dedup scan worker...');
+  const dedupWorker = startCompanyDedupScanWorker();
+
+  if (!dedupWorker) {
+    console.log('⚠️  Company dedup scan worker disabled (Redis not configured)');
+  } else {
+    console.log('✅ Company dedup scan worker started successfully\n');
+  }
 
   // Display initial queue stats
   const stats = await getDigestQueueStats();
@@ -163,7 +177,8 @@ async function main() {
     clearInterval(missedJobsInterval);
     clearInterval(nightlyMaintenanceInterval);
     await stopDigestWorker();
-    console.log('Worker stopped.');
+    await stopCompanyDedupScanWorker();
+    console.log('Workers stopped.');
     process.exit(0);
   };
 
