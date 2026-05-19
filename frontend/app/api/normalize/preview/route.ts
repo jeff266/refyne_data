@@ -4,6 +4,7 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { getRuleExplanation } from '@/lib/harmonies/get-rule-explanation';
+import { HubSpotClient } from '@/lib/hubspot/client';
 
 interface PreviewRecord {
   company: string;
@@ -144,6 +145,30 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Fetch company names from HubSpot for all unique record IDs
+    let companyNames: Record<string, string> = {};
+    if (records && records.length > 0) {
+      try {
+        const allRecordIds = new Set<string>();
+        for (const record of records) {
+          allRecordIds.add(record.record_id);
+        }
+        const recordIdArray = Array.from(allRecordIds);
+
+        const client = new HubSpotClient(accessToken, connection.portal_id);
+        const companies = await client.getCompaniesByIds(recordIdArray, ['name', 'domain']);
+
+        for (const company of companies) {
+          companyNames[company.id] = company.properties.name || company.id;
+        }
+
+        console.log(`[Normalize Preview] Fetched ${companies.length} company names`);
+      } catch (err: any) {
+        console.error('[Normalize Preview] Error fetching company names:', err.message);
+        // Continue without names - will show IDs
+      }
+    }
+
     // Transform to preview format and filter to only records that would change
     const preview: PreviewRecord[] = (records || [])
       .filter((r) => {
@@ -174,7 +199,7 @@ export async function GET(request: NextRequest) {
           : null;
 
         return {
-          company: r.record_id, // Will be enriched with company name if available
+          company: companyNames[r.record_id] || r.record_id,
           field: r.field,
           before: beforeDisplay,
           after: r.normalized_value || '',

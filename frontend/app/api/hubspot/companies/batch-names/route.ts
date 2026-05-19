@@ -78,10 +78,10 @@ export async function POST(request: NextRequest) {
     for (const company of companies) {
       companyMap[company.id] = {
         name: company.properties.name || company.id,
-        domain: company.properties.domain,
-        phone: company.properties.phone,
-        website: company.properties.website,
-        lifecyclestage: company.properties.lifecyclestage,
+        domain: company.properties.domain ?? undefined,
+        phone: company.properties.phone ?? undefined,
+        website: company.properties.website ?? undefined,
+        lifecyclestage: company.properties.lifecyclestage ?? undefined,
       };
     }
 
