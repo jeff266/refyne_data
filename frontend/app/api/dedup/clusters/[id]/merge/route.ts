@@ -1,0 +1,201 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { rowToCluster, type DedupClusterRow } from '@/lib/dedup/cluster-types';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
+import { revalidatePath } from 'next/cache';
+
+interface MergeClusterRequest {
+  masterId: string;
+  fieldSelections?: Record<string, string>; // field -> recordId
+  absorb?: boolean; // if true, use default merge behavior
+}
+
+/**
+ * POST /api/dedup/clusters/:id/merge
+ *
+ * Merge a cluster into a master record.
+ */
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  // Auth check
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  // Feature gate: dedup
+  try {
+    await requireFeature(ctx.orgId, 'dedup');
+  } catch (error) {
+    const gateError = parseFeatureGateError(error);
+    if (gateError) {
+      return NextResponse.json(
+        { error: 'feature_gated', feature: gateError.feature, currentPlan: gateError.currentPlan },
+        { status: 403 }
+      );
+    }
+    throw error;
+  }
+
+  try {
+    if (!isSupabaseConfigured() || !supabase) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
+    }
+
+    const { id } = params;
+    const orgId = ctx.orgId;
+    const body = (await request.json()) as MergeClusterRequest;
+
+    // Get cluster
+    const { data: cluster, error: clusterError } = await supabase
+      .from('dedup_clusters')
+      .select('*')
+      .eq('id', id)
+      .eq('org_id', orgId)
+      .single();
+
+    if (clusterError || !cluster) {
+      return NextResponse.json({ error: 'Cluster not found' }, { status: 404 });
+    }
+
+    const clusterData = rowToCluster(cluster as DedupClusterRow);
+
+    if (clusterData.status !== 'pending') {
+      return NextResponse.json({ error: 'Cluster already processed' }, { status: 400 });
+    }
+
+    // Get access token
+    const accessToken = await getAccessToken(orgId);
+    if (!accessToken) {
+      return NextResponse.json({ error: 'HubSpot not connected' }, { status: 400 });
+    }
+
+    // Merge all records into master
+    const masterId = body.masterId;
+    const recordsToMerge = clusterData.recordIds.filter((id) => id !== masterId);
+
+    try {
+      // Step 1: Merge each record into master
+      for (const recordId of recordsToMerge) {
+        const mergeRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies/merge', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            primaryObjectId: masterId,
+            objectIdToMerge: recordId,
+          }),
+        });
+
+        if (!mergeRes.ok) {
+          const error = await mergeRes.text();
+          console.error(`[Merge Cluster] Failed to merge ${recordId} into ${masterId}:`, error);
+          throw new Error(`HubSpot merge failed: ${error}`);
+        }
+      }
+
+      // Step 2: Update field values if selections provided
+      if (body.fieldSelections && !body.absorb) {
+        const updates: Record<string, string> = {};
+
+        // For each field selection, determine which record's value to use
+        for (const [field, sourceRecordId] of Object.entries(body.fieldSelections)) {
+          if (sourceRecordId !== masterId) {
+            // Fetch the source record to get the value
+            const sourceRes = await fetch(
+              `https://api.hubapi.com/crm/v3/objects/companies/${sourceRecordId}?properties=${field}`,
+              {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              }
+            );
+
+            if (sourceRes.ok) {
+              const sourceData = await sourceRes.json();
+              const value = sourceData.properties[field];
+              if (value !== null && value !== '') {
+                updates[field] = value;
+              }
+            }
+          }
+        }
+
+        // Apply updates to master
+        if (Object.keys(updates).length > 0) {
+          const updateRes = await fetch(
+            `https://api.hubapi.com/crm/v3/objects/companies/${masterId}`,
+            {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ properties: updates }),
+            }
+          );
+
+          if (!updateRes.ok) {
+            const error = await updateRes.text();
+            console.error(`[Merge Cluster] Failed to update master ${masterId}:`, error);
+          }
+        }
+      }
+
+      // Step 3: Update cluster status
+      const { error: updateError } = await supabase
+        .from('dedup_clusters')
+        .update({
+          status: 'merged',
+          merged_into: masterId,
+          resolved_by: ctx.userId,
+          resolved_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (updateError) {
+        console.error('[Merge Cluster] Failed to update cluster status:', updateError);
+      }
+
+      // Step 4: Update all pairs in cluster
+      const { error: pairsError } = await supabase
+        .from('dedup_pairs')
+        .update({
+          status: 'merged',
+          surviving_record_id: masterId,
+          merged_at: new Date().toISOString(),
+          merged_by: ctx.userId,
+          updated_at: new Date().toISOString(),
+        })
+        .in('id', clusterData.pairIds);
+
+      if (pairsError) {
+        console.error('[Merge Cluster] Failed to update pairs:', pairsError);
+      }
+
+      // Step 5: Invalidate cache
+      revalidatePath('/dedup');
+
+      return NextResponse.json({ success: true, masterId });
+    } catch (error) {
+      captureWithOrgContext(error, ctx.orgId, {
+        route: '/api/dedup/clusters/[id]/merge',
+        clusterId: id,
+      });
+      console.error('[Merge Cluster] Merge failed:', error);
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Merge failed' },
+        { status: 500 }
+      );
+    }
+  } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/clusters/[id]/merge' });
+    console.error('Failed to merge cluster:', error);
+    return NextResponse.json({ error: 'Failed to merge cluster' }, { status: 500 });
+  }
+}

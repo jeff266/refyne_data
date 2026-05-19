@@ -20,6 +20,8 @@ interface ScanProgress {
     C: number;
     D: number;
   };
+  clustersBuilt?: number;
+  largestClusterSize?: number;
   completed: boolean;
   error?: string;
 }
@@ -172,7 +174,11 @@ export function ScanningState({ jobId, orgId, onComplete }: ScanningStateProps) 
               fontFamily: F.mono,
             }}>
               <span>{Math.round(progress.progress)}%</span>
-              <span>{progress.pairsFound} potential duplicates found</span>
+              <span>
+                {progress.clustersBuilt !== undefined
+                  ? `${progress.clustersBuilt} duplicate clusters found`
+                  : `${progress.pairsFound} potential duplicates found`}
+              </span>
             </div>
           </div>
         )}
@@ -210,10 +216,17 @@ export function ScanningState({ jobId, orgId, onComplete }: ScanningStateProps) 
           </div>
         )}
 
+        {/* Completion state - largest cluster */}
+        {showComplete && progress.largestClusterSize && (
+          <div style={{ fontSize: 13, color: C.text2, marginTop: -8 }}>
+            Largest cluster: {progress.largestClusterSize} records
+          </div>
+        )}
+
         {/* Completion button */}
         {showComplete && (
           <PrimaryBtn onClick={onComplete}>
-            Review duplicates →
+            Review clusters →
           </PrimaryBtn>
         )}
 

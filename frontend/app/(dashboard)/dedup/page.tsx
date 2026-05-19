@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Settings } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { HowItWorksStrip } from '@/components/refyne';
-import { DedupSettings, ReviewQueue } from '@/components/dedup';
+import { DedupSettings, ClusterQueue } from '@/components/dedup';
 
 // ─────────────────────────────────────────────────────────────
 // Tab type
@@ -98,7 +98,7 @@ export default function DedupPage() {
       {tab === 'queue' && (
         <div style={{ padding: '28px 32px' }}>
           <HowItWorksStrip steps={dedupSteps} storageKey="how-it-works-dedup" />
-          <ReviewQueue />
+          <ClusterQueue />
         </div>
       )}
     </div>

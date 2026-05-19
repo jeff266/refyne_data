@@ -11,6 +11,7 @@ import { supabase, isSupabaseConfigured } from '../db/supabase';
 import { createHubSpotClient } from '../hubspot/client';
 import { evaluateCompanyPair, type CompanyProperties, normalizeDomain } from './company-signals';
 import type { FiredSignal, PairGrade } from './types';
+import { UnionFind } from './union-find';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -480,11 +481,33 @@ export async function runCompanyDedupScan(
   const durationMs = Date.now() - startTime;
   console.log(`[Company Dedup Scan] Completed in ${durationMs}ms: ${pairsEvaluated} pairs evaluated, ${pairsDetected} duplicates found (A:${pairsGradeA} B:${pairsGradeB} C:${pairsGradeC})`);
 
+  // Build clusters from all pairs
+  let clustersBuilt = 0;
+  let largestClusterSize = 0;
+  if (pairsDetected > 0) {
+    console.log('[Company Dedup Scan] Building clusters from pairs...');
+
+    if (job) {
+      await job.updateProgress({
+        phase: 'progress',
+        message: 'Building clusters...',
+        progress: 95,
+        pairsFound: pairsDetected,
+      });
+    }
+
+    const buildResult = await buildClusters(orgId, connectionId, portalId);
+    clustersBuilt = buildResult.clustersBuilt;
+    largestClusterSize = buildResult.largestClusterSize;
+
+    console.log(`[Company Dedup Scan] Built ${clustersBuilt} clusters, largest: ${largestClusterSize} records`);
+  }
+
   // Emit completion progress
   if (job) {
     await job.updateProgress({
       phase: 'completed',
-      message: `Found ${pairsDetected} duplicate pairs`,
+      message: `Found ${clustersBuilt} duplicate clusters`,
       progress: 100,
       pairsFound: pairsDetected,
       gradeBreakdown: {
@@ -493,6 +516,8 @@ export async function runCompanyDedupScan(
         C: pairsGradeC,
         D: pairsGradeD,
       },
+      clustersBuilt,
+      largestClusterSize,
     });
   }
 
@@ -507,6 +532,107 @@ export async function runCompanyDedupScan(
     durationMs,
     completedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Build clusters from all pairs in an organization.
+ */
+async function buildClusters(
+  orgId: string,
+  connectionId: string,
+  portalId: string
+): Promise<{ clustersBuilt: number; largestClusterSize: number }> {
+  if (!isSupabaseConfigured() || !supabase) {
+    throw new Error('Supabase not configured');
+  }
+
+  // Fetch all pairs for this org with status 'pending'
+  const { data: pairs, error: pairsError } = await supabase
+    .from('dedup_pairs')
+    .select('id, record_a_id, record_b_id, grade')
+    .eq('org_id', orgId)
+    .eq('status', 'pending');
+
+  if (pairsError || !pairs || pairs.length === 0) {
+    console.log('[Build Clusters] No pending pairs found');
+    return { clustersBuilt: 0, largestClusterSize: 0 };
+  }
+
+  // Build Union-Find from pairs
+  const uf = new UnionFind();
+  const pairsByCluster = new Map<string, Array<{ id: string; grade: PairGrade }>>();
+
+  for (const pair of pairs) {
+    uf.union(pair.record_a_id, pair.record_b_id);
+
+    // Track pairs by their cluster root
+    const root = uf.find(pair.record_a_id);
+    if (!pairsByCluster.has(root)) {
+      pairsByCluster.set(root, []);
+    }
+    pairsByCluster.get(root)!.push({
+      id: pair.id,
+      grade: pair.grade as PairGrade,
+    });
+  }
+
+  // Get clusters (only 2+ members)
+  const clusters = uf.getClusters();
+  console.log(`[Build Clusters] Found ${clusters.length} clusters from ${pairs.length} pairs`);
+
+  let largestClusterSize = 0;
+
+  // Insert cluster rows
+  for (const recordIds of clusters) {
+    const root = uf.find(recordIds[0]);
+    const clusterPairs = pairsByCluster.get(root) || [];
+
+    if (recordIds.length > largestClusterSize) {
+      largestClusterSize = recordIds.length;
+    }
+
+    // Determine highest grade in cluster (A > B > C > D)
+    const gradeOrder: PairGrade[] = ['A', 'B', 'C', 'D'];
+    let clusterGrade: PairGrade = 'D';
+    for (const grade of gradeOrder) {
+      if (clusterPairs.some(p => p.grade === grade)) {
+        clusterGrade = grade;
+        break;
+      }
+    }
+
+    // Insert cluster
+    const { data: cluster, error: clusterError } = await supabase
+      .from('dedup_clusters')
+      .insert({
+        org_id: orgId,
+        portal_id: portalId,
+        connection_id: connectionId,
+        grade: clusterGrade,
+        record_ids: recordIds,
+        pair_ids: clusterPairs.map(p => p.id),
+        status: 'pending',
+      })
+      .select('id')
+      .single();
+
+    if (clusterError || !cluster) {
+      console.error('[Build Clusters] Failed to insert cluster:', clusterError);
+      continue;
+    }
+
+    // Backfill cluster_id on pairs
+    const { error: updateError } = await supabase
+      .from('dedup_pairs')
+      .update({ cluster_id: cluster.id })
+      .in('id', clusterPairs.map(p => p.id));
+
+    if (updateError) {
+      console.error('[Build Clusters] Failed to update pair cluster_id:', updateError);
+    }
+  }
+
+  return { clustersBuilt: clusters.length, largestClusterSize };
 }
 
 // ─────────────────────────────────────────────────────────────
