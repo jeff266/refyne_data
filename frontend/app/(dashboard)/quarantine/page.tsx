@@ -312,6 +312,23 @@ export default function QuarantinePage() {
           </div>
         </div>
       )}
+
+      {/* Preview Slide-over with AI Analysis */}
+      {previewRecord && (
+        <QuarantineDetailSlideOver
+          record={previewRecord}
+          isOpen={!!previewRecord}
+          onClose={() => setPreviewRecord(null)}
+          onApprove={(id) => {
+            handleApprove(id);
+            setPreviewRecord(null);
+          }}
+          onReject={(id) => {
+            setSelectedRecord(previewRecord);
+            setPreviewRecord(null);
+          }}
+        />
+      )}
     </div>
   );
 }

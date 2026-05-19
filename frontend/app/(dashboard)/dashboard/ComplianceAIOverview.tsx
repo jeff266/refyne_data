@@ -107,8 +107,11 @@ export function ComplianceAIOverview() {
 
   if (collapsed) {
     return (
-      <Card style={{ marginBottom: 24, padding: '12px 20px', cursor: 'pointer' }} onClick={toggleCollapse}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Card style={{ marginBottom: 24, padding: '12px 20px' }}>
+        <div
+          onClick={toggleCollapse}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+        >
           <div style={{ fontSize: 13, color: C.text3 }}>AI overview available</div>
           <ChevronDown size={16} color={C.text3} />
         </div>

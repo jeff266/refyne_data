@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Check, Sparkles } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn } from '@/components/refyne';
 import { addToast } from '@/components/ui/toast';
+import { RehearsalAISummary } from './RehearsalAISummary';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -36,6 +37,7 @@ export default function NewArrangementPage() {
     output_config: {},
   });
   const [rehearsalResults, setRehearsalResults] = useState<any>(null);
+  const [readyToRun, setReadyToRun] = useState<boolean>(true);
 
   const handleNext = () => {
     if (currentStep < 5) {
@@ -329,24 +331,32 @@ export default function NewArrangementPage() {
               </button>
             </div>
             {rehearsalResults && (
-              <div style={{
-                marginTop: 24,
-                padding: 16,
-                background: C.greenDim,
-                border: `1px solid ${C.greenBrd}`,
-                borderRadius: 6,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <Sparkles size={16} color={C.green} />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
-                    Rehearsal Complete
-                  </span>
+              <>
+                <div style={{
+                  marginTop: 24,
+                  padding: 16,
+                  background: C.greenDim,
+                  border: `1px solid ${C.greenBrd}`,
+                  borderRadius: 6,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Sparkles size={16} color={C.green} />
+                    <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
+                      Rehearsal Complete
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 13, color: C.text2 }}>
+                    Successfully tested on {rehearsalResults.sampleSize} records.
+                    Estimated credits per run: {rehearsalResults.estimatedCredits}
+                  </p>
                 </div>
-                <p style={{ fontSize: 13, color: C.text2 }}>
-                  Successfully tested on {rehearsalResults.sampleSize} records.
-                  Estimated credits per run: {rehearsalResults.estimatedCredits}
-                </p>
-              </div>
+                {rehearsalResults.runId && (
+                  <RehearsalAISummary
+                    runId={rehearsalResults.runId}
+                    onReadyStateChange={setReadyToRun}
+                  />
+                )}
+              </>
             )}
           </div>
         )}
@@ -412,10 +422,39 @@ export default function NewArrangementPage() {
         </button>
 
         {currentStep < 5 ? (
-          <PrimaryBtn onClick={handleNext}>
-            Next
-            <ChevronRight size={16} />
-          </PrimaryBtn>
+          <div style={{ position: 'relative' }}>
+            <PrimaryBtn
+              onClick={handleNext}
+              style={{
+                opacity: currentStep === 4 && !readyToRun ? 0.5 : 1,
+                cursor: currentStep === 4 && !readyToRun ? 'not-allowed' : 'pointer',
+                background: currentStep === 4 && readyToRun ? C.green : C.indigo,
+                pointerEvents: currentStep === 4 && !readyToRun ? 'none' : 'auto',
+              }}
+            >
+              Next
+              <ChevronRight size={16} />
+            </PrimaryBtn>
+            {currentStep === 4 && !readyToRun && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '100%',
+                  right: 0,
+                  marginBottom: 8,
+                  padding: '6px 10px',
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 6,
+                  fontSize: 11,
+                  color: C.text3,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Review AI recommendations before proceeding
+              </div>
+            )}
+          </div>
         ) : (
           <PrimaryBtn onClick={handleSave}>
             <Check size={16} />
