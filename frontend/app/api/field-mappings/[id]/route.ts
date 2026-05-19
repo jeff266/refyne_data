@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { transformKeys } from '@/lib/utils/transform';
 
 interface UpdateFieldMappingBody {
   hubspot_property?: string;
@@ -82,7 +83,9 @@ export async function PUT(
       );
     }
 
-    return NextResponse.json({ mapping: data });
+    return NextResponse.json({
+      mapping: transformKeys(data)
+    });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/field-mappings/:id' });
     console.error('Failed to update field mapping:', error);

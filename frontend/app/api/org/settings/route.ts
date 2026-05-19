@@ -3,6 +3,7 @@ import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { logAuditEvent } from '@/lib/auth/audit-logger';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { transformKeys } from '@/lib/utils/transform';
 
 /**
  * GET /api/org/settings
@@ -34,7 +35,9 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
     }
 
-    return NextResponse.json({ settings });
+    return NextResponse.json({
+      settings: transformKeys(settings)
+    });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings' });
     console.error('Failed to get org settings:', error);
@@ -110,7 +113,9 @@ export async function PUT(request: Request) {
       metadata: { before: beforeSettings, after: updates },
     });
 
-    return NextResponse.json({ settings });
+    return NextResponse.json({
+      settings: transformKeys(settings)
+    });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings' });
     console.error('Failed to update org settings:', error);
@@ -173,7 +178,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create workspace' }, { status: 500 });
     }
 
-    return NextResponse.json({ settings }, { status: 201 });
+    return NextResponse.json({
+      settings: transformKeys(settings)
+    }, { status: 201 });
   } catch (error) {
     captureWithOrgContext(error, clerk_org_id || 'unknown', { route: '/api/org/settings' });
     console.error('Failed to create workspace:', error);

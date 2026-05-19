@@ -9,10 +9,10 @@ import { executeRollback } from '@/lib/normalize/rollback';
 
 interface RollbackResponse {
   success: boolean;
-  rolled_back: number;
+  rolledBack: number;
   failed: number;
   errors: Array<{
-    record_id: string;
+    recordId: string;
     field: string;
     error: string;
   }>;
@@ -138,9 +138,13 @@ export async function POST(
 
     const response: RollbackResponse = {
       success: result.success,
-      rolled_back: result.rolled_back,
+      rolledBack: result.rolled_back,
       failed: result.failed,
-      errors: result.errors,
+      errors: result.errors.map(err => ({
+        recordId: err.record_id,
+        field: err.field,
+        error: err.error,
+      })),
     };
 
     return NextResponse.json(response);

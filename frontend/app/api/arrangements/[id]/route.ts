@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { transformKeys } from '@/lib/utils/transform';
 
 /**
  * GET /api/arrangements/:id
@@ -42,7 +43,9 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ arrangement });
+    return NextResponse.json({
+      arrangement: transformKeys(arrangement)
+    });
 
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/arrangements/:id' });
@@ -108,7 +111,9 @@ export async function PUT(
       );
     }
 
-    return NextResponse.json({ arrangement });
+    return NextResponse.json({
+      arrangement: transformKeys(arrangement)
+    });
 
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/arrangements/:id', action: 'update' });

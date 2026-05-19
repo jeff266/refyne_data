@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { transformArray } from '@/lib/utils/transform';
 
 /**
  * GET /api/quarantine
@@ -56,7 +57,10 @@ export async function GET(request: Request) {
       total: statsData?.length || 0,
     };
 
-    return NextResponse.json({ records, stats });
+    return NextResponse.json({
+      records: transformArray(records || []),
+      stats
+    });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/quarantine' });
     console.error('Failed to get quarantine records:', error);

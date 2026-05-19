@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
+import { transformArray } from '@/lib/utils/transform';
 
 export async function GET(
   request: NextRequest,
@@ -58,7 +59,7 @@ export async function GET(
     }
 
     return NextResponse.json({
-      changes: changes || [],
+      changes: transformArray(changes || []),
       total: count || 0,
       page,
       limit,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { transformArray } from '@/lib/utils/transform';
 
 /**
  * GET /api/arrangements/runs
@@ -64,10 +65,10 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      runs,
+      runs: transformArray(runs || []),
       total: count || 0,
       page,
-      per_page: perPage,
+      perPage,
     });
 
   } catch (error) {

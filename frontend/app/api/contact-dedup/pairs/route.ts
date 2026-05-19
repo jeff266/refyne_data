@@ -4,6 +4,7 @@ import type { PairGrade, PairStatus } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { transformArray } from '@/lib/utils/transform';
 
 /**
  * GET /api/contact-dedup/pairs
@@ -139,7 +140,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      pairs,
+      pairs: transformArray(pairs || []),
       total: count || 0,
       counts: { byGrade, byStatus },
     });

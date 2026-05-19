@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
+import { transformKeys } from '@/lib/utils/transform';
 
 export async function GET(
   request: NextRequest,
@@ -61,12 +62,7 @@ export async function GET(
     );
 
     return NextResponse.json({
-      id: run.id,
-      created_at: run.created_at,
-      created_by_email: run.created_by_email,
-      records_changed: run.records_changed,
-      fields_changed: run.fields_changed,
-      status: run.status,
+      ...transformKeys(run),
       harmonies: uniqueHarmonies,
     });
 

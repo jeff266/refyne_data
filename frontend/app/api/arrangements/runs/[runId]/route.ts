@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { transformKeys, transformArray } from '@/lib/utils/transform';
 
 /**
  * GET /api/arrangements/runs/:runId
@@ -52,8 +53,8 @@ export async function GET(
       .limit(100);
 
     return NextResponse.json({
-      run,
-      progress: progress || [],
+      run: transformKeys(run),
+      progress: transformArray(progress || []),
     });
 
   } catch (error) {
@@ -170,7 +171,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      run: updatedRun,
+      run: transformKeys(updatedRun),
     });
 
   } catch (error) {

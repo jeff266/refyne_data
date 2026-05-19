@@ -2,18 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { transformArray } from '@/lib/utils/transform';
 
 export interface FieldMapping {
   id: string;
-  org_id: string;
-  canonical_field: string;
-  hubspot_property: string;
+  orgId: string;
+  canonicalField: string;
+  hubspotProperty: string;
   direction: 'read' | 'write' | 'bidirectional';
-  write_policy: 'always_overwrite' | 'overwrite_if_blank_or_ours' | 'never_overwrite';
-  valid_values?: { value: string; label: string }[];
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  writePolicy: 'always_overwrite' | 'overwrite_if_blank_or_ours' | 'never_overwrite';
+  validValues?: { value: string; label: string }[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -52,7 +53,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ mappings: data || [] });
+    return NextResponse.json({
+      mappings: transformArray<FieldMapping>(data || [])
+    });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/field-mappings' });
     console.error('Failed to get field mappings:', error);

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { logAuditEvent } from '@/lib/auth/audit-logger';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { transformArray } from '@/lib/utils/transform';
 
 /**
  * GET /api/limits
@@ -34,7 +35,9 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch limits' }, { status: 500 });
     }
 
-    return NextResponse.json({ limits });
+    return NextResponse.json({
+      limits: transformArray(limits || [])
+    });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/limits' });
     console.error('Failed to get limits:', error);
