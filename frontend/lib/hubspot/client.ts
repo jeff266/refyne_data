@@ -267,12 +267,22 @@ export type BurstLimitObservedCallback = (portalId: string, burstLimit: number) 
 export class HubSpotClient {
   private readonly accessToken: string;
   private readonly portalId: string;
+  private readonly connectionId?: string;
+  private readonly orgId?: string;
   private burstLimitObservedCallback: BurstLimitObservedCallback | null = null;
   private burstLimitCallbackFired = false;
 
-  constructor(accessToken: string, portalId: string, initialBurstLimit?: number) {
+  constructor(
+    accessToken: string,
+    portalId: string,
+    initialBurstLimit?: number,
+    connectionId?: string,
+    orgId?: string
+  ) {
     this.accessToken = accessToken;
     this.portalId = portalId;
+    this.connectionId = connectionId;
+    this.orgId = orgId;
 
     // Initialize with stored burst limit if provided
     if (initialBurstLimit) {
@@ -286,6 +296,27 @@ export class HubSpotClient {
    */
   setBurstLimitObservedCallback(callback: BurstLimitObservedCallback): void {
     this.burstLimitObservedCallback = callback;
+  }
+
+  /**
+   * Track API call usage (fire-and-forget).
+   * Increments api_calls_today and api_calls_month counters.
+   */
+  private async trackApiCall(): Promise<void> {
+    if (!this.connectionId || !this.orgId) return;
+
+    try {
+      // Fire-and-forget POST to tracking endpoint
+      fetch('/api/hubspot/track-api-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectionId: this.connectionId }),
+      }).catch(() => {
+        // Silently ignore tracking failures
+      });
+    } catch {
+      // Silently ignore tracking failures
+    }
   }
 
   /**
@@ -308,6 +339,9 @@ export class HubSpotClient {
     } else {
       await acquireGeneralSlot(this.portalId);
     }
+
+    // Track API call (fire-and-forget)
+    this.trackApiCall();
 
     const url = `${HUBSPOT_API_BASE}${path}`;
     const response = await fetch(url, {
