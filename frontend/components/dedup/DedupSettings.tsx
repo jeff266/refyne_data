@@ -565,7 +565,7 @@ export function DedupSettings({ isAdmin = true }: DedupSettingsProps) {
                     width: 6,
                     height: 6,
                     borderRadius: '50%',
-                    background: exclusion.isPreset ? C.blue : C.text3,
+                    background: exclusion.isPreset ? C.indigo : C.text3,
                   }}
                 />
                 <span style={{ fontSize: 13, color: C.text, fontFamily: F.mono }}>
@@ -591,7 +591,7 @@ export function DedupSettings({ isAdmin = true }: DedupSettingsProps) {
                       borderRadius: 4,
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = C.redFaint;
+                      e.currentTarget.style.background = C.redDim;
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = 'transparent';
