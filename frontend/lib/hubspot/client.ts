@@ -515,6 +515,20 @@ export class HubSpotClient {
     for (let i = 0; i < ids.length; i += 100) {
       const batchIds = ids.slice(i, i + 100);
 
+      const requestBody = {
+        inputs: batchIds.map(id => ({ id })),
+        properties: [...properties],
+      };
+
+      if (i === 0) {
+        console.log('[HubSpot] Batch read request:', {
+          url: '/crm/v3/objects/companies/batch/read',
+          idCount: batchIds.length,
+          firstTwoIds: batchIds.slice(0, 2),
+          properties: [...properties],
+        });
+      }
+
       const response = await this.request<{
         results: Array<{
           id: string;
@@ -524,11 +538,18 @@ export class HubSpotClient {
         }>;
       }>('/crm/v3/objects/companies/batch/read', {
         method: 'POST',
-        body: JSON.stringify({
-          inputs: batchIds.map(id => ({ id })),
-          properties: [...properties],
-        }),
+        body: JSON.stringify(requestBody),
       });
+
+      if (i === 0) {
+        console.log('[HubSpot] Batch read response:', {
+          resultCount: response.results?.length || 0,
+          firstResult: response.results?.[0] ? {
+            id: response.results[0].id,
+            hasName: !!response.results[0].properties?.name,
+          } : null,
+        });
+      }
 
       batches.push(
         ...response.results.map(r => ({

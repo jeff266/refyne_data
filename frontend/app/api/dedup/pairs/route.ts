@@ -119,8 +119,16 @@ export async function GET(request: NextRequest) {
           .eq('connection_status', 'active')
           .single();
 
+        console.log('[Dedup] Connection info:', {
+          hasConnection: !!connection,
+          portalId: connection?.portal_id,
+          orgId: ctx.orgId,
+        });
+
         if (connection?.portal_id) {
           const accessToken = await getAccessToken(ctx.orgId);
+          console.log('[Dedup] Access token:', { hasToken: !!accessToken });
+
           if (accessToken) {
             const client = new HubSpotClient(accessToken, connection.portal_id);
 
@@ -132,23 +140,35 @@ export async function GET(request: NextRequest) {
             }
 
             const recordIdArray = Array.from(allRecordIds);
-            console.log(`[Dedup API] Fetching names for ${recordIdArray.length} record IDs (first 3: ${recordIdArray.slice(0, 3).join(', ')})`);
+            console.log(`[Dedup] Fetching names for ${recordIdArray.length} record IDs`);
+            console.log('[Dedup] First 5 IDs:', recordIdArray.slice(0, 5));
+            console.log('[Dedup] Request body format:', JSON.stringify({
+              inputs: recordIdArray.slice(0, 2).map(id => ({ id })),
+              properties: ['name', 'domain'],
+            }));
 
-            // Fetch company data (only name property)
+            // Fetch company data with detailed properties
             let companies: any[] = [];
             try {
               companies = await client.getCompaniesByIds(
                 recordIdArray,
-                ['name']
+                ['name', 'domain', 'phone', 'industry']
               );
-              console.log(`[Dedup API] HubSpot returned ${companies.length} companies`);
+              console.log(`[Dedup] HubSpot returned ${companies.length} companies`);
               if (companies.length > 0) {
-                console.log(`[Dedup API] First company: id=${companies[0].id}, name=${companies[0].properties.name}`);
+                console.log(`[Dedup] First company:`, JSON.stringify({
+                  id: companies[0].id,
+                  name: companies[0].properties.name,
+                  domain: companies[0].properties.domain,
+                }));
               } else {
-                console.log('[Dedup API] WARNING: HubSpot batch read returned 0 companies - IDs may not exist or are archived');
+                console.log('[Dedup] WARNING: Batch read returned 0 companies');
               }
-            } catch (batchErr) {
-              console.error('[Dedup API] Error calling getCompaniesByIds:', batchErr);
+            } catch (batchErr: any) {
+              console.error('[Dedup] Batch read error:', {
+                message: batchErr.message,
+                status: batchErr.status,
+              });
               companies = [];
             }
 

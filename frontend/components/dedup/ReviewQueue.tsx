@@ -525,19 +525,30 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
     }
 
     const fetchDetails = async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
       try {
         const res = await fetch(`/api/dedup/pairs/${expandedId}`, {
           headers: { 'x-org-id': orgId },
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
+
         if (res.ok) {
           const data = await res.json();
           setExpandedRecordData({
             a: data.recordAData || null,
             b: data.recordBData || null,
           });
+        } else {
+          // Show error state
+          setExpandedRecordData({ a: {}, b: {} });
         }
-      } catch {
-        // Silently fail - will show loading state
+      } catch (err) {
+        clearTimeout(timeout);
+        // Timeout or network error - show error state
+        setExpandedRecordData({ a: {}, b: {} });
       }
     };
 
@@ -886,7 +897,7 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
               {/* Record A */}
               <div>
                 <div style={{ color: C.text, fontWeight: 500, fontSize: 12, marginBottom: 4 }}>
-                  {pair.recordAName || pair.recordAId}
+                  {pair.recordAName || `Record #${pair.recordAId}`}
                 </div>
                 <RecordLink hubspotId={pair.recordAId} />
               </div>
@@ -894,7 +905,7 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
               {/* Record B */}
               <div>
                 <div style={{ color: C.text2, fontSize: 12, marginBottom: 4 }}>
-                  {pair.recordBName || pair.recordBId}
+                  {pair.recordBName || `Record #${pair.recordBId}`}
                 </div>
                 <RecordLink hubspotId={pair.recordBId} />
               </div>
