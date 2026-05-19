@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
       }
 
       if (topValue && maxCount > 1) {
-        topPattern = \`"\${topValue}" appears in \${maxCount} records\`;
+        topPattern = `"${topValue}" appears in ${maxCount} records`;
       }
     }
 
