@@ -42,10 +42,10 @@ export async function GET(request: NextRequest) {
     const harmonyIdsParam = searchParams.get('harmonyIds');
     const limit = Math.min(100, parseInt(searchParams.get('limit') || '50', 10));
 
-    // Get HubSpot connection for portalId and access token
+    // Get HubSpot connection for portalId
     const { data: connection } = await supabase
       .from('hubspot_connections')
-      .select('portal_id, id')
+      .select('portal_id')
       .eq('org_id', ctx.orgId)
       .eq('connection_status', 'active')
       .single();
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get access token for HubSpot API calls
-    const accessToken = await getAccessToken(connection.id);
+    const accessToken = await getAccessToken(ctx.orgId);
     if (!accessToken) {
       console.error('Failed to get HubSpot access token');
       return NextResponse.json({ preview: [] });
