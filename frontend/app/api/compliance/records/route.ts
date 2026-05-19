@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching compliance records:', error);
-      throw new Error(\`Failed to fetch compliance records: \${error.message}\`);
+      throw new Error(`Failed to fetch compliance records: ${error.message}`);
     }
 
     const total = count || 0;

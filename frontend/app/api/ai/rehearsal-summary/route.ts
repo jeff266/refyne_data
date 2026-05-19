@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cacheKey = \`ai:rehearsal:\${runId}\`;
+    const cacheKey = `ai:rehearsal:${runId}`;
 
     // Step 1: Check Upstash cache (TTL 1 hour)
     const cached = await getCachedSummary<RehearsalOutput>(cacheKey);
