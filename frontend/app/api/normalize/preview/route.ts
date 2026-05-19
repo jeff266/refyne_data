@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
+import { getRuleExplanation } from '@/lib/harmonies/get-rule-explanation';
 
 interface PreviewRecord {
   company: string;
@@ -11,6 +12,8 @@ interface PreviewRecord {
   after: string;
   hubspotCompanyId: string;
   portalId: string;
+  ruleExplanation?: string;
+  excludable: boolean;
 }
 
 /**
@@ -120,12 +123,55 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Fetch active exclusions for this org
+    const { data: exclusions } = await supabase
+      .from('normalize_exclusions')
+      .select('company_id, field, exclusion_type, expires_at')
+      .eq('org_id', ctx.orgId)
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+
+    // Build exclusion lookup sets
+    const excludedCompanies = new Set<string>();
+    const excludedFields = new Set<string>(); // Format: "companyId:field"
+
+    (exclusions || []).forEach((ex) => {
+      if (!ex.field) {
+        // Company-level exclusion
+        excludedCompanies.add(ex.company_id);
+      } else {
+        // Field-level exclusion
+        excludedFields.add(`${ex.company_id}:${ex.field}`);
+      }
+    });
+
     // Transform to preview format and filter to only records that would change
     const preview: PreviewRecord[] = (records || [])
-      .filter((r) => r.raw_value !== r.normalized_value) // Only show records with actual changes
+      .filter((r) => {
+        // Filter out records with actual changes
+        if (r.raw_value === r.normalized_value) {
+          return false;
+        }
+
+        // Filter out excluded companies
+        if (excludedCompanies.has(r.record_id)) {
+          return false;
+        }
+
+        // Filter out excluded fields
+        if (excludedFields.has(`${r.record_id}:${r.field}`)) {
+          return false;
+        }
+
+        return true;
+      })
       .map((r) => {
         // Use display label if available, otherwise use raw value
         const beforeDisplay = labelMap[`${r.field}:${r.raw_value}`] || r.raw_value || '';
+
+        // Get rule explanation
+        const explanation = r.harmony_id
+          ? getRuleExplanation(r.harmony_id, r.field, beforeDisplay, r.normalized_value || '')
+          : null;
 
         return {
           company: r.record_id, // Will be enriched with company name if available
@@ -134,6 +180,8 @@ export async function GET(request: NextRequest) {
           after: r.normalized_value || '',
           hubspotCompanyId: r.record_id,
           portalId: connection.portal_id,
+          ruleExplanation: explanation ?? undefined,
+          excludable: true,
         };
       });
 

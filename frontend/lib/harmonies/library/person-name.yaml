@@ -15,6 +15,8 @@ applies_to:
     - person.last_name
   entity: person
 
+ruleExplanation: "Normalizing person name from '{{oldValue}}' to '{{newValue}}' (title case, whitespace cleanup)"
+
 sources: []
 
 rules:

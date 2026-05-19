@@ -14,6 +14,8 @@ applies_to:
     - person.country
   entity: company
 
+ruleExplanation: "Normalizing country from '{{oldValue}}' to '{{newValue}}' (ISO code standardization)"
+
 sources: []
 
 rules:

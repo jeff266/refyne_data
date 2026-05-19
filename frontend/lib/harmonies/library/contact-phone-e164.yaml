@@ -14,6 +14,8 @@ applies_to:
     - person.mobile
   entity: person
 
+ruleExplanation: "Normalizing phone from '{{oldValue}}' to '{{newValue}}' (E.164 format)"
+
 sources: []
 
 rules:

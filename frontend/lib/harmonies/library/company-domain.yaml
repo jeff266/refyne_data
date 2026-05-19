@@ -14,6 +14,8 @@ applies_to:
     - company.website
   entity: company
 
+ruleExplanation: "Normalizing domain from '{{oldValue}}' to '{{newValue}}' (extract domain, remove www)"
+
 sources: []
 
 rules:

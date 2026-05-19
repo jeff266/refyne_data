@@ -14,6 +14,8 @@ applies_to:
     - person.linkedin_url
   entity: company
 
+ruleExplanation: "Normalizing LinkedIn URL from '{{oldValue}}' to '{{newValue}}' (format standardization)"
+
 sources: []
 
 rules:

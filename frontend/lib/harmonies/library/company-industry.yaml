@@ -14,6 +14,8 @@ applies_to:
     - company.industry_raw
   entity: company
 
+ruleExplanation: "Normalizing industry from '{{oldValue}}' to '{{newValue}}' (industry standardization)"
+
 sources: []
 
 rules:

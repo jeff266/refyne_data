@@ -13,6 +13,8 @@ applies_to:
     - person.email
   entity: person
 
+ruleExplanation: "Normalizing email from '{{oldValue}}' to '{{newValue}}' (lowercase)"
+
 sources: []
 
 rules:

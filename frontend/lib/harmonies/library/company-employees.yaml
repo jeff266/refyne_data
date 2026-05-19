@@ -14,6 +14,8 @@ applies_to:
     - company.employee_band
   entity: company
 
+ruleExplanation: "Normalizing employee count from '{{oldValue}}' to '{{newValue}}' (range standardization)"
+
 sources: []
 
 rules:

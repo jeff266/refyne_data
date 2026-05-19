@@ -13,6 +13,8 @@ applies_to:
     - person.job_title
   entity: person
 
+ruleExplanation: "Normalizing title from '{{oldValue}}' to '{{newValue}}' (title standardization)"
+
 sources: []
 
 rules:

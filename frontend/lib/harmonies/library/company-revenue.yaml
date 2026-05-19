@@ -13,6 +13,8 @@ applies_to:
     - company.annual_revenue
   entity: company
 
+ruleExplanation: "Normalizing revenue from '{{oldValue}}' to '{{newValue}}' (range standardization)"
+
 sources: []
 
 rules:

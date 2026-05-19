@@ -16,6 +16,8 @@ applies_to:
     - person.role
   entity: person
 
+ruleExplanation: "Normalizing job title from '{{oldValue}}' to '{{newValue}}' (title case, abbreviation expansion)"
+
 sources: []
 
 rules:

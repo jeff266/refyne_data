@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle2, ChevronDown, ChevronUp, RotateCcw, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, RotateCcw, Loader2, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Toggle, PrimaryBtn, Chip } from '@/components/refyne';
 import { RollbackConfirmModal } from '@/components/normalize/RollbackConfirmModal';
 import { RunDetailSlideOver } from '@/components/normalize/RunDetailSlideOver';
+import { ByCompanyView } from '@/components/normalize/ByCompanyView';
+import { ByFieldView } from '@/components/normalize/ByFieldView';
+import { SkippedList } from '@/components/normalize/SkippedList';
 import { addToast } from '@/components/ui/toast';
 
 // TODO: wire to API - GET /api/harmonies or similar
@@ -18,6 +21,8 @@ interface PreviewRecord {
   after: string;
   hubspotCompanyId: string;
   portalId: string;
+  ruleExplanation?: string;
+  excludable: boolean;
 }
 
 interface NormalizeRun {
@@ -29,13 +34,29 @@ interface NormalizeRun {
   rollback_expires_at: string | null;
 }
 
+type ViewMode = 'by-company' | 'by-field';
+type TabMode = 'preview' | 'skipped';
+
 export default function NormalizePage() {
   const [active, setActive] = useState(['company-name','company-industry','phone-e164','linkedin-url']);
   const toggle = (id: string) => setActive(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id]);
 
+  // Tab state
+  const [currentTab, setCurrentTab] = useState<TabMode>('preview');
+
+  // View mode state
+  const [viewMode, setViewMode] = useState<ViewMode>('by-company');
+
   // Preview state
   const [preview, setPreview] = useState<PreviewRecord[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Selection state
+  const [selectedChanges, setSelectedChanges] = useState<Set<string>>(new Set());
+
+  // Apply state
+  const [applyLoading, setApplyLoading] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
   // Run history state
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -53,8 +74,6 @@ export default function NormalizePage() {
   // Detail slide over state
   const [detailSlideOverOpen, setDetailSlideOverOpen] = useState(false);
   const [detailRunId, setDetailRunId] = useState<string | null>(null);
-
-  // Note: Preview is loaded on-demand via "Load preview" button click
 
   // Fetch runs when history is expanded
   useEffect(() => {
@@ -86,6 +105,12 @@ export default function NormalizePage() {
 
       const data = await response.json();
       setPreview(data.preview || []);
+
+      // Auto-select all changes by default
+      const allIds = new Set<string>(
+        (data.preview || []).map((r: PreviewRecord) => `${r.hubspotCompanyId}:${r.field}`)
+      );
+      setSelectedChanges(allIds);
     } catch (error) {
       console.error('Failed to fetch preview:', error);
       addToast('error', 'Failed to load preview');
@@ -188,6 +213,84 @@ export default function NormalizePage() {
     setDetailSlideOverOpen(true);
   };
 
+  const handleToggleChange = (id: string) => {
+    setSelectedChanges(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    const allIds = new Set<string>(
+      preview.map(r => `${r.hubspotCompanyId}:${r.field}`)
+    );
+    setSelectedChanges(allIds);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedChanges(new Set());
+  };
+
+  const handleApplyClick = () => {
+    if (selectedChanges.size === 0) {
+      addToast('error', 'No changes selected');
+      return;
+    }
+    setConfirmModalOpen(true);
+  };
+
+  const handleApplyConfirm = async () => {
+    setApplyLoading(true);
+    setConfirmModalOpen(false);
+
+    try {
+      // Convert selectedChanges to array of objects
+      const selectedChangesArray = Array.from(selectedChanges).map(id => {
+        const [companyId, field] = id.split(':');
+        return { companyId, field };
+      });
+
+      const response = await fetch('/api/normalize/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          harmonyIds: active,
+          selectedChanges: selectedChangesArray,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Apply failed');
+      }
+
+      const data = await response.json();
+      addToast('success', `Normalization run started (${data.runId.slice(0, 8)})`);
+
+      // Refresh preview
+      fetchPreview();
+
+      // Expand history and refresh runs
+      setHistoryExpanded(true);
+      fetchRuns();
+    } catch (error) {
+      console.error('Apply failed:', error);
+      addToast('error', 'Failed to apply changes');
+    } finally {
+      setApplyLoading(false);
+    }
+  };
+
+  const handleExclusionCreated = () => {
+    // Refresh preview when exclusion is created
+    fetchPreview();
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
@@ -249,6 +352,29 @@ export default function NormalizePage() {
               </div>
             ))}
           </div>
+          <div style={{ padding: 12, borderTop: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.text3, marginBottom: 8 }}>
+              Don't see a field you need?
+            </div>
+            <a
+              href="/normalize/harmonies/new"
+              style={{
+                display: 'block',
+                padding: '6px 12px',
+                background: 'transparent',
+                border: `1px solid ${C.border2}`,
+                borderRadius: 5,
+                fontSize: 11,
+                color: C.indigo,
+                textDecoration: 'none',
+                textAlign: 'center',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = C.hover)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              + Add custom rule
+            </a>
+          </div>
           <div style={{ padding: 16, borderTop: `1px solid ${C.border}` }}>
             <PrimaryBtn onClick={fetchPreview} disabled={previewLoading}>
               {previewLoading ? 'Loading...' : 'Load preview'}
@@ -256,73 +382,208 @@ export default function NormalizePage() {
           </div>
         </div>
 
-        {/* Preview area */}
+        {/* Main content area */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <div style={{ padding: '12px 24px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: C.text2 }}>4 fields will change · 23,096 unchanged</span>
-            <PrimaryBtn>Apply 4 changes</PrimaryBtn>
+          {/* Top tabs */}
+          <div style={{ borderBottom: `1px solid ${C.border}`, background: C.sidebar }}>
+            <div style={{ display: 'flex', gap: 24, padding: '0 24px' }}>
+              <button
+                onClick={() => setCurrentTab('preview')}
+                style={{
+                  padding: '12px 0',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: currentTab === 'preview' ? `2px solid ${C.indigo}` : '2px solid transparent',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: currentTab === 'preview' ? C.text : C.text3,
+                  cursor: 'pointer',
+                }}
+              >
+                Preview
+              </button>
+              <button
+                onClick={() => setCurrentTab('skipped')}
+                style={{
+                  padding: '12px 0',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: currentTab === 'skipped' ? `2px solid ${C.indigo}` : '2px solid transparent',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: currentTab === 'skipped' ? C.text : C.text3,
+                  cursor: 'pointer',
+                }}
+              >
+                Skipped
+              </button>
+            </div>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: F.sans }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                  {['Record', 'Field', 'Before', 'After'].map(h => (
-                    <th key={h} style={{ padding: '10px 24px', textAlign: 'left', color: C.text3, fontSize: 11, fontWeight: 500, letterSpacing: '0.03em' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {preview.length === 0 && !previewLoading && (
-                  <tr>
-                    <td colSpan={4} style={{ padding: '40px 24px', textAlign: 'center', color: C.text3, fontSize: 12 }}>
-                      No changes to preview
-                    </td>
-                  </tr>
+
+          {/* Preview tab content */}
+          {currentTab === 'preview' && (
+            <>
+              {/* View controls bar */}
+              <div style={{ padding: '12px 24px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* View mode toggle */}
+                  <div style={{ display: 'flex', gap: 4, background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 6, padding: 2 }}>
+                    <button
+                      onClick={() => setViewMode('by-company')}
+                      style={{
+                        padding: '4px 12px',
+                        background: viewMode === 'by-company' ? C.indigo : 'transparent',
+                        border: 'none',
+                        borderRadius: 4,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: viewMode === 'by-company' ? '#fff' : C.text3,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      By Company
+                    </button>
+                    <button
+                      onClick={() => setViewMode('by-field')}
+                      style={{
+                        padding: '4px 12px',
+                        background: viewMode === 'by-field' ? C.indigo : 'transparent',
+                        border: 'none',
+                        borderRadius: 4,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: viewMode === 'by-field' ? '#fff' : C.text3,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      By Field
+                    </button>
+                  </div>
+
+                  {/* Select/deselect buttons */}
+                  <button
+                    onClick={handleSelectAll}
+                    style={{
+                      padding: '4px 12px',
+                      background: 'transparent',
+                      border: `1px solid ${C.border2}`,
+                      borderRadius: 5,
+                      fontSize: 11,
+                      color: C.text,
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = C.hover)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    Select all
+                  </button>
+                  <button
+                    onClick={handleDeselectAll}
+                    style={{
+                      padding: '4px 12px',
+                      background: 'transparent',
+                      border: `1px solid ${C.border2}`,
+                      borderRadius: 5,
+                      fontSize: 11,
+                      color: C.text,
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = C.hover)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    Deselect all
+                  </button>
+                </div>
+
+                <span style={{ fontSize: 12, color: C.text2 }}>
+                  {preview.length} change{preview.length !== 1 ? 's' : ''} found
+                </span>
+              </div>
+
+              {/* Preview content */}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {previewLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
+                    <Loader2 size={24} color={C.text3} style={{ animation: 'spin 1s linear infinite' }} />
+                  </div>
+                ) : viewMode === 'by-company' ? (
+                  <ByCompanyView
+                    changes={preview}
+                    selectedChanges={selectedChanges}
+                    onToggle={handleToggleChange}
+                    onExclusionCreated={handleExclusionCreated}
+                  />
+                ) : (
+                  <ByFieldView
+                    changes={preview}
+                    selectedChanges={selectedChanges}
+                    onToggle={handleToggleChange}
+                    onExclusionCreated={handleExclusionCreated}
+                  />
                 )}
-                {previewLoading && (
-                  <tr>
-                    <td colSpan={4} style={{ padding: '40px 24px', textAlign: 'center', color: C.text3, fontSize: 12 }}>
-                      Loading preview...
-                    </td>
-                  </tr>
-                )}
-                {preview.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '12px 24px', color: C.text2, fontWeight: 500 }}>
-                      <a
-                        href={`https://app.hubspot.com/contacts/${r.portalId}/company/${r.hubspotCompanyId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          color: C.indigo,
-                          textDecoration: 'none',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                        }}
-                      >
-                        {r.company}
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}>
-                          <path
-                            d="M10 6.5V10C10 10.2652 9.89464 10.5196 9.70711 10.7071C9.51957 10.8946 9.26522 11 9 11H2C1.73478 11 1.48043 10.8946 1.29289 10.7071C1.10536 10.5196 1 10.2652 1 10V3C1 2.73478 1.10536 2.48043 1.29289 2.29289C1.48043 2.10536 1.73478 2 2 2H5.5M8 1H11M11 1V4M11 1L5.5 6.5"
-                            stroke="currentColor"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </a>
-                    </td>
-                    <td style={{ padding: '12px 24px', fontFamily: F.mono, color: C.text3, fontSize: 11 }}>{r.field}</td>
-                    <td style={{ padding: '12px 24px', fontFamily: F.mono, color: C.red, fontSize: 11 }}>{r.before}</td>
-                    <td style={{ padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 7 }}>
-                      <span style={{ fontFamily: F.mono, color: C.green, fontSize: 11 }}>{r.after}</span>
-                      <CheckCircle2 size={11} color={C.green} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+
+              {/* Action bar (shown when changes selected) */}
+              {selectedChanges.size > 0 && (
+                <div
+                  style={{
+                    borderTop: `1px solid ${C.border}`,
+                    background: C.sidebar,
+                    padding: '12px 24px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span style={{ fontSize: 13, color: C.text2 }}>
+                    {selectedChanges.size} change{selectedChanges.size !== 1 ? 's' : ''} selected
+                  </span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={handleDeselectAll}
+                      style={{
+                        padding: '8px 16px',
+                        background: 'transparent',
+                        border: `1px solid ${C.border2}`,
+                        borderRadius: 6,
+                        fontSize: 13,
+                        color: C.text,
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = C.hover)}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleApplyClick}
+                      disabled={applyLoading}
+                      style={{
+                        padding: '8px 16px',
+                        background: C.indigo,
+                        border: 'none',
+                        borderRadius: 6,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: '#fff',
+                        cursor: applyLoading ? 'not-allowed' : 'pointer',
+                        opacity: applyLoading ? 0.6 : 1,
+                      }}
+                    >
+                      {applyLoading ? 'Applying...' : 'Apply Selected Changes →'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Skipped tab content */}
+          {currentTab === 'skipped' && (
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              <SkippedList />
+            </div>
+          )}
         </div>
       </div>
 
@@ -539,6 +800,81 @@ export default function NormalizePage() {
             return run.rollback_available && run.status === 'completed' && !expired;
           })()}
         />
+      )}
+
+      {/* Apply confirmation modal */}
+      {confirmModalOpen && (
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.6)',
+              zIndex: 9998,
+            }}
+            onClick={() => setConfirmModalOpen(false)}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 480,
+              maxHeight: '90vh',
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              zIndex: 9999,
+              padding: 24,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <AlertCircle size={24} color={C.indigo} />
+              <div style={{ fontSize: 16, fontWeight: 600, color: C.text }}>
+                Apply {selectedChanges.size} normalization change{selectedChanges.size !== 1 ? 's' : ''}?
+              </div>
+            </div>
+            <div style={{ fontSize: 13, color: C.text3, marginBottom: 16 }}>
+              This will update {selectedChanges.size} field{selectedChanges.size !== 1 ? 's' : ''} in HubSpot. You can roll back within 30 days.
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setConfirmModalOpen(false)}
+                style={{
+                  padding: '8px 16px',
+                  background: C.surface,
+                  border: `1px solid ${C.border2}`,
+                  borderRadius: 6,
+                  color: C.text,
+                  fontSize: 13,
+                  fontFamily: F.sans,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyConfirm}
+                style={{
+                  padding: '8px 16px',
+                  background: C.indigo,
+                  border: 'none',
+                  borderRadius: 6,
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: F.sans,
+                  cursor: 'pointer',
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* CSS for spinner animation */}

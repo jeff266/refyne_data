@@ -14,6 +14,8 @@ applies_to:
     - person.last_name
   entity: person
 
+ruleExplanation: "Normalizing contact name from '{{oldValue}}' to '{{newValue}}' (title case)"
+
 sources: []
 
 rules:
