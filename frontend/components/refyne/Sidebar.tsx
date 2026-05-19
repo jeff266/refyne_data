@@ -13,6 +13,7 @@ import {
   Plug2,
   Settings,
   HelpCircle,
+  User,
 } from 'lucide-react';
 import { C, F, NAV } from '@/lib/design-tokens';
 import { RefyneLogo } from './RefyneLogo';
@@ -168,6 +169,26 @@ export function Sidebar() {
             }}
           />
         </div>
+        <Link
+          href="/profile"
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 8px',
+            borderRadius: 7,
+            color: currentPage === 'profile' ? C.indigoLt : C.text3,
+            fontSize: 13,
+            marginBottom: 1,
+            background: currentPage === 'profile' ? 'rgba(99,102,241,0.12)' : 'transparent',
+            border: `1px solid ${currentPage === 'profile' ? C.indigoBrd : 'transparent'}`,
+            textDecoration: 'none',
+          }}
+        >
+          <User size={14} />
+          Profile
+        </Link>
         <Link
           href="/settings"
           style={{

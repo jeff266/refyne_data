@@ -18,12 +18,48 @@ interface Member {
 }
 
 const NOTIFICATION_TYPES = [
-  { key: 'always_on_digest', label: 'Digest' },
-  { key: 'compliance_threshold_alert', label: 'Threshold' },
-  { key: 'dedup_pairs_detected', label: 'Dedup' },
-  { key: 'quarantine_submitted', label: 'Quarantine' },
-  { key: 'credit_limit_warning', label: 'Credits' },
-  { key: 'member_joined', label: 'Members' },
+  {
+    key: 'always_on_digest',
+    label: 'Digest',
+    tooltip: 'Daily Always On compliance digest',
+    mandatory: false,
+    defaultSubscribed: false
+  },
+  {
+    key: 'compliance_threshold_alert',
+    label: 'Threshold',
+    tooltip: 'Alert when compliance score drops below threshold',
+    mandatory: true,
+    defaultSubscribed: true
+  },
+  {
+    key: 'dedup_pairs_detected',
+    label: 'Dedup',
+    tooltip: 'Notification when duplicate pairs are detected',
+    mandatory: false,
+    defaultSubscribed: true
+  },
+  {
+    key: 'quarantine_submitted',
+    label: 'Quarantine',
+    tooltip: 'Alert when records are quarantined for review',
+    mandatory: true,
+    defaultSubscribed: true
+  },
+  {
+    key: 'credit_limit_warning',
+    label: 'Credits',
+    tooltip: 'Warning when approaching credit limit',
+    mandatory: false,
+    defaultSubscribed: true
+  },
+  {
+    key: 'member_joined',
+    label: 'Members',
+    tooltip: 'Notification when new members join workspace',
+    mandatory: false,
+    defaultSubscribed: false
+  },
 ];
 
 export function NotificationsTab() {
@@ -40,7 +76,18 @@ export function NotificationsTab() {
       const res = await fetch('/api/org/notifications');
       if (res.ok) {
         const data = await res.json();
-        setMembers(data.members || []);
+        // Auto-seed defaults for missing subscriptions
+        const membersWithDefaults = (data.members || []).map((member: Member) => ({
+          ...member,
+          subscriptions: NOTIFICATION_TYPES.reduce((acc, type) => {
+            acc[type.key] = member.subscriptions[type.key] || {
+              subscribed: type.defaultSubscribed,
+              mandatory: type.mandatory,
+            };
+            return acc;
+          }, {} as Record<string, NotificationPrefs>),
+        }));
+        setMembers(membersWithDefaults);
       }
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
@@ -229,17 +276,43 @@ export function NotificationsTab() {
         >
           <span style={{ fontSize: 12, fontWeight: 500, color: C.text2 }}>Member</span>
           {NOTIFICATION_TYPES.map((type) => (
-            <span
+            <div
               key={type.key}
               style={{
-                fontSize: 12,
-                color: C.text2,
-                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4,
               }}
-              title={type.key}
+              title={type.tooltip}
             >
-              {type.label}
-            </span>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: C.text2,
+                  textAlign: 'center',
+                }}
+              >
+                {type.label}
+              </span>
+              {type.mandatory && (
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  style={{ opacity: 0.4, flexShrink: 0 }}
+                  title="Mandatory for admins"
+                >
+                  <path
+                    d="M10.5 6.5V5C10.5 3.067 8.933 1.5 7 1.5C5.067 1.5 3.5 3.067 3.5 5V6.5M7 9V10.5M5 12.5H9C9.828 12.5 10.5 11.828 10.5 11V8C10.5 7.172 9.828 6.5 9 6.5H5C4.172 6.5 3.5 7.172 3.5 8V11C3.5 11.828 4.172 12.5 5 12.5Z"
+                    stroke={C.text3}
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )}
+            </div>
           ))}
         </div>
 
@@ -266,13 +339,6 @@ export function NotificationsTab() {
 
             {NOTIFICATION_TYPES.map((type) => {
               const pref = member.subscriptions[type.key];
-              if (!pref) {
-                return (
-                  <div key={type.key} style={{ textAlign: 'center' }}>
-                    <span style={{ color: C.text2, fontSize: 11 }}>—</span>
-                  </div>
-                );
-              }
 
               if (pref.mandatory) {
                 return (

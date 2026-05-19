@@ -33,6 +33,7 @@ export function TopBar() {
         }}
       >
         <OrganizationSwitcher
+          afterSelectOrganizationUrl="/dashboard"
           appearance={{
             elements: {
               rootBox: {

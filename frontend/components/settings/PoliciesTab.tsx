@@ -181,6 +181,54 @@ export function PoliciesTab() {
         </div>
       </Card>
 
+      {/* Data Write Behavior */}
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Data Write Behavior</span>
+        </div>
+        <div style={{ padding: '16px 20px' }}>
+          <div style={{ fontSize: 13, color: C.text, marginBottom: 12 }}>When pushing enriched data to HubSpot:</div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ width: 180, fontSize: 12, fontWeight: 500, color: C.text3, paddingTop: 2 }}>
+                Always overwrite
+              </div>
+              <div style={{ flex: 1, fontSize: 12, color: C.text3 }}>
+                Fields like <code style={{ fontFamily: F.mono, background: C.surface, padding: '2px 6px', borderRadius: 3 }}>apollo_industry</code> always replace HubSpot values
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ width: 180, fontSize: 12, fontWeight: 500, color: C.text3, paddingTop: 2 }}>
+                Overwrite if blank/ours
+              </div>
+              <div style={{ flex: 1, fontSize: 12, color: C.text3 }}>
+                Fields like <code style={{ fontFamily: F.mono, background: C.surface, padding: '2px 6px', borderRadius: 3 }}>numberofemployees</code> update only if HubSpot has no value or last source was Refyne
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ width: 180, fontSize: 12, fontWeight: 500, color: C.text3, paddingTop: 2 }}>
+                Never overwrite
+              </div>
+              <div style={{ flex: 1, fontSize: 12, color: C.text3 }}>
+                Fields like <code style={{ fontFamily: F.mono, background: C.surface, padding: '2px 6px', borderRadius: 3 }}>domain</code> never overwrite existing values
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 16, padding: 12, background: C.indigoDim, borderRadius: 6, border: `1px solid ${C.indigoBrd}` }}>
+            <div style={{ fontSize: 12, color: C.text, marginBottom: 4, fontWeight: 500 }}>
+              Custom field policies
+            </div>
+            <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.5 }}>
+              Configure write policies per-field in <a href="/field-mappings" style={{ color: C.indigo, textDecoration: 'none' }}>Field Mappings →</a>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* Prospecting Limits */}
       <Card style={{ marginBottom: 24 }}>
         <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>

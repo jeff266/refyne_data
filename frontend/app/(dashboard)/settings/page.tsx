@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
+import { useSearchParams } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
-import { Card, Toggle, PrimaryBtn, GhostBtn } from '@/components/refyne';
-import { AlwaysOnSettings } from '@/components/always-on/AlwaysOnSettings';
+import { Card, PrimaryBtn } from '@/components/refyne';
+import { GeneralTab } from '@/components/settings/GeneralTab';
 import { MembersTab } from '@/components/settings/MembersTab';
 import { PoliciesTab } from '@/components/settings/PoliciesTab';
 import { NotificationsTab } from '@/components/settings/NotificationsTab';
@@ -12,7 +14,35 @@ import { BillingTab } from '@/components/settings/BillingTab';
 type TabType = 'general' | 'members' | 'policies' | 'notifications' | 'billing';
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('general');
+  const { orgRole } = useAuth();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab') as TabType | null;
+  const [activeTab, setActiveTab] = useState<TabType>(tabParam || 'general');
+
+  useEffect(() => {
+    if (tabParam && ['general', 'members', 'policies', 'notifications', 'billing'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
+
+  // Role gating: only admins can access settings
+  if (orgRole === 'org:viewer' || orgRole === 'org:operator') {
+    return (
+      <div style={{ padding: '28px 32px', fontFamily: F.sans, maxWidth: 920 }}>
+        <Card style={{ padding: 40, textAlign: 'center' }}>
+          <h1 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 12 }}>
+            Settings are managed by your workspace admin
+          </h1>
+          <p style={{ fontSize: 14, color: C.text3, marginBottom: 24 }}>
+            Manage your personal preferences in your Profile.
+          </p>
+          <PrimaryBtn onClick={() => window.location.href = '/profile'}>
+            Go to Profile →
+          </PrimaryBtn>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '28px 32px', fontFamily: F.sans, maxWidth: 920 }}>
@@ -71,101 +101,3 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   );
 }
 
-function GeneralTab() {
-  return (
-    <div style={{ maxWidth: 720 }}>
-      {/* Always On */}
-      <div style={{ marginBottom: 32 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 16 }}>Always On</h2>
-        <AlwaysOnSettings />
-      </div>
-
-      {/* General Settings */}
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>General</span>
-        </div>
-        <div style={{ padding: '16px 20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div>
-              <div style={{ fontSize: 13, color: C.text, marginBottom: 4 }}>Auto-scan on sync</div>
-              <div style={{ fontSize: 11, color: C.text3 }}>Automatically run compliance scan after HubSpot sync</div>
-            </div>
-            <Toggle on={true} onToggle={() => {}} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: 13, color: C.text, marginBottom: 4 }}>Implicit normalization</div>
-              <div style={{ fontSize: 11, color: C.text3 }}>Auto-apply normalized values without review</div>
-            </div>
-            <Toggle on={false} onToggle={() => {}} />
-          </div>
-        </div>
-      </Card>
-
-      {/* Notifications */}
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Notifications</span>
-        </div>
-        <div style={{ padding: '16px 20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div>
-              <div style={{ fontSize: 13, color: C.text, marginBottom: 4 }}>Email alerts</div>
-              <div style={{ fontSize: 11, color: C.text3 }}>Receive email when compliance drops below threshold</div>
-            </div>
-            <Toggle on={true} onToggle={() => {}} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div>
-              <div style={{ fontSize: 13, color: C.text, marginBottom: 4 }}>Slack notifications</div>
-              <div style={{ fontSize: 11, color: C.text3 }}>Post alerts to a Slack channel</div>
-            </div>
-            <Toggle on={false} onToggle={() => {}} />
-          </div>
-          <div>
-            <div style={{ fontSize: 13, color: C.text, marginBottom: 8 }}>Score threshold</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <input
-                type="number"
-                defaultValue={75}
-                style={{
-                  width: 80,
-                  padding: '8px 12px',
-                  background: C.surface,
-                  border: `1px solid ${C.border2}`,
-                  borderRadius: 6,
-                  color: C.text,
-                  fontFamily: F.mono,
-                  fontSize: 13,
-                }}
-              />
-              <span style={{ fontSize: 12, color: C.text3 }}>Alert when compliance score drops below this value</span>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Danger Zone */}
-      <Card>
-        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.red }}>Danger Zone</span>
-        </div>
-        <div style={{ padding: '16px 20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontSize: 13, color: C.text, marginBottom: 4 }}>Reset compliance data</div>
-              <div style={{ fontSize: 11, color: C.text3 }}>Clear all normalized records and score history</div>
-            </div>
-            <GhostBtn>Reset Data</GhostBtn>
-          </div>
-        </div>
-      </Card>
-
-      <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
-        <PrimaryBtn>Save Changes</PrimaryBtn>
-        <GhostBtn>Cancel</GhostBtn>
-      </div>
-    </div>
-  );
-}
