@@ -51,8 +51,18 @@ rules:
     when: $lowercase(value) in ["chief marketing officer", "cmo"]
     transform: '"CMO"'
 
+  - id: standardize-vp-abbr
+    description: Standardize V.P. abbreviation
+    when: $substring($lowercase(value), 0, 4) = "v.p."
+    transform: |
+      (
+        $lower := $lowercase(value);
+        $rest := $trim($substring($lower, 4));
+        $rest ? "VP " & $normalize_case($rest, "title") : "VP"
+      )
+
   - id: standardize-vp
-    description: Standardize VP prefix
+    description: Standardize VP prefix (vice president)
     when: |
       (
         $lower := $lowercase(value);
@@ -64,7 +74,7 @@ rules:
         $rest := $contains($lower, "vice president")
           ? $trim($replace($lower, /^vice president/, ""))
           : $trim($replace($lower, /^v\.?\s*p\.?/, ""));
-        "VP " & $normalize_case($rest, "title")
+        $rest ? "VP " & $normalize_case($rest, "title") : "VP"
       )
 
   - id: normalize-title-case
