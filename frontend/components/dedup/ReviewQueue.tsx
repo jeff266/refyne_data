@@ -885,16 +885,18 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
 
               {/* Record A */}
               <div>
-                <div style={{ color: C.text, fontWeight: 500, fontSize: 12, marginBottom: 2 }}>
-                  {pair.recordAId}
+                <div style={{ color: C.text, fontWeight: 500, fontSize: 12, marginBottom: 4 }}>
+                  {pair.recordAName || pair.recordAId}
                 </div>
+                <RecordLink hubspotId={pair.recordAId} />
               </div>
 
               {/* Record B */}
               <div>
-                <div style={{ color: C.text2, fontSize: 12, marginBottom: 2 }}>
-                  {pair.recordBId}
+                <div style={{ color: C.text2, fontSize: 12, marginBottom: 4 }}>
+                  {pair.recordBName || pair.recordBId}
                 </div>
+                <RecordLink hubspotId={pair.recordBId} />
               </div>
 
               {/* Signals */}
