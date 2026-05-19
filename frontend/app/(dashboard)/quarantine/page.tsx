@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, PrimaryBtn, GhostBtn } from '@/components/refyne';
+import { QuarantineDetailSlideOver } from './QuarantineDetailSlideOver';
 
 interface QuarantineRecord {
   id: string;
@@ -35,6 +36,7 @@ export default function QuarantinePage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [selectedRecord, setSelectedRecord] = useState<QuarantineRecord | null>(null);
+  const [previewRecord, setPreviewRecord] = useState<QuarantineRecord | null>(null);
   const [rejectionNote, setRejectionNote] = useState('');
 
   useEffect(() => {
@@ -232,6 +234,7 @@ export default function QuarantinePage() {
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       {record.status === 'pending' ? (
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                          <GhostBtn onClick={() => setPreviewRecord(record)}>Preview</GhostBtn>
                           <PrimaryBtn onClick={() => handleApprove(record.id)}>Approve</PrimaryBtn>
                           <GhostBtn onClick={() => setSelectedRecord(record)}>Reject</GhostBtn>
                         </div>

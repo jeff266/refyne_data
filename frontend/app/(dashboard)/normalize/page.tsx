@@ -54,10 +54,7 @@ export default function NormalizePage() {
   const [detailSlideOverOpen, setDetailSlideOverOpen] = useState(false);
   const [detailRunId, setDetailRunId] = useState<string | null>(null);
 
-  // Fetch preview on mount and when active harmonies change
-  useEffect(() => {
-    fetchPreview();
-  }, [active]);
+  // Note: Preview is loaded on-demand via "Load preview" button click
 
   // Fetch runs when history is expanded
   useEffect(() => {
@@ -253,7 +250,9 @@ export default function NormalizePage() {
             ))}
           </div>
           <div style={{ padding: 16, borderTop: `1px solid ${C.border}` }}>
-            <PrimaryBtn>Load 23,100</PrimaryBtn>
+            <PrimaryBtn onClick={fetchPreview} disabled={previewLoading}>
+              {previewLoading ? 'Loading...' : 'Load preview'}
+            </PrimaryBtn>
           </div>
         </div>
 

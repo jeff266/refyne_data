@@ -11,6 +11,7 @@ import {
 import { TrendChart } from './TrendChart';
 import { OnboardingWrapper } from './OnboardingWrapper';
 import { DashboardClient } from './DashboardClient';
+import { ComplianceAIOverview } from './ComplianceAIOverview';
 
 // Default org ID for development - in production this would come from session
 const DEFAULT_ORG_ID = process.env.DEFAULT_ORG_ID || 'demo-org';
@@ -510,6 +511,8 @@ export default function DashboardPage() {
       <Suspense fallback={null}>
         <ClientData />
       </Suspense>
+
+      <ComplianceAIOverview />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
