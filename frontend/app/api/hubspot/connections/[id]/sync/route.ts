@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { enqueueScan } from '@/lib/compliance/compliance-scanner';
 
 /**
  * POST /api/hubspot/connections/:id/sync
@@ -33,10 +34,10 @@ export async function POST(
       );
     }
 
-    // Fetch connection to verify ownership
+    // Fetch connection to verify ownership and get access token
     const { data: connection, error: fetchError } = await supabase
       .from('hubspot_connections')
-      .select('org_id, last_sync_status')
+      .select('org_id, last_sync_status, access_token, has_export_scope')
       .eq('id', connectionId)
       .single();
 
@@ -82,11 +83,31 @@ export async function POST(
       );
     }
 
-    // TODO: Enqueue BullMQ scan job
-    // For now, just return a mock job ID
-    const jobId = `scan_${connectionId}_${Date.now()}`;
+    // Enqueue BullMQ compliance scan job
+    const scanResult = await enqueueScan(
+      ctx.orgId,
+      connection.access_token,
+      connection.has_export_scope || false
+    );
 
-    console.log(`[Sync] Started sync job ${jobId} for connection ${connectionId}`);
+    if (!scanResult.queued) {
+      // Failed to enqueue - revert status
+      await supabase
+        .from('hubspot_connections')
+        .update({
+          last_sync_status: 'failed',
+          last_sync_error: scanResult.reason || 'Failed to enqueue scan job',
+        })
+        .eq('id', connectionId);
+
+      return NextResponse.json(
+        { error: scanResult.reason || 'Failed to enqueue scan' },
+        { status: 500 }
+      );
+    }
+
+    const jobId = scanResult.jobId;
+    console.log(`[Sync] Enqueued compliance scan job ${jobId} for connection ${connectionId}`);
 
     return NextResponse.json({ jobId });
   } catch (error) {

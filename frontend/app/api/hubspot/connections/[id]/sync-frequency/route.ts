@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { getBillingContext } from '@/lib/billing/check-feature';
 
 type SyncFrequency = 'manual' | 'nightly' | 'every_6h' | 'hourly';
 
@@ -43,11 +44,22 @@ export async function PUT(
       );
     }
 
-    // TODO: Add plan gating
-    // For now, allow all frequencies
-    // In production:
-    // - 'every_6h' requires Growth+
-    // - 'hourly' requires Scale+
+    // Plan gating: every_6h requires Growth+, hourly requires Scale+
+    const { plan } = await getBillingContext(ctx.orgId);
+
+    if (frequency === 'every_6h' && !['growth', 'scale', 'enterprise'].includes(plan)) {
+      return NextResponse.json(
+        { error: 'PLAN_REQUIRED', requiredPlan: 'growth' },
+        { status: 403 }
+      );
+    }
+
+    if (frequency === 'hourly' && !['scale', 'enterprise'].includes(plan)) {
+      return NextResponse.json(
+        { error: 'PLAN_REQUIRED', requiredPlan: 'scale' },
+        { status: 403 }
+      );
+    }
 
     // Fetch connection to verify ownership
     const { data: connection, error: fetchError } = await supabase

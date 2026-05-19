@@ -101,21 +101,56 @@ async function main() {
     }
   }, 6 * 60 * 60 * 1000); // Check every 6 hours
 
-  // Rollback expiry - check once per day
-  console.log('✅ Starting rollback expiry task...');
-  console.log('Expiring old rollback windows daily\n');
+  // Rollback expiry + API counter resets - check once per day
+  console.log('✅ Starting nightly maintenance tasks...');
+  console.log('Expiring old rollback windows and resetting API counters daily\n');
 
-  const expireRollbacksInterval = setInterval(async () => {
+  const nightlyMaintenanceInterval = setInterval(async () => {
     try {
       if (!supabase) return;
-      const { error } = await supabase.rpc('expire_rollback_windows');
-      if (error) {
-        console.error('Error expiring rollback windows:', error);
+
+      // Expire old rollback windows
+      const { error: rollbackError } = await supabase.rpc('expire_rollback_windows');
+      if (rollbackError) {
+        console.error('Error expiring rollback windows:', rollbackError);
       } else {
         console.log(`[${new Date().toISOString()}] Rollback windows expired successfully`);
       }
+
+      // Reset daily API call counters at midnight UTC
+      const startOfTodayUTC = new Date();
+      startOfTodayUTC.setUTCHours(0, 0, 0, 0);
+
+      const { error: dailyResetError } = await supabase
+        .from('hubspot_connections')
+        .update({
+          api_calls_today: 0,
+          api_calls_reset_at: new Date().toISOString()
+        })
+        .lt('api_calls_reset_at', startOfTodayUTC.toISOString());
+
+      if (dailyResetError) {
+        console.error('Error resetting daily API counters:', dailyResetError);
+      } else {
+        console.log(`[${new Date().toISOString()}] Daily API counters reset successfully`);
+      }
+
+      // Reset monthly counters on the 1st
+      if (new Date().getUTCDate() === 1) {
+        const { error: monthlyResetError } = await supabase
+          .from('hubspot_connections')
+          .update({ api_calls_month: 0 })
+          .neq('id', null);
+
+        if (monthlyResetError) {
+          console.error('Error resetting monthly API counters:', monthlyResetError);
+        } else {
+          console.log(`[${new Date().toISOString()}] Monthly API counters reset successfully`);
+        }
+      }
+
     } catch (error) {
-      console.error('Error in rollback expiry task:', error);
+      console.error('Error in nightly maintenance tasks:', error);
     }
   }, 24 * 60 * 60 * 1000); // Check every 24 hours
 
@@ -126,7 +161,7 @@ async function main() {
     console.log('\nShutting down...');
     clearInterval(cronInterval);
     clearInterval(missedJobsInterval);
-    clearInterval(expireRollbacksInterval);
+    clearInterval(nightlyMaintenanceInterval);
     await stopDigestWorker();
     console.log('Worker stopped.');
     process.exit(0);
