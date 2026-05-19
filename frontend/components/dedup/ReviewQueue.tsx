@@ -474,6 +474,7 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
 
   // Action state
   const [actionLoading, setActionLoading] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
 
   // ─────────────────────────────────────────────────────────────
   // Fetch pairs
@@ -714,6 +715,38 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
   };
 
   // ─────────────────────────────────────────────────────────────
+  // Run scan
+  // ─────────────────────────────────────────────────────────────
+
+  const handleRunScan = async () => {
+    setScanLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/dedup/scan', {
+        method: 'POST',
+        headers: { 'x-org-id': orgId },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to start scan');
+      }
+
+      const data = await res.json();
+      console.log(`[Dedup] Scan enqueued: jobId=${data.jobId}`);
+
+      // Poll for completion and refresh pairs
+      setTimeout(() => {
+        fetchPairs();
+      }, 3000); // Refresh after 3 seconds
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start scan');
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
   // Computed values
   // ─────────────────────────────────────────────────────────────
 
@@ -766,10 +799,15 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
             onChange={(v) => { setSortBy(v); setPage(1); }}
           />
         </div>
-        <GhostBtn onClick={fetchPairs} disabled={loading}>
-          <RefreshCw size={12} style={{ marginRight: 4 }} />
-          Refresh
-        </GhostBtn>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <PrimaryBtn onClick={handleRunScan} disabled={scanLoading || loading}>
+            {scanLoading ? 'Scanning...' : 'Run scan'}
+          </PrimaryBtn>
+          <GhostBtn onClick={fetchPairs} disabled={loading}>
+            <RefreshCw size={12} style={{ marginRight: 4 }} />
+            Refresh
+          </GhostBtn>
+        </div>
       </div>
 
       {/* Selection bar */}
