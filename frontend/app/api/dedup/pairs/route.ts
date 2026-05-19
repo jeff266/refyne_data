@@ -123,8 +123,10 @@ export async function GET(request: NextRequest) {
         const pairsWithPortal = (pairs as DedupPairRow[]).filter(p => p.portal_id);
         const knownPortalId = pairsWithPortal.length > 0 ? pairsWithPortal[0].portal_id : null;
 
+        let triedKnownPortal = false;
         if (knownPortalId) {
           console.log(`[Dedup] Using known portal ${knownPortalId} from dedup_pairs table`);
+          triedKnownPortal = true;
 
           const accessToken = await getAccessToken(ctx.orgId);
           if (accessToken) {
@@ -136,10 +138,21 @@ export async function GET(request: NextRequest) {
             }
 
             console.log(`[Dedup] Fetched ${companies.length} names from known portal`);
+
+            // If known portal returned 0 results, fall back to multi-portal search
+            if (companies.length === 0) {
+              console.log('[Dedup] Known portal returned 0 results, falling back to multi-portal search...');
+            }
           }
-        } else {
-          // SHORT-TERM FIX: Try all active connections since pairs may be from different portals
-          console.log('[Dedup] No portal_id in pairs, trying all active connections...');
+        }
+
+        // Multi-portal fallback: if no known portal OR known portal returned 0 results
+        if (!knownPortalId || Object.keys(companyNames).length === 0) {
+          if (triedKnownPortal) {
+            console.log('[Dedup] Trying all portals since known portal failed...');
+          } else {
+            console.log('[Dedup] No portal_id in pairs, trying all active connections...');
+          }
 
           const { data: connections } = await supabase
             .from('hubspot_connections')
