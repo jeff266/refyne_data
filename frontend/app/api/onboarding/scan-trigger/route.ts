@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 /**
  * POST /api/onboarding/scan-trigger
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const runId = uuidv4();
+    const runId = randomUUID();
 
     // Insert initial scan progress event
     const { error: eventError } = await supabase
