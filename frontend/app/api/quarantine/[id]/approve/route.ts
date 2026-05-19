@@ -61,7 +61,7 @@ export async function POST(
       .eq('org_id', ctx.orgId);
 
     if (updateError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/quarantine/[id]/approve' });
+      captureWithOrgContext(updateError, ctx.orgId, { route: '/api/quarantine/[id]/approve' });
       console.error('Failed to approve record:', updateError);
       return NextResponse.json({ error: 'Failed to approve record' }, { status: 500 });
     }

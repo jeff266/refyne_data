@@ -124,13 +124,17 @@ export async function PUT(request: Request) {
  * Creates workspace_entitlements row for new organization.
  */
 export async function POST(request: Request) {
+  let clerk_org_id: string | undefined;
+  let org_name: string | undefined;
+
   try {
     if (!supabase) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
 
     const body = await request.json();
-    const { clerk_org_id, org_name } = body;
+    clerk_org_id = body.clerk_org_id;
+    org_name = body.org_name;
 
     if (!clerk_org_id || !org_name) {
       return NextResponse.json(
@@ -164,14 +168,14 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings' });
+      captureWithOrgContext(error, clerk_org_id, { route: '/api/org/settings' });
       console.error('Failed to create workspace entitlements:', error);
       return NextResponse.json({ error: 'Failed to create workspace' }, { status: 500 });
     }
 
     return NextResponse.json({ settings }, { status: 201 });
   } catch (error) {
-    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings' });
+    captureWithOrgContext(error, clerk_org_id || 'unknown', { route: '/api/org/settings' });
     console.error('Failed to create workspace:', error);
     return NextResponse.json({ error: 'Failed to create workspace' }, { status: 500 });
   }

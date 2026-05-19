@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
         ...Object.keys(transformedRecord),
       ]);
 
-      for (const field of allFields) {
+      for (const field of Array.from(allFields)) {
         // Skip internal fields
         if (field.startsWith('_')) continue;
 

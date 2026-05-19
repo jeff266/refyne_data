@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       .single();
 
     if (settingsError || !settings) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/enrich/push' });
+      captureWithOrgContext(settingsError, ctx.orgId, { route: '/api/enrich/push' });
       console.error('Failed to fetch org settings:', settingsError);
       return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
     }
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
           });
 
         if (quarantineError) {
-          captureWithOrgContext(error, ctx.orgId, { route: '/api/enrich/push' });
+          captureWithOrgContext(quarantineError, ctx.orgId, { route: '/api/enrich/push' });
           console.error('Failed to quarantine record:', quarantineError);
           return NextResponse.json(
             { error: 'Failed to quarantine record' },

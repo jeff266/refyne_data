@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       .single();
 
     if (settingsError || !settings) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/enrich/csv-push' });
+      captureWithOrgContext(settingsError, ctx.orgId, { route: '/api/enrich/csv-push' });
       console.error('Failed to fetch org settings:', settingsError);
       return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
     }

@@ -90,7 +90,7 @@ export async function executeRollback(
   let failedCount = 0;
 
   // Process each company
-  for (const [companyId, companyChanges] of changesByCompany.entries()) {
+  for (const [companyId, companyChanges] of Array.from(changesByCompany.entries())) {
     try {
       // Build properties object with original values
       const properties: Record<string, string | null> = {};
@@ -102,7 +102,7 @@ export async function executeRollback(
       await client.updateCompany(companyId, properties);
 
       // Track successful changes
-      succeededChanges.push(...companyChanges.map(c => c.id));
+      succeededChanges.push(...companyChanges.map((c: NormalizationChange) => c.id));
       rolledBackCount += companyChanges.length;
     } catch (error) {
       // Log error but continue with other companies
