@@ -10,6 +10,13 @@ interface OrgSettings {
   external_agencies_enabled: boolean;
 }
 
+interface DataPolicies {
+  existingValuePolicy: 'fill_gaps' | 'overwrite_always' | 'overwrite_if_stale';
+  overwriteStaleDays: number;
+  conflictResolution: 'first_wins' | 'highest_confidence' | 'manual_review';
+  dedupPreflight: boolean;
+}
+
 interface Limit {
   id: string;
   applies_to: string;
@@ -19,6 +26,7 @@ interface Limit {
 
 export function PoliciesTab() {
   const [settings, setSettings] = useState<OrgSettings | null>(null);
+  const [dataPolicies, setDataPolicies] = useState<DataPolicies | null>(null);
   const [limits, setLimits] = useState<Limit[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,6 +34,7 @@ export function PoliciesTab() {
 
   useEffect(() => {
     loadSettings();
+    loadDataPolicies();
     loadLimits();
   }, []);
 
@@ -42,6 +51,17 @@ export function PoliciesTab() {
     }
   }
 
+  async function loadDataPolicies() {
+    try {
+      const res = await fetch('/api/org/data-policies');
+      if (!res.ok) throw new Error('Failed to load data policies');
+      const data = await res.json();
+      setDataPolicies(data);
+    } catch (err) {
+      console.error('Failed to load data policies:', err);
+    }
+  }
+
   async function loadLimits() {
     try {
       const res = await fetch('/api/limits');
@@ -54,17 +74,27 @@ export function PoliciesTab() {
   }
 
   async function handleSave() {
-    if (!settings) return;
+    if (!settings || !dataPolicies) return;
 
     setSaving(true);
     try {
-      const res = await fetch('/api/org/settings', {
+      // Save org settings
+      const res1 = await fetch('/api/org/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       });
 
-      if (!res.ok) throw new Error('Failed to save settings');
+      if (!res1.ok) throw new Error('Failed to save settings');
+
+      // Save data policies
+      const res2 = await fetch('/api/org/data-policies', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataPolicies),
+      });
+
+      if (!res2.ok) throw new Error('Failed to save data policies');
 
       alert('Settings saved successfully');
     } catch (err) {
@@ -88,7 +118,7 @@ export function PoliciesTab() {
     }
   }
 
-  if (loading || !settings) {
+  if (loading || !settings || !dataPolicies) {
     return <div style={{ color: C.text3, fontSize: 13 }}>Loading policies...</div>;
   }
 
@@ -187,44 +217,121 @@ export function PoliciesTab() {
           <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Data Write Behavior</span>
         </div>
         <div style={{ padding: '16px 20px' }}>
-          <div style={{ fontSize: 13, color: C.text, marginBottom: 12 }}>When pushing enriched data to HubSpot:</div>
+          <div style={{ fontSize: 13, color: C.text, marginBottom: 12 }}>
+            When a field already has a value in HubSpot:
+          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ width: 180, fontSize: 12, fontWeight: 500, color: C.text3, paddingTop: 2 }}>
-                Always overwrite
-              </div>
-              <div style={{ flex: 1, fontSize: 12, color: C.text3 }}>
-                Fields like <code style={{ fontFamily: F.mono, background: C.surface, padding: '2px 6px', borderRadius: 3 }}>apollo_industry</code> always replace HubSpot values
+          <label style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 10, cursor: 'pointer' }}>
+            <input
+              type="radio"
+              checked={dataPolicies.existingValuePolicy === 'fill_gaps'}
+              onChange={() => setDataPolicies({ ...dataPolicies, existingValuePolicy: 'fill_gaps' })}
+              style={{ marginRight: 10, marginTop: 2 }}
+            />
+            <div>
+              <div style={{ fontSize: 13, color: C.text }}>Fill gaps only <span style={{ color: C.text3, fontWeight: 400 }}>(recommended)</span></div>
+              <div style={{ fontSize: 11, color: C.text3 }}>Only enrich fields that are empty.</div>
+            </div>
+          </label>
+
+          <label style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 10, cursor: 'pointer' }}>
+            <input
+              type="radio"
+              checked={dataPolicies.existingValuePolicy === 'overwrite_always'}
+              onChange={() => setDataPolicies({ ...dataPolicies, existingValuePolicy: 'overwrite_always' })}
+              style={{ marginRight: 10, marginTop: 2 }}
+            />
+            <div>
+              <div style={{ fontSize: 13, color: C.text }}>Overwrite always</div>
+              <div style={{ fontSize: 11, color: C.text3 }}>Replace existing values with enriched data.</div>
+            </div>
+          </label>
+
+          <label style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 16, cursor: 'pointer' }}>
+            <input
+              type="radio"
+              checked={dataPolicies.existingValuePolicy === 'overwrite_if_stale'}
+              onChange={() => setDataPolicies({ ...dataPolicies, existingValuePolicy: 'overwrite_if_stale' })}
+              style={{ marginRight: 10, marginTop: 2 }}
+            />
+            <div>
+              <div style={{ fontSize: 13, color: C.text, display: 'flex', alignItems: 'center', gap: 6 }}>
+                Overwrite if not updated in
+                <input
+                  type="number"
+                  min="7"
+                  max="365"
+                  value={dataPolicies.overwriteStaleDays}
+                  onChange={(e) => setDataPolicies({ ...dataPolicies, overwriteStaleDays: parseInt(e.target.value) || 30 })}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    width: 50,
+                    padding: '2px 6px',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 4,
+                    background: C.surface,
+                    color: C.text,
+                    fontSize: 13,
+                  }}
+                />
+                days
               </div>
             </div>
+          </label>
 
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ width: 180, fontSize: 12, fontWeight: 500, color: C.text3, paddingTop: 2 }}>
-                Overwrite if blank/ours
-              </div>
-              <div style={{ flex: 1, fontSize: 12, color: C.text3 }}>
-                Fields like <code style={{ fontFamily: F.mono, background: C.surface, padding: '2px 6px', borderRadius: 3 }}>numberofemployees</code> update only if HubSpot has no value or last source was Refyne
-              </div>
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginTop: 6 }}>
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 12 }}>
+              When two providers return different values:
             </div>
 
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ width: 180, fontSize: 12, fontWeight: 500, color: C.text3, paddingTop: 2 }}>
-                Never overwrite
-              </div>
-              <div style={{ flex: 1, fontSize: 12, color: C.text3 }}>
-                Fields like <code style={{ fontFamily: F.mono, background: C.surface, padding: '2px 6px', borderRadius: 3 }}>domain</code> never overwrite existing values
-              </div>
+            <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                checked={dataPolicies.conflictResolution === 'first_wins'}
+                onChange={() => setDataPolicies({ ...dataPolicies, conflictResolution: 'first_wins' })}
+                style={{ marginRight: 10 }}
+              />
+              <div style={{ fontSize: 13, color: C.text }}>First provider wins</div>
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                checked={dataPolicies.conflictResolution === 'highest_confidence'}
+                onChange={() => setDataPolicies({ ...dataPolicies, conflictResolution: 'highest_confidence' })}
+                style={{ marginRight: 10 }}
+              />
+              <div style={{ fontSize: 13, color: C.text }}>Highest confidence wins</div>
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', marginBottom: 16, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                checked={dataPolicies.conflictResolution === 'manual_review'}
+                onChange={() => setDataPolicies({ ...dataPolicies, conflictResolution: 'manual_review' })}
+                style={{ marginRight: 10 }}
+              />
+              <div style={{ fontSize: 13, color: C.text }}>Flag for manual review (sends to quarantine)</div>
+            </label>
+
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={dataPolicies.dedupPreflight}
+                  onChange={() => setDataPolicies({ ...dataPolicies, dedupPreflight: !dataPolicies.dedupPreflight })}
+                  style={{ marginRight: 10, marginTop: 2 }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, color: C.text }}>Before bulk operations, check for duplicates</div>
+                  <div style={{ fontSize: 11, color: C.text3 }}>Pause and show conflicts before proceeding</div>
+                </div>
+              </label>
             </div>
           </div>
 
-          <div style={{ marginTop: 16, padding: 12, background: C.indigoDim, borderRadius: 6, border: `1px solid ${C.indigoBrd}` }}>
-            <div style={{ fontSize: 12, color: C.text, marginBottom: 4, fontWeight: 500 }}>
-              Custom field policies
-            </div>
-            <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.5 }}>
-              Configure write policies per-field in <a href="/field-mappings" style={{ color: C.indigo, textDecoration: 'none' }}>Field Mappings →</a>
-            </div>
+          <div style={{ marginTop: 16, fontSize: 11, color: C.text3, lineHeight: 1.5 }}>
+            Applies to all Normalize runs, Enrich pushes, and CSV imports. Arrangements can override per run.
           </div>
         </div>
       </Card>
