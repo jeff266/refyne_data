@@ -71,12 +71,18 @@ export async function GET() {
       );
     }
 
-    // Build HubSpot OAuth URL
+    // Build HubSpot OAuth URL with full scope list
     const scopes = [
+      // Required
       'crm.objects.companies.read',
       'crm.objects.companies.write',
-      'crm.export',
+      'crm.schemas.companies.read',
       'oauth',
+      // Conditionally required
+      'crm.export',
+      'crm.objects.contacts.read',
+      'crm.objects.contacts.write',
+      'crm.schemas.contacts.read',
     ];
 
     const authUrl = new URL('https://app.hubspot.com/oauth/authorize');
