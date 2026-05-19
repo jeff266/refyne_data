@@ -16,7 +16,7 @@ import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers
 export async function GET() {
   let ctx;
   try {
-    ctx = requireAdmin();
+    ctx = await requireAdmin();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
@@ -93,7 +93,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   // Add auth check
   let ctx;
-  try { ctx = getOrgContext(); }
+  try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 
   try {
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   // Add auth check
   let ctx;
-  try { ctx = getOrgContext(); }
+  try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 
   try {

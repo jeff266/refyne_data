@@ -18,7 +18,7 @@ import type { CompanyQuery, SearchQuery } from '@/lib/providers/types';
 export async function POST(request: NextRequest) {
   let ctx;
   try {
-    ctx = requireOperatorOrAbove();
+    ctx = await requireOperatorOrAbove();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

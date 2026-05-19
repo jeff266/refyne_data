@@ -51,7 +51,7 @@ export async function PUT(
 ) {
   // Add auth check
   let ctx;
-  try { ctx = getOrgContext(); }
+  try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 
   // Feature gate: dedup
@@ -214,7 +214,7 @@ export async function DELETE(
 ) {
   // Add auth check
   let ctx;
-  try { ctx = getOrgContext(); }
+  try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 
   // Feature gate: dedup

@@ -10,7 +10,7 @@ import { checkProspectingCredits, getUsageSummary } from '@/lib/auth/check-credi
 export async function GET(request: Request) {
   let ctx;
   try {
-    ctx = getOrgContext();
+    ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

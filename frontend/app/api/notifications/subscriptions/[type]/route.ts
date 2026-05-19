@@ -25,7 +25,7 @@ export async function PUT(
 ) {
   let ctx;
   try {
-    ctx = getOrgContext();
+    ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

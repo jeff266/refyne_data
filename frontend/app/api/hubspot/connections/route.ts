@@ -13,7 +13,7 @@ import { supabase } from '@/lib/db/supabase';
 export async function GET() {
   let ctx;
   try {
-    ctx = getOrgContext();
+    ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

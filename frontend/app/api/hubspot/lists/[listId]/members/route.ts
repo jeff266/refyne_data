@@ -32,7 +32,7 @@ export async function GET(
 ) {
   // Add auth check
   let ctx;
-  try { ctx = getOrgContext(); }
+  try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 
   try {

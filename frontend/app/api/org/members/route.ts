@@ -13,7 +13,7 @@ import { getPlanFeatures, getNextPlanWithMoreSeats } from '@/lib/billing/plan-fe
 export async function GET() {
   let ctx;
   try {
-    ctx = getOrgContext();
+    ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
@@ -50,7 +50,7 @@ export async function GET() {
 export async function POST(request: Request) {
   let ctx;
   try {
-    ctx = requireAdmin();
+    ctx = await requireAdmin();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

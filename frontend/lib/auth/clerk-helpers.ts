@@ -10,8 +10,8 @@ export interface OrgContext {
   userEmail?: string;
 }
 
-export function getOrgContext(): OrgContext {
-  const { orgId, orgRole, userId, sessionClaims } = auth();
+export async function getOrgContext(): Promise<OrgContext> {
+  const { orgId, orgRole, userId, sessionClaims } = await auth();
   if (!orgId || !userId) {
     throw new Error('UNAUTHENTICATED');
   }
@@ -19,16 +19,16 @@ export function getOrgContext(): OrgContext {
   return { orgId, orgRole: orgRole as OrgRole, userId, userEmail };
 }
 
-export function requireAdmin(): OrgContext {
-  const ctx = getOrgContext();
+export async function requireAdmin(): Promise<OrgContext> {
+  const ctx = await getOrgContext();
   if (ctx.orgRole !== 'org:admin') {
     throw new Error('FORBIDDEN');
   }
   return ctx;
 }
 
-export function requireOperatorOrAbove(): OrgContext {
-  const ctx = getOrgContext();
+export async function requireOperatorOrAbove(): Promise<OrgContext> {
+  const ctx = await getOrgContext();
   if (ctx.orgRole === 'org:viewer') {
     throw new Error('FORBIDDEN');
   }

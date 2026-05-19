@@ -26,7 +26,7 @@ export async function PUT(
 ) {
   let ctx;
   try {
-    ctx = requireAdmin();
+    ctx = await requireAdmin();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

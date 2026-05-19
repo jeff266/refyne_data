@@ -24,7 +24,7 @@ type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 export async function GET() {
   let ctx;
   try {
-    ctx = requireAdmin();
+    ctx = await requireAdmin();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

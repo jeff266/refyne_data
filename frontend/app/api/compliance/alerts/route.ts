@@ -12,7 +12,7 @@ import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-featu
 export async function GET(request: NextRequest) {
   // Add auth check
   let ctx;
-  try { ctx = getOrgContext(); }
+  try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
   // Feature gate: compliance
   try {
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   // Add auth check
   let ctx;
-  try { ctx = getOrgContext(); }
+  try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
   // Feature gate: compliance
   try {
