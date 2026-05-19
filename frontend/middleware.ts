@@ -11,6 +11,7 @@ const isPublicRoute = createRouteMatcher([
   '/unsubscribed',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/onboarding(.*)', // Users need to access onboarding before they have an org
   '/api/webhooks(.*)', // Webhooks use signature validation, not session cookies
 ]);
 
@@ -21,14 +22,15 @@ export default clerkMiddleware(async (auth, request) => {
 
     // After auth check, if user has no active org, activate their first org
     const { userId, orgId } = await auth();
+    const url = new URL(request.url);
 
-    if (userId && !orgId) {
+    // Only redirect if we haven't already tried to set the org (prevent redirect loop)
+    if (userId && !orgId && !url.searchParams.has('__clerk_org')) {
       const client = await clerkClient();
       const userMemberships = await client.users.getOrganizationMembershipList({ userId });
 
       if (userMemberships.data.length > 0) {
         const firstOrg = userMemberships.data[0].organization;
-        const url = new URL(request.url);
         url.searchParams.set('__clerk_org', firstOrg.id);
         return NextResponse.redirect(url);
       }
