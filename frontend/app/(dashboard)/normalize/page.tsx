@@ -11,13 +11,14 @@ import { addToast } from '@/components/ui/toast';
 // TODO: wire to API - GET /api/harmonies or similar
 const list = ['company-name','company-industry','phone-e164','linkedin-url','person-title','person-name'];
 
-// TODO: wire to API - replace with normalization preview results
-const preview = [
-  { company: 'Specialized ABA',  field: 'industry', before: 'HOSPITAL_HEALTH_CARE', after: 'Healthcare' },
-  { company: 'Specialized ABA',  field: 'phone',    before: '+1 (386) 795-5695',    after: '+13867955695' },
-  { company: 'LEARN Behavioral', field: 'industry', before: 'MENTAL_HEALTH_CARE',   after: 'Mental Health Care' },
-  { company: 'ZABA Therapy LLC', field: 'industry', before: 'PHARMACEUTICALS',      after: 'Pharmaceuticals' },
-];
+interface PreviewRecord {
+  company: string;
+  field: string;
+  before: string;
+  after: string;
+  hubspotCompanyId: string;
+  portalId: string;
+}
 
 interface NormalizeRun {
   id: string;
@@ -31,6 +32,10 @@ interface NormalizeRun {
 export default function NormalizePage() {
   const [active, setActive] = useState(['company-name','company-industry','phone-e164','linkedin-url']);
   const toggle = (id: string) => setActive(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id]);
+
+  // Preview state
+  const [preview, setPreview] = useState<PreviewRecord[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Run history state
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -49,6 +54,11 @@ export default function NormalizePage() {
   const [detailSlideOverOpen, setDetailSlideOverOpen] = useState(false);
   const [detailRunId, setDetailRunId] = useState<string | null>(null);
 
+  // Fetch preview on mount and when active harmonies change
+  useEffect(() => {
+    fetchPreview();
+  }, [active]);
+
   // Fetch runs when history is expanded
   useEffect(() => {
     if (historyExpanded) {
@@ -66,6 +76,26 @@ export default function NormalizePage() {
 
     return () => clearInterval(interval);
   }, [pollingRunId]);
+
+  const fetchPreview = async () => {
+    setPreviewLoading(true);
+
+    try {
+      const response = await fetch('/api/normalize/preview?limit=50');
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch preview');
+      }
+
+      const data = await response.json();
+      setPreview(data.preview || []);
+    } catch (error) {
+      console.error('Failed to fetch preview:', error);
+      addToast('error', 'Failed to load preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   const fetchRuns = async () => {
     setRunsLoading(true);
@@ -243,9 +273,46 @@ export default function NormalizePage() {
                 </tr>
               </thead>
               <tbody>
+                {preview.length === 0 && !previewLoading && (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '40px 24px', textAlign: 'center', color: C.text3, fontSize: 12 }}>
+                      No changes to preview
+                    </td>
+                  </tr>
+                )}
+                {previewLoading && (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '40px 24px', textAlign: 'center', color: C.text3, fontSize: 12 }}>
+                      Loading preview...
+                    </td>
+                  </tr>
+                )}
                 {preview.map((r, i) => (
                   <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '12px 24px', color: C.text2, fontWeight: 500 }}>{r.company}</td>
+                    <td style={{ padding: '12px 24px', color: C.text2, fontWeight: 500 }}>
+                      <a
+                        href={`https://app.hubspot.com/contacts/${r.portalId}/company/${r.hubspotCompanyId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: C.indigo,
+                          textDecoration: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        {r.company}
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}>
+                          <path
+                            d="M10 6.5V10C10 10.2652 9.89464 10.5196 9.70711 10.7071C9.51957 10.8946 9.26522 11 9 11H2C1.73478 11 1.48043 10.8946 1.29289 10.7071C1.10536 10.5196 1 10.2652 1 10V3C1 2.73478 1.10536 2.48043 1.29289 2.29289C1.48043 2.10536 1.73478 2 2 2H5.5M8 1H11M11 1V4M11 1L5.5 6.5"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </a>
+                    </td>
                     <td style={{ padding: '12px 24px', fontFamily: F.mono, color: C.text3, fontSize: 11 }}>{r.field}</td>
                     <td style={{ padding: '12px 24px', fontFamily: F.mono, color: C.red, fontSize: 11 }}>{r.before}</td>
                     <td style={{ padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 7 }}>

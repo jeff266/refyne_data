@@ -26,6 +26,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status'); // pending, approved, rejected, or null (all)
 
+    // Get HubSpot connection for portalId
+    const { data: connection } = await supabase
+      .from('hubspot_connections')
+      .select('portal_id')
+      .eq('org_id', ctx.orgId)
+      .eq('connection_status', 'active')
+      .single();
+
+    const portalId = connection?.portal_id || '';
+
     let query = supabase
       .from('quarantine_records')
       .select('*')
@@ -36,7 +46,13 @@ export async function GET(request: Request) {
       query = query.eq('status', status);
     }
 
-    const { data: records, error } = await query;
+    const { data: rawRecords, error } = await query;
+
+    // Add portalId to each record
+    const records = (rawRecords || []).map(r => ({
+      ...r,
+      portalId,
+    }));
 
     if (error) {
       captureWithOrgContext(error, ctx.orgId, { route: '/api/quarantine' });

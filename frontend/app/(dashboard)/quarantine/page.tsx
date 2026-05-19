@@ -19,6 +19,7 @@ interface QuarantineRecord {
   reviewed_at: string | null;
   rejection_note: string | null;
   created_at: string;
+  portalId?: string;
 }
 
 interface Stats {
@@ -163,10 +164,42 @@ export default function QuarantinePage() {
                 {records.map((record) => (
                   <tr key={record.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>
-                        {record.record_data?.name || record.record_data?.domain || 'Unknown'}
-                      </div>
-                      <div style={{ fontSize: 12, color: C.text3 }}>{record.record_data?.domain}</div>
+                      {record.portalId && record.record_data?.hubspot_id ? (
+                        <a
+                          href={`https://app.hubspot.com/contacts/${record.portalId}/company/${record.record_data.hubspot_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: C.indigo,
+                            textDecoration: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 500 }}>
+                              {record.record_data?.name || record.record_data?.domain || 'Unknown'}
+                            </div>
+                            <div style={{ fontSize: 12, color: C.text3 }}>{record.record_data?.domain}</div>
+                          </div>
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, marginTop: -10 }}>
+                            <path
+                              d="M10 6.5V10C10 10.2652 9.89464 10.5196 9.70711 10.7071C9.51957 10.8946 9.26522 11 9 11H2C1.73478 11 1.48043 10.8946 1.29289 10.7071C1.10536 10.5196 1 10.2652 1 10V3C1 2.73478 1.10536 2.48043 1.29289 2.29289C1.48043 2.10536 1.73478 2 2 2H5.5M8 1H11M11 1V4M11 1L5.5 6.5"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </a>
+                      ) : (
+                        <div>
+                          <div style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>
+                            {record.record_data?.name || record.record_data?.domain || 'Unknown'}
+                          </div>
+                          <div style={{ fontSize: 12, color: C.text3 }}>{record.record_data?.domain}</div>
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <span
