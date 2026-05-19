@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Database, AlertCircle, X, Plus, Check } from 'lucide-react';
+import { Database, AlertCircle, X, Plus, Check, Pencil } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Chip, GhostBtn, StatusDot, PrimaryBtn } from '@/components/refyne';
 
@@ -10,6 +10,7 @@ interface HubSpotConnection {
   id: string;
   portalId: string;
   hubId?: string;
+  friendlyName?: string;
   connectionStatus: 'active' | 'expired' | 'disconnected' | 'error';
   lastActiveAt: string | null;
   createdAt: string;
@@ -64,6 +65,8 @@ export default function ConnectionsPage() {
   const [addDialogTab, setAddDialogTab] = useState<'crm' | 'enrichment'>('crm');
   const [showApiKeyInput, setShowApiKeyInput] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
+  const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -155,6 +158,37 @@ export default function ConnectionsPage() {
     setApiKey('');
   }
 
+  function handleEditName(connection: HubSpotConnection) {
+    setEditingConnectionId(connection.id);
+    setEditingName(connection.friendlyName || connection.hubId || `Portal ${connection.portalId}`);
+  }
+
+  function handleCancelEdit() {
+    setEditingConnectionId(null);
+    setEditingName('');
+  }
+
+  async function handleSaveName(connectionId: string) {
+    try {
+      const res = await fetch(`/api/hubspot/connections/${connectionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ friendlyName: editingName }),
+      });
+
+      if (res.ok) {
+        showToast('Connection name updated', 'success');
+        setEditingConnectionId(null);
+        setEditingName('');
+        fetchHubSpotConnections();
+      } else {
+        showToast('Failed to update name', 'error');
+      }
+    } catch (err) {
+      showToast('Failed to update name', 'error');
+    }
+  }
+
   const connectedProviderIds = new Set(hubspotConnections.map(() => 'hubspot'));
   const availableProviders = PROVIDERS.filter(p => !connectedProviderIds.has(p.id));
 
@@ -190,7 +224,8 @@ export default function ConnectionsPage() {
                 ? 'pat'
                 : 'unknown';
               const badge = getStatusBadge(conn.connectionStatus, authType);
-              const portalName = conn.hubId || `Portal ${conn.portalId}`;
+              const displayName = conn.friendlyName || conn.hubId || `Portal ${conn.portalId}`;
+              const isEditing = editingConnectionId === conn.id;
 
               return (
                 <Card key={conn.id} style={{ padding: 20 }}>
@@ -208,10 +243,85 @@ export default function ConnectionsPage() {
                       }}>
                         <Database size={20} style={{ color: C.indigoLt }} />
                       </div>
-                      <div>
-                        <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>
-                          HubSpot — {portalName}
-                        </div>
+                      <div style={{ flex: 1 }}>
+                        {isEditing ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <input
+                              type="text"
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              style={{
+                                padding: '6px 10px',
+                                background: C.bg,
+                                border: `1px solid ${C.border}`,
+                                borderRadius: 4,
+                                fontSize: 15,
+                                fontWeight: 500,
+                                color: C.text,
+                                fontFamily: F.sans,
+                                width: 250,
+                              }}
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveName(conn.id);
+                                if (e.key === 'Escape') handleCancelEdit();
+                              }}
+                            />
+                            <button
+                              onClick={() => handleSaveName(conn.id)}
+                              style={{
+                                padding: '6px 12px',
+                                background: C.indigo,
+                                border: 'none',
+                                borderRadius: 4,
+                                color: 'white',
+                                fontSize: 13,
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                fontFamily: F.sans,
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              style={{
+                                padding: '6px 12px',
+                                background: 'transparent',
+                                border: `1px solid ${C.border}`,
+                                borderRadius: 4,
+                                color: C.text2,
+                                fontSize: 13,
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                fontFamily: F.sans,
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <div style={{ fontSize: 15, fontWeight: 500 }}>
+                              HubSpot — {displayName}
+                            </div>
+                            <button
+                              onClick={() => handleEditName(conn)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: C.text3,
+                                cursor: 'pointer',
+                                padding: 4,
+                                display: 'flex',
+                                alignItems: 'center',
+                              }}
+                              title="Edit connection name"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          </div>
+                        )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <StatusDot color={badge.dot} />
