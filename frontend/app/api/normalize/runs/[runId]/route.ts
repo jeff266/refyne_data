@@ -45,18 +45,18 @@ interface NormalizationChange {
 }
 
 interface FieldSummary {
-  field_name: string;
-  changes_count: number;
-  rolled_back_count: number;
+  fieldName: string;
+  changesCount: number;
+  rolledBackCount: number;
 }
 
 interface RunDetailsResponse {
   run: NormalizationRun;
   changes: NormalizationChange[];
-  total_changes: number;
+  totalChanges: number;
   page: number;
-  per_page: number;
-  field_summary: FieldSummary[];
+  perPage: number;
+  fieldSummary: FieldSummary[];
 }
 
 /**
@@ -158,27 +158,27 @@ export async function GET(
       .eq('run_id', runId)
       .eq('org_id', ctx.orgId);
 
-    const fieldSummaryMap = new Map<string, { changes_count: number; rolled_back_count: number }>();
+    const fieldSummaryMap = new Map<string, { changesCount: number; rolledBackCount: number }>();
 
     if (allChanges) {
       for (const change of allChanges) {
         if (!fieldSummaryMap.has(change.field_name)) {
-          fieldSummaryMap.set(change.field_name, { changes_count: 0, rolled_back_count: 0 });
+          fieldSummaryMap.set(change.field_name, { changesCount: 0, rolledBackCount: 0 });
         }
         const summary = fieldSummaryMap.get(change.field_name)!;
-        summary.changes_count++;
+        summary.changesCount++;
         if (change.status === 'rolled_back') {
-          summary.rolled_back_count++;
+          summary.rolledBackCount++;
         }
       }
     }
 
     const fieldSummary: FieldSummary[] = Array.from(fieldSummaryMap.entries())
-      .map(([field_name, counts]) => ({
-        field_name,
+      .map(([fieldName, counts]) => ({
+        fieldName,
         ...counts,
       }))
-      .sort((a, b) => b.changes_count - a.changes_count);
+      .sort((a, b) => b.changesCount - a.changesCount);
 
     const response: RunDetailsResponse = {
       run: transformKeys(run) as NormalizationRun,

@@ -61,8 +61,10 @@ export async function GET(
       ).values()
     );
 
+    const transformedRun = transformKeys<Record<string, any>>(run);
+
     return NextResponse.json({
-      ...transformKeys(run),
+      ...transformedRun,
       harmonies: uniqueHarmonies,
     });
 

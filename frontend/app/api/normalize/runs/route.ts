@@ -33,12 +33,12 @@ interface RunsListResponse {
   runs: NormalizationRun[];
   total: number;
   page: number;
-  per_page: number;
+  perPage: number;
   summary: {
-    total_completed: number;
-    total_rolled_back: number;
-    total_failed: number;
-    total_running: number;
+    totalCompleted: number;
+    totalRolledBack: number;
+    totalFailed: number;
+    totalRunning: number;
   };
 }
 
@@ -121,18 +121,18 @@ export async function GET(request: NextRequest) {
       .eq('org_id', ctx.orgId);
 
     const summary = {
-      total_completed: 0,
-      total_rolled_back: 0,
-      total_failed: 0,
-      total_running: 0,
+      totalCompleted: 0,
+      totalRolledBack: 0,
+      totalFailed: 0,
+      totalRunning: 0,
     };
 
     if (allRuns) {
       for (const run of allRuns) {
-        if (run.status === 'completed') summary.total_completed++;
-        else if (run.status === 'rolled_back') summary.total_rolled_back++;
-        else if (run.status === 'failed') summary.total_failed++;
-        else if (run.status === 'running' || run.status === 'rolling_back') summary.total_running++;
+        if (run.status === 'completed') summary.totalCompleted++;
+        else if (run.status === 'rolled_back') summary.totalRolledBack++;
+        else if (run.status === 'failed') summary.totalFailed++;
+        else if (run.status === 'running' || run.status === 'rolling_back') summary.totalRunning++;
       }
     }
 
