@@ -318,9 +318,11 @@ export default function ConnectionsPage() {
                   <p style={{ fontSize: 13, color: C.text2, marginBottom: 20 }}>
                     Connect your HubSpot account to sync contacts and companies.
                   </p>
-                  <PrimaryBtn onClick={handleConnectHubSpot} style={{ width: '100%' }}>
-                    Connect HubSpot →
-                  </PrimaryBtn>
+                  <div style={{ width: '100%' }}>
+                    <PrimaryBtn onClick={handleConnectHubSpot}>
+                      Connect HubSpot →
+                    </PrimaryBtn>
+                  </div>
                 </div>
               ) : showApiKeyInput ? (
                 <div>
@@ -348,12 +350,16 @@ export default function ConnectionsPage() {
                     }}
                   />
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <GhostBtn onClick={() => setShowApiKeyInput(null)} style={{ flex: 1 }}>
-                      Cancel
-                    </GhostBtn>
-                    <PrimaryBtn onClick={handleSaveApiKey} style={{ flex: 1 }} disabled={!apiKey}>
-                      Save
-                    </PrimaryBtn>
+                    <div style={{ flex: 1 }}>
+                      <GhostBtn onClick={() => setShowApiKeyInput(null)}>
+                        Cancel
+                      </GhostBtn>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <PrimaryBtn onClick={handleSaveApiKey} disabled={!apiKey}>
+                        Save
+                      </PrimaryBtn>
+                    </div>
                   </div>
                 </div>
               ) : (
