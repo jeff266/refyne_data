@@ -66,7 +66,7 @@ export default function OnboardingConnectPage() {
         <div style={{ fontSize: 13, color: C.text3, marginBottom: 12 }}>
           Step 2 of 2
         </div>
-        <div style={{ width: 300, height: 6, background: C.bg2, borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ width: 300, height: 6, background: C.surface, borderRadius: 3, overflow: 'hidden' }}>
           <div style={{ width: '100%', height: '100%', background: C.indigo }} />
         </div>
       </div>

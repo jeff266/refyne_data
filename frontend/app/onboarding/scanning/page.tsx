@@ -128,7 +128,7 @@ export default function OnboardingScanningPage() {
         <div style={{
           width: '100%',
           height: 8,
-          background: C.bg2,
+          background: C.surface,
           borderRadius: 4,
           overflow: 'hidden',
           marginBottom: 48,

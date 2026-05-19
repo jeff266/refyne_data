@@ -93,7 +93,7 @@ export default function OnboardingProfilePage() {
         <div style={{ fontSize: 13, color: C.text3, marginBottom: 12 }}>
           Step 1 of 2
         </div>
-        <div style={{ width: 300, height: 6, background: C.bg2, borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ width: 300, height: 6, background: C.surface, borderRadius: 3, overflow: 'hidden' }}>
           <div style={{ width: '50%', height: '100%', background: C.indigo }} />
         </div>
       </div>
