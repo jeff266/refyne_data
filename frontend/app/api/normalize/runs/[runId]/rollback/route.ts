@@ -12,7 +12,7 @@ interface RollbackResponse {
   rolled_back: number;
   failed: number;
   errors: Array<{
-    company_id: string;
+    record_id: string;
     field: string;
     error: string;
   }>;

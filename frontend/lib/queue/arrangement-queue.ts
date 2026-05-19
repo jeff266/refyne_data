@@ -341,7 +341,7 @@ async function processRehearsalJob(
 
             if (result) {
               for (const field of step.fields) {
-                enrichedData[field] = result.data[field];
+                enrichedData[field] = result.normalized?.[field] ?? result.raw[field];
               }
               recordCredits += step.fields.length;
             }
@@ -453,7 +453,7 @@ async function processLiveRunJob(
 
             if (result) {
               for (const field of step.fields) {
-                enrichedData[field] = result.data[field];
+                enrichedData[field] = result.normalized?.[field] ?? result.raw[field];
               }
               recordCredits += step.fields.length;
             }

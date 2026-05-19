@@ -55,7 +55,7 @@ export interface RollbackJobResult {
   rolledBack: number;
   failed: number;
   errors?: Array<{
-    company_id: string;
+    record_id: string;
     field: string;
     error: string;
   }>;

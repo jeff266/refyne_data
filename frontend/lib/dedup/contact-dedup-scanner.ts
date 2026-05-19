@@ -285,7 +285,7 @@ export async function runContactDedupScan(
   // Generate candidate pairs from blocking keys
   const candidatePairs: Array<[string, string]> = [];
 
-  for (const ids of emailIndex.values()) {
+  for (const ids of Array.from(emailIndex.values())) {
     if (ids.length > 1) {
       for (let i = 0; i < ids.length; i++) {
         for (let j = i + 1; j < ids.length; j++) {
@@ -299,7 +299,7 @@ export async function runContactDedupScan(
     }
   }
 
-  for (const ids of phoneIndex.values()) {
+  for (const ids of Array.from(phoneIndex.values())) {
     if (ids.length > 1) {
       for (let i = 0; i < ids.length; i++) {
         for (let j = i + 1; j < ids.length; j++) {
@@ -313,7 +313,7 @@ export async function runContactDedupScan(
     }
   }
 
-  for (const ids of linkedInIndex.values()) {
+  for (const ids of Array.from(linkedInIndex.values())) {
     if (ids.length > 1) {
       for (let i = 0; i < ids.length; i++) {
         for (let j = i + 1; j < ids.length; j++) {
