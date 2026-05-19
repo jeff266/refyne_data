@@ -649,9 +649,11 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                           </div>
 
                           {/* Data rows */}
-                          {cluster.recordIds.slice(0, 3).map((id) => {
+                          {cluster.recordIds.slice(0, 3).map((id, idx) => {
                             const company = companyData[id];
                             if (!company) return null;
+
+                            const isMaster = idx === 0; // First record is the suggested master
 
                             return (
                               <>
@@ -659,20 +661,37 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                                   key={`${id}-name`}
                                   style={{
                                     fontSize: 11,
-                                    color: C.text,
+                                    color: isMaster ? C.text : C.text2,
+                                    fontWeight: isMaster ? 600 : 400,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
                                   }}
                                   title={company.name}
                                 >
+                                  {isMaster && (
+                                    <span
+                                      style={{
+                                        fontSize: 10,
+                                        color: C.green,
+                                        fontWeight: 600,
+                                      }}
+                                      title="Surviving record (based on survivorship strategy)"
+                                    >
+                                      ★
+                                    </span>
+                                  )}
                                   {company.name}
                                 </div>
                                 <div
                                   key={`${id}-domain`}
                                   style={{
                                     fontSize: 11,
-                                    color: C.text2,
+                                    color: isMaster ? C.text : C.text3,
+                                    fontWeight: isMaster ? 600 : 400,
                                     fontFamily: F.mono,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
@@ -686,7 +705,8 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                                   key={`${id}-phone`}
                                   style={{
                                     fontSize: 11,
-                                    color: C.text2,
+                                    color: isMaster ? C.text : C.text3,
+                                    fontWeight: isMaster ? 600 : 400,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
@@ -699,7 +719,8 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                                   key={`${id}-website`}
                                   style={{
                                     fontSize: 11,
-                                    color: C.text2,
+                                    color: isMaster ? C.text : C.text3,
+                                    fontWeight: isMaster ? 600 : 400,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
@@ -712,7 +733,8 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                                   key={`${id}-lifecycle`}
                                   style={{
                                     fontSize: 11,
-                                    color: C.text2,
+                                    color: isMaster ? C.text : C.text3,
+                                    fontWeight: isMaster ? 600 : 400,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
