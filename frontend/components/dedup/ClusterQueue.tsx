@@ -201,8 +201,19 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
 
-  // Company names for expanded view
-  const [companyNames, setCompanyNames] = useState<Record<string, string>>({});
+  // Company data for expanded view
+  const [companyData, setCompanyData] = useState<
+    Record<
+      string,
+      {
+        name: string;
+        domain?: string;
+        phone?: string;
+        website?: string;
+        lifecyclestage?: string;
+      }
+    >
+  >({});
 
   // Selection state for bulk merge
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -260,7 +271,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
 
         if (namesRes.ok) {
           const namesData = await namesRes.json();
-          setCompanyNames(namesData.companies);
+          setCompanyData(namesData.companies);
         }
       }
     } catch (err) {
@@ -606,35 +617,128 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             color: C.text,
                             fontWeight: 500,
                             fontSize: 12,
-                            marginBottom: 4,
+                            marginBottom: 8,
                           }}
                         >
                           Cluster {cluster.id.slice(0, 8)}
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          {cluster.recordIds.slice(0, 3).map((id) => (
-                            <div
-                              key={id}
-                              style={{
-                                fontSize: 11,
-                                color: C.text2,
-                                fontFamily: F.mono,
-                              }}
-                            >
-                              {companyNames[id] || id}
-                            </div>
-                          ))}
-                          {cluster.recordIds.length > 3 && (
-                            <div
-                              style={{
-                                fontSize: 10,
-                                color: C.text3,
-                                fontStyle: 'italic',
-                              }}
-                            >
-                              +{cluster.recordIds.length - 3} more
-                            </div>
-                          )}
+                        {/* Mini table with key fields */}
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '180px 120px 100px 120px 120px',
+                            gap: 8,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {/* Header row */}
+                          <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, textTransform: 'uppercase' }}>
+                            Company Name
+                          </div>
+                          <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, textTransform: 'uppercase' }}>
+                            Domain
+                          </div>
+                          <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, textTransform: 'uppercase' }}>
+                            Phone
+                          </div>
+                          <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, textTransform: 'uppercase' }}>
+                            Website
+                          </div>
+                          <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, textTransform: 'uppercase' }}>
+                            Lifecycle Stage
+                          </div>
+
+                          {/* Data rows */}
+                          {cluster.recordIds.slice(0, 3).map((id) => {
+                            const company = companyData[id];
+                            if (!company) return null;
+
+                            return (
+                              <>
+                                <div
+                                  key={`${id}-name`}
+                                  style={{
+                                    fontSize: 11,
+                                    color: C.text,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                  title={company.name}
+                                >
+                                  {company.name}
+                                </div>
+                                <div
+                                  key={`${id}-domain`}
+                                  style={{
+                                    fontSize: 11,
+                                    color: C.text2,
+                                    fontFamily: F.mono,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                  title={company.domain}
+                                >
+                                  {company.domain || '—'}
+                                </div>
+                                <div
+                                  key={`${id}-phone`}
+                                  style={{
+                                    fontSize: 11,
+                                    color: C.text2,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                  title={company.phone}
+                                >
+                                  {company.phone || '—'}
+                                </div>
+                                <div
+                                  key={`${id}-website`}
+                                  style={{
+                                    fontSize: 11,
+                                    color: C.text2,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                  title={company.website}
+                                >
+                                  {company.website || '—'}
+                                </div>
+                                <div
+                                  key={`${id}-lifecycle`}
+                                  style={{
+                                    fontSize: 11,
+                                    color: C.text2,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                  title={company.lifecyclestage}
+                                >
+                                  {company.lifecyclestage || '—'}
+                                </div>
+                              </>
+                            );
+                          })}
+                        </div>
+                        {/* See more link */}
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: C.indigo,
+                            marginTop: 4,
+                            cursor: 'pointer',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/dedup/clusters/${cluster.id}`);
+                          }}
+                        >
+                          See more →
                         </div>
                       </>
                     ) : (

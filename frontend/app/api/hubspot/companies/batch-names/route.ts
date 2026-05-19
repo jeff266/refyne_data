@@ -55,16 +55,37 @@ export async function POST(request: NextRequest) {
     const accessToken = await getAccessToken(orgId);
     const client = new HubSpotClient(accessToken, connection.portalId);
 
-    // Fetch companies (only need name property)
-    const companies = await client.getCompaniesByIds(ids, ['name']);
+    // Fetch companies with key fields for cluster view
+    const companies = await client.getCompaniesByIds(ids, [
+      'name',
+      'domain',
+      'phone',
+      'website',
+      'lifecyclestage',
+    ]);
 
-    // Build id -> name map
-    const nameMap: Record<string, string> = {};
+    // Build id -> company data map
+    const companyMap: Record<
+      string,
+      {
+        name: string;
+        domain?: string;
+        phone?: string;
+        website?: string;
+        lifecyclestage?: string;
+      }
+    > = {};
     for (const company of companies) {
-      nameMap[company.id] = company.properties.name || company.id;
+      companyMap[company.id] = {
+        name: company.properties.name || company.id,
+        domain: company.properties.domain,
+        phone: company.properties.phone,
+        website: company.properties.website,
+        lifecyclestage: company.properties.lifecyclestage,
+      };
     }
 
-    return NextResponse.json({ companies: nameMap });
+    return NextResponse.json({ companies: companyMap });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/companies/batch-names' });
     console.error('[batch-names] Failed to fetch company names:', error);
