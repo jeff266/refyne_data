@@ -135,14 +135,21 @@ export async function GET(request: NextRequest) {
             console.log(`[Dedup API] Fetching names for ${recordIdArray.length} record IDs (first 3: ${recordIdArray.slice(0, 3).join(', ')})`);
 
             // Fetch company data (only name property)
-            const companies = await client.getCompaniesByIds(
-              recordIdArray,
-              ['name']
-            );
-
-            console.log(`[Dedup API] HubSpot returned ${companies.length} companies`);
-            if (companies.length > 0) {
-              console.log(`[Dedup API] First company: id=${companies[0].id}, name=${companies[0].properties.name}`);
+            let companies: any[] = [];
+            try {
+              companies = await client.getCompaniesByIds(
+                recordIdArray,
+                ['name']
+              );
+              console.log(`[Dedup API] HubSpot returned ${companies.length} companies`);
+              if (companies.length > 0) {
+                console.log(`[Dedup API] First company: id=${companies[0].id}, name=${companies[0].properties.name}`);
+              } else {
+                console.log('[Dedup API] WARNING: HubSpot batch read returned 0 companies - IDs may not exist or are archived');
+              }
+            } catch (batchErr) {
+              console.error('[Dedup API] Error calling getCompaniesByIds:', batchErr);
+              companies = [];
             }
 
             // Build lookup map: id -> name
