@@ -27,11 +27,32 @@ rules:
     transform: '""'
 
   - id: normalize-name
-    description: Clean whitespace, title case, and normalize suffixes
+    description: Clean whitespace, smart title case (preserving acronyms), and normalize suffixes
     transform: |
       (
         $cleaned := $clean_whitespace(value);
-        $titled := $normalize_case($cleaned, "title");
+
+        /* Smart title case that preserves acronyms and handles conjunctions */
+        $words := $split($cleaned, /\s+/);
+        $titleCased := $map($words, function($word, $index) {
+          (
+            /* Preserve ALL CAPS acronyms (2-4 chars): LLC, INC, USA, AI, ABA */
+            $isAcronym := $match($word, /^[A-Z]{2,4}$/).matched;
+
+            /* Preserve mixed case words: iPhone, ABA4autism */
+            $isMixedCase := $match($word, /[a-z].*[A-Z]|[A-Z].*[a-z].*[A-Z]/).matched;
+
+            /* Conjunctions and prepositions (lowercase unless first word) */
+            $isConjunction := $lowercase($word) in ["and", "or", "the", "of", "in", "for", "with", "at", "by", "to"];
+            $shouldLowercase := $isConjunction and $index > 0;
+
+            $isAcronym ? $uppercase($word) :
+            $isMixedCase ? $word :
+            $shouldLowercase ? $lowercase($word) :
+            $normalize_case($word, "title")
+          )
+        });
+        $titled := $join($titleCased, " ");
 
         /* Suffix mapping - normalize to canonical forms */
         /* US Forms */
@@ -118,6 +139,30 @@ tests:
   - name: Mixed case normalization
     input: "mY cOMpaNY nAmE"
     expected: "My Company Name"
+
+  - name: Preserves ALL CAPS acronyms
+    input: "Specialized ABA Services"
+    expected: "Specialized ABA Services"
+
+  - name: Preserves ALL CAPS brand names (2-4 chars)
+    input: "LEARN Behavioral"
+    expected: "LEARN Behavioral"
+
+  - name: Lowercases conjunctions (not first word)
+    input: "Pisecco AND Associates"
+    expected: "Pisecco and Associates"
+
+  - name: Preserves mixed case brand names
+    input: "iPhone Repair Co"
+    expected: "iPhone Repair Co."
+
+  - name: Multiple conjunctions lowercase
+    input: "The Company Of The Future"
+    expected: "The Company of the Future"
+
+  - name: Acronyms with suffixes
+    input: "ABC LLC"
+    expected: "ABC LLC"
 
 on_error: fail-silent-log
 default_enabled: true

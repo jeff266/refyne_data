@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
 
 interface PreviewRecord {
   company: string;
@@ -41,16 +42,54 @@ export async function GET(request: NextRequest) {
     const harmonyIdsParam = searchParams.get('harmonyIds');
     const limit = Math.min(100, parseInt(searchParams.get('limit') || '50', 10));
 
-    // Get HubSpot connection for portalId
+    // Get HubSpot connection for portalId and access token
     const { data: connection } = await supabase
       .from('hubspot_connections')
-      .select('portal_id')
+      .select('portal_id, id')
       .eq('org_id', ctx.orgId)
       .eq('connection_status', 'active')
       .single();
 
     if (!connection) {
       return NextResponse.json({ preview: [] });
+    }
+
+    // Get access token for HubSpot API calls
+    const accessToken = await getAccessToken(connection.id);
+    if (!accessToken) {
+      console.error('Failed to get HubSpot access token');
+      return NextResponse.json({ preview: [] });
+    }
+
+    // Fetch HubSpot property definitions to get display labels for enum values
+    const labelMap: Record<string, string> = {};
+    try {
+      const propsResponse = await fetch(
+        'https://api.hubapi.com/crm/v3/properties/companies',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (propsResponse.ok) {
+        const propsData = await propsResponse.json();
+        const properties = propsData.results || [];
+
+        // Build label lookup map: "field:value" -> "display label"
+        properties.forEach((prop: any) => {
+          if (prop.options && Array.isArray(prop.options)) {
+            prop.options.forEach((opt: any) => {
+              labelMap[`${prop.name}:${opt.value}`] = opt.label;
+            });
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch HubSpot property definitions:', err);
+      // Continue without labels - will show raw values
     }
 
     // Build query for normalized_records where there would be changes
@@ -84,14 +123,19 @@ export async function GET(request: NextRequest) {
     // Transform to preview format and filter to only records that would change
     const preview: PreviewRecord[] = (records || [])
       .filter((r) => r.raw_value !== r.normalized_value) // Only show records with actual changes
-      .map((r) => ({
-        company: r.record_id, // Will be enriched with company name if available
-        field: r.field,
-        before: r.raw_value || '',
-        after: r.normalized_value || '',
-        hubspotCompanyId: r.record_id,
-        portalId: connection.portal_id,
-      }));
+      .map((r) => {
+        // Use display label if available, otherwise use raw value
+        const beforeDisplay = labelMap[`${r.field}:${r.raw_value}`] || r.raw_value || '';
+
+        return {
+          company: r.record_id, // Will be enriched with company name if available
+          field: r.field,
+          before: beforeDisplay,
+          after: r.normalized_value || '',
+          hubspotCompanyId: r.record_id,
+          portalId: connection.portal_id,
+        };
+      });
 
     return NextResponse.json({ preview });
   } catch (error) {
