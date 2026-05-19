@@ -1,0 +1,86 @@
+# Contact Email Lowercase Normalizer
+# Normalizes email addresses to lowercase
+
+id: contact-email-lower
+version: 1.0.0
+name: Contact Email Lowercase Normalizer
+description: Normalizes contact email addresses to lowercase for consistency
+category: contact-fields
+author: revops-impact
+
+applies_to:
+  fields:
+    - person.email
+  entity: person
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: "null"
+
+  - id: invalid-email
+    description: Return null for clearly invalid emails
+    when: |
+      (
+        $cleaned := $trim(value);
+        $not($contains($cleaned, "@")) or
+        $contains($cleaned, " ") or
+        $length($cleaned) < 5
+      )
+    transform: "null"
+
+  - id: normalize-to-lowercase
+    description: Normalize email to lowercase and trim
+    transform: |
+      (
+        $cleaned := $trim(value);
+        $lowercase($cleaned)
+      )
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string returns null
+    input: ""
+    expected: null
+
+  - name: Normalizes mixed case
+    input: "John.Doe@Example.COM"
+    expected: "john.doe@example.com"
+
+  - name: Normalizes all caps
+    input: "JANE@COMPANY.IO"
+    expected: "jane@company.io"
+
+  - name: Trims whitespace
+    input: "  user@domain.com  "
+    expected: "user@domain.com"
+
+  - name: Handles already lowercase
+    input: "test@example.com"
+    expected: "test@example.com"
+
+  - name: Returns null for invalid (no @)
+    input: "not-an-email"
+    expected: null
+
+  - name: Returns null for spaces
+    input: "bad email@test.com"
+    expected: null
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - contact
+  - email
+  - normalization

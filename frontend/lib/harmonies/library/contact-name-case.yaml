@@ -1,0 +1,72 @@
+# Contact Name Case Normalizer
+# Normalizes contact first and last names to title case
+
+id: contact-name-case
+version: 1.0.0
+name: Contact Name Case Normalizer
+description: Normalizes contact first and last names to title case for consistency
+category: contact-fields
+author: revops-impact
+
+applies_to:
+  fields:
+    - person.first_name
+    - person.last_name
+  entity: person
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: '""'
+
+  - id: normalize-to-title-case
+    description: Normalize name to title case
+    transform: |
+      (
+        $cleaned := $clean_whitespace(value);
+        $normalize_case($cleaned, "title")
+      )
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string passes through
+    input: ""
+    expected: ""
+
+  - name: Normalizes all caps
+    input: "JOHN"
+    expected: "John"
+
+  - name: Normalizes all lowercase
+    input: "smith"
+    expected: "Smith"
+
+  - name: Handles mixed case
+    input: "mCdonald"
+    expected: "Mcdonald"
+
+  - name: Cleans extra whitespace
+    input: "  Mary   Jane  "
+    expected: "Mary Jane"
+
+  - name: Handles hyphenated names
+    input: "jean-pierre"
+    expected: "Jean-Pierre"
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - contact
+  - name
+  - normalization

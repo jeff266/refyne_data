@@ -12,7 +12,8 @@ interface NormalizationChange {
   id: string;
   run_id: string;
   org_id: string;
-  hubspot_company_id: string;
+  hubspot_record_id: string; // Updated from hubspot_company_id
+  object_type: 'company' | 'contact'; // New field
   field_name: string;
   value_before: string | null;
   value_after: string | null;
@@ -28,7 +29,7 @@ interface RollbackResult {
   rolled_back: number;
   failed: number;
   errors: Array<{
-    company_id: string;
+    record_id: string; // Updated from company_id
     field: string;
     error: string;
   }>;
@@ -74,49 +75,59 @@ export async function executeRollback(
     };
   }
 
-  // Group changes by company for batch updates
-  const changesByCompany = new Map<string, NormalizationChange[]>();
+  // Group changes by record for batch updates
+  const changesByRecord = new Map<string, NormalizationChange[]>();
   for (const change of changes as NormalizationChange[]) {
-    if (!changesByCompany.has(change.hubspot_company_id)) {
-      changesByCompany.set(change.hubspot_company_id, []);
+    if (!changesByRecord.has(change.hubspot_record_id)) {
+      changesByRecord.set(change.hubspot_record_id, []);
     }
-    changesByCompany.get(change.hubspot_company_id)!.push(change);
+    changesByRecord.get(change.hubspot_record_id)!.push(change);
   }
 
   const client = new HubSpotClient(accessToken, portalId);
-  const errors: Array<{ company_id: string; field: string; error: string }> = [];
+  const errors: Array<{ record_id: string; field: string; error: string }> = [];
   const succeededChanges: string[] = [];
   let rolledBackCount = 0;
   let failedCount = 0;
 
-  // Process each company
-  for (const [companyId, companyChanges] of Array.from(changesByCompany.entries())) {
+  // Determine object type from first change (all should be same type per run)
+  const objectType = (changes[0] as NormalizationChange).object_type || 'company';
+
+  // Process each record
+  for (const [recordId, recordChanges] of Array.from(changesByRecord.entries())) {
     try {
       // Build properties object with original values
       const properties: Record<string, string | null> = {};
-      for (const change of companyChanges) {
+      for (const change of recordChanges) {
         properties[change.field_name] = change.value_before;
       }
 
-      // Write back to HubSpot
-      await client.updateCompany(companyId, properties);
+      // Write back to HubSpot using appropriate endpoint
+      if (objectType === 'contact') {
+        await client.request(`/crm/v3/objects/contacts/${recordId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ properties }),
+        });
+      } else {
+        await client.updateCompany(recordId, properties);
+      }
 
       // Track successful changes
-      succeededChanges.push(...companyChanges.map((c: NormalizationChange) => c.id));
-      rolledBackCount += companyChanges.length;
+      succeededChanges.push(...recordChanges.map((c: NormalizationChange) => c.id));
+      rolledBackCount += recordChanges.length;
     } catch (error) {
-      // Log error but continue with other companies
+      // Log error but continue with other records
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`Failed to rollback company ${companyId}:`, errorMsg);
+      console.error(`Failed to rollback ${objectType} ${recordId}:`, errorMsg);
 
-      for (const change of companyChanges) {
+      for (const change of recordChanges) {
         errors.push({
-          company_id: companyId,
+          record_id: recordId,
           field: change.field_name,
           error: errorMsg,
         });
       }
-      failedCount += companyChanges.length;
+      failedCount += recordChanges.length;
     }
   }
 

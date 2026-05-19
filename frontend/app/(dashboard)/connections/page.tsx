@@ -9,11 +9,11 @@ import { Card, Chip, GhostBtn, StatusDot, PrimaryBtn } from '@/components/refyne
 interface HubSpotConnection {
   id: string;
   portalId: string;
-  portalName?: string;
+  hubId?: string;
   connectionStatus: 'active' | 'expired' | 'disconnected' | 'error';
   lastActiveAt: string | null;
   createdAt: string;
-  oauthAccessToken?: string;
+  accessToken?: string;
   encryptedToken?: string;
 }
 
@@ -184,13 +184,13 @@ export default function ConnectionsPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {hubspotConnections.map((conn) => {
               // Determine auth type per connection
-              const authType = conn.oauthAccessToken
+              const authType = conn.accessToken
                 ? 'oauth'
                 : conn.encryptedToken
                 ? 'pat'
                 : 'unknown';
               const badge = getStatusBadge(conn.connectionStatus, authType);
-              const portalName = conn.portalName || `Portal ${conn.portalId}`;
+              const portalName = conn.hubId || `Portal ${conn.portalId}`;
 
               return (
                 <Card key={conn.id} style={{ padding: 20 }}>

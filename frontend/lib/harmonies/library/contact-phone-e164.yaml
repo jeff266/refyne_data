@@ -1,0 +1,86 @@
+# Contact Phone E.164 Formatter
+# Formats contact phone numbers to E.164 standard
+
+id: contact-phone-e164
+version: 1.0.0
+name: Contact Phone E.164 Formatter
+description: Formats contact phone numbers to E.164 international standard (+[country][number])
+category: contact-fields
+author: revops-impact
+
+applies_to:
+  fields:
+    - person.phone
+    - person.mobile
+  entity: person
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: "null"
+
+  - id: already-e164
+    description: Pass through already E.164 formatted numbers
+    when: $match(value, /^\+\d{7,15}$/).matched
+    transform: value
+
+  - id: format-to-e164
+    description: Format to E.164 (simplified - digits with + prefix)
+    transform: |
+      (
+        $digits := $replace(value, /\D/, "");
+        $length($digits) >= 7 ? "+" & $digits : null
+      )
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string returns null
+    input: ""
+    expected: null
+
+  - name: Formats 10-digit US number
+    input: "4155551234"
+    expected: "+4155551234"
+
+  - name: Formats number with dashes
+    input: "415-555-1234"
+    expected: "+4155551234"
+
+  - name: Formats number with spaces
+    input: "415 555 1234"
+    expected: "+4155551234"
+
+  - name: Formats number with parentheses
+    input: "(415) 555-1234"
+    expected: "+4155551234"
+
+  - name: Passes through already E.164
+    input: "+14155551234"
+    expected: "+14155551234"
+
+  - name: Handles international format
+    input: "+44 20 7946 0958"
+    expected: "+442079460958"
+
+  - name: Returns null for too short
+    input: "123"
+    expected: null
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - contact
+  - phone
+  - e164
+  - normalization

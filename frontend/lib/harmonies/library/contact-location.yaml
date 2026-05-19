@@ -1,0 +1,73 @@
+# Contact Location Normalizer
+# Normalizes contact location fields (city, state, country)
+
+id: contact-location
+version: 1.0.0
+name: Contact Location Normalizer
+description: Normalizes contact location fields to title case for consistency
+category: contact-fields
+author: revops-impact
+
+applies_to:
+  fields:
+    - address.city
+    - address.state
+    - address.country
+  entity: person
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: '""'
+
+  - id: normalize-to-title-case
+    description: Normalize location to title case
+    transform: |
+      (
+        $cleaned := $clean_whitespace(value);
+        $normalize_case($cleaned, "title")
+      )
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string passes through
+    input: ""
+    expected: ""
+
+  - name: Normalizes city
+    input: "san francisco"
+    expected: "San Francisco"
+
+  - name: Normalizes state
+    input: "CALIFORNIA"
+    expected: "California"
+
+  - name: Normalizes country
+    input: "united states"
+    expected: "United States"
+
+  - name: Handles mixed case
+    input: "nEW yORK"
+    expected: "New York"
+
+  - name: Cleans extra whitespace
+    input: "  Los  Angeles  "
+    expected: "Los Angeles"
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - contact
+  - location
+  - normalization

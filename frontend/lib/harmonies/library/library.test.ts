@@ -42,6 +42,11 @@ const EXPECTED_YAML_FILES = [
   'address-country.yaml',
   'address-state.yaml',
   'linkedin-url.yaml',
+  'contact-name-case.yaml',
+  'contact-phone-e164.yaml',
+  'contact-title-standard.yaml',
+  'contact-email-lower.yaml',
+  'contact-location.yaml',
 ];
 
 describe('Harmony Library', () => {
