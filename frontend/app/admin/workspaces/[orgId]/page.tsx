@@ -338,7 +338,9 @@ export default function WorkspaceDetailPage() {
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         {run.digest_sent && (
-                          <Mail size={14} className="text-blue-600" title="Email sent" />
+                          <span title="Email sent">
+                            <Mail size={14} className="text-blue-600" />
+                          </span>
                         )}
                         {run.slack_sent && (
                           <span className="text-xs text-purple-600" title="Slack sent">Slack</span>
