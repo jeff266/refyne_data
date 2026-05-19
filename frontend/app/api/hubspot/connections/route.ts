@@ -60,7 +60,7 @@ export async function GET() {
 
     const { data: connections, error } = await supabase
       .from('hubspot_connections')
-      .select('id, portal_id, hub_id, connection_status, last_active_at, created_at, access_token, encrypted_token')
+      .select('id, portal_id, hub_id, friendly_name, connection_status, last_active_at, created_at, access_token, encrypted_token')
       .eq('org_id', ctx.orgId)
       .neq('connection_status', 'disconnected');
       // Do NOT filter by access_token presence - return ALL active connections
@@ -94,6 +94,7 @@ export async function GET() {
       id: conn.id,
       portalId: conn.portal_id,
       hubId: conn.hub_id,
+      friendlyName: conn.friendly_name,
       connectionStatus: conn.connection_status,
       lastActiveAt: conn.last_active_at,
       createdAt: conn.created_at,
