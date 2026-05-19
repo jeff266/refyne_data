@@ -4,6 +4,8 @@ import { validateToken, saveConnection, getConnection, deleteConnection, HubSpot
 import { upsertSchemaFieldMappings } from '@/lib/hubspot/repository';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { checkOrgRateLimit, rateLimitErrorResponse } from '@/lib/hubspot/org-rate-limiter';
 
 /**
  * GET /api/hubspot/connect
@@ -19,6 +21,15 @@ export async function GET() {
     ctx = await requireAdmin();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  // Check org rate limit
+  const rateLimitCheck = await checkOrgRateLimit(ctx.orgId, '/api/hubspot/connect');
+  if (!rateLimitCheck.allowed) {
+    return NextResponse.json(
+      rateLimitErrorResponse(rateLimitCheck.resetAt!, rateLimitCheck.remaining!),
+      { status: 429 }
+    );
   }
 
   try {
@@ -52,6 +63,7 @@ export async function GET() {
       });
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/connect' });
       console.error('Failed to store OAuth state:', error);
       return NextResponse.json(
         { error: 'Failed to initiate OAuth flow' },
@@ -173,6 +185,7 @@ export async function POST(request: NextRequest) {
       schemaSync: schemaSyncResult,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/connect' });
     console.error('Failed to connect HubSpot:', error);
     return NextResponse.json(
       { error: 'Failed to connect to HubSpot' },
@@ -206,6 +219,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/connect' });
     console.error('Failed to disconnect HubSpot:', error);
     return NextResponse.json(
       { error: 'Failed to disconnect from HubSpot' },

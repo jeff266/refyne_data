@@ -9,6 +9,8 @@ import {
 } from '@/lib/hubspot';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { checkOrgRateLimit, rateLimitErrorResponse } from '@/lib/hubspot/org-rate-limiter';
 
 interface RouteParams {
   params: Promise<{
@@ -34,6 +36,15 @@ export async function GET(
   let ctx;
   try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
+  // Check org rate limit
+  const rateLimitCheck = await checkOrgRateLimit(ctx.orgId, '/api/hubspot/lists/members');
+  if (!rateLimitCheck.allowed) {
+    return NextResponse.json(
+      rateLimitErrorResponse(rateLimitCheck.resetAt!, rateLimitCheck.remaining!),
+      { status: 429 }
+    );
+  }
 
   try {
     const { listId } = await params;
@@ -97,6 +108,7 @@ export async function GET(
       preview,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/lists/[listId]/members' });
     console.error('Failed to get list members:', error);
 
     if (error instanceof Error && error.message.includes('401')) {

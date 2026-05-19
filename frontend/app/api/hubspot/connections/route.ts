@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { checkOrgRateLimit, rateLimitErrorResponse } from '@/lib/hubspot/org-rate-limiter';
 
 /**
  * GET /api/hubspot/connections
@@ -18,6 +20,15 @@ export async function GET() {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
+  // Check org rate limit
+  const rateLimitCheck = await checkOrgRateLimit(ctx.orgId, '/api/hubspot/connections');
+  if (!rateLimitCheck.allowed) {
+    return NextResponse.json(
+      rateLimitErrorResponse(rateLimitCheck.resetAt!, rateLimitCheck.remaining!),
+      { status: 429 }
+    );
+  }
+
   if (!supabase) {
     return NextResponse.json(
       { error: 'Database not configured' },
@@ -32,6 +43,7 @@ export async function GET() {
       .eq('org_id', ctx.orgId);
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/connections' });
       console.error('Failed to fetch HubSpot connections:', error);
       return NextResponse.json(
         { error: 'Failed to fetch connections' },

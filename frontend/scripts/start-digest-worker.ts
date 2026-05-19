@@ -13,7 +13,17 @@
  *   UPSTASH_REDIS_URL - Redis connection string (required)
  *   NEXT_PUBLIC_SUPABASE_URL - Supabase URL (required)
  *   NEXT_PUBLIC_SUPABASE_ANON_KEY - Supabase anon key (required)
+ *   SENTRY_DSN - Sentry DSN for error tracking (optional)
  */
+
+import * as Sentry from '@sentry/node';
+
+// Initialize Sentry
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV || 'production',
+  tracesSampleRate: 0.1,
+});
 
 import {
   startDigestWorker,
@@ -23,6 +33,7 @@ import {
 } from '../lib/queue/digest-queue';
 import { isRedisConfigured } from '../lib/queue/redis';
 import { supabase, isSupabaseConfigured } from '../lib/db/supabase';
+import { checkMissedJobs } from '../lib/monitoring/check-missed-jobs';
 
 async function main() {
   console.log('═'.repeat(60));
@@ -76,12 +87,46 @@ async function main() {
     }
   }, 60_000); // Check every minute
 
+  // Missed job monitoring - check on startup and every 6 hours
+  console.log('✅ Starting missed job monitor...');
+  console.log('Checking for missed digest jobs every 6 hours\n');
+
+  await checkMissedJobs(); // Check immediately on startup
+
+  const missedJobsInterval = setInterval(async () => {
+    try {
+      await checkMissedJobs();
+    } catch (error) {
+      console.error('Error checking missed jobs:', error);
+    }
+  }, 6 * 60 * 60 * 1000); // Check every 6 hours
+
+  // Rollback expiry - check once per day
+  console.log('✅ Starting rollback expiry task...');
+  console.log('Expiring old rollback windows daily\n');
+
+  const expireRollbacksInterval = setInterval(async () => {
+    try {
+      if (!supabase) return;
+      const { error } = await supabase.rpc('expire_rollback_windows');
+      if (error) {
+        console.error('Error expiring rollback windows:', error);
+      } else {
+        console.log(`[${new Date().toISOString()}] Rollback windows expired successfully`);
+      }
+    } catch (error) {
+      console.error('Error in rollback expiry task:', error);
+    }
+  }, 24 * 60 * 60 * 1000); // Check every 24 hours
+
   console.log('Worker is running. Press Ctrl+C to stop.\n');
 
   // Graceful shutdown
   const shutdown = async () => {
     console.log('\nShutting down...');
     clearInterval(cronInterval);
+    clearInterval(missedJobsInterval);
+    clearInterval(expireRollbacksInterval);
     await stopDigestWorker();
     console.log('Worker stopped.');
     process.exit(0);

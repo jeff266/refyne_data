@@ -846,6 +846,28 @@ export class HubSpotClient {
   }
 
   /**
+   * Update a single company by ID.
+   * Uses PATCH endpoint for individual company updates.
+   *
+   * @param companyId - HubSpot company ID
+   * @param properties - Properties to update
+   */
+  async updateCompany(
+    companyId: string,
+    properties: Record<string, string | number | null>
+  ): Promise<void> {
+    await this.request<{
+      id: string;
+      properties: Record<string, string | null>;
+    }>(`/crm/v3/objects/companies/${companyId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        properties: this.cleanProperties(properties),
+      }),
+    });
+  }
+
+  /**
    * Clean properties for HubSpot API.
    * Removes null/undefined values and converts numbers to strings.
    */

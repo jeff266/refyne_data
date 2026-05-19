@@ -9,6 +9,8 @@ import {
 } from '@/lib/hubspot';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { checkOrgRateLimit, rateLimitErrorResponse } from '@/lib/hubspot/org-rate-limiter';
 
 /**
  * GET /api/hubspot/companies
@@ -25,6 +27,15 @@ export async function GET(request: NextRequest) {
   let ctx;
   try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
+  // Check org rate limit
+  const rateLimitCheck = await checkOrgRateLimit(ctx.orgId, '/api/hubspot/companies');
+  if (!rateLimitCheck.allowed) {
+    return NextResponse.json(
+      rateLimitErrorResponse(rateLimitCheck.resetAt!, rateLimitCheck.remaining!),
+      { status: 429 }
+    );
+  }
 
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -88,6 +99,7 @@ export async function GET(request: NextRequest) {
       preview,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/companies' });
     console.error('Failed to get companies:', error);
 
     if (error instanceof Error && error.message.includes('401')) {

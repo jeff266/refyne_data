@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getConnection, HubSpotClient } from '@/lib/hubspot';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { checkOrgRateLimit, rateLimitErrorResponse } from '@/lib/hubspot/org-rate-limiter';
 
 /**
  * GET /api/hubspot/lists
@@ -13,6 +15,15 @@ export async function GET(request: NextRequest) {
   let ctx;
   try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
+  // Check org rate limit
+  const rateLimitCheck = await checkOrgRateLimit(ctx.orgId, '/api/hubspot/lists');
+  if (!rateLimitCheck.allowed) {
+    return NextResponse.json(
+      rateLimitErrorResponse(rateLimitCheck.resetAt!, rateLimitCheck.remaining!),
+      { status: 429 }
+    );
+  }
 
   try {
     const orgId = ctx.orgId;
@@ -37,6 +48,7 @@ export async function GET(request: NextRequest) {
       total: lists.length,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/lists' });
     console.error('Failed to get HubSpot lists:', error);
 
     // Check if it's an auth error

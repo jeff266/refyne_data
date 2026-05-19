@@ -4,6 +4,7 @@
  * Processes nightly compliance scans, dedup detection, and sends digest emails/Slack.
  */
 
+import * as Sentry from '@sentry/nextjs';
 import type { Job } from 'bullmq';
 import type { DigestJobData, DigestJobResult } from '../queue/digest-queue';
 import type { DigestPayload, RemediationItem, HarmonyBreakdownItem } from '../always-on/types';
@@ -12,6 +13,7 @@ import { sendDigestEmail } from '../always-on/send-digest';
 import { postToSlack } from '../always-on/slack-payload';
 import { getSubscribers } from '../notifications/get-recipients';
 import { getAccessToken } from '../hubspot/get-access-token';
+import { sendWorkerAlert } from '../monitoring/alert';
 
 /**
  * Process a digest job.
@@ -140,6 +142,12 @@ async function processConnection(
   if (!supabase) {
     throw new Error('Supabase not configured');
   }
+
+  // Sentry check-in monitoring
+  const checkIn = Sentry.captureCheckIn({
+    monitorSlug: 'always-on-digest',
+    status: 'in_progress',
+  });
 
   // 1. Create digest_run row
   const { data: run, error: createError } = await supabase
@@ -375,6 +383,13 @@ async function processConnection(
       })
       .eq('id', runId);
 
+    // Sentry check-in success
+    Sentry.captureCheckIn({
+      checkInId: checkIn,
+      monitorSlug: 'always-on-digest',
+      status: 'ok',
+    });
+
     return {
       runId,
       status: 'completed',
@@ -384,13 +399,28 @@ async function processConnection(
     };
 
   } catch (error) {
+    // Sentry check-in error
+    Sentry.captureCheckIn({
+      checkInId: checkIn,
+      monitorSlug: 'always-on-digest',
+      status: 'error',
+    });
+
+    // Send worker alert
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    await sendWorkerAlert(
+      `Digest job failed — ${portalName || orgId}`,
+      `Connection: ${connectionId}\nError: ${errorMessage}`,
+      orgId
+    );
+
     // Mark run as failed
     if (supabase) {
       await supabase
         .from('digest_runs')
         .update({
           status: 'failed',
-          error_message: error instanceof Error ? error.message : 'Unknown error',
+          error_message: errorMessage,
         })
         .eq('id', runId);
     }

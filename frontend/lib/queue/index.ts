@@ -29,3 +29,17 @@ export type {
   WebhookJobData,
   WebhookJobResult,
 } from './webhook-queue';
+
+// Rollback queue
+export {
+  getRollbackQueue,
+  enqueueRollbackJob,
+  startRollbackWorker,
+  stopRollbackWorker,
+  getRollbackQueueStats,
+} from './rollback-queue';
+
+export type {
+  RollbackJobData,
+  RollbackJobResult,
+} from './rollback-queue';
