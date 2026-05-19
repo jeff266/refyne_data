@@ -21,7 +21,7 @@ import type {
 const HUBSPOT_PORTAL_ID = process.env.NEXT_PUBLIC_HUBSPOT_PORTAL_ID || '49169539';
 
 function getHubSpotUrl(hubspotId: string): string {
-  return `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/record/0-1/${hubspotId}`;
+  return `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/record/0-2/${hubspotId}`;
 }
 
 const GRADE_COLORS: Record<PairGrade, { bg: string; text: string; border: string }> = {
