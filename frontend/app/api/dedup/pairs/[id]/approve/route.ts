@@ -93,7 +93,25 @@ export async function POST(
     // TODO: Enqueue BullMQ merge job
     const jobId = `merge:${id}:${Date.now()}`;
 
-    return NextResponse.json({ jobId });
+    // Check if this is the first merge (delight moment)
+    let isFirstMerge = false;
+    const { data: progress, error: progressError } = await supabase
+      .from('onboarding_progress')
+      .select('first_merge_at')
+      .eq('clerk_org_id', orgId)
+      .single();
+
+    if (!progressError && progress && !progress.first_merge_at) {
+      // Mark first merge
+      await supabase
+        .from('onboarding_progress')
+        .update({ first_merge_at: new Date().toISOString() })
+        .eq('clerk_org_id', orgId);
+
+      isFirstMerge = true;
+    }
+
+    return NextResponse.json({ jobId, isFirstMerge });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/[id]/approve' });
     console.error('Failed to approve pair:', error);
