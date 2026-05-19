@@ -5,9 +5,20 @@ import { clerkClient } from '@clerk/nextjs/server';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import Stripe from 'stripe';
 
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-04-22.dahlia' })
-  : null;
+// Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
+let stripe: Stripe | null = null;
+
+function getStripeClient(): Stripe | null {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return null;
+  }
+  if (!stripe) {
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2026-04-22.dahlia',
+    });
+  }
+  return stripe;
+}
 
 /**
  * DELETE /api/org/workspace
@@ -93,9 +104,10 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Step 1: Cancel Stripe subscription if exists
-    if (stripe) {
+    const stripeClient = getStripeClient();
+    if (stripeClient) {
       try {
-        const { data: subscriptions } = await stripe.subscriptions.list({
+        const { data: subscriptions } = await stripeClient.subscriptions.list({
           limit: 100,
         });
 
@@ -104,7 +116,7 @@ export async function DELETE(request: NextRequest) {
         );
 
         for (const subscription of orgSubscriptions) {
-          await stripe.subscriptions.cancel(subscription.id);
+          await stripeClient.subscriptions.cancel(subscription.id);
           console.log(`Cancelled Stripe subscription: ${subscription.id}`);
         }
       } catch (stripeError) {
