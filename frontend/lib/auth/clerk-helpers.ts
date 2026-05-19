@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 export type OrgRole = 'org:admin' | 'org:operator' | 'org:viewer';
@@ -12,10 +12,31 @@ export interface OrgContext {
 
 export async function getOrgContext(): Promise<OrgContext> {
   const { orgId, orgRole, userId, sessionClaims } = await auth();
-  if (!orgId || !userId) {
+
+  if (!userId) {
     throw new Error('UNAUTHENTICATED');
   }
+
   const userEmail = sessionClaims?.email as string | undefined;
+
+  // If no active org, fall back to user's first org membership
+  if (!orgId) {
+    const client = await clerkClient();
+    const userMemberships = await client.users.getOrganizationMembershipList({ userId });
+    const firstMembership = userMemberships.data[0];
+
+    if (!firstMembership) {
+      throw new Error('UNAUTHENTICATED');
+    }
+
+    return {
+      orgId: firstMembership.organization.id,
+      orgRole: firstMembership.role as OrgRole,
+      userId,
+      userEmail,
+    };
+  }
+
   return { orgId, orgRole: orgRole as OrgRole, userId, userEmail };
 }
 

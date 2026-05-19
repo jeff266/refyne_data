@@ -1,4 +1,5 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher, clerkClient } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 
 // Public routes that don't require authentication
 const isPublicRoute = createRouteMatcher([
@@ -13,10 +14,25 @@ const isPublicRoute = createRouteMatcher([
   '/api/webhooks(.*)', // Webhooks use signature validation, not session cookies
 ]);
 
-export default clerkMiddleware((auth, request) => {
+export default clerkMiddleware(async (auth, request) => {
   // Protect all routes except public ones
   if (!isPublicRoute(request)) {
-    auth().protect();
+    await auth.protect();
+
+    // After auth check, if user has no active org, activate their first org
+    const { userId, orgId } = await auth();
+
+    if (userId && !orgId) {
+      const client = await clerkClient();
+      const userMemberships = await client.users.getOrganizationMembershipList({ userId });
+
+      if (userMemberships.data.length > 0) {
+        const firstOrg = userMemberships.data[0].organization;
+        const url = new URL(request.url);
+        url.searchParams.set('__clerk_org', firstOrg.id);
+        return NextResponse.redirect(url);
+      }
+    }
   }
 });
 
