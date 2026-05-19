@@ -341,6 +341,8 @@ export interface DedupPair {
   orgId: string;
   recordAId: string;
   recordBId: string;
+  recordAName?: string; // Company name from HubSpot
+  recordBName?: string; // Company name from HubSpot
   confidence: number;
   grade: PairGrade;
   nameSimilarity: number | null;
