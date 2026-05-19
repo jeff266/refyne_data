@@ -44,7 +44,16 @@ export async function GET() {
     const clientId = process.env.HUBSPOT_CLIENT_ID;
     const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/hubspot/callback`;
 
+    console.log('[HubSpot Connect] Starting OAuth flow', {
+      orgId: ctx.orgId,
+      userId: ctx.userId,
+      role: ctx.orgRole,
+      hasClientId: !!clientId,
+      hasRedirectUri: !!redirectUri,
+    });
+
     if (!clientId) {
+      console.error('[HubSpot Connect] Missing HUBSPOT_CLIENT_ID');
       return NextResponse.json(
         { error: 'HubSpot OAuth not configured' },
         { status: 500 }
@@ -52,6 +61,7 @@ export async function GET() {
     }
 
     if (!supabase) {
+      console.error('[HubSpot Connect] Supabase not configured');
       return NextResponse.json(
         { error: 'Database not configured' },
         { status: 500 }
@@ -60,6 +70,8 @@ export async function GET() {
 
     // Generate cryptographically random state (32 bytes hex = 64 characters)
     const state = randomBytes(32).toString('hex');
+
+    console.log('[HubSpot Connect] Storing OAuth state in database...');
 
     // Store state in database for CSRF protection
     const { error } = await supabase
@@ -71,13 +83,15 @@ export async function GET() {
       });
 
     if (error) {
+      console.error('[HubSpot Connect] Failed to store OAuth state:', error);
       captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/connect' });
-      console.error('Failed to store OAuth state:', error);
       return NextResponse.json(
-        { error: 'Failed to initiate OAuth flow' },
+        { error: 'Failed to initiate OAuth flow', details: error.message },
         { status: 500 }
       );
     }
+
+    console.log('[HubSpot Connect] OAuth state stored successfully');
 
     // Build HubSpot OAuth URL with full scope list
     const scopes = [
