@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, ReferenceLine } from 'recharts';
 import { C, F } from '@/lib/design-tokens';
 
@@ -14,6 +14,20 @@ type Period = '1m' | '3m' | '6m' | 'all';
 export function TrendChart({ data, benchmark }: TrendChartProps) {
   const [period, setPeriod] = useState<Period>('6m');
 
+  // Load period from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('refyne:score-trend-period');
+    if (saved && ['1m', '3m', '6m', 'all'].includes(saved)) {
+      setPeriod(saved as Period);
+    }
+  }, []);
+
+  // Save period to localStorage when changed
+  const handlePeriodChange = (newPeriod: Period) => {
+    setPeriod(newPeriod);
+    localStorage.setItem('refyne:score-trend-period', newPeriod);
+  };
+
   // Filter data based on period
   const getFilteredData = () => {
     if (period === 'all') return data;
@@ -24,17 +38,26 @@ export function TrendChart({ data, benchmark }: TrendChartProps) {
 
   const filteredData = getFilteredData();
 
-  // Calculate Y-axis domain
+  // Calculate Y-axis domain and ticks
   const values = filteredData.map(d => d.v);
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
-  const yMin = Math.floor(Math.max(0, minValue - 10) / 10) * 10;
-  const yMax = Math.ceil(Math.min(100, maxValue + 10) / 10) * 10;
+  const currentValue = values[values.length - 1];
+  const startingValue = values[0];
 
-  // Custom tooltip
+  // Y-axis should show: 100%, current, starting, 70%
+  const yMin = Math.max(0, Math.floor((minValue - 5) / 10) * 10);
+  const yMax = 100;
+  const yTicks = [yMin, startingValue, currentValue, yMax].filter((v, i, arr) => arr.indexOf(v) === i).sort((a, b) => a - b);
+
+  // Custom tooltip with delta
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const point = payload[0].payload;
+      const idx = filteredData.findIndex((d) => d === point);
+      const prevPoint = idx > 0 ? filteredData[idx - 1] : null;
+      const delta = prevPoint ? point.v - prevPoint.v : 0;
+
       return (
         <div
           style={{
@@ -47,6 +70,11 @@ export function TrendChart({ data, benchmark }: TrendChartProps) {
           <div style={{ fontSize: 11, fontFamily: F.mono, color: C.text, marginBottom: 4 }}>
             {point.date || point.m} — {point.v}%
           </div>
+          {delta !== 0 && (
+            <div style={{ fontSize: 10, color: delta > 0 ? C.green : C.red, fontFamily: F.mono }}>
+              {delta > 0 ? '↑' : '↓'} {Math.abs(delta)}pts from previous
+            </div>
+          )}
           {point.event && (
             <div style={{ fontSize: 10, color: C.text3 }}>
               {point.event}
@@ -65,7 +93,7 @@ export function TrendChart({ data, benchmark }: TrendChartProps) {
           {(['1m', '3m', '6m', 'all'] as Period[]).map((p) => (
             <button
               key={p}
-              onClick={() => setPeriod(p)}
+              onClick={() => handlePeriodChange(p)}
               style={{
                 padding: '4px 8px',
                 background: period === p ? C.indigo : 'transparent',
@@ -100,7 +128,7 @@ export function TrendChart({ data, benchmark }: TrendChartProps) {
           />
           <YAxis
             domain={[yMin, yMax]}
-            ticks={[yMin, Math.round((yMin + yMax) / 2), yMax]}
+            ticks={yTicks.length > 1 ? yTicks : [yMin, yMax]}
             tick={{ fill: C.text3, fontSize: 10, fontFamily: F.mono }}
             axisLine={false}
             tickLine={false}

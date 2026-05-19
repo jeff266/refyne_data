@@ -165,14 +165,19 @@ async function StatCards() {
         <StatCard
           label="Compliance"
           value={`${Math.round(score)}%`}
-          sub={`${trendText} · ${breakpointInfo.text}`}
+          sub={trendText}
           accent={breakpointInfo.color}
         />
-        {benchmark && (
-          <div style={{ fontSize: 11, color: C.text3, marginTop: 6, textAlign: 'center' }}>
-            Better than {benchmark.percentile}% of similar portals
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, marginTop: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: breakpointInfo.color }}>
+            {breakpointInfo.text}
           </div>
-        )}
+          {benchmark && (
+            <div style={{ fontSize: 11, color: C.text3 }}>
+              Better than {benchmark.percentile}% of similar portals
+            </div>
+          )}
+        </div>
       </div>
       <StatCard
         label="Active harmonies"
@@ -244,55 +249,64 @@ async function HarmonyBarsSection() {
           {total.toLocaleString()} records
         </span>
       </div>
-      {harmonies.map((h: any) => (
-        <div key={h.name} style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <div
-              style={{ flex: 1, position: 'relative', cursor: 'help' }}
-              title={h.description || h.name}
-            >
-              <span style={{ fontSize: 12, fontFamily: F.mono, color: C.text3 }}>
-                {h.name}
-              </span>
-              {/* Tooltip on hover - description would show in actual implementation */}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 13, fontFamily: F.mono, fontWeight: 500, color: C.text }}>
-                {h.score}%
-              </span>
-              {h.delta !== null && h.delta !== undefined && h.delta !== 0 && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: h.delta > 0 ? C.green : C.red,
-                    fontFamily: F.mono,
-                  }}
-                >
-                  {h.delta > 0 ? '↑' : '↓'}{Math.abs(h.delta)}% since last scan
+      {harmonies.map((h: any) => {
+        // Build tooltip text with description, failing records, and estimated impact
+        const tooltipParts = [];
+        if (h.description) tooltipParts.push(h.description);
+        if (h.recordsAffected) tooltipParts.push(`${h.recordsAffected} records failing`);
+        if (h.estimatedScoreImpact) tooltipParts.push(`+${h.estimatedScoreImpact}pts if fixed`);
+        const tooltipText = tooltipParts.join(' · ');
+
+        return (
+          <div key={h.name} style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <div
+                style={{ flex: 1, position: 'relative', cursor: 'help' }}
+                title={tooltipText || h.name}
+              >
+                <span style={{ fontSize: 12, fontFamily: F.mono, color: C.text3 }}>
+                  {h.name}
                 </span>
-              )}
-              {h.actionable && h.score < 60 && (
-                <a
-                  href={h.actionRoute || `/harmonies?harmony=${h.harmonyId}`}
-                  style={{
-                    padding: '2px 8px',
-                    background: C.indigoDim,
-                    border: `1px solid ${C.indigoBrd}`,
-                    borderRadius: 4,
-                    fontSize: 10,
-                    color: C.indigo,
-                    textDecoration: 'none',
-                    fontWeight: 600,
-                  }}
-                >
-                  Fix this →
-                </a>
-              )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, fontFamily: F.mono, fontWeight: 500, color: C.text }}>
+                  {h.score}%
+                </span>
+                {h.delta !== null && h.delta !== undefined && h.delta !== 0 && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: h.delta > 0 ? C.green : C.red,
+                      fontFamily: F.mono,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {h.delta > 0 ? '↑' : '↓'}{Math.abs(h.delta)}%
+                  </span>
+                )}
+                {h.actionable && h.score < 60 && (
+                  <a
+                    href={h.actionRoute || `/harmonies?harmony=${h.harmonyId}`}
+                    style={{
+                      padding: '2px 8px',
+                      background: C.indigoDim,
+                      border: `1px solid ${C.indigoBrd}`,
+                      borderRadius: 4,
+                      fontSize: 10,
+                      color: C.indigo,
+                      textDecoration: 'none',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Fix this →
+                  </a>
+                )}
+              </div>
             </div>
+            <HarmonyBar name={h.name} score={h.score} note={h.note} />
           </div>
-          <HarmonyBar name={h.name} score={h.score} note={h.note} />
-        </div>
-      ))}
+        );
+      })}
     </Card>
   );
 }
@@ -380,23 +394,36 @@ async function InsightsSection() {
 async function PortalsSection() {
   const connectionsData = await fetchConnections();
 
-  // Transform API data with health scores (would need per-portal score API)
-  const portals = (connectionsData?.connections || []).map((conn: {
-    name?: string;
-    companyCount?: number;
-    lastSync?: string;
-    portalId?: string;
-  }) => {
-    // Mock health score - in production would fetch per portal
-    const mockScore = 70 + Math.floor(Math.random() * 25);
-    return {
-      name: conn.name || 'Unknown Portal',
-      count: conn.companyCount || 0,
-      sync: conn.lastSync || 'never',
-      score: mockScore,
-      portalId: conn.portalId || '',
-    };
-  });
+  // Transform API data with health scores - fetch in parallel
+  const portals = await Promise.all(
+    (connectionsData?.connections || []).map(async (conn: {
+      name?: string;
+      companyCount?: number;
+      lastSync?: string;
+      portalId?: string;
+    }) => {
+      // Fetch per-portal score if available, otherwise use mock
+      let score = 70 + Math.floor(Math.random() * 25);
+      if (conn.portalId) {
+        try {
+          const scoreData = await fetchScore(`${DEFAULT_ORG_ID}-${conn.portalId}`);
+          if (scoreData?.score) {
+            score = Math.round(scoreData.score);
+          }
+        } catch {
+          // Use mock score on error
+        }
+      }
+
+      return {
+        name: conn.name || 'Unknown Portal',
+        count: conn.companyCount || 0,
+        sync: conn.lastSync || 'never',
+        score,
+        portalId: conn.portalId || '',
+      };
+    })
+  );
 
   // Fallback if no data
   if (portals.length === 0) {

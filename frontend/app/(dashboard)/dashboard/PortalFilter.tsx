@@ -7,6 +7,7 @@ interface Portal {
   id: string;
   name: string;
   recordCount: number;
+  score?: number; // Compliance score percentage
 }
 
 interface PortalFilterProps {
@@ -31,7 +32,7 @@ export function PortalFilter({ portals, selectedPortalId, onSelectPortal }: Port
 
   useEffect(() => {
     // Restore from localStorage on mount
-    const saved = localStorage.getItem('refyne_selected_portal');
+    const saved = localStorage.getItem('refyne:dashboard-portal-filter');
     if (saved && portals.find(p => p.id === saved)) {
       onSelectPortal(saved);
     }
@@ -43,9 +44,9 @@ export function PortalFilter({ portals, selectedPortalId, onSelectPortal }: Port
 
     // Persist to localStorage
     if (portalId) {
-      localStorage.setItem('refyne_selected_portal', portalId);
+      localStorage.setItem('refyne:dashboard-portal-filter', portalId);
     } else {
-      localStorage.removeItem('refyne_selected_portal');
+      localStorage.removeItem('refyne:dashboard-portal-filter');
     }
 
     // Update URL
@@ -153,10 +154,11 @@ export function PortalFilter({ portals, selectedPortalId, onSelectPortal }: Port
                 >
                   <div>
                     <div style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>
-                      {isSelected && '✓ '}{portal.name}
+                      {isSelected ? '✓' : '○'} {portal.name}
                     </div>
                     <div style={{ fontSize: 11, color: C.text3, fontFamily: F.mono }}>
                       {portal.recordCount.toLocaleString()} records
+                      {portal.score !== undefined && ` · ${Math.round(portal.score)}%`}
                     </div>
                   </div>
                 </button>

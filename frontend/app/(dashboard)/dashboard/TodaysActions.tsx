@@ -20,7 +20,23 @@ interface TodaysActionsProps {
 
 export function TodaysActions({ actions }: TodaysActionsProps) {
   if (actions.length === 0) {
-    return null;
+    return (
+      <Card>
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}` }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.text, letterSpacing: '-0.01em' }}>
+            Today's actions
+          </span>
+        </div>
+        <div style={{ padding: '28px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: C.text, marginBottom: 6 }}>
+            Your CRM is in great shape.
+          </div>
+          <div style={{ fontSize: 12, color: C.text3 }}>
+            No actions needed today.
+          </div>
+        </div>
+      </Card>
+    );
   }
 
   return (
@@ -55,7 +71,10 @@ export function TodaysActions({ actions }: TodaysActionsProps) {
                   {action.label}
                 </div>
                 <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.5 }}>
-                  {action.description} · ~{action.estimatedMinutes} min · +{action.estimatedScoreImpact}pts
+                  {action.description}
+                </div>
+                <div style={{ fontSize: 10, fontFamily: F.mono, color: C.text3, marginTop: 2 }}>
+                  {action.estimatedMinutes} min · +{action.estimatedScoreImpact}pts
                 </div>
               </div>
             </div>
