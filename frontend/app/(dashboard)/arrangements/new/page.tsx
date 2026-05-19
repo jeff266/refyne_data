@@ -423,18 +423,21 @@ export default function NewArrangementPage() {
 
         {currentStep < 5 ? (
           <div style={{ position: 'relative' }}>
-            <PrimaryBtn
-              onClick={handleNext}
+            <div
               style={{
                 opacity: currentStep === 4 && !readyToRun ? 0.5 : 1,
                 cursor: currentStep === 4 && !readyToRun ? 'not-allowed' : 'pointer',
                 background: currentStep === 4 && readyToRun ? C.green : C.indigo,
                 pointerEvents: currentStep === 4 && !readyToRun ? 'none' : 'auto',
+                borderRadius: 6,
+                display: 'inline-block',
               }}
             >
-              Next
-              <ChevronRight size={16} />
-            </PrimaryBtn>
+              <PrimaryBtn onClick={handleNext}>
+                Next
+                <ChevronRight size={16} />
+              </PrimaryBtn>
+            </div>
             {currentStep === 4 && !readyToRun && (
               <div
                 style={{

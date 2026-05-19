@@ -119,6 +119,10 @@ export function ComplianceAIOverview() {
     );
   }
 
+  if (!overview) {
+    return null;
+  }
+
   return (
     <Card style={{ marginBottom: 24, padding: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>

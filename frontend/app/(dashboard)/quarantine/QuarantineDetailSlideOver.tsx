@@ -387,8 +387,7 @@ export function QuarantineDetailSlideOver({
         >
           <GhostBtn onClick={() => onReject(record.id)}>Reject</GhostBtn>
           <div style={{ position: 'relative' }}>
-            <PrimaryBtn
-              onClick={() => onApprove(record.id)}
+            <div
               style={{
                 background:
                   aiAnalysis?.recommendation === 'approve'
@@ -402,10 +401,14 @@ export function QuarantineDetailSlideOver({
                     : aiAnalysis?.recommendation === 'reject'
                     ? C.text3
                     : '#fff',
+                borderRadius: 6,
+                display: 'inline-block',
               }}
             >
-              Approve & Push
-            </PrimaryBtn>
+              <PrimaryBtn onClick={() => onApprove(record.id)}>
+                Approve & Push
+              </PrimaryBtn>
+            </div>
             {aiAnalysis?.recommendation === 'approve' && (
               <div
                 style={{
