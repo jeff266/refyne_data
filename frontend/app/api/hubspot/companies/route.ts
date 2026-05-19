@@ -7,6 +7,7 @@ import {
   getMappingSummary,
   getPropertiesToFetch,
 } from '@/lib/hubspot';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
@@ -43,8 +44,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // TODO: Decrypt the token
-    const accessToken = connection.encryptedToken;
+    const accessToken = await getAccessToken(orgId);
 
     const client = new HubSpotClient(accessToken, connection.portalId);
 
