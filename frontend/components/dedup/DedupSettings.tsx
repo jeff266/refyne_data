@@ -7,6 +7,17 @@ import type { DedupConfig, SuppressionRule } from '@/lib/dedup/types';
 import { SuppressionRulesSection } from './SuppressionRulesSection';
 
 // ─────────────────────────────────────────────────────────────
+// Domain Exclusion Types
+// ─────────────────────────────────────────────────────────────
+
+interface DomainExclusion {
+  id: string;
+  domain: string;
+  isPreset: boolean;
+  createdAt: string;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────
 
@@ -77,28 +88,37 @@ export function DedupSettings({ isAdmin = true }: DedupSettingsProps) {
   const [config, setConfig] = useState<DedupConfig | null>(null);
   const [formValues, setFormValues] = useState<FormValues | null>(null);
   const [rules, setRules] = useState<SuppressionRule[]>([]);
+  const [exclusions, setExclusions] = useState<DomainExclusion[]>([]);
+  const [newDomain, setNewDomain] = useState('');
+  const [addingDomain, setAddingDomain] = useState(false);
+  const [removingDomain, setRemovingDomain] = useState<string | null>(null);
+  const [domainError, setDomainError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch config and rules on mount
+  // Fetch config, rules, and exclusions on mount
   useEffect(() => {
     async function fetchData() {
       try {
-        const [configRes, rulesRes] = await Promise.all([
+        const [configRes, rulesRes, exclusionsRes] = await Promise.all([
           fetch('/api/dedup/config'),
           fetch('/api/dedup/suppression-rules'),
+          fetch('/api/dedup/domain-exclusions'),
         ]);
 
         if (!configRes.ok) throw new Error('Failed to load config');
         if (!rulesRes.ok) throw new Error('Failed to load rules');
+        if (!exclusionsRes.ok) throw new Error('Failed to load exclusions');
 
         const configData = await configRes.json();
         const rulesData = await rulesRes.json();
+        const exclusionsData = await exclusionsRes.json();
 
         setConfig(configData.config);
         setFormValues(configToForm(configData.config));
         setRules(rulesData.rules);
+        setExclusions(exclusionsData.exclusions);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load settings');
       } finally {
@@ -167,6 +187,61 @@ export function DedupSettings({ isAdmin = true }: DedupSettingsProps) {
   // Handle rules change from SuppressionRulesSection
   const handleRulesChange = (newRules: SuppressionRule[]) => {
     setRules(newRules);
+  };
+
+  // Add new domain exclusion
+  const handleAddDomain = async () => {
+    if (!newDomain.trim()) {
+      setDomainError('Domain is required');
+      return;
+    }
+
+    setAddingDomain(true);
+    setDomainError(null);
+
+    try {
+      const res = await fetch('/api/dedup/domain-exclusions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: newDomain.trim() }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to add domain');
+      }
+
+      const data = await res.json();
+      setExclusions([...exclusions, data.exclusion]);
+      setNewDomain('');
+    } catch (err) {
+      setDomainError(err instanceof Error ? err.message : 'Failed to add domain');
+    } finally {
+      setAddingDomain(false);
+    }
+  };
+
+  // Remove domain exclusion
+  const handleRemoveDomain = async (id: string) => {
+    setRemovingDomain(id);
+    setDomainError(null);
+
+    try {
+      const res = await fetch(`/api/dedup/domain-exclusions?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to remove domain');
+      }
+
+      setExclusions(exclusions.filter(e => e.id !== id));
+    } catch (err) {
+      setDomainError(err instanceof Error ? err.message : 'Failed to remove domain');
+    } finally {
+      setRemovingDomain(null);
+    }
   };
 
   if (!isAdmin) {
@@ -459,6 +534,133 @@ export function DedupSettings({ isAdmin = true }: DedupSettingsProps) {
         rules={rules}
         onRulesChange={handleRulesChange}
       />
+
+      {/* Section 6.5: Domain Exclusions */}
+      <Card style={{ padding: 20, ...sectionStyle }}>
+        <div style={sectionTitleStyle}>Domain Exclusions</div>
+        <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
+          Domains excluded from duplicate matching. These domains appear on many records and
+          would create false positive matches if used as a signal.
+        </div>
+
+        {/* Exclusion list */}
+        <div style={{ marginBottom: 16 }}>
+          {exclusions.map((exclusion) => (
+            <div
+              key={exclusion.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                background: C.surfaceAlt,
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                marginBottom: 8,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: exclusion.isPreset ? C.blue : C.text3,
+                  }}
+                />
+                <span style={{ fontSize: 13, color: C.text, fontFamily: F.mono }}>
+                  {exclusion.domain}
+                </span>
+              </div>
+              <div>
+                {exclusion.isPreset ? (
+                  <span style={{ fontSize: 11, color: C.text3, fontWeight: 500 }}>
+                    Preset
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleRemoveDomain(exclusion.id)}
+                    disabled={removingDomain === exclusion.id}
+                    style={{
+                      fontSize: 11,
+                      color: C.red,
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = C.redFaint;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    {removingDomain === exclusion.id ? 'Removing...' : 'Remove'}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Add new domain */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <input
+              type="text"
+              placeholder="example.com"
+              value={newDomain}
+              onChange={(e) => {
+                setNewDomain(e.target.value);
+                setDomainError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddDomain();
+                }
+              }}
+              style={{
+                width: '100%',
+                background: C.surface,
+                border: `1px solid ${domainError ? C.red : C.border}`,
+                borderRadius: 6,
+                padding: '8px 12px',
+                fontSize: 13,
+                color: C.text,
+                fontFamily: F.mono,
+              }}
+            />
+            {domainError && (
+              <div style={{ fontSize: 11, color: C.red, marginTop: 4 }}>
+                {domainError}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleAddDomain}
+            disabled={addingDomain || !newDomain.trim()}
+            style={{
+              padding: '8px 16px',
+              fontSize: 13,
+              fontWeight: 500,
+              color: C.text,
+              background: C.surfaceAlt,
+              border: `1px solid ${C.border}`,
+              borderRadius: 6,
+              cursor: addingDomain || !newDomain.trim() ? 'not-allowed' : 'pointer',
+              opacity: addingDomain || !newDomain.trim() ? 0.5 : 1,
+            }}
+          >
+            {addingDomain ? 'Adding...' : '+ Add domain'}
+          </button>
+        </div>
+
+        <div style={{ fontSize: 11, color: C.text3, marginTop: 12 }}>
+          Preset list maintained by Refyne. Add domains specific to your industry as needed.
+        </div>
+      </Card>
 
       {/* Section 7: Post-Merge Behavior */}
       <Card style={{ padding: 20, ...sectionStyle }}>

@@ -139,10 +139,21 @@ export async function enqueueCompanyDedupScan(
 
 /**
  * Normalize domain for blocking key.
+ * Returns null if domain is in exclusion list.
  */
-function getDomainBlockingKey(domain: string | null): string | null {
+function getDomainBlockingKey(
+  domain: string | null,
+  excludedDomains: Set<string>
+): string | null {
   if (!domain) return null;
   const normalized = normalizeDomain(domain);
+  if (!normalized) return null;
+
+  // Skip domains in exclusion list (social media, directories, etc.)
+  if (excludedDomains.has(normalized)) {
+    return null;
+  }
+
   return normalized;
 }
 
@@ -273,6 +284,15 @@ export async function runCompanyDedupScan(
     });
   }
 
+  // Fetch domain exclusions for this org
+  const { data: exclusions } = await supabase
+    .from('dedup_domain_exclusions')
+    .select('domain')
+    .eq('org_id', orgId);
+
+  const excludedDomains = new Set(exclusions?.map(e => e.domain) || []);
+  console.log(`[Company Dedup Scan] Loaded ${excludedDomains.size} excluded domains`);
+
   // Fetch all companies
   const companies = await fetchAllCompanies(accessToken, portalId, job);
   console.log(`[Company Dedup Scan] Loaded ${companies.size} companies`);
@@ -300,8 +320,8 @@ export async function runCompanyDedupScan(
   const nameIndex = new Map<string, string[]>();
 
   for (const [id, company] of Array.from(companies.entries())) {
-    // Domain blocking
-    const domainKey = getDomainBlockingKey(company.domain);
+    // Domain blocking (excludes social media/directory domains)
+    const domainKey = getDomainBlockingKey(company.domain, excludedDomains);
     if (domainKey) {
       if (!domainIndex.has(domainKey)) {
         domainIndex.set(domainKey, []);
