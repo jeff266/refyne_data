@@ -207,7 +207,28 @@ export function InsightsSlideOver({ harmonyId, harmonyName, recordCount, isOpen,
                   {records.map((record) => (
                     <tr key={record.recordId} style={{ borderBottom: `1px solid ${C.border}` }}>
                       <td style={{ padding: '10px 0', fontSize: 12, color: C.text }}>
-                        {record.companyName || record.recordId}
+                        <a
+                          href={`https://app.hubspot.com/contacts/${record.portalId}/company/${record.hubspotId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: C.indigo,
+                            textDecoration: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          {record.companyName || record.recordId}
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0 }}>
+                            <path
+                              d="M10 6.5V10C10 10.2652 9.89464 10.5196 9.70711 10.7071C9.51957 10.8946 9.26522 11 9 11H2C1.73478 11 1.48043 10.8946 1.29289 10.7071C1.10536 10.5196 1 10.2652 1 10V3C1 2.73478 1.10536 2.48043 1.29289 2.29289C1.48043 2.10536 1.73478 2 2 2H5.5M8 1H11M11 1V4M11 1L5.5 6.5"
+                              stroke="currentColor"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </a>
                       </td>
                       <td style={{ padding: '10px 0', fontSize: 11, fontFamily: F.mono, color: C.text3 }}>
                         {record.currentValue || '—'}

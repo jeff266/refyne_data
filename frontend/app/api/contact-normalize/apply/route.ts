@@ -8,6 +8,7 @@ import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { getHarmoniesByEntity, getHarmonyById } from '@/lib/harmonies/library';
 import { Normalizer } from '@/lib/harmonies/pipeline/normalizer';
 import type { RawCandidate } from '@/lib/harmonies/pipeline/types';
+import { invalidateSummary } from '@/lib/ai/cache';
 
 /**
  * POST /api/contact-normalize/apply
@@ -95,6 +96,10 @@ export async function POST(request: NextRequest) {
 
     // TODO: Enqueue BullMQ job to process normalization asynchronously
     // For now, return the run ID
+
+    // Invalidate AI summary cache after normalization run starts
+    await invalidateSummary(`ai:compliance:${orgId}:all`);
+
     return NextResponse.json({
       runId: run.id,
       status: 'queued',

@@ -22,6 +22,7 @@ import type {
 import { getScore, storeScoreHistory } from './compliance-score';
 import { generateInsights } from './insight-generator';
 import { evaluateAlerts } from './alert-evaluator';
+import { invalidateSummary } from '../ai/cache';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -542,11 +543,14 @@ export function startScanWorker(): Worker<ScanJobData, ScanResult> | null {
     }
   );
 
-  scanWorker.on('completed', (job, result) => {
+  scanWorker.on('completed', async (job, result) => {
     console.log(
       `[Compliance Worker] Job ${job.id} completed: ` +
       `${result.recordsScanned} records in ${result.durationMs}ms`
     );
+
+    // Invalidate AI summary cache after scan completes
+    await invalidateSummary(`ai:compliance:${result.orgId}:all`);
   });
 
   scanWorker.on('failed', (job, error) => {

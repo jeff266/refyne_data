@@ -7,15 +7,18 @@
 
 import { Redis } from '@upstash/redis';
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
+// Use fromEnv() to automatically detect UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
+// Falls back to empty client if env vars not set (for local dev without Redis)
+const redis = process.env.UPSTASH_REDIS_REST_URL
+  ? Redis.fromEnv()
+  : null;
 
 /**
  * Get cached AI summary from Redis.
  */
 export async function getCachedSummary<T>(key: string): Promise<T | null> {
+  if (!redis) return null;
+
   try {
     return await redis.get<T>(key);
   } catch (err) {
@@ -32,6 +35,8 @@ export async function setCachedSummary<T>(
   value: T,
   ttlSeconds: number
 ): Promise<void> {
+  if (!redis) return;
+
   try {
     await redis.setex(key, ttlSeconds, value);
   } catch (err) {
@@ -43,6 +48,8 @@ export async function setCachedSummary<T>(
  * Invalidate (delete) a cached summary.
  */
 export async function invalidateSummary(key: string): Promise<void> {
+  if (!redis) return;
+
   try {
     await redis.del(key);
   } catch (err) {

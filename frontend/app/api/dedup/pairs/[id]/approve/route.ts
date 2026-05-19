@@ -4,6 +4,7 @@ import { rowToPair, type DedupPairRow, type SingleApproveRequest } from '@/lib/d
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { invalidateSummary } from '@/lib/ai/cache';
 
 /**
  * POST /api/dedup/pairs/:id/approve
@@ -110,6 +111,9 @@ export async function POST(
 
       isFirstMerge = true;
     }
+
+    // Invalidate AI summary cache after merge approval
+    await invalidateSummary(`ai:compliance:${orgId}:all`);
 
     return NextResponse.json({ jobId, isFirstMerge });
   } catch (error) {
