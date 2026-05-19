@@ -9,9 +9,12 @@ import { Card, Chip, GhostBtn, StatusDot, PrimaryBtn } from '@/components/refyne
 interface HubSpotConnection {
   id: string;
   portalId: string;
+  portalName?: string;
   connectionStatus: 'active' | 'expired' | 'disconnected' | 'error';
   lastActiveAt: string | null;
   createdAt: string;
+  oauthAccessToken?: string;
+  encryptedToken?: string;
 }
 
 interface Provider {
@@ -34,7 +37,12 @@ const PROVIDERS: Provider[] = [
   { id: 'clearbit', name: 'Clearbit', description: 'Real-time enrichment', category: 'enrichment' },
 ];
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, authType: 'oauth' | 'pat' | 'unknown') {
+  // For PAT connections, show amber badge
+  if (authType === 'pat') {
+    return { color: C.amber, dot: C.amber, text: 'Connected (API key)' };
+  }
+
   switch (status) {
     case 'active':
       return { color: C.green, dot: C.green, text: 'Active' };
@@ -175,7 +183,15 @@ export default function ConnectionsPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {hubspotConnections.map((conn) => {
-              const badge = getStatusBadge(conn.connectionStatus);
+              // Determine auth type per connection
+              const authType = conn.oauthAccessToken
+                ? 'oauth'
+                : conn.encryptedToken
+                ? 'pat'
+                : 'unknown';
+              const badge = getStatusBadge(conn.connectionStatus, authType);
+              const portalName = conn.portalName || `Portal ${conn.portalId}`;
+
               return (
                 <Card key={conn.id} style={{ padding: 20 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -194,13 +210,35 @@ export default function ConnectionsPage() {
                       </div>
                       <div>
                         <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>
-                          HubSpot — Portal {conn.portalId}
+                          HubSpot — {portalName}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <StatusDot color={badge.dot} />
                             <span style={{ fontSize: 13, color: badge.color }}>{badge.text}</span>
                           </div>
+                          {authType === 'pat' && (
+                            <>
+                              <span style={{ fontSize: 13, color: C.text3 }}>•</span>
+                              <a
+                                href="/api/hubspot/connect"
+                                style={{
+                                  fontSize: 13,
+                                  color: C.amber,
+                                  textDecoration: 'none',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  window.location.href = '/api/hubspot/connect';
+                                }}
+                              >
+                                Upgrade to OAuth ↗
+                              </a>
+                            </>
+                          )}
                           <span style={{ fontSize: 13, color: C.text3 }}>•</span>
                           <span style={{ fontSize: 13, color: C.text2 }}>2,798 companies</span>
                         </div>
