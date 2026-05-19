@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (insertError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/config' });
+      captureWithOrgContext(insertError, ctx.orgId, { route: '/api/dedup/config' });
       console.error('Failed to create default dedup config:', insertError);
       return NextResponse.json(
         { error: 'Failed to create config' },
@@ -231,7 +231,7 @@ export async function PUT(request: NextRequest) {
       .single();
 
     if (updateError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/config' });
+      captureWithOrgContext(updateError, ctx.orgId, { route: '/api/dedup/config' });
       console.error('Failed to update dedup config:', updateError);
       return NextResponse.json(
         { error: 'Failed to update config' },
