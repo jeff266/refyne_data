@@ -131,18 +131,30 @@ export async function GET(request: NextRequest) {
               allRecordIds.add(pair.record_b_id);
             }
 
+            const recordIdArray = Array.from(allRecordIds);
+            console.log(`[Dedup API] Fetching names for ${recordIdArray.length} record IDs (first 3: ${recordIdArray.slice(0, 3).join(', ')})`);
+
             // Fetch company data (only name property)
             const companies = await client.getCompaniesByIds(
-              Array.from(allRecordIds),
+              recordIdArray,
               ['name']
             );
+
+            console.log(`[Dedup API] HubSpot returned ${companies.length} companies`);
+            if (companies.length > 0) {
+              console.log(`[Dedup API] First company: id=${companies[0].id}, name=${companies[0].properties.name}`);
+            }
 
             // Build lookup map: id -> name
             for (const company of companies) {
               companyNames[company.id] = company.properties.name || company.id;
             }
             console.log(`[Dedup API] Fetched ${companies.length} company names from HubSpot`);
+          } else {
+            console.log('[Dedup API] No access token available');
           }
+        } else {
+          console.log('[Dedup API] No portal_id found in connection');
         }
       } catch (err) {
         console.error('[Dedup API] Failed to fetch company names from HubSpot:', err);
