@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
             .eq('org_id', ctx.orgId)
             .eq('connection_status', 'active');
 
-          console.log(`[Dedup] Found ${connections?.length || 0} active connections`);
+          console.log('[Dedup] Starting multi-portal lookup, connections count:', connections?.length ?? 0);
 
           if (connections && connections.length > 0) {
             for (const connection of connections) {
