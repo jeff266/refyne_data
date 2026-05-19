@@ -46,6 +46,14 @@ const STATUS_OPTIONS = [
   { value: 'merged', label: 'Merged' },
 ] as const;
 
+const PER_PAGE_OPTIONS = [
+  { value: '20', label: '20 per page' },
+  { value: '50', label: '50 per page' },
+  { value: '100', label: '100 per page' },
+  { value: '200', label: '200 per page' },
+  { value: '500', label: '500 per page' },
+] as const;
+
 // ─────────────────────────────────────────────────────────────
 // Utility Components
 // ─────────────────────────────────────────────────────────────
@@ -463,7 +471,7 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
   const [statusFilter, setStatusFilter] = useState<PairStatus | 'all'>('pending');
   const [sortBy, setSortBy] = useState<'confidence_desc' | 'confidence_asc' | 'detected_asc'>('confidence_desc');
   const [page, setPage] = useState(1);
-  const perPage = 20;
+  const [perPage, setPerPage] = useState(20);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1011,7 +1019,12 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
             <div style={{ fontSize: 12, color: C.text3 }}>
               Showing {(page - 1) * perPage + 1}-{Math.min(page * perPage, total)} of {total}
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <SelectDropdown
+                value={String(perPage)}
+                options={PER_PAGE_OPTIONS}
+                onChange={(v) => { setPerPage(Number(v)); setPage(1); }}
+              />
               <GhostBtn
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
