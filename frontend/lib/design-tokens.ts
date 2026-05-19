@@ -44,27 +44,29 @@ export const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { divider: true },
   { group: 'Data' },
-  { id: 'enrich',     label: 'Enrich',        icon: 'Search' },
-  { id: 'normalize',  label: 'Normalize',     icon: 'ArrowUpDown' },
-  { id: 'dedup',      label: 'Dedup',         icon: 'GitMerge' },
-  { id: 'quarantine', label: 'Quarantine',    icon: 'Shield' },
+  { id: 'enrich',      label: 'Enrich',        icon: 'Search' },
+  { id: 'normalize',   label: 'Normalize',     icon: 'ArrowUpDown' },
+  { id: 'dedup',       label: 'Dedup',         icon: 'GitMerge' },
+  { id: 'quarantine',  label: 'Quarantine',    icon: 'Shield' },
+  { id: 'arrangements', label: 'Arrangements',  icon: 'Workflow' },
   { divider: true },
   { group: 'Config' },
-  { id: 'harmonies',  label: 'Harmonies',     icon: 'Sparkles' },
-  { id: 'mappings',   label: 'Field Mappings', icon: 'ArrowRightLeft' },
+  { id: 'harmonies',   label: 'Harmonies',     icon: 'Sparkles' },
+  { id: 'mappings',    label: 'Field Mappings', icon: 'ArrowRightLeft' },
   { id: 'connections', label: 'Connections',   icon: 'Plug2' },
 ] as const;
 
 // Page metadata
 export const PAGE_META: Record<string, { label: string; action: string | null }> = {
-  dashboard:   { label: 'Dashboard',      action: null },
-  enrich:      { label: 'Enrich',         action: 'New search' },
-  normalize:   { label: 'Normalize',      action: 'Load records' },
-  dedup:       { label: 'Dedup',          action: 'Run scan' },
-  quarantine:  { label: 'Quarantine',     action: null },
-  harmonies:   { label: 'Harmonies',      action: 'New harmony' },
-  mappings:    { label: 'Field Mappings', action: null },
-  connections: { label: 'Connections',    action: 'Add connection' },
+  dashboard:    { label: 'Dashboard',      action: null },
+  enrich:       { label: 'Enrich',         action: 'New search' },
+  normalize:    { label: 'Normalize',      action: 'Load records' },
+  dedup:        { label: 'Dedup',          action: 'Run scan' },
+  quarantine:   { label: 'Quarantine',     action: null },
+  arrangements: { label: 'Arrangements',   action: 'New arrangement' },
+  harmonies:    { label: 'Harmonies',      action: 'New harmony' },
+  mappings:     { label: 'Field Mappings', action: null },
+  connections:  { label: 'Connections',    action: 'Add connection' },
 };
 
 export type NavItem =
