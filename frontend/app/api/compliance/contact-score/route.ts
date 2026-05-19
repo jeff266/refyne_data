@@ -69,13 +69,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Get dedup score (% without duplicates)
-    const { data: totalContacts, error: totalError } = await supabase
+    const { count: totalContactCount, error: totalError } = await supabase
       .from('normalized_records')
       .select('record_id', { count: 'exact', head: true })
       .eq('org_id', orgId)
       .eq('record_type', 'contact');
 
-    const { data: duplicatePairs, error: dupeError } = await supabase
+    const { count: dupeCount, error: dupeError } = await supabase
       .from('contact_dedup_pairs')
       .select('id', { count: 'exact', head: true })
       .eq('org_id', orgId)
@@ -86,10 +86,7 @@ export async function GET(request: NextRequest) {
       // Non-fatal - use 100% if we can't get dedup data
       console.warn('Failed to get dedup data for contact score');
     }
-
-    const totalContactCount = totalContacts?.count || 0;
-    const dupeCount = duplicatePairs?.count || 0;
-    const noDupesRate = totalContactCount > 0 ? ((totalContactCount - dupeCount) / totalContactCount) * 100 : 100;
+    const noDupesRate = (totalContactCount ?? 0) > 0 ? (((totalContactCount ?? 0) - (dupeCount ?? 0)) / (totalContactCount ?? 0)) * 100 : 100;
 
     // Calculate field-level metrics
     const fieldMetrics: Record<string, { compliant: number; total: number; rate: number }> = {
@@ -172,8 +169,8 @@ export async function GET(request: NextRequest) {
         no_dupes: {
           weight: METRIC_WEIGHTS.no_dupes,
           rate: Math.round(noDupesRate),
-          duplicatesFound: dupeCount,
-          totalContacts: totalContactCount,
+          duplicatesFound: dupeCount ?? 0,
+          totalContacts: totalContactCount ?? 0,
         },
       },
     });
