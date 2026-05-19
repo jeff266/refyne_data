@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
       .from('hubspot_connections')
       .select('id, encrypted_token, scopes, has_export_scope')
       .eq('org_id', stateRecord.org_id)
-      .single();
+      .maybeSingle();
 
     // Update existing connection with OAuth tokens
     if (existingConnection) {
@@ -203,10 +203,11 @@ export async function GET(request: NextRequest) {
       // Don't fail the connection - schema sync is best-effort
     }
 
-    // Redirect to connections page with success
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/connections?connected=true`
-    );
+    // Redirect to connections page with success, preserving org context
+    const redirectUrl = new URL('/connections', process.env.NEXT_PUBLIC_APP_URL);
+    redirectUrl.searchParams.set('connected', 'true');
+    redirectUrl.searchParams.set('__clerk_org', stateRecord.org_id);
+    return NextResponse.redirect(redirectUrl.toString());
   } catch (error) {
     console.error('OAuth callback error:', error);
     return NextResponse.redirect(

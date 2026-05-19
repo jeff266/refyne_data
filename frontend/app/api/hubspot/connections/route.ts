@@ -16,6 +16,12 @@ export async function GET() {
   let ctx;
   try {
     console.log('[Connections GET] Getting org context...');
+    console.log('[Connections GET] Supabase config check:', {
+      hasUrl: !!process.env.SUPABASE_URL || !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      supabaseClientExists: !!supabase,
+    });
     ctx = await getOrgContext();
     console.log('[Connections GET] Got context:', { orgId: ctx.orgId, role: ctx.orgRole });
   } catch (e) {
@@ -24,6 +30,15 @@ export async function GET() {
   }
 
   try {
+    // Validate org context
+    if (!ctx.orgId) {
+      console.error('[Connections GET] No org ID in context');
+      return NextResponse.json(
+        { error: 'Organization context missing' },
+        { status: 400 }
+      );
+    }
+
     // Check org rate limit
     const rateLimitCheck = await checkOrgRateLimit(ctx.orgId, '/api/hubspot/connections');
     if (!rateLimitCheck.allowed) {
@@ -51,10 +66,20 @@ export async function GET() {
       // Do NOT filter by access_token presence - return ALL active connections
 
     if (error) {
+      console.error('[Connections GET] Supabase query error:', {
+        error,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
       captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/connections' });
-      console.error('Failed to fetch HubSpot connections:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch connections' },
+        {
+          error: 'Failed to fetch connections',
+          details: error.message,
+          code: error.code
+        },
         { status: 500 }
       );
     }
