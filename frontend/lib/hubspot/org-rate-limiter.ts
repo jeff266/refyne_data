@@ -9,20 +9,13 @@ import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
 // Initialize Redis client for rate limiting
-// Note: Requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
-// (not the rediss:// URL used by BullMQ)
+// Uses Redis.fromEnv() to automatically read UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
 let redis: Redis | null = null;
 
 try {
-  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_REDIS_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_TOKEN;
-
-  // Only initialize if URL looks like a REST API URL (https://)
-  if (url && url.startsWith('https://') && token) {
-    redis = new Redis({ url, token });
-  }
+  redis = Redis.fromEnv();
 } catch (error) {
-  console.warn('[Org Rate Limit] Failed to initialize Redis client:', error);
+  console.warn('[Org Rate Limit] Redis not configured, rate limiting disabled:', error);
   redis = null;
 }
 
