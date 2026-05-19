@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { BulkApproveRequest, BulkApproveResponse } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/dedup/pairs/bulk-approve
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
       .in('id', body.pairIds);
 
     if (selectError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/bulk-approve' });
       console.error('Failed to validate pairs:', selectError);
       return NextResponse.json(
         { error: 'Failed to validate pairs' },
@@ -102,6 +104,7 @@ export async function POST(request: NextRequest) {
       .in('id', body.pairIds);
 
     if (updateError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/bulk-approve' });
       console.error('Failed to approve pairs:', updateError);
       return NextResponse.json(
         { error: 'Failed to approve pairs' },
@@ -119,6 +122,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/bulk-approve' });
     console.error('Failed to bulk approve pairs:', error);
     return NextResponse.json(
       { error: 'Failed to bulk approve pairs' },

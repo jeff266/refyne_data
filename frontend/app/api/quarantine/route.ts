@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/quarantine
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
     const { data: records, error } = await query;
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/quarantine' });
       console.error('Failed to fetch quarantine records:', error);
       return NextResponse.json({ error: 'Failed to fetch records' }, { status: 500 });
     }
@@ -56,6 +58,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ records, stats });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/quarantine' });
     console.error('Failed to get quarantine records:', error);
     return NextResponse.json({ error: 'Failed to get records' }, { status: 500 });
   }

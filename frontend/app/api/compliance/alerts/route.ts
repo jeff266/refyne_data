@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAlertConfig, saveAlertConfig, type AlertConfig } from '@/lib/compliance';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 
 /**
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(config);
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/compliance/alerts' });
     console.error('Failed to get alert config:', error);
     return NextResponse.json(
       { error: 'Failed to get alert configuration' },
@@ -124,6 +126,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/compliance/alerts' });
     console.error('Failed to save alert config:', error);
     return NextResponse.json(
       { error: 'Failed to save alert configuration' },

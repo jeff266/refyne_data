@@ -9,6 +9,7 @@ import {
 } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/dedup/pairs
@@ -96,6 +97,7 @@ export async function GET(request: NextRequest) {
     const { data: pairs, count, error } = await query;
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs' });
       console.error('Failed to get dedup pairs:', error);
       return NextResponse.json(
         { error: 'Failed to get pairs' },
@@ -150,6 +152,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs' });
     console.error('Failed to get dedup pairs:', error);
     return NextResponse.json(
       { error: 'Failed to get pairs' },

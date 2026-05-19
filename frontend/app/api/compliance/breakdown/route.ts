@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getBreakdownByHarmony, getBreakdownByField } from '@/lib/compliance';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 
 /**
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
       items,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/compliance/breakdown' });
     console.error('Failed to get compliance breakdown:', error);
     return NextResponse.json(
       { error: 'Failed to get compliance breakdown' },

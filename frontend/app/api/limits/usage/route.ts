@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { checkProspectingCredits, getUsageSummary } from '@/lib/auth/check-credits';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/limits/usage
@@ -44,6 +45,7 @@ export async function GET(request: Request) {
       breakdown: usage.byAction,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/limits/usage' });
     console.error('Failed to get usage:', error);
     return NextResponse.json({ error: 'Failed to get usage' }, { status: 500 });
   }

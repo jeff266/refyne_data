@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/harmonies/:id/toggle
@@ -56,6 +57,7 @@ export async function POST(
       });
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/harmonies/[id]/toggle' });
       console.error('Failed to toggle harmony:', error);
       return NextResponse.json(
         { error: 'Failed to toggle harmony' },
@@ -69,6 +71,7 @@ export async function POST(
       harmonies: newIds,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/harmonies/[id]/toggle' });
     console.error('Failed to toggle harmony:', error);
     return NextResponse.json(
       { error: 'Failed to toggle harmony' },

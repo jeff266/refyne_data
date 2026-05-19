@@ -8,6 +8,7 @@ import {
 } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 // Valid canonical fields for core_display_fields
 const VALID_CORE_FIELDS = new Set([
@@ -61,6 +62,7 @@ export async function GET(request: NextRequest) {
 
     if (selectError && selectError.code !== 'PGRST116') {
       // PGRST116 = no rows returned (expected for new orgs)
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/config' });
       console.error('Failed to get dedup config:', selectError);
       return NextResponse.json(
         { error: 'Failed to get config' },
@@ -80,6 +82,7 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (insertError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/config' });
       console.error('Failed to create default dedup config:', insertError);
       return NextResponse.json(
         { error: 'Failed to create config' },
@@ -89,6 +92,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ config: rowToConfig(created as DedupConfigRow) });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/config' });
     console.error('Failed to get dedup config:', error);
     return NextResponse.json(
       { error: 'Failed to get config' },
@@ -227,6 +231,7 @@ export async function PUT(request: NextRequest) {
       .single();
 
     if (updateError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/config' });
       console.error('Failed to update dedup config:', updateError);
       return NextResponse.json(
         { error: 'Failed to update config' },
@@ -236,6 +241,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ config: rowToConfig(updated as DedupConfigRow) });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/config' });
     console.error('Failed to update dedup config:', error);
     return NextResponse.json(
       { error: 'Failed to update config' },

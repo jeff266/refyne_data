@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/notifications/subscriptions
@@ -29,12 +30,14 @@ export async function GET() {
       .order('notification_type', { ascending: true });
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/notifications/subscriptions' });
       console.error('Failed to fetch subscriptions:', error);
       return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 });
     }
 
     return NextResponse.json({ subscriptions: subscriptions || [] });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/notifications/subscriptions' });
     console.error('Failed to get subscriptions:', error);
     return NextResponse.json({ error: 'Failed to get subscriptions' }, { status: 500 });
   }

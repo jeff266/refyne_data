@@ -4,6 +4,7 @@ import { sendDigestEmail } from '@/lib/always-on/send-digest';
 import type { DigestPayload } from '@/lib/always-on/types';
 import type { AlwaysOnTestEmailResponse } from '@/lib/always-on/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/always-on/test-email
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
       recipient: testEmail,
     } as AlwaysOnTestEmailResponse);
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/always-on/test-email' });
     console.error('Failed to send test email:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to send test email' },

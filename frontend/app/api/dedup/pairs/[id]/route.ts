@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { rowToPair, type DedupPairRow } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/dedup/pairs/:id
@@ -89,6 +90,7 @@ export async function GET(
       recordBData,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/[id]' });
     console.error('Failed to get dedup pair:', error);
     return NextResponse.json(
       { error: 'Failed to get pair' },

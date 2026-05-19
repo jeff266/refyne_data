@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/pipelines/default
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
       harmony_ids: pipeline?.harmony_ids || [],
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/pipelines/default' });
     console.error('Failed to get default pipeline:', error);
     return NextResponse.json({ harmony_ids: [] });
   }

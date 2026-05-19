@@ -3,6 +3,7 @@ import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
 import { checkProspectingCredits, deductCredit } from '@/lib/auth/check-credits';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/enrich/csv-push
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
       .single();
 
     if (settingsError || !settings) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/enrich/csv-push' });
       console.error('Failed to fetch org settings:', settingsError);
       return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
     }
@@ -109,6 +111,7 @@ export async function POST(request: Request) {
 
         results.processed++;
       } catch (error) {
+        captureWithOrgContext(error, ctx.orgId, { route: '/api/enrich/csv-push' });
         console.error('Failed to process record:', error);
         results.failed++;
       }
@@ -119,6 +122,7 @@ export async function POST(request: Request) {
       results,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/enrich/csv-push' });
     console.error('Failed to push CSV:', error);
     return NextResponse.json({ error: 'Failed to push CSV' }, { status: 500 });
   }

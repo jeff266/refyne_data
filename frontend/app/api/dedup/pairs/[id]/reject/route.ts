@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { rowToPair, type DedupPairRow } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/dedup/pairs/:id/reject
@@ -78,6 +79,7 @@ export async function POST(
       .single();
 
     if (updateError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/[id]/reject' });
       console.error('Failed to reject pair:', updateError);
       return NextResponse.json(
         { error: 'Failed to reject pair' },
@@ -87,6 +89,7 @@ export async function POST(
 
     return NextResponse.json({ pair: rowToPair(updated as DedupPairRow) });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/[id]/reject' });
     console.error('Failed to reject pair:', error);
     return NextResponse.json(
       { error: 'Failed to reject pair' },

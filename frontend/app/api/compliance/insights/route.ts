@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getActiveInsights, dismissInsight } from '@/lib/compliance';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 
 /**
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ insights });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/compliance/insights' });
     console.error('Failed to get compliance insights:', error);
     return NextResponse.json(
       { error: 'Failed to get compliance insights' },
@@ -90,6 +92,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/compliance/insights' });
     console.error('Failed to dismiss insight:', error);
     return NextResponse.json(
       { error: 'Failed to dismiss insight' },

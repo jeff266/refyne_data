@@ -8,6 +8,7 @@ import {
 } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 // Valid operators for conditions
 const VALID_OPERATORS = new Set([
@@ -185,6 +186,7 @@ export async function PUT(
       .single();
 
     if (updateError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/[id]' });
       console.error('Failed to update suppression rule:', updateError);
       return NextResponse.json(
         { error: 'Failed to update rule' },
@@ -194,6 +196,7 @@ export async function PUT(
 
     return NextResponse.json({ rule: rowToRule(updated as SuppressionRuleRow) });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/[id]' });
     console.error('Failed to update suppression rule:', error);
     return NextResponse.json(
       { error: 'Failed to update rule' },
@@ -266,6 +269,7 @@ export async function DELETE(
       .eq('id', id);
 
     if (deleteError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/[id]' });
       console.error('Failed to delete suppression rule:', deleteError);
       return NextResponse.json(
         { error: 'Failed to delete rule' },
@@ -296,6 +300,7 @@ export async function DELETE(
       suppressedCount,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/[id]' });
     console.error('Failed to delete suppression rule:', error);
     return NextResponse.json(
       { error: 'Failed to delete rule' },

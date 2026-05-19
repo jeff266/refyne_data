@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/connections
@@ -25,6 +26,7 @@ export async function GET() {
       .eq('org_id', ctx.orgId);
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/connections' });
       console.error('Failed to fetch connections:', error);
       return NextResponse.json({ connections: [] });
     }
@@ -56,6 +58,7 @@ export async function GET() {
 
     return NextResponse.json({ connections: connectionsWithStats });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/connections' });
     console.error('Failed to get connections:', error);
     return NextResponse.json(
       { error: 'Failed to get connections' },

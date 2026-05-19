@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getScore, getPreviousScore } from '@/lib/compliance';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 
 /**
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest) {
       trendDelta,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/compliance/score' });
     console.error('Failed to get compliance score:', error);
     return NextResponse.json(
       { error: 'Failed to get compliance score' },

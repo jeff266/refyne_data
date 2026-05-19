@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { supabase } from '@/lib/db/supabase';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 const VALID_TYPES = [
   'always_on_digest',
@@ -95,12 +96,14 @@ export async function PUT(
       .single();
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/org/notifications/[userId]/[type]' });
       console.error('Failed to update subscription:', error);
       return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
     }
 
     return NextResponse.json({ subscription });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/notifications/[userId]/[type]' });
     console.error('Failed to update subscription:', error);
     return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
   }

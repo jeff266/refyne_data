@@ -4,6 +4,7 @@ import { postToSlack } from '@/lib/always-on/slack-payload';
 import type { DigestPayload } from '@/lib/always-on/types';
 import type { AlwaysOnTestSlackResponse } from '@/lib/always-on/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/always-on/test-slack
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
       sent: true,
     } as AlwaysOnTestSlackResponse);
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/always-on/test-slack' });
     console.error('Failed to send test Slack message:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to send test message' },

@@ -13,6 +13,8 @@ export { GlobalStyles } from './GlobalStyles';
 export { Sidebar } from './Sidebar';
 export { TopBar } from './TopBar';
 export { Skeleton } from './Skeleton';
+export { HowItWorksStrip } from './HowItWorksStrip';
+export { OnboardingChecklist } from './OnboardingChecklist';
 export {
   StatCardsSkeleton,
   HarmonyBarsSkeleton,

@@ -3,6 +3,7 @@ import { clerkClient } from '@clerk/nextjs/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { wouldRemoveLastAdmin } from '@/lib/auth/admin-guard';
 import { logAuditEvent } from '@/lib/auth/audit-logger';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * PUT /api/org/members/[userId]/role
@@ -83,6 +84,7 @@ export async function PUT(
       role,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/members/[userId]/role' });
     console.error('Failed to update role:', error);
     return NextResponse.json({ error: 'Failed to update role' }, { status: 500 });
   }

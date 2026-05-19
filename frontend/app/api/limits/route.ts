@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { logAuditEvent } from '@/lib/auth/audit-logger';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/limits
@@ -28,12 +29,14 @@ export async function GET() {
       .order('applies_to', { ascending: true });
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/limits' });
       console.error('Failed to fetch limits:', error);
       return NextResponse.json({ error: 'Failed to fetch limits' }, { status: 500 });
     }
 
     return NextResponse.json({ limits });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/limits' });
     console.error('Failed to get limits:', error);
     return NextResponse.json({ error: 'Failed to get limits' }, { status: 500 });
   }
@@ -106,6 +109,7 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/limits' });
       console.error('Failed to create/update limit:', error);
       return NextResponse.json({ error: 'Failed to create/update limit' }, { status: 500 });
     }
@@ -121,6 +125,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ limit }, { status: 201 });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/limits' });
     console.error('Failed to create limit:', error);
     return NextResponse.json({ error: 'Failed to create limit' }, { status: 500 });
   }

@@ -7,6 +7,7 @@ import {
 } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/dedup/suppression-rules/reorder
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
       .eq('org_id', orgId);
 
     if (fetchError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/reorder' });
       console.error('Failed to fetch rules for reorder:', fetchError);
       return NextResponse.json(
         { error: 'Failed to fetch rules' },
@@ -113,6 +115,7 @@ export async function POST(request: NextRequest) {
       .order('priority', { ascending: true });
 
     if (selectError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/reorder' });
       console.error('Failed to fetch updated rules:', selectError);
       return NextResponse.json(
         { error: 'Rules reordered but failed to fetch updated list' },
@@ -124,6 +127,7 @@ export async function POST(request: NextRequest) {
       rules: (updatedRules as SuppressionRuleRow[]).map(rowToRule),
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/reorder' });
     console.error('Failed to reorder suppression rules:', error);
     return NextResponse.json(
       { error: 'Failed to reorder rules' },

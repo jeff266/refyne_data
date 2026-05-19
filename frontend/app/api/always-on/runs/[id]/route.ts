@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { DigestRun } from '@/lib/always-on/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/always-on/runs/:id
@@ -37,6 +38,7 @@ export async function GET(
       .single();
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/always-on/runs/[id]' });
       console.error('Failed to fetch digest run:', error);
       return NextResponse.json(
         { error: 'Run not found' },
@@ -48,6 +50,7 @@ export async function GET(
       run: mapDigestRunFromDb(run),
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/always-on/runs/[id]' });
     console.error('Failed to get digest run:', error);
     return NextResponse.json(
       { error: 'Failed to get run' },

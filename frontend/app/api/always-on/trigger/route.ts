@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { enqueueDigestJob } from '@/lib/queue/digest-queue';
 import type { AlwaysOnTriggerRequest, AlwaysOnTriggerResponse } from '@/lib/always-on/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/always-on/trigger
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
       runId: result.jobId!, // Will be replaced with actual runId in job
     } as AlwaysOnTriggerResponse);
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/always-on/trigger' });
     console.error('Failed to trigger Always On digest:', error);
     return NextResponse.json(
       { error: 'Failed to trigger digest' },

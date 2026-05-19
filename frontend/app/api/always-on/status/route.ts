@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { AlwaysOnStatus } from '@/lib/always-on/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/always-on/status
@@ -71,6 +72,7 @@ export async function GET(request: NextRequest) {
       nextRunAt,
     } as AlwaysOnStatus);
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/always-on/status' });
     console.error('Failed to get Always On status:', error);
     return NextResponse.json(
       { error: 'Failed to get Always On status' },

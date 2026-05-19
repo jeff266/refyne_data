@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { AlwaysOnToggleRequest, AlwaysOnToggleResponse } from '@/lib/always-on/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/always-on/toggle
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/always-on/toggle' });
       console.error('Failed to toggle Always On:', error);
       return NextResponse.json(
         { error: 'Failed to toggle Always On' },
@@ -74,6 +76,7 @@ export async function POST(request: NextRequest) {
       alwaysOnSince: entitlement.always_on_since,
     } as AlwaysOnToggleResponse);
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/always-on/toggle' });
     console.error('Failed to toggle Always On:', error);
     return NextResponse.json(
       { error: 'Failed to toggle Always On' },

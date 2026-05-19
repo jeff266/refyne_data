@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { AlwaysOnConfig } from '@/lib/always-on/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * PUT /api/always-on/config
@@ -106,6 +107,7 @@ export async function PUT(request: NextRequest) {
       .single();
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/always-on/config' });
       console.error('Failed to update config:', error);
       return NextResponse.json(
         { error: 'Failed to update config' },
@@ -117,6 +119,7 @@ export async function PUT(request: NextRequest) {
       config: mapConfigFromDb(config),
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/always-on/config' });
     console.error('Failed to update Always On config:', error);
     return NextResponse.json(
       { error: 'Failed to update config' },

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { logAuditEvent } from '@/lib/auth/audit-logger';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/org/settings
@@ -28,12 +29,14 @@ export async function GET() {
       .single();
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings' });
       console.error('Failed to fetch org settings:', error);
       return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
     }
 
     return NextResponse.json({ settings });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings' });
     console.error('Failed to get org settings:', error);
     return NextResponse.json({ error: 'Failed to get settings' }, { status: 500 });
   }
@@ -94,6 +97,7 @@ export async function PUT(request: Request) {
       .single();
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings' });
       console.error('Failed to update org settings:', error);
       return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
     }
@@ -108,6 +112,7 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ settings });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings' });
     console.error('Failed to update org settings:', error);
     return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
   }
@@ -159,12 +164,14 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings' });
       console.error('Failed to create workspace entitlements:', error);
       return NextResponse.json({ error: 'Failed to create workspace' }, { status: 500 });
     }
 
     return NextResponse.json({ settings }, { status: 201 });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings' });
     console.error('Failed to create workspace:', error);
     return NextResponse.json({ error: 'Failed to create workspace' }, { status: 500 });
   }

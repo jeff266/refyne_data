@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { rowToPair, type DedupPairRow, type SingleApproveRequest } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/dedup/pairs/:id/approve
@@ -81,6 +82,7 @@ export async function POST(
       .single();
 
     if (updateError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/[id]/approve' });
       console.error('Failed to approve pair:', updateError);
       return NextResponse.json(
         { error: 'Failed to approve pair' },
@@ -93,6 +95,7 @@ export async function POST(
 
     return NextResponse.json({ jobId });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/[id]/approve' });
     console.error('Failed to approve pair:', error);
     return NextResponse.json(
       { error: 'Failed to approve pair' },

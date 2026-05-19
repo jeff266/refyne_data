@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { X, Plus } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
-import { Card, Chip, PrimaryBtn } from '@/components/refyne';
+import { Card, Chip, PrimaryBtn, HowItWorksStrip } from '@/components/refyne';
 
 // TODO: wire to API - replace with search results from enrichment providers
 const rows = [
@@ -29,6 +29,21 @@ function MatchBar({ n }: { n: number }) {
 
 export default function EnrichPage() {
   const [view, setView] = useState<'table' | 'grid'>('table');
+
+  const prospectingSteps = [
+    {
+      title: 'Set your ICP filters',
+      description: 'Industry, size, location, keywords — search across connected providers.',
+    },
+    {
+      title: 'Enrich and review',
+      description: 'Refyne enriches each result with canonical data before it touches your CRM.',
+    },
+    {
+      title: 'Push with confidence',
+      description: 'Duplicate check runs automatically — records are blocked, quarantined, or pushed based on your org policy.',
+    },
+  ];
 
   return (
     <div style={{ display: 'flex', height: '100%', fontFamily: F.sans }}>
@@ -82,6 +97,9 @@ export default function EnrichPage() {
             </div>
             <PrimaryBtn><Plus size={11} /> Enrich selected</PrimaryBtn>
           </div>
+        </div>
+        <div style={{ padding: '20px 20px 0 20px' }}>
+          <HowItWorksStrip steps={prospectingSteps} storageKey="how-it-works-prospecting" />
         </div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {view === 'table' ? (

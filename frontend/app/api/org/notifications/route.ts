@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { supabase } from '@/lib/db/supabase';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 const NOTIFICATION_TYPES = [
   'always_on_digest',
@@ -48,6 +49,7 @@ export async function GET() {
       .eq('org_id', ctx.orgId);
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/org/notifications' });
       console.error('Failed to fetch subscriptions:', error);
       return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 });
     }
@@ -86,6 +88,7 @@ export async function GET() {
 
     return NextResponse.json({ members });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/notifications' });
     console.error('Failed to get org notifications:', error);
     return NextResponse.json({ error: 'Failed to get org notifications' }, { status: 500 });
   }

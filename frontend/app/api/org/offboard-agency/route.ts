@@ -3,6 +3,7 @@ import { clerkClient } from '@clerk/nextjs/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 import { logAuditEvent } from '@/lib/auth/audit-logger';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/org/offboard-agency
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
         .eq('clerk_org_id', ctx.orgId);
 
       if (error) {
+        captureWithOrgContext(error, ctx.orgId, { route: '/api/org/offboard-agency' });
         console.error('Failed to disable external agencies:', error);
       }
     }
@@ -105,6 +107,7 @@ export async function POST(request: Request) {
       results,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/offboard-agency' });
     console.error('Failed to offboard agency:', error);
     return NextResponse.json({ error: 'Failed to offboard agency' }, { status: 500 });
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/quarantine/[id]/reject
@@ -63,6 +64,7 @@ export async function POST(
       .eq('org_id', ctx.orgId);
 
     if (updateError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/quarantine/[id]/reject' });
       console.error('Failed to reject record:', updateError);
       return NextResponse.json({ error: 'Failed to reject record' }, { status: 500 });
     }
@@ -72,6 +74,7 @@ export async function POST(
       recordId: id,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/quarantine/[id]/reject' });
     console.error('Failed to reject record:', error);
     return NextResponse.json({ error: 'Failed to reject record' }, { status: 500 });
   }

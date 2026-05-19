@@ -3,6 +3,7 @@ import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
 import { checkProspectingCredits, deductCredit } from '@/lib/auth/check-credits';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * POST /api/enrich/push
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
       .single();
 
     if (settingsError || !settings) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/enrich/push' });
       console.error('Failed to fetch org settings:', settingsError);
       return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
     }
@@ -127,6 +129,7 @@ export async function POST(request: Request) {
           });
 
         if (quarantineError) {
+          captureWithOrgContext(error, ctx.orgId, { route: '/api/enrich/push' });
           console.error('Failed to quarantine record:', quarantineError);
           return NextResponse.json(
             { error: 'Failed to quarantine record' },
@@ -167,6 +170,7 @@ export async function POST(request: Request) {
       warning: duplicateCheck.isDuplicate ? 'Duplicate detected but allowed by policy' : null,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/enrich/push' });
     console.error('Failed to push record:', error);
     return NextResponse.json({ error: 'Failed to push record' }, { status: 500 });
   }

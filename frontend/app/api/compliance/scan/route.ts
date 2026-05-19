@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { enqueueScan, runComplianceScan } from '@/lib/compliance';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 
 /**
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
       jobId,
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/compliance/scan' });
     console.error('Failed to enqueue compliance scan:', error);
     return NextResponse.json(
       { error: 'Failed to enqueue compliance scan' },

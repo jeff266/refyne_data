@@ -9,6 +9,7 @@ import {
 } from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 // Valid operators for conditions
 const VALID_OPERATORS = new Set([
@@ -83,6 +84,7 @@ export async function GET(request: NextRequest) {
       .order('priority', { ascending: true });
 
     if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules' });
       console.error('Failed to get suppression rules:', error);
       return NextResponse.json(
         { error: 'Failed to get rules' },
@@ -94,6 +96,7 @@ export async function GET(request: NextRequest) {
       rules: (rules as SuppressionRuleRow[]).map(rowToRule),
     });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules' });
     console.error('Failed to get suppression rules:', error);
     return NextResponse.json(
       { error: 'Failed to get rules' },
@@ -212,6 +215,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules' });
       console.error('Failed to create suppression rule:', insertError);
       return NextResponse.json(
         { error: 'Failed to create rule' },
@@ -221,6 +225,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ rule: rowToRule(created as SuppressionRuleRow) });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules' });
     console.error('Failed to create suppression rule:', error);
     return NextResponse.json(
       { error: 'Failed to create rule' },

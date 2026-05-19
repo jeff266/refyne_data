@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTrend } from '@/lib/compliance';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 
 /**
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ trend });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/compliance/trend' });
     console.error('Failed to get compliance trend:', error);
     return NextResponse.json(
       { error: 'Failed to get compliance trend' },

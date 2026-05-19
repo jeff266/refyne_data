@@ -4,6 +4,7 @@ import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers
 import { logAuditEvent } from '@/lib/auth/audit-logger';
 import { getBillingContext } from '@/lib/billing/check-feature';
 import { getPlanFeatures, getNextPlanWithMoreSeats } from '@/lib/billing/plan-features';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * GET /api/org/members
@@ -37,6 +38,7 @@ export async function GET() {
 
     return NextResponse.json({ members: formattedMembers });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/members' });
     console.error('Failed to get org members:', error);
     return NextResponse.json({ error: 'Failed to get members' }, { status: 500 });
   }
@@ -119,6 +121,7 @@ export async function POST(request: Request) {
       invitationId: invitation.id,
     });
   } catch (error: any) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/members' });
     console.error('Failed to invite member:', error);
 
     if (error.errors?.[0]?.code === 'duplicate_record') {

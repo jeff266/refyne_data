@@ -3,6 +3,7 @@ import { clerkClient } from '@clerk/nextjs/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { wouldRemoveLastAdmin } from '@/lib/auth/admin-guard';
 import { logAuditEvent } from '@/lib/auth/audit-logger';
+import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 /**
  * DELETE /api/org/members/[userId]
@@ -75,6 +76,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'Member removed successfully' });
   } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/members/[userId]' });
     console.error('Failed to remove member:', error);
     return NextResponse.json({ error: 'Failed to remove member' }, { status: 500 });
   }
