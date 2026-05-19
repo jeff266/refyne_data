@@ -37,6 +37,8 @@ export async function GET() {
   }
 
   try {
+    console.log('[Connections GET] Fetching connections for org:', ctx.orgId);
+
     const { data: connections, error } = await supabase
       .from('hubspot_connections')
       .select('id, portal_id, hub_id, friendly_name, connection_status, last_active_at, created_at, access_token, encrypted_token')
@@ -52,6 +54,11 @@ export async function GET() {
         { status: 500 }
       );
     }
+
+    console.log('[Connections GET] Found connections:', {
+      count: connections?.length || 0,
+      connections: connections?.map(c => ({ id: c.id, portalId: c.portal_id, status: c.connection_status })),
+    });
 
     // Transform snake_case to camelCase for UI
     const transformedConnections = (connections || []).map((conn: any) => ({

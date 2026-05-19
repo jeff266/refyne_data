@@ -156,6 +156,13 @@ export async function GET(request: NextRequest) {
       }
     } else {
       // Create new OAuth connection
+      console.log('[OAuth Callback] Creating new connection:', {
+        orgId: stateRecord.org_id,
+        portalId,
+        hubId,
+        connectionStatus: 'active',
+      });
+
       const { error: insertError } = await supabase
         .from('hubspot_connections')
         .insert({
@@ -179,6 +186,8 @@ export async function GET(request: NextRequest) {
           `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=save_failed`
         );
       }
+
+      console.log('[OAuth Callback] Connection created successfully');
     }
 
     // Sync workspace schema (discover enum fields)
