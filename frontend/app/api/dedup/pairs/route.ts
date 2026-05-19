@@ -10,6 +10,8 @@ import {
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
+import { HubSpotClient } from '@/lib/hubspot/client';
 
 /**
  * GET /api/dedup/pairs
@@ -105,6 +107,48 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Fetch company names from HubSpot for all record IDs
+    let companyNames: Record<string, string> = {};
+    if (pairs && pairs.length > 0) {
+      try {
+        // Get portal_id from HubSpot connection
+        const { data: connection } = await supabase
+          .from('hubspot_connections')
+          .select('portal_id')
+          .eq('org_id', ctx.orgId)
+          .eq('connection_status', 'active')
+          .single();
+
+        if (connection?.portal_id) {
+          const accessToken = await getAccessToken(ctx.orgId);
+          if (accessToken) {
+            const client = new HubSpotClient(accessToken, connection.portal_id);
+
+            // Collect all unique record IDs
+            const allRecordIds = new Set<string>();
+            for (const pair of pairs as DedupPairRow[]) {
+              allRecordIds.add(pair.record_a_id);
+              allRecordIds.add(pair.record_b_id);
+            }
+
+            // Fetch company data (only name property)
+            const companies = await client.getCompaniesByIds(
+              Array.from(allRecordIds),
+              ['name']
+            );
+
+            // Build lookup map: id -> name
+            for (const company of companies) {
+              companyNames[company.id] = company.properties.name || company.id;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch company names from HubSpot:', err);
+        // Continue without names - will show IDs as fallback
+      }
+    }
+
     // Get counts for sidebar
     const [gradeCountsResult, statusCountsResult] = await Promise.all([
       supabase
@@ -145,7 +189,11 @@ export async function GET(request: NextRequest) {
     }
 
     const response: PairsListResponse = {
-      pairs: (pairs as DedupPairRow[]).map(rowToPair),
+      pairs: (pairs as DedupPairRow[]).map(row => ({
+        ...rowToPair(row),
+        recordAName: companyNames[row.record_a_id] || row.record_a_id,
+        recordBName: companyNames[row.record_b_id] || row.record_b_id,
+      })),
       total: count || 0,
       counts: { byGrade, byStatus },
     };
