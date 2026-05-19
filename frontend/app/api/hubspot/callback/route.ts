@@ -124,11 +124,41 @@ export async function GET(request: NextRequest) {
     const scopes = portalInfo.scopes || [];
     const portalId = hubId || portalInfo.hub_id?.toString() || '';
 
-    // Upsert connection
-    const { error: upsertError } = await supabase
+    // Check if connection exists
+    const { data: existingConnection } = await supabase
       .from('hubspot_connections')
-      .upsert(
-        {
+      .select('id, encrypted_token, scopes, has_export_scope')
+      .eq('org_id', stateRecord.org_id)
+      .single();
+
+    // Update existing connection with OAuth tokens
+    if (existingConnection) {
+      const { error: updateError } = await supabase
+        .from('hubspot_connections')
+        .update({
+          portal_id: portalId,
+          hub_id: hubId,
+          access_token,
+          refresh_token,
+          token_expires_at: expiresAt.toISOString(),
+          oauth_scopes: scopes,
+          connection_status: 'active',
+          last_active_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('org_id', stateRecord.org_id);
+
+      if (updateError) {
+        console.error('Failed to update connection:', updateError);
+        return NextResponse.redirect(
+          `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=save_failed`
+        );
+      }
+    } else {
+      // Create new OAuth connection
+      const { error: insertError } = await supabase
+        .from('hubspot_connections')
+        .insert({
           org_id: stateRecord.org_id,
           portal_id: portalId,
           hub_id: hubId,
@@ -138,17 +168,17 @@ export async function GET(request: NextRequest) {
           oauth_scopes: scopes,
           connection_status: 'active',
           last_active_at: new Date().toISOString(),
-        },
-        {
-          onConflict: 'org_id',
-        }
-      );
+          encrypted_token: '', // Empty PAT for OAuth-only connections
+          scopes: scopes,
+          has_export_scope: scopes.includes('crm.export'),
+        });
 
-    if (upsertError) {
-      console.error('Failed to save connection:', upsertError);
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=save_failed`
-      );
+      if (insertError) {
+        console.error('Failed to create connection:', insertError);
+        return NextResponse.redirect(
+          `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=save_failed`
+        );
+      }
     }
 
     // Sync workspace schema (discover enum fields)
