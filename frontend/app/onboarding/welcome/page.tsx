@@ -225,10 +225,7 @@ export default function OnboardingWelcomePage() {
         )}
 
         {/* Enter Workspace */}
-        <PrimaryBtn
-          onClick={() => router.push(getLandingPage())}
-          style={{ width: '100%', padding: '14px 24px' }}
-        >
+        <PrimaryBtn onClick={() => router.push(getLandingPage())}>
           Enter workspace →
         </PrimaryBtn>
       </div>

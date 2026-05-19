@@ -228,13 +228,35 @@ export default function OnboardingProfilePage() {
           )}
 
           {/* Submit */}
-          <PrimaryBtn
+          <button
             type="submit"
             disabled={!canContinue || loading}
-            style={{ width: '100%' }}
+            style={{
+              width: '100%',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 5,
+              padding: '6px 14px',
+              background: !canContinue || loading
+                ? C.text3
+                : `linear-gradient(to bottom, ${C.indigo}, ${C.indigoDk})`,
+              color: '#fff',
+              borderRadius: 7,
+              fontSize: 12,
+              fontWeight: 500,
+              fontFamily: F.sans,
+              boxShadow: !canContinue || loading
+                ? 'none'
+                : '0 0 0 1px rgba(99,102,241,0.3), 0 1px 3px rgba(0,0,0,0.4)',
+              letterSpacing: '-0.01em',
+              border: 'none',
+              cursor: !canContinue || loading ? 'not-allowed' : 'pointer',
+              opacity: !canContinue || loading ? 0.6 : 1,
+            }}
           >
             {loading ? 'Creating workspace...' : 'Continue →'}
-          </PrimaryBtn>
+          </button>
         </form>
       </div>
 

@@ -209,17 +209,11 @@ export default function OnboardingScorePage() {
         {/* Phase 3: CTA */}
         {showCTA && (
           <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
-            <PrimaryBtn
-              onClick={() => router.push(primaryCTA.path)}
-              style={{
-                width: '100%',
-                padding: '16px 24px',
-                fontSize: 16,
-                marginBottom: 16,
-              }}
-            >
-              {primaryCTA.text}
-            </PrimaryBtn>
+            <div style={{ marginBottom: 16 }}>
+              <PrimaryBtn onClick={() => router.push(primaryCTA.path)}>
+                {primaryCTA.text}
+              </PrimaryBtn>
+            </div>
 
             <button
               onClick={() => router.push('/dashboard')}

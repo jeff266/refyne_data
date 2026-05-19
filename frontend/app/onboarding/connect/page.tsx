@@ -102,17 +102,11 @@ export default function OnboardingConnectPage() {
         </div>
 
         {/* Connect Button */}
-        <PrimaryBtn
-          onClick={handleConnect}
-          style={{
-            width: '100%',
-            padding: '16px 24px',
-            fontSize: 16,
-            marginBottom: 24,
-          }}
-        >
-          Connect HubSpot →
-        </PrimaryBtn>
+        <div style={{ marginBottom: 24 }}>
+          <PrimaryBtn onClick={handleConnect}>
+            Connect HubSpot →
+          </PrimaryBtn>
+        </div>
 
         {/* Benefits */}
         <div style={{
