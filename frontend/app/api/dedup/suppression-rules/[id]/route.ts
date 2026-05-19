@@ -186,7 +186,7 @@ export async function PUT(
       .single();
 
     if (updateError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/[id]' });
+      captureWithOrgContext(updateError, ctx.orgId, { route: '/api/dedup/suppression-rules/[id]' });
       console.error('Failed to update suppression rule:', updateError);
       return NextResponse.json(
         { error: 'Failed to update rule' },
@@ -269,7 +269,7 @@ export async function DELETE(
       .eq('id', id);
 
     if (deleteError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/[id]' });
+      captureWithOrgContext(deleteError, ctx.orgId, { route: '/api/dedup/suppression-rules/[id]' });
       console.error('Failed to delete suppression rule:', deleteError);
       return NextResponse.json(
         { error: 'Failed to delete rule' },

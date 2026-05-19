@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       .in('id', body.pairIds);
 
     if (selectError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/bulk-reject' });
+      captureWithOrgContext(selectError, ctx.orgId, { route: '/api/dedup/pairs/bulk-reject' });
       console.error('Failed to validate pairs:', selectError);
       return NextResponse.json(
         { error: 'Failed to validate pairs' },
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       .in('id', body.pairIds);
 
     if (updateError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/bulk-reject' });
+      captureWithOrgContext(updateError, ctx.orgId, { route: '/api/dedup/pairs/bulk-reject' });
       console.error('Failed to reject pairs:', updateError);
       return NextResponse.json(
         { error: 'Failed to reject pairs' },

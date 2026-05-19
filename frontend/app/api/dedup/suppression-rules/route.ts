@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules' });
+      captureWithOrgContext(insertError, ctx.orgId, { route: '/api/dedup/suppression-rules' });
       console.error('Failed to create suppression rule:', insertError);
       return NextResponse.json(
         { error: 'Failed to create rule' },

@@ -73,7 +73,7 @@ export async function POST(
       .single();
 
     if (updateError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/[id]/skip' });
+      captureWithOrgContext(updateError, ctx.orgId, { route: '/api/dedup/pairs/[id]/skip' });
       console.error('Failed to skip pair:', updateError);
       return NextResponse.json(
         { error: 'Failed to skip pair' },

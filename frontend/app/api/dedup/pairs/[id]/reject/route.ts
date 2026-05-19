@@ -79,7 +79,7 @@ export async function POST(
       .single();
 
     if (updateError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/[id]/reject' });
+      captureWithOrgContext(updateError, ctx.orgId, { route: '/api/dedup/pairs/[id]/reject' });
       console.error('Failed to reject pair:', updateError);
       return NextResponse.json(
         { error: 'Failed to reject pair' },

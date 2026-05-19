@@ -82,7 +82,7 @@ export async function POST(
       .single();
 
     if (updateError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/pairs/[id]/approve' });
+      captureWithOrgContext(updateError, ctx.orgId, { route: '/api/dedup/pairs/[id]/approve' });
       console.error('Failed to approve pair:', updateError);
       return NextResponse.json(
         { error: 'Failed to approve pair' },

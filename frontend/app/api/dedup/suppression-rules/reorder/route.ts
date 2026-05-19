@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       .eq('org_id', orgId);
 
     if (fetchError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/reorder' });
+      captureWithOrgContext(fetchError, ctx.orgId, { route: '/api/dedup/suppression-rules/reorder' });
       console.error('Failed to fetch rules for reorder:', fetchError);
       return NextResponse.json(
         { error: 'Failed to fetch rules' },
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
       .order('priority', { ascending: true });
 
     if (selectError) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/suppression-rules/reorder' });
+      captureWithOrgContext(selectError, ctx.orgId, { route: '/api/dedup/suppression-rules/reorder' });
       console.error('Failed to fetch updated rules:', selectError);
       return NextResponse.json(
         { error: 'Rules reordered but failed to fetch updated list' },
