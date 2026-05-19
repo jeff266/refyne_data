@@ -73,54 +73,78 @@ export async function GET(request: NextRequest) {
     // Get job state
     const state = await job.getState();
 
-    // Map BullMQ states to our response format
+    // Get progress data from job
+    const progressData = job.progress as any;
+
+    // Extract progress information
     let phase: 'started' | 'progress' | 'completed' | 'failed';
     let completed = false;
     let error: string | undefined;
+    let message = '';
     let pairsFound = 0;
-    let progress = 0;
+    let progressPercent = 0;
+    let gradeBreakdown: { A: number; B: number; C: number; D: number } | undefined;
 
     switch (state) {
       case 'waiting':
       case 'delayed':
         phase = 'started';
-        progress = 0;
+        message = 'Waiting to start...';
+        progressPercent = 0;
         break;
 
       case 'active':
-        phase = 'progress';
-        // BullMQ progress is a number between 0-100
-        progress = job.progress as number || 0;
-        // Check if job has stored partial results in data
-        if (job.returnvalue) {
-          pairsFound = job.returnvalue.pairsDetected || 0;
+        // Extract progress from job.progress object
+        if (progressData && typeof progressData === 'object') {
+          phase = progressData.phase || 'progress';
+          message = progressData.message || 'Scanning...';
+          progressPercent = progressData.progress || 0;
+          pairsFound = progressData.pairsFound || 0;
+          gradeBreakdown = progressData.gradeBreakdown;
+        } else {
+          phase = 'progress';
+          message = 'Scanning...';
+          progressPercent = typeof progressData === 'number' ? progressData : 0;
         }
         break;
 
       case 'completed':
         phase = 'completed';
         completed = true;
-        progress = 100;
+        progressPercent = 100;
         if (job.returnvalue) {
           pairsFound = job.returnvalue.pairsDetected || 0;
+          message = `Found ${pairsFound} duplicate pairs`;
+          gradeBreakdown = {
+            A: job.returnvalue.pairsGradeA || 0,
+            B: job.returnvalue.pairsGradeB || 0,
+            C: job.returnvalue.pairsGradeC || 0,
+            D: job.returnvalue.pairsGradeD || 0,
+          };
+        } else {
+          message = 'Scan complete';
         }
         break;
 
       case 'failed':
         phase = 'failed';
         completed = true;
+        message = 'Scan failed';
         error = job.failedReason || 'Unknown error';
         break;
 
       default:
         phase = 'started';
-        progress = 0;
+        message = 'Starting...';
+        progressPercent = 0;
     }
 
     return NextResponse.json({
       phase,
-      progress,
+      message,
+      progress: progressPercent,
       pairsFound,
+      gradeBreakdown,
       completed,
       error,
     });

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ChevronRight, ChevronDown, Check, ExternalLink, X, AlertCircle, RefreshCw } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, GhostBtn, PrimaryBtn } from '@/components/refyne';
+import { ScanningState } from './ScanningState';
 import type {
   DedupPair,
   PairGrade,
@@ -475,6 +476,7 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
   // Action state
   const [actionLoading, setActionLoading] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   // ─────────────────────────────────────────────────────────────
   // Fetch pairs
@@ -735,15 +737,19 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
       const data = await res.json();
       console.log(`[Dedup] Scan enqueued: jobId=${data.jobId}`);
 
-      // Poll for completion and refresh pairs
-      setTimeout(() => {
-        fetchPairs();
-      }, 3000); // Refresh after 3 seconds
+      // Show scanning UI
+      setActiveJobId(data.jobId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start scan');
     } finally {
       setScanLoading(false);
     }
+  };
+
+  const handleScanComplete = () => {
+    // Clear active job and refresh pairs
+    setActiveJobId(null);
+    fetchPairs();
   };
 
   // ─────────────────────────────────────────────────────────────
@@ -761,8 +767,20 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
 
   return (
     <div>
-      {/* Grade pills */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      {/* Show scanning state when job is active */}
+      {activeJobId && (
+        <ScanningState
+          jobId={activeJobId}
+          orgId={orgId}
+          onComplete={handleScanComplete}
+        />
+      )}
+
+      {/* Show normal review queue when not scanning */}
+      {!activeJobId && (
+        <>
+          {/* Grade pills */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <GradePill
           grade="all"
           count={totalGradeCount}
@@ -1010,6 +1028,8 @@ export function ReviewQueue({ orgId = 'default' }: ReviewQueueProps) {
           </div>
         )}
       </Card>
+        </>
+      )}
     </div>
   );
 }

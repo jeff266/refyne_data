@@ -169,7 +169,8 @@ function getNameBlockingKey(name: string | null): string | null {
  */
 async function fetchAllCompanies(
   accessToken: string,
-  portalId: string
+  portalId: string,
+  job?: Job<CompanyDedupScanJobData, CompanyDedupScanResult>
 ): Promise<Map<string, CompanyProperties>> {
   const clientResult = await createHubSpotClient(accessToken);
   if ('error' in clientResult) {
@@ -179,6 +180,8 @@ async function fetchAllCompanies(
 
   const companies = new Map<string, CompanyProperties>();
   let after: string | undefined;
+  let totalFetched = 0;
+  let estimatedTotal = 0;
 
   do {
     const response = await client.request<{
@@ -187,6 +190,7 @@ async function fetchAllCompanies(
         properties: Record<string, string | null>;
       }>;
       paging?: { next?: { after: string } };
+      total?: number;
     }>(
       `/crm/v3/objects/companies?properties=${COMPANY_PROPERTIES.join(',')}&limit=100${after ? `&after=${after}` : ''}`,
       { method: 'GET' }
@@ -202,6 +206,27 @@ async function fetchAllCompanies(
       });
     }
 
+    totalFetched += response.results.length;
+
+    // Use total from first response if available, otherwise estimate
+    if (response.total !== undefined && estimatedTotal === 0) {
+      estimatedTotal = response.total;
+    }
+
+    // Emit progress for each page
+    if (job) {
+      const progress = estimatedTotal > 0
+        ? Math.min(49, (totalFetched / estimatedTotal) * 50)
+        : Math.min(49, totalFetched / 100 * 2); // Fallback estimation
+
+      await job.updateProgress({
+        phase: 'progress',
+        message: 'Loading companies...',
+        progress,
+        pairsFound: 0,
+      });
+    }
+
     after = response.paging?.next?.after;
   } while (after);
 
@@ -214,7 +239,8 @@ async function fetchAllCompanies(
 export async function runCompanyDedupScan(
   orgId: string,
   accessToken: string,
-  connectionId: string
+  connectionId: string,
+  job?: Job<CompanyDedupScanJobData, CompanyDedupScanResult>
 ): Promise<CompanyDedupScanResult> {
   const startTime = Date.now();
 
@@ -237,9 +263,29 @@ export async function runCompanyDedupScan(
 
   console.log(`[Company Dedup Scan] Starting scan for org ${orgId}, portal ${portalId}`);
 
+  // Emit started progress
+  if (job) {
+    await job.updateProgress({
+      phase: 'started',
+      message: 'Initializing scan...',
+      progress: 0,
+      pairsFound: 0,
+    });
+  }
+
   // Fetch all companies
-  const companies = await fetchAllCompanies(accessToken, portalId);
+  const companies = await fetchAllCompanies(accessToken, portalId, job);
   console.log(`[Company Dedup Scan] Loaded ${companies.size} companies`);
+
+  // Emit progress after loading companies
+  if (job) {
+    await job.updateProgress({
+      phase: 'started',
+      message: `Scanning ${companies.size} companies`,
+      progress: 0,
+      pairsFound: 0,
+    });
+  }
 
   let pairsEvaluated = 0;
   let pairsDetected = 0;
@@ -335,6 +381,18 @@ export async function runCompanyDedupScan(
 
   console.log(`[Company Dedup Scan] Generated ${candidatePairs.length} candidate pairs`);
 
+  const totalPairs = candidatePairs.length;
+
+  // Emit progress before evaluation starts
+  if (job) {
+    await job.updateProgress({
+      phase: 'progress',
+      message: 'Checking domain matches...',
+      progress: 50,
+      pairsFound: 0,
+    });
+  }
+
   // Evaluate each candidate pair
   for (const [idA, idB] of candidatePairs) {
     const companyA = companies.get(idA);
@@ -378,14 +436,45 @@ export async function runCompanyDedupScan(
 
     pairsEvaluated++;
 
-    // Log progress every 100 pairs
-    if (pairsEvaluated % 100 === 0) {
+    // Emit progress every 100 pairs
+    if (job && pairsEvaluated % 100 === 0) {
+      const evaluationProgress = totalPairs > 0
+        ? (pairsEvaluated / totalPairs) * 50
+        : 0;
+
+      const message = pairsEvaluated < totalPairs / 2
+        ? 'Evaluating name similarity...'
+        : 'Calculating confidence scores...';
+
+      await job.updateProgress({
+        phase: 'progress',
+        message,
+        progress: 50 + evaluationProgress,
+        pairsFound: pairsDetected,
+      });
+
       console.log(`[Company Dedup Scan] Evaluated ${pairsEvaluated} pairs...`);
     }
   }
 
   const durationMs = Date.now() - startTime;
   console.log(`[Company Dedup Scan] Completed in ${durationMs}ms: ${pairsEvaluated} pairs evaluated, ${pairsDetected} duplicates found (A:${pairsGradeA} B:${pairsGradeB} C:${pairsGradeC})`);
+
+  // Emit completion progress
+  if (job) {
+    await job.updateProgress({
+      phase: 'completed',
+      message: `Found ${pairsDetected} duplicate pairs`,
+      progress: 100,
+      pairsFound: pairsDetected,
+      gradeBreakdown: {
+        A: pairsGradeA,
+        B: pairsGradeB,
+        C: pairsGradeC,
+        D: pairsGradeD,
+      },
+    });
+  }
 
   return {
     orgId,
@@ -415,7 +504,7 @@ async function processScanJob(
   console.log(`[Company Dedup Worker] Processing scan job for org ${orgId}, user ${initiatedBy}`);
 
   try {
-    const result = await runCompanyDedupScan(orgId, accessToken, connectionId);
+    const result = await runCompanyDedupScan(orgId, accessToken, connectionId, job);
     return result;
   } catch (error) {
     console.error(`[Company Dedup Worker] Scan failed:`, error);
