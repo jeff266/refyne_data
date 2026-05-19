@@ -18,8 +18,16 @@ import { checkOrgRateLimit, rateLimitErrorResponse } from '@/lib/hubspot/org-rat
 export async function GET() {
   let ctx;
   try {
-    ctx = await requireAdmin();
+    ctx = await getOrgContext();
+    // Allow admin or operator to connect HubSpot
+    if (ctx.orgRole === 'org:viewer') {
+      return NextResponse.json(
+        { error: 'Insufficient permissions - admin or operator required' },
+        { status: 403 }
+      );
+    }
   } catch (e) {
+    console.error('[HubSpot Connect] Auth error:', e);
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
