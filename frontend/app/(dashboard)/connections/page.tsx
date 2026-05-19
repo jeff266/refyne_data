@@ -799,10 +799,12 @@ export default function ConnectionsPage() {
               {addDialogTab === 'crm' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {PROVIDERS.filter(p => p.category === 'crm').map((provider) => (
-                    <Card key={provider.id} style={{ padding: 16, cursor: 'pointer' }} onClick={handleConnectHubSpot}>
-                      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{provider.name}</div>
-                      <div style={{ fontSize: 12, color: C.text3 }}>{provider.description}</div>
-                    </Card>
+                    <div key={provider.id} style={{ cursor: 'pointer' }} onClick={handleConnectHubSpot}>
+                      <Card style={{ padding: 16 }}>
+                        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{provider.name}</div>
+                        <div style={{ fontSize: 12, color: C.text3 }}>{provider.description}</div>
+                      </Card>
+                    </div>
                   ))}
                 </div>
               )}
@@ -810,16 +812,17 @@ export default function ConnectionsPage() {
               {addDialogTab === 'enrichment' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {PROVIDERS.filter(p => p.category === 'enrichment' || p.category === 'research').map((provider) => (
-                    <Card
+                    <div
                       key={provider.id}
-                      style={{ padding: 16, cursor: provider.managed ? 'default' : 'pointer', opacity: provider.managed ? 0.6 : 1 }}
+                      style={{ cursor: provider.managed ? 'default' : 'pointer', opacity: provider.managed ? 0.6 : 1 }}
                       onClick={() => !provider.managed && handleConnectProvider(provider.id)}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 4 }}>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>{provider.name}</div>
-                        {provider.managed && (
-                          <Chip>Managed</Chip>
-                        )}
+                      <Card style={{ padding: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 4 }}>
+                          <div style={{ fontSize: 14, fontWeight: 500 }}>{provider.name}</div>
+                          {provider.managed && (
+                            <Chip>Managed</Chip>
+                          )}
                       </div>
                       <div style={{ fontSize: 12, color: C.text3, marginBottom: provider.managedCredits ? 4 : 0 }}>
                         {provider.description}
@@ -829,7 +832,8 @@ export default function ConnectionsPage() {
                           {provider.managedCredits}
                         </div>
                       )}
-                    </Card>
+                      </Card>
+                    </div>
                   ))}
                 </div>
               )}
