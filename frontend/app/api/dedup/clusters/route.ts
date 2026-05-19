@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
     // Parse query params
     const grade = searchParams.get('grade') || 'all';
     const status = searchParams.get('status') || 'pending';
+    const size = searchParams.get('size') || 'all';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const perPage = Math.min(200, Math.max(1, parseInt(searchParams.get('per_page') || '50', 10)));
 
@@ -72,17 +73,33 @@ export async function GET(request: NextRequest) {
     // Order by grade (A first), then created_at
     query = query.order('grade', { ascending: true }).order('created_at', { ascending: false });
 
-    // Apply pagination
-    const offset = (page - 1) * perPage;
-    query = query.range(offset, offset + perPage - 1);
-
-    const { data: clusters, count, error } = await query;
+    // Fetch all clusters (we'll filter and paginate in JS for size filter)
+    const { data: allClusters, error } = await query;
 
     if (error) {
       captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/clusters' });
       console.error('Failed to get dedup clusters:', error);
       return NextResponse.json({ error: 'Failed to get clusters' }, { status: 500 });
     }
+
+    let clusters = (allClusters as DedupClusterRow[]) || [];
+
+    // Apply size filter in JavaScript
+    if (size !== 'all') {
+      clusters = clusters.filter((c) => {
+        const clusterSize = c.record_ids.length;
+        if (size === '5+') return clusterSize >= 5;
+        return clusterSize === parseInt(size, 10);
+      });
+
+      // Sort by size descending when size filter is active
+      clusters = clusters.sort((a, b) => b.record_ids.length - a.record_ids.length);
+    }
+
+    // Apply pagination after filtering
+    const count = clusters.length;
+    const offset = (page - 1) * perPage;
+    clusters = clusters.slice(offset, offset + perPage);
 
     // Get counts for sidebar
     const [gradeCountsResult, statusCountsResult] = await Promise.all([
@@ -111,7 +128,7 @@ export async function GET(request: NextRequest) {
     }
 
     const response: ClustersListResponse = {
-      clusters: (clusters as DedupClusterRow[]).map(rowToCluster),
+      clusters: clusters.map(rowToCluster),
       total: count || 0,
       counts: { byGrade, byStatus } as ClustersCounts,
     };

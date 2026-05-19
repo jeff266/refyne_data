@@ -34,6 +34,14 @@ const PER_PAGE_OPTIONS = [
   { value: '100', label: '100 per page' },
 ] as const;
 
+const SIZE_OPTIONS = [
+  { value: 'all', label: 'All sizes' },
+  { value: '2', label: '2 records' },
+  { value: '3', label: '3 records' },
+  { value: '4', label: '4 records' },
+  { value: '5+', label: '5+ records' },
+] as const;
+
 // ─────────────────────────────────────────────────────────────
 // Utility Components
 // ─────────────────────────────────────────────────────────────
@@ -188,8 +196,13 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
   // Filter state
   const [gradeFilter, setGradeFilter] = useState<PairGrade | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'merged' | 'rejected' | 'skipped'>('pending');
+  const [sizeFilter, setSizeFilter] = useState<'all' | '2' | '3' | '4' | '5+'>('all');
+  const [view, setView] = useState<'compact' | 'expanded'>('compact');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
+
+  // Company names for expanded view
+  const [companyNames, setCompanyNames] = useState<Record<string, string>>({});
 
   // Selection state for bulk merge
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -210,6 +223,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
       const params = new URLSearchParams();
       if (gradeFilter !== 'all') params.set('grade', gradeFilter);
       if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (sizeFilter !== 'all') params.set('size', sizeFilter);
       params.set('page', String(page));
       params.set('per_page', String(perPage));
 
@@ -226,12 +240,35 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
       setClusters(data.clusters);
       setCounts(data.counts);
       setTotal(data.total);
+
+      // If expanded view, fetch company names
+      if (view === 'expanded' && data.clusters.length > 0) {
+        const allRecordIds = new Set<string>();
+        data.clusters.forEach((c: DedupCluster) =>
+          c.recordIds.forEach((id: string) => allRecordIds.add(id))
+        );
+
+        // Fetch company names
+        const namesRes = await fetch('/api/hubspot/companies/batch-names', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-org-id': orgId,
+          },
+          body: JSON.stringify({ ids: Array.from(allRecordIds) }),
+        });
+
+        if (namesRes.ok) {
+          const namesData = await namesRes.json();
+          setCompanyNames(namesData.companies);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch clusters');
     } finally {
       setLoading(false);
     }
-  }, [orgId, gradeFilter, statusFilter, page, perPage]);
+  }, [orgId, gradeFilter, statusFilter, sizeFilter, page, perPage, view]);
 
   useEffect(() => {
     fetchClusters();
@@ -367,6 +404,30 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                   setPage(1);
                 }}
               />
+              <SelectDropdown
+                value={sizeFilter}
+                options={SIZE_OPTIONS}
+                onChange={(v) => {
+                  setSizeFilter(v);
+                  setPage(1);
+                }}
+              />
+              <button
+                onClick={() => setView((v) => (v === 'compact' ? 'expanded' : 'compact'))}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  background: C.hover,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 6,
+                  color: C.text2,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {view === 'compact' ? '📋 Compact' : '📖 Expanded'}
+              </button>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               {gradeAClusters.length > 0 && selectedIds.size === 0 && (
@@ -538,19 +599,61 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
 
                   {/* Cluster info */}
                   <div>
-                    <div
-                      style={{
-                        color: C.text,
-                        fontWeight: 500,
-                        fontSize: 12,
-                        marginBottom: 4,
-                      }}
-                    >
-                      Cluster {cluster.id.slice(0, 8)}
-                    </div>
-                    <div style={{ fontSize: 11, color: C.text3 }}>
-                      {cluster.recordIds.length} companies
-                    </div>
+                    {view === 'expanded' ? (
+                      <>
+                        <div
+                          style={{
+                            color: C.text,
+                            fontWeight: 500,
+                            fontSize: 12,
+                            marginBottom: 4,
+                          }}
+                        >
+                          Cluster {cluster.id.slice(0, 8)}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {cluster.recordIds.slice(0, 3).map((id) => (
+                            <div
+                              key={id}
+                              style={{
+                                fontSize: 11,
+                                color: C.text2,
+                                fontFamily: F.mono,
+                              }}
+                            >
+                              {companyNames[id] || id}
+                            </div>
+                          ))}
+                          {cluster.recordIds.length > 3 && (
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: C.text3,
+                                fontStyle: 'italic',
+                              }}
+                            >
+                              +{cluster.recordIds.length - 3} more
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div
+                          style={{
+                            color: C.text,
+                            fontWeight: 500,
+                            fontSize: 12,
+                            marginBottom: 4,
+                          }}
+                        >
+                          Cluster {cluster.id.slice(0, 8)}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.text3 }}>
+                          {cluster.recordIds.length} companies
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Size badge */}
