@@ -19,11 +19,12 @@ export async function GET() {
       return NextResponse.json({ connections: [] });
     }
 
-    // Get all connections for this org
+    // Get all active connections for this org
     const { data: connections, error } = await supabase
       .from('hubspot_connections')
-      .select('org_id, portal_id, portal_name, created_at, updated_at')
-      .eq('org_id', ctx.orgId);
+      .select('org_id, portal_id, portal_name, created_at, updated_at, connection_status')
+      .eq('org_id', ctx.orgId)
+      .eq('connection_status', 'active');
 
     if (error) {
       captureWithOrgContext(error, ctx.orgId, { route: '/api/connections' });

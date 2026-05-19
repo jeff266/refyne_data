@@ -139,6 +139,9 @@ export async function getBreakdownByHarmony(orgId: string): Promise<HarmonyBreak
     ? prevHistory[1].score
     : null;
 
+  // Get total record count for score impact calculation
+  const totalRecords = records?.length || 0;
+
   // Build breakdown array
   const breakdowns: HarmonyBreakdown[] = [];
 
@@ -148,17 +151,41 @@ export async function getBreakdownByHarmony(orgId: string): Promise<HarmonyBreak
     const total = counts.compliant + counts.stale + counts.unprocessed;
     const rate = total > 0 ? (counts.compliant / total) * 100 : 0;
 
-    // Get harmony name
+    // Get harmony metadata
     const harmony = getHarmonyById(harmonyId);
+
+    // Calculate records affected (unprocessed + stale)
+    const recordsAffected = counts.unprocessed + counts.stale;
+
+    // Estimate score impact if all affected records were fixed
+    // Impact = (recordsAffected / totalRecords) * 100
+    const estimatedScoreImpact = totalRecords > 0
+      ? Math.round((recordsAffected / totalRecords) * 100)
+      : 0;
+
+    // Calculate delta from previous scan (if available)
+    const delta = prevScore !== null ? Math.round(rate * 100) / 100 - prevScore : null;
+
+    // Determine if actionable (has unmatched records and is known harmony)
+    const actionable = counts.unprocessed > 0 && harmony !== undefined;
+
+    // Determine action route
+    const actionRoute = actionable ? `/harmonies?harmony=${harmonyId}` : null;
 
     breakdowns.push({
       harmonyId,
       harmonyName: harmony?.spec.name,
+      description: harmony?.spec.description,
       compliant: counts.compliant,
       stale: counts.stale,
       unprocessed: counts.unprocessed,
+      recordsAffected,
       rate: Math.round(rate * 100) / 100,
-      trend: prevScore !== null ? Math.round(rate * 100) / 100 - prevScore : null,
+      trend: delta,
+      delta,
+      estimatedScoreImpact,
+      actionable,
+      actionRoute,
     });
   }
 

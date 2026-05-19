@@ -124,13 +124,24 @@ export interface ComplianceScore {
 export interface HarmonyBreakdown {
   harmonyId: string;
   harmonyName?: string;
+  description?: string;
   compliant: number;
   stale: number;
   unprocessed: number;
+  /** Raw count of records affected (unprocessed + stale) */
+  recordsAffected: number;
   /** Compliance rate for this Harmony (0-100) */
   rate: number;
   /** Delta vs previous score history entry */
   trend: number | null;
+  /** Change since last scan (+/-%) */
+  delta: number | null;
+  /** Estimated score points gained if all records fixed */
+  estimatedScoreImpact: number;
+  /** Whether there's a clear fix action available */
+  actionable: boolean;
+  /** Route to navigate to for fixing this harmony */
+  actionRoute: string | null;
 }
 
 /**
