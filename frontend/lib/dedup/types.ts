@@ -365,6 +365,8 @@ export interface DedupPairRow {
   org_id: string;
   record_a_id: string;
   record_b_id: string;
+  connection_id: string | null;
+  portal_id: string | null;
   confidence: number;
   grade: PairGrade;
   name_similarity: number | null;

@@ -111,84 +111,79 @@ export async function GET(request: NextRequest) {
     let companyNames: Record<string, string> = {};
     if (pairs && pairs.length > 0) {
       try {
-        // Get portal_id from HubSpot connection
-        const { data: connection } = await supabase
-          .from('hubspot_connections')
-          .select('portal_id')
-          .eq('org_id', ctx.orgId)
-          .eq('connection_status', 'active')
-          .single();
+        // Collect all unique record IDs
+        const allRecordIds = new Set<string>();
+        for (const pair of pairs as DedupPairRow[]) {
+          allRecordIds.add(pair.record_a_id);
+          allRecordIds.add(pair.record_b_id);
+        }
+        const recordIdArray = Array.from(allRecordIds);
 
-        console.log('[Dedup] Connection info:', {
-          hasConnection: !!connection,
-          portalId: connection?.portal_id,
-          orgId: ctx.orgId,
-        });
+        // LONG-TERM: Use portal_id from dedup_pairs if available (requires migration 027)
+        const pairsWithPortal = (pairs as DedupPairRow[]).filter(p => p.portal_id);
+        const knownPortalId = pairsWithPortal.length > 0 ? pairsWithPortal[0].portal_id : null;
 
-        if (connection?.portal_id) {
+        if (knownPortalId) {
+          console.log(`[Dedup] Using known portal ${knownPortalId} from dedup_pairs table`);
+
           const accessToken = await getAccessToken(ctx.orgId);
-          console.log('[Dedup] Access token:', { hasToken: !!accessToken });
-
           if (accessToken) {
-            const client = new HubSpotClient(accessToken, connection.portal_id);
+            const client = new HubSpotClient(accessToken, knownPortalId);
+            const companies = await client.getCompaniesByIds(recordIdArray, ['name', 'domain']);
 
-            // Collect all unique record IDs
-            const allRecordIds = new Set<string>();
-            for (const pair of pairs as DedupPairRow[]) {
-              allRecordIds.add(pair.record_a_id);
-              allRecordIds.add(pair.record_b_id);
-            }
-
-            const recordIdArray = Array.from(allRecordIds);
-            console.log(`[Dedup] Fetching names for ${recordIdArray.length} record IDs`);
-            console.log('[Dedup] First 5 IDs:', recordIdArray.slice(0, 5));
-            console.log('[Dedup] Request body format:', JSON.stringify({
-              inputs: recordIdArray.slice(0, 2).map(id => ({ id })),
-              properties: ['name', 'domain'],
-            }));
-
-            // Fetch company data with detailed properties
-            let companies: any[] = [];
-            try {
-              companies = await client.getCompaniesByIds(
-                recordIdArray,
-                ['name', 'domain', 'phone', 'industry']
-              );
-              console.log(`[Dedup] HubSpot returned ${companies.length} companies`);
-              if (companies.length > 0) {
-                console.log(`[Dedup] First company:`, JSON.stringify({
-                  id: companies[0].id,
-                  name: companies[0].properties.name,
-                  domain: companies[0].properties.domain,
-                }));
-              } else {
-                console.log('[Dedup] WARNING: Batch read returned 0 companies');
-              }
-            } catch (batchErr: any) {
-              console.error('[Dedup] Batch read error:', {
-                message: batchErr.message,
-                status: batchErr.status,
-              });
-              companies = [];
-            }
-
-            // Build lookup map: id -> name
             for (const company of companies) {
               companyNames[company.id] = company.properties.name || company.id;
             }
-            console.log(`[Dedup API] Fetched ${companies.length} company names from HubSpot`);
-          } else {
-            console.log('[Dedup API] No access token available');
+
+            console.log(`[Dedup] Fetched ${companies.length} names from known portal`);
           }
         } else {
-          console.log('[Dedup API] No portal_id found in connection');
+          // SHORT-TERM FIX: Try all active connections since pairs may be from different portals
+          console.log('[Dedup] No portal_id in pairs, trying all active connections...');
+
+          const { data: connections } = await supabase
+            .from('hubspot_connections')
+            .select('id, portal_id')
+            .eq('org_id', ctx.orgId)
+            .eq('connection_status', 'active');
+
+          console.log(`[Dedup] Found ${connections?.length || 0} active connections`);
+
+          if (connections && connections.length > 0) {
+            for (const connection of connections) {
+              console.log(`[Dedup] Trying portal ${connection.portal_id}...`);
+
+              const accessToken = await getAccessToken(ctx.orgId);
+              if (!accessToken) continue;
+
+              const client = new HubSpotClient(accessToken, connection.portal_id);
+
+              try {
+                const companies = await client.getCompaniesByIds(recordIdArray, ['name', 'domain']);
+
+                if (companies.length > 0) {
+                  console.log(`[Dedup] ✅ Portal ${connection.portal_id} returned ${companies.length} companies`);
+
+                  for (const company of companies) {
+                    companyNames[company.id] = company.properties.name || company.id;
+                  }
+
+                  break; // Found the right portal
+                } else {
+                  console.log(`[Dedup] ⚠️  Portal ${connection.portal_id} returned 0 companies, trying next...`);
+                }
+              } catch (batchErr: any) {
+                console.error(`[Dedup] Error with portal ${connection.portal_id}:`, batchErr.message);
+              }
+            }
+          }
         }
-      } catch (err) {
-        console.error('[Dedup API] Failed to fetch company names from HubSpot:', err);
-        // Continue without names - will show IDs as fallback
+
+        console.log(`[Dedup] Final: ${Object.keys(companyNames).length} company names fetched`);
+      } catch (err: any) {
+        console.error('[Dedup] Error fetching company names:', err.message);
       }
     }
-    console.log(`[Dedup API] Returning ${pairs?.length || 0} pairs with ${Object.keys(companyNames).length} company names`);
 
     // Get counts for sidebar
     const [gradeCountsResult, statusCountsResult] = await Promise.all([
