@@ -15,28 +15,32 @@ import { checkOrgRateLimit, rateLimitErrorResponse } from '@/lib/hubspot/org-rat
 export async function GET() {
   let ctx;
   try {
+    console.log('[Connections GET] Getting org context...');
     ctx = await getOrgContext();
+    console.log('[Connections GET] Got context:', { orgId: ctx.orgId, role: ctx.orgRole });
   } catch (e) {
+    console.error('[Connections GET] Auth error:', e);
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
-  // Check org rate limit
-  const rateLimitCheck = await checkOrgRateLimit(ctx.orgId, '/api/hubspot/connections');
-  if (!rateLimitCheck.allowed) {
-    return NextResponse.json(
-      rateLimitErrorResponse(rateLimitCheck.resetAt!, rateLimitCheck.remaining!),
-      { status: 429 }
-    );
-  }
-
-  if (!supabase) {
-    return NextResponse.json(
-      { error: 'Database not configured' },
-      { status: 500 }
-    );
-  }
-
   try {
+    // Check org rate limit
+    const rateLimitCheck = await checkOrgRateLimit(ctx.orgId, '/api/hubspot/connections');
+    if (!rateLimitCheck.allowed) {
+      return NextResponse.json(
+        rateLimitErrorResponse(rateLimitCheck.resetAt!, rateLimitCheck.remaining!),
+        { status: 429 }
+      );
+    }
+
+    if (!supabase) {
+      console.error('[Connections GET] Supabase not configured');
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 500 }
+      );
+    }
+
     console.log('[Connections GET] Fetching connections for org:', ctx.orgId);
 
     const { data: connections, error } = await supabase
@@ -77,9 +81,10 @@ export async function GET() {
       connections: transformedConnections,
     });
   } catch (error) {
-    console.error('Error fetching HubSpot connections:', error);
+    console.error('[Connections GET] Unexpected error:', error);
+    captureWithOrgContext(error, ctx?.orgId || 'unknown', { route: '/api/hubspot/connections' });
     return NextResponse.json(
-      { error: 'Failed to fetch connections' },
+      { error: 'Failed to fetch connections', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
