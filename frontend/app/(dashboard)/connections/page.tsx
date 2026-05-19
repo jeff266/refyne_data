@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Database, AlertCircle, X, Plus, Check, Pencil } from 'lucide-react';
+import { useAuth } from '@clerk/nextjs';
+import { Database, AlertCircle, X, Plus, Check, Pencil, ChevronDown, ChevronUp } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Chip, GhostBtn, StatusDot, PrimaryBtn } from '@/components/refyne';
 
@@ -16,6 +17,35 @@ interface HubSpotConnection {
   createdAt: string;
   accessToken?: string;
   encryptedToken?: string;
+  lastSyncAt?: string | null;
+  lastSyncStatus?: 'success' | 'failed' | 'running' | null;
+  lastSyncDurationMs?: number | null;
+  lastSyncError?: string | null;
+  syncFrequency?: 'manual' | 'nightly' | 'every_6h' | 'hourly';
+}
+
+interface SyncHistoryEntry {
+  runAt: string;
+  status: string;
+  recordsScanned: number;
+  durationMs: number;
+  errorMessage?: string;
+}
+
+interface SyncHistory {
+  history: SyncHistoryEntry[];
+  apiUsage: {
+    today: number;
+    month: number;
+    dailyLimit: number;
+    monthlyLimit: number | null;
+  };
+  lastSync: {
+    at: string;
+    status: string;
+    durationMs: number;
+    error?: string;
+  } | null;
 }
 
 interface Provider {
@@ -58,7 +88,59 @@ function getStatusBadge(status: string, authType: 'oauth' | 'pat' | 'unknown') {
   }
 }
 
+function formatTimeAgo(isoString: string): string {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins} min ago`;
+
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+
+  return date.toLocaleDateString();
+}
+
+function getSyncStatusVariant(
+  lastSyncAt: string | null | undefined,
+  lastSyncStatus: string | null | undefined,
+  syncFrequency: string = 'nightly'
+): { color: string; text: string; showRetry?: boolean } {
+  if (!lastSyncAt) {
+    return { color: C.text3, text: 'Never synced' };
+  }
+
+  if (lastSyncStatus === 'running') {
+    return { color: C.text3, text: 'Syncing...' };
+  }
+
+  if (lastSyncStatus === 'failed') {
+    return { color: C.red, text: `Last sync failed ${formatTimeAgo(lastSyncAt)}`, showRetry: true };
+  }
+
+  // Calculate expected interval in hours
+  const intervalHours = syncFrequency === 'hourly' ? 1
+    : syncFrequency === 'every_6h' ? 6
+    : 24; // nightly or manual
+
+  const hoursSinceSync = (new Date().getTime() - new Date(lastSyncAt).getTime()) / (1000 * 60 * 60);
+  const isOverdue = hoursSinceSync > (intervalHours * 2);
+
+  if (isOverdue && syncFrequency !== 'manual') {
+    return { color: C.amber, text: `Last sync: ${formatTimeAgo(lastSyncAt)}` };
+  }
+
+  return { color: C.green, text: `Last sync: ${formatTimeAgo(lastSyncAt)}` };
+}
+
 export default function ConnectionsPage() {
+  const { orgRole } = useAuth();
   const [hubspotConnections, setHubspotConnections] = useState<HubSpotConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -67,7 +149,13 @@ export default function ConnectionsPage() {
   const [apiKey, setApiKey] = useState('');
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [expandedConnectionId, setExpandedConnectionId] = useState<string | null>(null);
+  const [syncHistory, setSyncHistory] = useState<Record<string, SyncHistory>>({});
+  const [loadingHistory, setLoadingHistory] = useState<Record<string, boolean>>({});
+  const [syncing, setSyncing] = useState<Record<string, boolean>>({});
   const searchParams = useSearchParams();
+
+  const isAdmin = orgRole === 'org:admin';
 
   useEffect(() => {
     fetchHubSpotConnections();
@@ -189,6 +277,57 @@ export default function ConnectionsPage() {
     }
   }
 
+  async function toggleHistoryPanel(connectionId: string) {
+    if (expandedConnectionId === connectionId) {
+      setExpandedConnectionId(null);
+      return;
+    }
+
+    setExpandedConnectionId(connectionId);
+
+    // Fetch history if not already loaded
+    if (!syncHistory[connectionId]) {
+      setLoadingHistory({ ...loadingHistory, [connectionId]: true });
+      try {
+        const res = await fetch(`/api/hubspot/connections/${connectionId}/sync-history`);
+        if (res.ok) {
+          const data = await res.json();
+          setSyncHistory({ ...syncHistory, [connectionId]: data });
+        }
+      } catch (err) {
+        console.error('Failed to fetch sync history:', err);
+      } finally {
+        setLoadingHistory({ ...loadingHistory, [connectionId]: false });
+      }
+    }
+  }
+
+  async function handleSync(connectionId: string) {
+    if (syncing[connectionId]) return;
+
+    setSyncing({ ...syncing, [connectionId]: true });
+    try {
+      const res = await fetch(`/api/hubspot/connections/${connectionId}/sync`, {
+        method: 'POST',
+      });
+
+      if (res.ok) {
+        showToast('Sync started', 'success');
+        // Refresh connections to show updated status
+        setTimeout(() => {
+          fetchHubSpotConnections();
+          setSyncing({ ...syncing, [connectionId]: false });
+        }, 2000);
+      } else {
+        showToast('Failed to start sync', 'error');
+        setSyncing({ ...syncing, [connectionId]: false });
+      }
+    } catch (err) {
+      showToast('Failed to start sync', 'error');
+      setSyncing({ ...syncing, [connectionId]: false });
+    }
+  }
+
   const connectedProviderIds = new Set(hubspotConnections.map(() => 'hubspot'));
   const availableProviders = PROVIDERS.filter(p => !connectedProviderIds.has(p.id));
 
@@ -226,146 +365,338 @@ export default function ConnectionsPage() {
               const badge = getStatusBadge(conn.connectionStatus, authType);
               const displayName = conn.friendlyName || conn.hubId || `Portal ${conn.portalId}`;
               const isEditing = editingConnectionId === conn.id;
+              const isExpanded = expandedConnectionId === conn.id;
+              const history = syncHistory[conn.id];
+              const isLoadingHistory = loadingHistory[conn.id];
+              const isSyncing = syncing[conn.id] || conn.lastSyncStatus === 'running';
+
+              // Get sync status for admin view
+              const syncStatus = isAdmin && conn.lastSyncAt
+                ? getSyncStatusVariant(conn.lastSyncAt, conn.lastSyncStatus, conn.syncFrequency)
+                : null;
 
               return (
-                <Card key={conn.id} style={{ padding: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                      <div style={{
-                        width: 40,
-                        height: 40,
-                        background: C.indigoDim,
-                        border: `1px solid ${C.indigoBrd}`,
-                        borderRadius: 8,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}>
-                        <Database size={20} style={{ color: C.indigoLt }} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        {isEditing ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <input
-                              type="text"
-                              value={editingName}
-                              onChange={(e) => setEditingName(e.target.value)}
-                              style={{
-                                padding: '6px 10px',
-                                background: C.bg,
-                                border: `1px solid ${C.border}`,
-                                borderRadius: 4,
-                                fontSize: 15,
-                                fontWeight: 500,
-                                color: C.text,
-                                fontFamily: F.sans,
-                                width: 250,
-                              }}
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSaveName(conn.id);
-                                if (e.key === 'Escape') handleCancelEdit();
-                              }}
-                            />
-                            <button
-                              onClick={() => handleSaveName(conn.id)}
-                              style={{
-                                padding: '6px 12px',
-                                background: C.indigo,
-                                border: 'none',
-                                borderRadius: 4,
-                                color: 'white',
-                                fontSize: 13,
-                                fontWeight: 500,
-                                cursor: 'pointer',
-                                fontFamily: F.sans,
-                              }}
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={handleCancelEdit}
-                              style={{
-                                padding: '6px 12px',
-                                background: 'transparent',
-                                border: `1px solid ${C.border}`,
-                                borderRadius: 4,
-                                color: C.text2,
-                                fontSize: 13,
-                                fontWeight: 500,
-                                cursor: 'pointer',
-                                fontFamily: F.sans,
-                              }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <div style={{ fontSize: 15, fontWeight: 500 }}>
-                              HubSpot — {displayName}
-                            </div>
-                            <button
-                              onClick={() => handleEditName(conn)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: C.text3,
-                                cursor: 'pointer',
-                                padding: 4,
-                                display: 'flex',
-                                alignItems: 'center',
-                              }}
-                              title="Edit connection name"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <StatusDot color={badge.dot} />
-                            <span style={{ fontSize: 13, color: badge.color }}>{badge.text}</span>
-                          </div>
-                          {authType === 'pat' && (
-                            <>
-                              <span style={{ fontSize: 13, color: C.text3 }}>•</span>
-                              <button
+                <div key={conn.id}>
+                  <Card style={{ padding: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1 }}>
+                        <div style={{
+                          width: 40,
+                          height: 40,
+                          background: C.indigoDim,
+                          border: `1px solid ${C.indigoBrd}`,
+                          borderRadius: 8,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                          <Database size={20} style={{ color: C.indigoLt }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          {isEditing ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                              <input
+                                type="text"
+                                value={editingName}
+                                onChange={(e) => setEditingName(e.target.value)}
                                 style={{
-                                  fontSize: 13,
-                                  color: C.amber,
-                                  textDecoration: 'none',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  background: 'none',
+                                  padding: '6px 10px',
+                                  background: C.bg,
+                                  border: `1px solid ${C.border}`,
+                                  borderRadius: 4,
+                                  fontSize: 15,
+                                  fontWeight: 500,
+                                  color: C.text,
+                                  fontFamily: F.sans,
+                                  width: 250,
+                                }}
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveName(conn.id);
+                                  if (e.key === 'Escape') handleCancelEdit();
+                                }}
+                              />
+                              <button
+                                onClick={() => handleSaveName(conn.id)}
+                                style={{
+                                  padding: '6px 12px',
+                                  background: C.indigo,
                                   border: 'none',
-                                  padding: 0,
+                                  borderRadius: 4,
+                                  color: 'white',
+                                  fontSize: 13,
+                                  fontWeight: 500,
                                   cursor: 'pointer',
                                   fontFamily: F.sans,
                                 }}
-                                onClick={() => {
-                                  window.location.href = '/api/hubspot/connect';
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={handleCancelEdit}
+                                style={{
+                                  padding: '6px 12px',
+                                  background: 'transparent',
+                                  border: `1px solid ${C.border}`,
+                                  borderRadius: 4,
+                                  color: C.text2,
+                                  fontSize: 13,
+                                  fontWeight: 500,
+                                  cursor: 'pointer',
+                                  fontFamily: F.sans,
                                 }}
                               >
-                                Upgrade to OAuth ↗
+                                Cancel
                               </button>
-                            </>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                              <div style={{ fontSize: 15, fontWeight: 500 }}>
+                                HubSpot — {displayName}
+                              </div>
+                              {isAdmin && (
+                                <button
+                                  onClick={() => handleEditName(conn)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: C.text3,
+                                    cursor: 'pointer',
+                                    padding: 4,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                  }}
+                                  title="Edit connection name"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                              )}
+                            </div>
                           )}
-                          <span style={{ fontSize: 13, color: C.text3 }}>•</span>
-                          <span style={{ fontSize: 13, color: C.text2 }}>2,798 companies</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <StatusDot color={badge.dot} />
+                              <span style={{ fontSize: 13, color: badge.color }}>{badge.text}</span>
+                            </div>
+                            {authType === 'pat' && (
+                              <>
+                                <span style={{ fontSize: 13, color: C.text3 }}>•</span>
+                                <button
+                                  style={{
+                                    fontSize: 13,
+                                    color: C.amber,
+                                    textDecoration: 'none',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: 0,
+                                    cursor: 'pointer',
+                                    fontFamily: F.sans,
+                                  }}
+                                  onClick={() => {
+                                    window.location.href = '/api/hubspot/connect';
+                                  }}
+                                >
+                                  Upgrade to OAuth ↗
+                                </button>
+                              </>
+                            )}
+                            <span style={{ fontSize: 13, color: C.text3 }}>•</span>
+                            <span style={{ fontSize: 13, color: C.text2 }}>2,798 companies</span>
+
+                            {/* Sync status line (admin only) */}
+                            {isAdmin && syncStatus && (
+                              <>
+                                <span style={{ fontSize: 13, color: C.text3 }}>•</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ fontSize: 13, color: syncStatus.color }}>
+                                    {isSyncing ? (
+                                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span className="spinner" style={{
+                                          width: 12,
+                                          height: 12,
+                                          border: `2px solid ${C.border}`,
+                                          borderTopColor: C.indigo,
+                                          borderRadius: '50%',
+                                          animation: 'spin 0.8s linear infinite',
+                                        }} />
+                                        Syncing...
+                                      </span>
+                                    ) : (
+                                      syncStatus.text
+                                    )}
+                                  </span>
+                                  {syncStatus.showRetry && isAdmin && (
+                                    <button
+                                      onClick={() => handleSync(conn.id)}
+                                      style={{
+                                        fontSize: 13,
+                                        color: C.indigo,
+                                        background: 'none',
+                                        border: 'none',
+                                        padding: 0,
+                                        cursor: 'pointer',
+                                        textDecoration: 'underline',
+                                        fontFamily: F.sans,
+                                      }}
+                                    >
+                                      Retry
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => toggleHistoryPanel(conn.id)}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: C.text3,
+                                      cursor: 'pointer',
+                                      padding: 4,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                    }}
+                                    title="Toggle sync history"
+                                  >
+                                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <GhostBtn onClick={() => {}}>Sync</GhostBtn>
-                      <GhostBtn onClick={() => handleDisconnectHubSpot(conn.id)}>
-                        Disconnect
-                      </GhostBtn>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {isAdmin && (
+                          <GhostBtn
+                            onClick={() => handleSync(conn.id)}
+                            disabled={isSyncing}
+                          >
+                            {isSyncing ? 'Syncing...' : 'Sync'}
+                          </GhostBtn>
+                        )}
+                        {isAdmin && (
+                          <GhostBtn onClick={() => handleDisconnectHubSpot(conn.id)}>
+                            Disconnect
+                          </GhostBtn>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
+
+                  {/* Sync History Panel (expandable, admin only) */}
+                  {isAdmin && isExpanded && (
+                    <Card style={{ marginTop: 8, padding: 24 }}>
+                      {isLoadingHistory ? (
+                        <div style={{ textAlign: 'center', color: C.text3, padding: 20 }}>
+                          Loading sync history...
+                        </div>
+                      ) : history ? (
+                        <>
+                          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Sync history</h3>
+
+                          {history.history.length > 0 ? (
+                            <div style={{ marginBottom: 24 }}>
+                              {history.history.map((entry, idx) => (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '8px 0',
+                                    borderBottom: idx < history.history.length - 1 ? `1px solid ${C.border}` : 'none',
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <span style={{ fontSize: 13, color: C.text2, minWidth: 140 }}>
+                                      {formatTimeAgo(entry.runAt)}
+                                    </span>
+                                    <span style={{ fontSize: 20 }}>
+                                      {entry.status === 'completed' || entry.status === 'success' ? '✓' : '✗'}
+                                    </span>
+                                    <span style={{ fontSize: 13, color: C.text }}>
+                                      {entry.recordsScanned?.toLocaleString() || 0} records
+                                    </span>
+                                    <span style={{ fontSize: 13, color: C.text3 }}>
+                                      {entry.durationMs ? `${entry.durationMs}ms` : '—'}
+                                    </span>
+                                  </div>
+                                  {entry.errorMessage && (
+                                    <button
+                                      style={{
+                                        fontSize: 13,
+                                        color: C.indigo,
+                                        background: 'none',
+                                        border: 'none',
+                                        padding: 0,
+                                        cursor: 'pointer',
+                                        textDecoration: 'underline',
+                                        fontFamily: F.sans,
+                                      }}
+                                      onClick={() => alert(entry.errorMessage)}
+                                    >
+                                      Details
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 13, color: C.text3, marginBottom: 24 }}>
+                              No sync history yet
+                            </div>
+                          )}
+
+                          {/* API Usage Bar */}
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
+                              API usage this month
+                            </div>
+                            <div style={{ marginBottom: 8 }}>
+                              {(() => {
+                                const percentage = (history.apiUsage.today / history.apiUsage.dailyLimit) * 100;
+                                const barColor = percentage >= 90 ? C.red
+                                  : percentage >= 70 ? C.amber
+                                  : C.indigo;
+
+                                return (
+                                  <>
+                                    <div style={{
+                                      width: '100%',
+                                      height: 8,
+                                      background: C.border,
+                                      borderRadius: 4,
+                                      overflow: 'hidden',
+                                    }}>
+                                      <div style={{
+                                        width: `${Math.min(percentage, 100)}%`,
+                                        height: '100%',
+                                        background: barColor,
+                                        transition: 'width 0.3s ease',
+                                      }} />
+                                    </div>
+                                    <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>
+                                      {history.apiUsage.today.toLocaleString()} / {history.apiUsage.dailyLimit.toLocaleString()} daily limit ({percentage.toFixed(1)}%)
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                            <div style={{ fontSize: 12, color: C.text3 }}>
+                              Monthly total: {history.apiUsage.month.toLocaleString()} calls
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 13, color: C.text3 }}>
+                          Failed to load sync history
+                        </div>
+                      )}
+                    </Card>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -428,18 +759,19 @@ export default function ConnectionsPage() {
             </div>
 
             {/* Tabs */}
-            <div style={{ padding: '0 24px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 24 }}>
+            <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, padding: '0 24px' }}>
               <button
                 onClick={() => setAddDialogTab('crm')}
                 style={{
+                  padding: '12px 16px',
                   background: 'none',
                   border: 'none',
-                  padding: '12px 0',
+                  borderBottom: addDialogTab === 'crm' ? `2px solid ${C.indigo}` : '2px solid transparent',
+                  color: addDialogTab === 'crm' ? C.text : C.text3,
                   fontSize: 14,
                   fontWeight: 500,
-                  color: addDialogTab === 'crm' ? C.text : C.text3,
-                  borderBottom: addDialogTab === 'crm' ? `2px solid ${C.indigo}` : '2px solid transparent',
                   cursor: 'pointer',
+                  fontFamily: F.sans,
                 }}
               >
                 CRM
@@ -447,14 +779,15 @@ export default function ConnectionsPage() {
               <button
                 onClick={() => setAddDialogTab('enrichment')}
                 style={{
+                  padding: '12px 16px',
                   background: 'none',
                   border: 'none',
-                  padding: '12px 0',
+                  borderBottom: addDialogTab === 'enrichment' ? `2px solid ${C.indigo}` : '2px solid transparent',
+                  color: addDialogTab === 'enrichment' ? C.text : C.text3,
                   fontSize: 14,
                   fontWeight: 500,
-                  color: addDialogTab === 'enrichment' ? C.text : C.text3,
-                  borderBottom: addDialogTab === 'enrichment' ? `2px solid ${C.indigo}` : '2px solid transparent',
                   cursor: 'pointer',
+                  fontFamily: F.sans,
                 }}
               >
                 Enrichment
@@ -463,92 +796,36 @@ export default function ConnectionsPage() {
 
             {/* Content */}
             <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
-              {addDialogTab === 'crm' ? (
-                <div>
-                  <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>Connect a HubSpot portal</h3>
-                  <p style={{ fontSize: 13, color: C.text2, marginBottom: 20 }}>
-                    Connect your HubSpot account to sync contacts and companies.
-                  </p>
-                  <div style={{ width: '100%' }}>
-                    <PrimaryBtn onClick={handleConnectHubSpot}>
-                      Connect HubSpot →
-                    </PrimaryBtn>
-                  </div>
+              {addDialogTab === 'crm' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {PROVIDERS.filter(p => p.category === 'crm').map((provider) => (
+                    <Card key={provider.id} style={{ padding: 16, cursor: 'pointer' }} onClick={handleConnectHubSpot}>
+                      <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{provider.name}</div>
+                      <div style={{ fontSize: 12, color: C.text3 }}>{provider.description}</div>
+                    </Card>
+                  ))}
                 </div>
-              ) : showApiKeyInput ? (
-                <div>
-                  <h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>
-                    Connect {PROVIDERS.find(p => p.id === showApiKeyInput)?.name}
-                  </h3>
-                  <p style={{ fontSize: 13, color: C.text2, marginBottom: 20 }}>
-                    Enter your API key to connect this provider.
-                  </p>
-                  <input
-                    type="password"
-                    placeholder="API key"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      background: C.bg,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: 6,
-                      fontSize: 14,
-                      color: C.text,
-                      marginBottom: 16,
-                      fontFamily: F.mono,
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <div style={{ flex: 1 }}>
-                      <GhostBtn onClick={() => setShowApiKeyInput(null)}>
-                        Cancel
-                      </GhostBtn>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <PrimaryBtn onClick={handleSaveApiKey} disabled={!apiKey}>
-                        Save
-                      </PrimaryBtn>
-                    </div>
-                  </div>
-                </div>
-              ) : (
+              )}
+
+              {addDialogTab === 'enrichment' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {PROVIDERS.filter(p => p.category === 'enrichment' || p.category === 'research').map((provider) => (
-                    <Card key={provider.id} style={{ padding: 16 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{provider.name}</div>
-                          <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
-                            {provider.description}
-                          </div>
-                          {provider.managed && (
-                            <div style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              padding: '4px 8px',
-                              background: C.indigoDim,
-                              border: `1px solid ${C.indigoBrd}`,
-                              borderRadius: 4,
-                              fontSize: 11,
-                              fontWeight: 500,
-                              color: C.indigoLt,
-                            }}>
-                              <Check size={12} />
-                              Included
-                            </div>
-                          )}
-                        </div>
-                        {!provider.managed && (
-                          <GhostBtn onClick={() => handleConnectProvider(provider.id)}>
-                            Connect
-                          </GhostBtn>
+                    <Card
+                      key={provider.id}
+                      style={{ padding: 16, cursor: provider.managed ? 'default' : 'pointer', opacity: provider.managed ? 0.6 : 1 }}
+                      onClick={() => !provider.managed && handleConnectProvider(provider.id)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 4 }}>
+                        <div style={{ fontSize: 14, fontWeight: 500 }}>{provider.name}</div>
+                        {provider.managed && (
+                          <Chip>Managed</Chip>
                         )}
                       </div>
-                      {provider.managed && (
-                        <div style={{ fontSize: 11, color: C.text3, marginTop: 8 }}>
+                      <div style={{ fontSize: 12, color: C.text3, marginBottom: provider.managedCredits ? 4 : 0 }}>
+                        {provider.description}
+                      </div>
+                      {provider.managedCredits && (
+                        <div style={{ fontSize: 11, color: C.text3, fontStyle: 'italic' }}>
                           {provider.managedCredits}
                         </div>
                       )}
@@ -560,6 +837,13 @@ export default function ConnectionsPage() {
           </div>
         </div>
       )}
+
+      {/* Spinner animation */}
+      <style jsx>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

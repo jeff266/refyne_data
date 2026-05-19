@@ -42,9 +42,13 @@ export function GeneralTab() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [confirmName, setConfirmName] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [syncFrequency, setSyncFrequency] = useState<'manual' | 'nightly' | 'every_6h' | 'hourly'>('nightly');
+  const [connections, setConnections] = useState<any[]>([]);
+  const [savingSyncFreq, setSavingSyncFreq] = useState(false);
 
   useEffect(() => {
     fetchSettings();
+    fetchConnections();
   }, []);
 
   async function fetchSettings() {
@@ -68,6 +72,55 @@ export function GeneralTab() {
       console.error('Failed to fetch settings:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchConnections() {
+    try {
+      const res = await fetch('/api/hubspot/connections');
+      if (res.ok) {
+        const data = await res.json();
+        setConnections(data.connections || []);
+        // Set sync frequency from first connection
+        if (data.connections?.length > 0 && data.connections[0].syncFrequency) {
+          setSyncFrequency(data.connections[0].syncFrequency);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch connections:', err);
+    }
+  }
+
+  async function handleSaveSyncFrequency() {
+    if (connections.length === 0) {
+      showToast('No HubSpot connection found', 'error');
+      return;
+    }
+
+    setSavingSyncFreq(true);
+    try {
+      // Update all connections with the new frequency
+      const promises = connections.map(conn =>
+        fetch(`/api/hubspot/connections/${conn.id}/sync-frequency`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frequency: syncFrequency }),
+        })
+      );
+
+      const results = await Promise.all(promises);
+      const allSuccessful = results.every(r => r.ok);
+
+      if (allSuccessful) {
+        showToast('Sync frequency updated', 'success');
+        await fetchConnections();
+      } else {
+        showToast('Failed to update sync frequency', 'error');
+      }
+    } catch (err) {
+      showToast('Failed to update sync frequency', 'error');
+    } finally {
+      setSavingSyncFreq(false);
     }
   }
 
@@ -328,6 +381,94 @@ export function GeneralTab() {
           </div>
         </Card>
       </div>
+
+      {/* Sync Configuration */}
+      {connections.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
+            Sync Configuration
+          </h2>
+
+          <Card>
+            <div style={{ padding: 20 }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 4 }}>
+                  Sync frequency
+                </div>
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
+                  How often Refyne reads from HubSpot to update scores and detect new duplicates.
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    checked={syncFrequency === 'nightly'}
+                    onChange={() => setSyncFrequency('nightly')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 13, color: C.text }}>Nightly (default)</span>
+                    <span style={{ fontSize: 11, color: C.text3, marginLeft: 8 }}>All plans</span>
+                  </div>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'not-allowed', opacity: 0.5 }}>
+                  <input
+                    type="radio"
+                    checked={syncFrequency === 'every_6h'}
+                    onChange={() => setSyncFrequency('every_6h')}
+                    disabled
+                    style={{ cursor: 'not-allowed' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 13, color: C.text }}>Every 6 hours</span>
+                    <span style={{ fontSize: 11, color: C.amber, marginLeft: 8 }}>🔒 Growth</span>
+                  </div>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'not-allowed', opacity: 0.5 }}>
+                  <input
+                    type="radio"
+                    checked={syncFrequency === 'hourly'}
+                    onChange={() => setSyncFrequency('hourly')}
+                    disabled
+                    style={{ cursor: 'not-allowed' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 13, color: C.text }}>Hourly</span>
+                    <span style={{ fontSize: 11, color: C.indigo, marginLeft: 8 }}>🔒 Scale</span>
+                  </div>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    checked={syncFrequency === 'manual'}
+                    onChange={() => setSyncFrequency('manual')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 13, color: C.text }}>Manual</span>
+                    <span style={{ fontSize: 11, color: C.text3, marginLeft: 8 }}>Sync only when you click Sync</span>
+                  </div>
+                </label>
+              </div>
+
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 16 }}>
+                Applies to: all connected HubSpot portals in this workspace
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <PrimaryBtn onClick={handleSaveSyncFrequency} disabled={savingSyncFreq}>
+                  {savingSyncFreq ? 'Saving...' : 'Save sync frequency'}
+                </PrimaryBtn>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Danger Zone */}
       <div style={{ marginBottom: 32 }}>
