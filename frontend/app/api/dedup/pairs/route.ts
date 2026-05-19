@@ -141,13 +141,15 @@ export async function GET(request: NextRequest) {
             for (const company of companies) {
               companyNames[company.id] = company.properties.name || company.id;
             }
+            console.log(`[Dedup API] Fetched ${companies.length} company names from HubSpot`);
           }
         }
       } catch (err) {
-        console.error('Failed to fetch company names from HubSpot:', err);
+        console.error('[Dedup API] Failed to fetch company names from HubSpot:', err);
         // Continue without names - will show IDs as fallback
       }
     }
+    console.log(`[Dedup API] Returning ${pairs?.length || 0} pairs with ${Object.keys(companyNames).length} company names`);
 
     // Get counts for sidebar
     const [gradeCountsResult, statusCountsResult] = await Promise.all([
