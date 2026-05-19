@@ -220,8 +220,7 @@ export default function ConnectionsPage() {
                           {authType === 'pat' && (
                             <>
                               <span style={{ fontSize: 13, color: C.text3 }}>•</span>
-                              <a
-                                href="/api/hubspot/connect"
+                              <button
                                 style={{
                                   fontSize: 13,
                                   color: C.amber,
@@ -229,14 +228,18 @@ export default function ConnectionsPage() {
                                   display: 'flex',
                                   alignItems: 'center',
                                   gap: 4,
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  cursor: 'pointer',
+                                  fontFamily: F.sans,
                                 }}
-                                onClick={(e) => {
-                                  e.preventDefault();
+                                onClick={() => {
                                   window.location.href = '/api/hubspot/connect';
                                 }}
                               >
                                 Upgrade to OAuth ↗
-                              </a>
+                              </button>
                             </>
                           )}
                           <span style={{ fontSize: 13, color: C.text3 }}>•</span>
