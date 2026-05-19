@@ -3,9 +3,20 @@ import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-04-22.dahlia',
-});
+// Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
+let stripe: Stripe | null = null;
+
+function getStripeClient(): Stripe {
+  if (!stripe) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error('STRIPE_SECRET_KEY is not configured');
+    }
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2026-04-22.dahlia',
+    });
+  }
+  return stripe;
+}
 
 /**
  * POST /api/billing/portal
@@ -43,7 +54,8 @@ export async function POST() {
       );
     }
 
-    const session = await stripe.billingPortal.sessions.create({
+    const stripeClient = getStripeClient();
+    const session = await stripeClient.billingPortal.sessions.create({
       customer: entitlements.stripe_customer_id,
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing`,
     });

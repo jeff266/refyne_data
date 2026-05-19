@@ -4,9 +4,20 @@ import { resetEnrichCredits } from '@/lib/billing/check-feature';
 import { PLAN_FEATURES, Plan } from '@/lib/billing/plan-features';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-04-22.dahlia',
-});
+// Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
+let stripe: Stripe | null = null;
+
+function getStripeClient(): Stripe {
+  if (!stripe) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error('STRIPE_SECRET_KEY is not configured');
+    }
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2026-04-22.dahlia',
+    });
+  }
+  return stripe;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +48,8 @@ export async function POST(request: NextRequest) {
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(
+    const stripeClient = getStripeClient();
+    event = stripeClient.webhooks.constructEvent(
       body,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET
