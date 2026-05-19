@@ -30,6 +30,7 @@ export const C = {
   redLt:     '#FCA5A5',
   amber:     '#F59E0B',
   amberDim:  'rgba(245,158,11,0.08)',
+  amberBrd:  'rgba(245,158,11,0.2)',
   yellow:    '#EAB308',
 } as const;
 

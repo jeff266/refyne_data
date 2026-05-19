@@ -59,12 +59,11 @@ export function TodaysActions({ actions }: TodaysActionsProps) {
                 </div>
               </div>
             </div>
-            <PrimaryBtn
-              onClick={() => window.location.href = action.route}
-              style={{ width: '100%', fontSize: 12 }}
-            >
-              {action.primaryCta} →
-            </PrimaryBtn>
+            <div style={{ width: '100%' }}>
+              <PrimaryBtn onClick={() => window.location.href = action.route}>
+                {action.primaryCta} →
+              </PrimaryBtn>
+            </div>
           </div>
         ))}
         {actions.length === 3 && (

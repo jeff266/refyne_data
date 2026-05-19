@@ -76,10 +76,10 @@ export async function GET(
       // For now, using record_data as proxy
       existingRecord = {
         name: quarantine.duplicate_of,
-        domain: null,
-        industry: null,
-        employeeCount: null,
-        linkedinUrl: null,
+        domain: undefined,
+        industry: undefined,
+        employeeCount: undefined,
+        linkedinUrl: undefined,
         createdDaysAgo: 30, // Placeholder
       };
     }

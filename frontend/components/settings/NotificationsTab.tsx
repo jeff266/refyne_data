@@ -302,7 +302,6 @@ export function NotificationsTab() {
                   viewBox="0 0 14 14"
                   fill="none"
                   style={{ opacity: 0.4, flexShrink: 0 }}
-                  title="Mandatory for admins"
                 >
                   <path
                     d="M10.5 6.5V5C10.5 3.067 8.933 1.5 7 1.5C5.067 1.5 3.5 3.067 3.5 5V6.5M7 9V10.5M5 12.5H9C9.828 12.5 10.5 11.828 10.5 11V8C10.5 7.172 9.828 6.5 9 6.5H5C4.172 6.5 3.5 7.172 3.5 8V11C3.5 11.828 4.172 12.5 5 12.5Z"

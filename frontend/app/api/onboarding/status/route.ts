@@ -18,11 +18,21 @@ export async function GET() {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
-  try {
-    if (!isSupabaseConfigured() || !supabase) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
-    }
+  // Return graceful default if database not configured
+  if (!isSupabaseConfigured() || !supabase) {
+    return NextResponse.json({
+      org_id: ctx.orgId,
+      connected_hubspot: false,
+      viewed_dashboard: false,
+      viewed_dedup: false,
+      applied_harmony: false,
+      ran_normalize: false,
+      completed_at: null,
+      dismissed: false,
+    });
+  }
 
+  try {
     // Try to get existing progress
     let { data: progress, error } = await supabase
       .from('onboarding_progress')
@@ -41,14 +51,34 @@ export async function GET() {
       if (insertError) {
         captureWithOrgContext(insertError, ctx.orgId, { route: '/api/onboarding/status' });
         console.error('Failed to create onboarding progress:', insertError);
-        return NextResponse.json({ error: 'Failed to create progress' }, { status: 500 });
+        // Return default instead of 500
+        return NextResponse.json({
+          org_id: ctx.orgId,
+          connected_hubspot: false,
+          viewed_dashboard: false,
+          viewed_dedup: false,
+          applied_harmony: false,
+          ran_normalize: false,
+          completed_at: null,
+          dismissed: false,
+        });
       }
 
       progress = newProgress;
     } else if (error) {
       captureWithOrgContext(error, ctx.orgId, { route: '/api/onboarding/status' });
       console.error('Failed to fetch onboarding progress:', error);
-      return NextResponse.json({ error: 'Failed to fetch progress' }, { status: 500 });
+      // Return default instead of 500
+      return NextResponse.json({
+        org_id: ctx.orgId,
+        connected_hubspot: false,
+        viewed_dashboard: false,
+        viewed_dedup: false,
+        applied_harmony: false,
+        ran_normalize: false,
+        completed_at: null,
+        dismissed: false,
+      });
     }
 
     // Check actual data to determine step completion
@@ -129,6 +159,16 @@ export async function GET() {
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/onboarding/status' });
     console.error('Failed to get onboarding status:', error);
-    return NextResponse.json({ error: 'Failed to get status' }, { status: 500 });
+    // Return graceful default instead of 500
+    return NextResponse.json({
+      org_id: ctx.orgId,
+      connected_hubspot: false,
+      viewed_dashboard: false,
+      viewed_dedup: false,
+      applied_harmony: false,
+      ran_normalize: false,
+      completed_at: null,
+      dismissed: false,
+    });
   }
 }

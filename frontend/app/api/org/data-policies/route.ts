@@ -20,9 +20,6 @@ export async function GET(request: NextRequest) {
   let ctx;
   try {
     ctx = await getOrgContext();
-    if (!ctx.authorized) {
-      return NextResponse.json({ error: ctx.error }, { status: 401 });
-    }
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

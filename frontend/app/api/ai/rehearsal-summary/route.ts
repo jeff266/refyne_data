@@ -24,15 +24,12 @@ export async function POST(request: NextRequest) {
   let ctx;
   try {
     ctx = await getOrgContext();
-    if (!ctx.authorized) {
-      return NextResponse.json({ error: ctx.error }, { status: 401 });
-    }
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
   // Check role (admin or operator)
-  if (ctx.role !== 'org:admin' && ctx.role !== 'org:operator') {
+  if (ctx.orgRole !== 'org:admin' && ctx.orgRole !== 'org:operator') {
     return NextResponse.json(
       { error: 'Insufficient permissions' },
       { status: 403 }

@@ -283,7 +283,7 @@ export function GeneralTab() {
                   Enable daily compliance digest and monitoring
                 </div>
               </div>
-              <Toggle on={digestEnabled} onToggle={setDigestEnabled} />
+              <Toggle on={digestEnabled} onToggle={() => setDigestEnabled(!digestEnabled)} />
             </div>
 
             <div style={{ marginBottom: 20, paddingBottom: 20, borderBottom: `1px solid ${C.border}` }}>
@@ -520,10 +520,8 @@ export function GeneralTab() {
           }}
           onClick={() => setShowDeleteConfirm(false)}
         >
-          <Card
-            style={{ width: 480, maxWidth: '90vw' }}
-            onClick={(e: React.MouseEvent) => e.stopPropagation()}
-          >
+          <div onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <Card style={{ width: 480, maxWidth: '90vw' }}>
             <div style={{ padding: 20, borderBottom: `1px solid ${C.border}` }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, color: C.text }}>
                 Delete workspace
@@ -560,13 +558,13 @@ export function GeneralTab() {
                 <PrimaryBtn
                   onClick={handleDeleteWorkspace}
                   disabled={confirmName !== workspaceName || deleting}
-                  style={{ background: C.red, borderColor: C.red }}
                 >
                   {deleting ? 'Deleting...' : 'Delete workspace'}
                 </PrimaryBtn>
               </div>
             </div>
-          </Card>
+            </Card>
+          </div>
         </div>
       )}
     </div>

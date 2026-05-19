@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
       // Find most common
       let maxCount = 0;
       let topValue = null;
-      for (const [value, count] of valueCounts.entries()) {
+      for (const [value, count] of Array.from(valueCounts.entries())) {
         if (count > maxCount) {
           maxCount = count;
           topValue = value;

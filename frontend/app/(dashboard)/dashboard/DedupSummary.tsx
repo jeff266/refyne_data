@@ -126,12 +126,11 @@ export function DedupSummary({ gradeA, gradeB, gradeC, lastScan }: DedupSummaryP
         </div>
 
         {gradeA > 0 && (
-          <PrimaryBtn
-            onClick={() => window.location.href = '/dedup?grade=A'}
-            style={{ width: '100%', fontSize: 12 }}
-          >
-            Review Grade A →
-          </PrimaryBtn>
+          <div style={{ width: '100%' }}>
+            <PrimaryBtn onClick={() => window.location.href = '/dedup?grade=A'}>
+              Review Grade A →
+            </PrimaryBtn>
+          </div>
         )}
       </div>
     </Card>

@@ -26,9 +26,6 @@ export async function GET(request: NextRequest) {
   let ctx;
   try {
     ctx = await getOrgContext();
-    if (!ctx.authorized) {
-      return NextResponse.json({ error: ctx.error }, { status: 401 });
-    }
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
@@ -130,8 +127,8 @@ async function buildInputData(orgId: string, portalId: string): Promise<Complian
   const breakdown = await getBreakdownByHarmony(orgId);
   const harmonyBreakdown = breakdown.map((item) => ({
     name: item.harmonyId,
-    score: Math.round((item.compliantCount / (item.totalCount || 1)) * 100),
-    failingRecords: item.totalCount - item.compliantCount,
+    score: Math.round(item.rate),
+    failingRecords: item.recordsAffected,
   }));
 
   // Fetch dedup pairs by grade

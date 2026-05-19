@@ -154,12 +154,11 @@ export function InsightsSlideOver({ harmonyId, harmonyName, recordCount, isOpen,
               <div style={{ fontSize: 11, color: C.text3, marginBottom: 12 }}>
                 Add the most common value as a canonical option in the {harmonyName} harmony.
               </div>
-              <PrimaryBtn
-                onClick={() => window.location.href = `/harmonies?harmony=${harmonyId}`}
-                style={{ width: '100%', fontSize: 11 }}
-              >
-                Add to harmony →
-              </PrimaryBtn>
+              <div style={{ width: '100%' }}>
+                <PrimaryBtn onClick={() => window.location.href = `/harmonies?harmony=${harmonyId}`}>
+                  Add to harmony →
+                </PrimaryBtn>
+              </div>
             </div>
           )}
 
