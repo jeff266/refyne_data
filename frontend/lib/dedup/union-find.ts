@@ -57,7 +57,7 @@ export class UnionFind {
   getClusters(): string[][] {
     const clusters = new Map<string, string[]>();
 
-    for (const id of this.parent.keys()) {
+    for (const id of Array.from(this.parent.keys())) {
       const root = this.find(id);
       if (!clusters.has(root)) {
         clusters.set(root, []);
