@@ -53,8 +53,20 @@ export async function GET() {
       );
     }
 
+    // Transform snake_case to camelCase for UI
+    const transformedConnections = (connections || []).map((conn: any) => ({
+      id: conn.id,
+      portalId: conn.portal_id,
+      hubId: conn.hub_id,
+      connectionStatus: conn.connection_status,
+      lastActiveAt: conn.last_active_at,
+      createdAt: conn.created_at,
+      accessToken: conn.access_token,
+      encryptedToken: conn.encrypted_token,
+    }));
+
     return NextResponse.json({
-      connections: connections || [],
+      connections: transformedConnections,
     });
   } catch (error) {
     console.error('Error fetching HubSpot connections:', error);
