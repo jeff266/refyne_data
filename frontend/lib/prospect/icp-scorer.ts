@@ -17,7 +17,28 @@ const DEFAULT_WEIGHTS = {
 };
 
 /**
+ * Check industry match type (exact, partial, or none).
+ */
+function industryMatches(
+  companyIndustry: string | undefined,
+  targetIndustries: string[]
+): 'exact' | 'partial' | 'none' {
+  if (!companyIndustry || targetIndustries.length === 0) return 'none';
+
+  const normalized = companyIndustry.toLowerCase();
+
+  for (const target of targetIndustries) {
+    const t = target.toLowerCase();
+    if (normalized === t) return 'exact';
+    if (normalized.includes(t) || t.includes(normalized)) return 'partial';
+  }
+
+  return 'none';
+}
+
+/**
  * Score industry match.
+ * Exact match = 100 points, partial match = 60 points.
  */
 function scoreIndustry(
   company: ProspectCompany,
@@ -27,16 +48,11 @@ function scoreIndustry(
     return 100; // No filter = full score
   }
 
-  if (!company.industry) {
-    return 0;
-  }
+  const matchType = industryMatches(company.industry, config.target_industries);
 
-  const companyIndustry = company.industry.toLowerCase();
-  const matchesIndustry = config.target_industries.some((targetIndustry) =>
-    companyIndustry.includes(targetIndustry.toLowerCase())
-  );
-
-  return matchesIndustry ? 100 : 0;
+  if (matchType === 'exact') return 100;
+  if (matchType === 'partial') return 60;
+  return 0;
 }
 
 /**

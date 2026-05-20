@@ -14,6 +14,47 @@ import {
 const APOLLO_BASE_URL = 'https://api.apollo.io/v1';
 
 /**
+ * Apply hard filters to Apollo results (Apollo's standard tier has soft filters).
+ */
+function postFilterResults(
+  results: ProspectCompany[],
+  query: ProspectSearchQuery
+): ProspectCompany[] {
+  return results.filter(company => {
+    // Hard employee count filter
+    if (query.employeeMin !== undefined && company.employee_count !== null && company.employee_count !== undefined) {
+      if (company.employee_count < query.employeeMin) return false;
+    }
+    if (query.employeeMax !== undefined && company.employee_count !== null && company.employee_count !== undefined) {
+      if (company.employee_count > query.employeeMax) return false;
+    }
+    // If employee_count is null: keep the result (unknown is not a disqualifier)
+
+    // Hard location filter
+    if (query.location) {
+      const { city, state, country } = query.location;
+
+      // Country filter
+      if (country && company.country !== null && company.country !== undefined) {
+        if (company.country.toLowerCase() !== country.toLowerCase()) return false;
+      }
+
+      // State filter (only check if country matches or no country specified)
+      if (state && company.state !== null && company.state !== undefined) {
+        if (company.state.toLowerCase() !== state.toLowerCase()) return false;
+      }
+
+      // City filter (only check if state/country match or not specified)
+      if (city && company.city !== null && company.city !== undefined) {
+        if (company.city.toLowerCase() !== city.toLowerCase()) return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+/**
  * Get Apollo API key from environment.
  */
 function getApiKey(): string {
@@ -64,10 +105,14 @@ export async function searchCompaniesApollo(
 
   try {
     // Build Apollo search payload
+    // Request more results than needed to compensate for post-filtering
+    const requestLimit = query.limit || 25;
+    const apolloLimit = Math.min(requestLimit * 4, 100); // Apollo max is 100
+
     const payload: Record<string, unknown> = {
       api_key: apiKey,
       page: 1,
-      per_page: query.limit || 25,
+      per_page: apolloLimit,
     };
 
     // Industry filters - use keyword search instead of tag IDs
@@ -151,9 +196,15 @@ export async function searchCompaniesApollo(
       })
     );
 
+    // Apply hard filters (Apollo's standard tier has soft filters)
+    const filteredCompanies = postFilterResults(companies, query);
+
+    // Slice to requested limit
+    const finalCompanies = filteredCompanies.slice(0, requestLimit);
+
     return {
       provider: 'apollo',
-      companies,
+      companies: finalCompanies,
       total_results: totalResults,
       query_time_ms: Date.now() - startTime,
     };
