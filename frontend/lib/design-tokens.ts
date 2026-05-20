@@ -65,7 +65,7 @@ export const PAGE_META: Record<string, { label: string; action: string | null }>
   dedup:        { label: 'Dedup',          action: 'Run scan' },
   quarantine:   { label: 'Quarantine',     action: null },
   arrangements: { label: 'Arrangements',   action: 'New arrangement' },
-  harmonies:    { label: 'Harmonies',      action: 'New harmony' },
+  harmonies:    { label: 'Harmonies',      action: null },
   mappings:     { label: 'Field Mappings', action: null },
   connections:  { label: 'Connections',    action: 'Add connection' },
 };

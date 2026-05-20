@@ -290,6 +290,7 @@ export default function HarmoniesPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
   const [expandedHarmonyId, setExpandedHarmonyId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch harmonies and enabled state
   const fetchHarmonies = useCallback(async () => {
@@ -406,8 +407,17 @@ export default function HarmoniesPage() {
     };
   });
 
-  const enrichedCompany = enrichedHarmonies.filter(h => h.category === 'company');
-  const enrichedPerson = enrichedHarmonies.filter(h => h.category === 'person' || h.category === 'contact');
+  // Filter harmonies based on search query
+  const filteredHarmonies = searchQuery.trim()
+    ? enrichedHarmonies.filter(h =>
+        h.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        h.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        h.fields.some(f => f.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : enrichedHarmonies;
+
+  const enrichedCompany = filteredHarmonies.filter(h => h.category === 'company');
+  const enrichedPerson = filteredHarmonies.filter(h => h.category === 'person' || h.category === 'contact');
 
   if (loading) {
     return (
@@ -420,9 +430,28 @@ export default function HarmoniesPage() {
   return (
     <div style={{ padding: '28px 32px', fontFamily: F.sans }}>
       <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
-        <div style={{ flex: 1, background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 8, padding: '8px 14px', fontSize: 12, color: C.text3 }}>Search harmonies...</div>
-        <PrimaryBtn><Plus size={12} /> New harmony</PrimaryBtn>
-        <GhostBtn>Import YAML</GhostBtn>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search harmonies..."
+          style={{
+            flex: 1,
+            background: C.surface,
+            border: `1px solid ${C.border2}`,
+            borderRadius: 8,
+            padding: '8px 14px',
+            fontSize: 12,
+            color: C.text,
+            outline: 'none',
+          }}
+        />
+        <PrimaryBtn onClick={() => alert('Custom harmony creation coming soon. For now, harmonies are managed through the library system.')}>
+          <Plus size={12} /> New harmony
+        </PrimaryBtn>
+        <GhostBtn onClick={() => alert('YAML import coming soon. You can currently manage reference data inline by clicking the "Data" button on lookup harmonies.')}>
+          Import YAML
+        </GhostBtn>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {enrichedCompany.length > 0 && (
