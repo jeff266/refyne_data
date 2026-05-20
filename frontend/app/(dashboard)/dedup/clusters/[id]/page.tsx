@@ -2,13 +2,37 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Loader2, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Loader2,
+  X,
+  Plus,
+  GripVertical,
+} from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, GhostBtn, PrimaryBtn } from '@/components/refyne';
 import type { ClusterWithRecords } from '@/lib/dedup/cluster-types';
 import type { HubSpotCompany } from '@/lib/dedup/select-master';
 import { autoSelectFields } from '@/lib/dedup/select-master';
 import { MergeHistory } from '@/components/dedup/MergeHistory';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Company Name',
@@ -24,7 +48,7 @@ const FIELD_LABELS: Record<string, string> = {
   type: 'Company Type',
 };
 
-const FIELDS_TO_DISPLAY = [
+const DEFAULT_FIELDS = [
   'name',
   'domain',
   'phone',
@@ -40,12 +64,19 @@ const FIELDS_TO_DISPLAY = [
 
 // Animation state machine
 type MergeAnimationState =
-  | 'idle'          // default, no merge in progress
-  | 'merging'       // API call in flight, buttons disabled
-  | 'collapsing'    // non-master columns exiting
-  | 'absorbing'     // master column pulsing
-  | 'highlighting'  // rescued fields glowing
-  | 'complete';     // toast visible, about to navigate
+  | 'idle' // default, no merge in progress
+  | 'merging' // API call in flight, buttons disabled
+  | 'collapsing' // non-master columns exiting
+  | 'absorbing' // master column pulsing
+  | 'highlighting' // rescued fields glowing
+  | 'complete'; // toast visible, about to navigate
+
+interface HubSpotProperty {
+  name: string;
+  label: string;
+  type: string;
+  hubspotDefined: boolean;
+}
 
 // Calculate which fields will be rescued (master empty, non-master has value)
 function calculateRescuedFields(
@@ -82,6 +113,378 @@ function calculateRescuedFields(
   return { count: rescued.length, fieldKeys: rescued };
 }
 
+// Sortable field row component for drag-to-reorder
+function SortableFieldRow({
+  field,
+  fieldLabel,
+  visibleRecords,
+  masterId,
+  propertyLabels,
+  fieldSelections,
+  mergeState,
+  rescuedFieldKeys,
+  onFieldSelectionChange,
+  onRemoveField,
+}: {
+  field: string;
+  fieldLabel: string;
+  visibleRecords: HubSpotCompany[];
+  masterId: string | null;
+  propertyLabels: Record<string, string>;
+  fieldSelections: Record<string, string>;
+  mergeState: MergeAnimationState;
+  rescuedFieldKeys: string[];
+  onFieldSelectionChange: (field: string, recordId: string) => void;
+  onRemoveField: (field: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: field,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const isRescuedField =
+    (mergeState === 'highlighting' || mergeState === 'complete') && rescuedFieldKeys.includes(field);
+
+  const isDefaultField = DEFAULT_FIELDS.includes(field);
+
+  return (
+    <tr
+      ref={setNodeRef}
+      className={isRescuedField ? 'field-rescued' : ''}
+      style={{ borderBottom: `0.5px solid ${C.border}`, ...style }}
+    >
+      <td
+        style={{
+          padding: '12px 16px',
+          fontWeight: 500,
+          color: C.text2,
+          position: 'sticky',
+          left: 0,
+          background: C.surface,
+          zIndex: 1,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div
+            {...attributes}
+            {...listeners}
+            style={{
+              cursor: mergeState === 'idle' ? 'grab' : 'not-allowed',
+              display: 'flex',
+              alignItems: 'center',
+              color: C.text3,
+              opacity: mergeState === 'idle' ? 0.5 : 0.2,
+            }}
+          >
+            <GripVertical size={14} />
+          </div>
+          <span>{fieldLabel}</span>
+          {!isDefaultField && mergeState === 'idle' && (
+            <button
+              onClick={() => onRemoveField(field)}
+              title="Remove field"
+              style={{
+                padding: 2,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: C.text3,
+                opacity: 0.5,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '1';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '0.5';
+              }}
+            >
+              <X size={10} />
+            </button>
+          )}
+        </div>
+      </td>
+      {visibleRecords.map((record) => {
+        const value = record.properties[field];
+        const isSelected = fieldSelections[field] === record.id;
+        const isMaster = record.id === masterId;
+        const isNonMaster = !isMaster;
+        const shouldAnimateExit =
+          mergeState === 'collapsing' ||
+          mergeState === 'absorbing' ||
+          mergeState === 'highlighting' ||
+          mergeState === 'complete';
+
+        // Get human-readable label for enum values
+        const displayValue = value ? propertyLabels[`${field}:${value}`] || value : '(empty)';
+
+        return (
+          <td
+            key={record.id}
+            className={isNonMaster && shouldAnimateExit ? 'merge-exit' : ''}
+            style={{
+              padding: '12px 16px',
+              background: isMaster ? C.indigoDim : 'transparent',
+            }}
+          >
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                cursor: mergeState === 'idle' ? 'pointer' : 'not-allowed',
+              }}
+            >
+              <input
+                type="radio"
+                name={`field_${field}`}
+                checked={isSelected}
+                disabled={mergeState !== 'idle'}
+                onChange={() => onFieldSelectionChange(field, record.id)}
+                style={{ cursor: mergeState === 'idle' ? 'pointer' : 'not-allowed' }}
+              />
+              <span
+                className={isMaster && isRescuedField ? 'master-value' : ''}
+                style={{
+                  color: value ? C.text : C.text3,
+                  fontStyle: value ? 'normal' : 'italic',
+                }}
+              >
+                {displayValue}
+              </span>
+            </label>
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
+
+// Field picker component with search and grouping
+function FieldPicker({
+  availableProperties,
+  onAddField,
+  disabled,
+}: {
+  availableProperties: HubSpotProperty[];
+  onAddField: (fieldName: string) => void;
+  disabled: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const filtered = availableProperties.filter(
+    (f) =>
+      f.label.toLowerCase().includes(search.toLowerCase()) ||
+      f.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const standardFields = filtered.filter((f) => f.hubspotDefined);
+  const customFields = filtered.filter((f) => !f.hubspotDefined);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        style={{
+          padding: '6px 12px',
+          fontSize: 12,
+          color: disabled ? C.text3 : C.indigo,
+          background: 'transparent',
+          border: `0.5px dashed ${disabled ? C.border : C.indigo}`,
+          borderRadius: 0,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          opacity: disabled ? 0.5 : 1,
+        }}
+      >
+        <Plus size={12} />
+        Add field
+      </button>
+
+      {isOpen && (
+        <>
+          {/* Backdrop to close on outside click */}
+          <div
+            onClick={() => setIsOpen(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 99,
+            }}
+          />
+
+          <div
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              marginTop: 4,
+              background: C.surface,
+              border: `0.5px solid ${C.border}`,
+              borderRadius: 0,
+              width: 320,
+              maxHeight: 400,
+              overflow: 'auto',
+              zIndex: 100,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            }}
+          >
+            {/* Search input */}
+            <input
+              type="text"
+              placeholder="Search fields..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                fontSize: 12,
+                background: C.bg,
+                border: 'none',
+                borderBottom: `0.5px solid ${C.border}`,
+                outline: 'none',
+                color: C.text,
+              }}
+            />
+
+            {/* Field list */}
+            <div style={{ padding: '4px 0' }}>
+              {filtered.length === 0 ? (
+                <div
+                  style={{ padding: '12px', fontSize: 12, color: C.text3, textAlign: 'center' }}
+                >
+                  No fields found
+                </div>
+              ) : (
+                <>
+                  {/* Standard fields section */}
+                  {standardFields.length > 0 && (
+                    <>
+                      <div
+                        style={{
+                          padding: '8px 12px',
+                          fontSize: 10,
+                          color: C.text3,
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          borderBottom: `0.5px solid ${C.border}`,
+                        }}
+                      >
+                        ─── Standard fields ───────────────────
+                      </div>
+                      {standardFields.map((field) => (
+                        <button
+                          key={field.name}
+                          onClick={() => {
+                            onAddField(field.name);
+                            setIsOpen(false);
+                            setSearch('');
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            fontSize: 12,
+                            color: C.text,
+                            background: 'transparent',
+                            border: 'none',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = C.hover;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <span>{field.label}</span>
+                          <span style={{ fontSize: 10, color: C.text3, fontFamily: F.mono }}>
+                            {field.type}
+                          </span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Custom fields section */}
+                  {customFields.length > 0 && (
+                    <>
+                      <div
+                        style={{
+                          padding: '8px 12px',
+                          fontSize: 10,
+                          color: C.text3,
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          borderBottom: `0.5px solid ${C.border}`,
+                          marginTop: standardFields.length > 0 ? 8 : 0,
+                        }}
+                      >
+                        ─── Custom fields ─────────────────────
+                      </div>
+                      {customFields.map((field) => (
+                        <button
+                          key={field.name}
+                          onClick={() => {
+                            onAddField(field.name);
+                            setIsOpen(false);
+                            setSearch('');
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            fontSize: 12,
+                            color: C.text,
+                            background: 'transparent',
+                            border: 'none',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = C.hover;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <span>{field.label}</span>
+                          <span style={{ fontSize: 10, color: C.text3, fontFamily: F.mono }}>
+                            {field.type}
+                          </span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function ClusterReviewPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [data, setData] = useState<ClusterWithRecords | null>(null);
@@ -92,6 +495,11 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
   // Selection state
   const [masterId, setMasterId] = useState<string | null>(null);
   const [fieldSelections, setFieldSelections] = useState<Record<string, string>>({});
+
+  // Field configuration state
+  const [fieldsToDisplay, setFieldsToDisplay] = useState<string[]>(DEFAULT_FIELDS);
+  const [availableProperties, setAvailableProperties] = useState<HubSpotProperty[]>([]);
+  const [loadingFields, setLoadingFields] = useState(true);
 
   // Action state
   const [rejecting, setRejecting] = useState(false);
@@ -108,6 +516,82 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
     recordsConsolidated: number;
     fieldsRescued: number;
   } | null>(null);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Load dedup display fields from API
+  useEffect(() => {
+    async function loadDedupFields() {
+      try {
+        const res = await fetch('/api/org/dedup-fields', {
+          headers: { 'x-org-id': 'default' },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setFieldsToDisplay(data.fields || DEFAULT_FIELDS);
+        }
+      } catch (err) {
+        console.error('Failed to load dedup fields:', err);
+        setFieldsToDisplay(DEFAULT_FIELDS);
+      } finally {
+        setLoadingFields(false);
+      }
+    }
+
+    loadDedupFields();
+  }, []);
+
+  // Save fields to API when changed
+  const saveFieldsToAPI = async (fields: string[]) => {
+    try {
+      await fetch('/api/org/dedup-fields', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-org-id': 'default',
+        },
+        body: JSON.stringify({ fields }),
+      });
+    } catch (err) {
+      console.error('Failed to save dedup fields:', err);
+    }
+  };
+
+  // Handle field reordering
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setFieldsToDisplay((items) => {
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        const newOrder = arrayMove(items, oldIndex, newIndex);
+        saveFieldsToAPI(newOrder);
+        return newOrder;
+      });
+    }
+  };
+
+  // Handle adding a field
+  const handleAddField = (fieldName: string) => {
+    const newFields = [...fieldsToDisplay, fieldName];
+    setFieldsToDisplay(newFields);
+    saveFieldsToAPI(newFields);
+  };
+
+  // Handle removing a field
+  const handleRemoveField = (fieldName: string) => {
+    const newFields = fieldsToDisplay.filter((f) => f !== fieldName);
+    setFieldsToDisplay(newFields);
+    saveFieldsToAPI(newFields);
+  };
 
   // Fetch cluster data
   useEffect(() => {
@@ -136,17 +620,28 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         );
 
         if (master) {
-          const autoSelections = autoSelectFields(FIELDS_TO_DISPLAY, master, others);
+          const autoSelections = autoSelectFields(fieldsToDisplay, master, others);
           setFieldSelections(autoSelections);
         }
 
-        // Fetch HubSpot property definitions for enum field labels
+        // Fetch HubSpot property definitions
         try {
           const propsRes = await fetch('/api/hubspot/properties/companies');
           if (propsRes.ok) {
             const propsData = await propsRes.json();
             const labelMap: Record<string, string> = {};
 
+            // Store all properties for field picker
+            const allProps: HubSpotProperty[] = propsData.properties.map((prop: any) => ({
+              name: prop.name,
+              label: prop.label || prop.name,
+              type: prop.type,
+              hubspotDefined: prop.hubspotDefined || false,
+            }));
+
+            setAvailableProperties(allProps);
+
+            // Extract enum labels
             propsData.properties.forEach((prop: any) => {
               if (prop.options && Array.isArray(prop.options)) {
                 prop.options.forEach((opt: any) => {
@@ -159,7 +654,6 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
           }
         } catch (err) {
           console.error('Failed to fetch property definitions:', err);
-          // Continue without labels - will show raw values
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch cluster');
@@ -169,14 +663,16 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
     };
 
     fetchCluster();
-  }, [params.id]);
+  }, [params.id, fieldsToDisplay]);
 
   // Handle merge with animation
   const handleMerge = async () => {
     if (!masterId || !data) return;
 
     const masterRecord = data.records.find((r) => r.id === masterId);
-    const nonMasterRecords = data.records.filter((r) => r.id !== masterId && !excludedRecords.has(r.id));
+    const nonMasterRecords = data.records.filter(
+      (r) => r.id !== masterId && !excludedRecords.has(r.id)
+    );
 
     if (!masterRecord) return;
 
@@ -219,7 +715,6 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
       });
 
       if (prefersReducedMotion) {
-        // Skip animations, go straight to toast
         setMergeState('complete');
         setTimeout(() => {
           router.push(
@@ -319,18 +814,15 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
 
       const result = await res.json();
 
-      // Add to excluded set (for UI filtering)
       setExcludedRecords((prev) => {
         const next = new Set(prev);
         next.add(recordId);
         return next;
       });
 
-      // Show toast
       setToastMessage(`${recordName} excluded from this merge`);
       setTimeout(() => setToastMessage(null), 5000);
 
-      // If cluster was auto-rejected, redirect to queue
       if (result.clusterRejected) {
         setTimeout(() => {
           router.push('/dedup');
@@ -343,7 +835,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
     }
   };
 
-  if (loading) {
+  if (loading || loadingFields) {
     return (
       <div
         style={{
@@ -361,48 +853,35 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
   if (error || !data) {
     return (
       <div style={{ padding: 40 }}>
-        <div style={{ fontSize: 14, color: C.red, marginBottom: 16 }}>{error || 'Cluster not found'}</div>
+        <div style={{ fontSize: 14, color: C.red, marginBottom: 16 }}>
+          {error || 'Cluster not found'}
+        </div>
         <GhostBtn onClick={() => router.push('/dedup')}>Back to queue</GhostBtn>
       </div>
     );
   }
 
   const { cluster, records } = data;
-
-  // Filter out excluded records
   const visibleRecords = records.filter((r) => !excludedRecords.has(r.id));
+
+  // Available fields for picker (not already displayed)
+  const availableFieldsForPicker = availableProperties.filter(
+    (p) => !fieldsToDisplay.includes(p.name)
+  );
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: 24 }}>
       <style>{`
         @keyframes mergeExit {
-          0%   {
-            transform: translateX(0) scale(1);
-            opacity: 1;
-          }
-          70%  {
-            transform: translateX(32px) scale(0.95);
-            opacity: 0.2;
-          }
-          100% {
-            transform: translateX(48px) scale(0.88);
-            opacity: 0;
-          }
+          0%   { transform: translateX(0) scale(1); opacity: 1; }
+          70%  { transform: translateX(32px) scale(0.95); opacity: 0.2; }
+          100% { transform: translateX(48px) scale(0.88); opacity: 0; }
         }
 
         @keyframes mergeAbsorb {
-          0%   {
-            box-shadow: 0 0 0 0 rgba(46, 204, 138, 0);
-            border-color: rgba(255, 255, 255, 0.08);
-          }
-          40%  {
-            box-shadow: 0 0 0 6px rgba(46, 204, 138, 0.18);
-            border-color: rgba(46, 204, 138, 0.6);
-          }
-          100% {
-            box-shadow: 0 0 0 0 rgba(46, 204, 138, 0);
-            border-color: rgba(255, 255, 255, 0.08);
-          }
+          0%   { box-shadow: 0 0 0 0 rgba(46, 204, 138, 0); border-color: rgba(255, 255, 255, 0.08); }
+          40%  { box-shadow: 0 0 0 6px rgba(46, 204, 138, 0.18); border-color: rgba(46, 204, 138, 0.6); }
+          100% { box-shadow: 0 0 0 0 rgba(46, 204, 138, 0); border-color: rgba(255, 255, 255, 0.08); }
         }
 
         @keyframes fieldRescued {
@@ -423,25 +902,11 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
           to { transform: translateY(0); opacity: 1; }
         }
 
-        .merge-exit {
-          animation: mergeExit 400ms ease-in forwards;
-        }
-
-        .merge-absorb {
-          animation: mergeAbsorb 400ms ease-out forwards;
-        }
-
-        .field-rescued {
-          animation: fieldRescued 1200ms ease-out forwards;
-        }
-
-        .field-rescued .master-value {
-          animation: rescuedValue 1200ms ease-out forwards;
-        }
-
-        .toast-slide-up {
-          animation: toastSlideUp 200ms ease-out forwards;
-        }
+        .merge-exit { animation: mergeExit 400ms ease-in forwards; }
+        .merge-absorb { animation: mergeAbsorb 400ms ease-out forwards; }
+        .field-rescued { animation: fieldRescued 1200ms ease-out forwards; }
+        .field-rescued .master-value { animation: rescuedValue 1200ms ease-out forwards; }
+        .toast-slide-up { animation: toastSlideUp 200ms ease-out forwards; }
       `}</style>
 
       {/* Header */}
@@ -461,14 +926,12 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         </p>
       </div>
 
-      {/* Merge History (for merged clusters) */}
       {cluster.status === 'merged' && (
         <div style={{ marginBottom: 32 }}>
           <MergeHistory clusterId={params.id} />
         </div>
       )}
 
-      {/* Error state */}
       {error && mergeState === 'idle' && (
         <div
           style={{
@@ -478,8 +941,8 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
             padding: 12,
             marginBottom: 16,
             background: `${C.red}15`,
-            border: `1px solid ${C.red}30`,
-            borderRadius: 8,
+            border: `0.5px solid ${C.red}30`,
+            borderRadius: 0,
             color: C.red,
             fontSize: 13,
           }}
@@ -514,8 +977,8 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
             fontSize: 13,
             color: C.text,
             background: C.surface,
-            border: `1px solid ${C.border}`,
-            borderRadius: 6,
+            border: `0.5px solid ${C.border}`,
+            borderRadius: 0,
             cursor: mergeState !== 'idle' ? 'not-allowed' : 'pointer',
             outline: 'none',
             width: '100%',
@@ -540,7 +1003,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
           }}
         >
           <thead>
-            <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+            <tr style={{ borderBottom: `0.5px solid ${C.border}` }}>
               <th
                 style={{
                   textAlign: 'left',
@@ -556,7 +1019,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
               >
                 Field
               </th>
-              {visibleRecords.map((record, idx) => {
+              {visibleRecords.map((record) => {
                 const isMaster = record.id === masterId;
                 const isNonMaster = !isMaster;
                 const shouldAnimate =
@@ -582,10 +1045,17 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                       color: C.text3,
                       fontSize: 11,
                       background: isMaster ? C.indigoDim : 'transparent',
-                      border: isMaster ? `1px solid ${C.border}` : 'none',
+                      border: isMaster ? `0.5px solid ${C.border}` : 'none',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                      }}
+                    >
                       <div>
                         {record.properties.name || record.id}
                         {isMaster && (
@@ -604,19 +1074,32 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                       </div>
                       {!isMaster && (
                         <button
-                          onClick={() => handleExcludeRecord(record.id, record.properties.name || record.id)}
+                          onClick={() =>
+                            handleExcludeRecord(record.id, record.properties.name || record.id)
+                          }
                           disabled={excludingRecordId === record.id || mergeState !== 'idle'}
                           title="Mark this record as not a duplicate. It will remain in HubSpot as a separate company."
                           style={{
                             padding: '4px 8px',
                             fontSize: 10,
                             fontWeight: 500,
-                            color: excludingRecordId === record.id || mergeState !== 'idle' ? C.text3 : C.red,
+                            color:
+                              excludingRecordId === record.id || mergeState !== 'idle'
+                                ? C.text3
+                                : C.red,
                             background: 'transparent',
-                            border: `1px solid ${excludingRecordId === record.id || mergeState !== 'idle' ? C.border : C.red}`,
-                            borderRadius: 4,
-                            cursor: excludingRecordId === record.id || mergeState !== 'idle' ? 'not-allowed' : 'pointer',
-                            opacity: excludingRecordId === record.id || mergeState !== 'idle' ? 0.5 : 1,
+                            border: `0.5px solid ${
+                              excludingRecordId === record.id || mergeState !== 'idle'
+                                ? C.border
+                                : C.red
+                            }`,
+                            borderRadius: 0,
+                            cursor:
+                              excludingRecordId === record.id || mergeState !== 'idle'
+                                ? 'not-allowed'
+                                : 'pointer',
+                            opacity:
+                              excludingRecordId === record.id || mergeState !== 'idle' ? 0.5 : 1,
                             whiteSpace: 'nowrap',
                           }}
                           onMouseEnter={(e) => {
@@ -638,92 +1121,42 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
             </tr>
           </thead>
           <tbody>
-            {FIELDS_TO_DISPLAY.map((field) => {
-              const isRescuedField =
-                (mergeState === 'highlighting' || mergeState === 'complete') &&
-                rescuedFieldKeys.includes(field);
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={fieldsToDisplay} strategy={verticalListSortingStrategy}>
+                {fieldsToDisplay.map((field) => (
+                  <SortableFieldRow
+                    key={field}
+                    field={field}
+                    fieldLabel={FIELD_LABELS[field] || field}
+                    visibleRecords={visibleRecords}
+                    masterId={masterId}
+                    propertyLabels={propertyLabels}
+                    fieldSelections={fieldSelections}
+                    mergeState={mergeState}
+                    rescuedFieldKeys={rescuedFieldKeys}
+                    onFieldSelectionChange={(field, recordId) =>
+                      setFieldSelections((prev) => ({ ...prev, [field]: recordId }))
+                    }
+                    onRemoveField={handleRemoveField}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
 
-              return (
-                <tr
-                  key={field}
-                  className={isRescuedField ? 'field-rescued' : ''}
-                  style={{ borderBottom: `1px solid ${C.border}` }}
-                >
-                  <td
-                    style={{
-                      padding: '12px 16px',
-                      fontWeight: 500,
-                      color: C.text2,
-                      position: 'sticky',
-                      left: 0,
-                      background: C.surface,
-                      zIndex: 1,
-                    }}
-                  >
-                    {FIELD_LABELS[field] || field}
-                  </td>
-                  {visibleRecords.map((record) => {
-                    const value = record.properties[field];
-                    const isSelected = fieldSelections[field] === record.id;
-                    const isMaster = record.id === masterId;
-                    const isNonMaster = !isMaster;
-                    const shouldAnimateExit =
-                      mergeState === 'collapsing' ||
-                      mergeState === 'absorbing' ||
-                      mergeState === 'highlighting' ||
-                      mergeState === 'complete';
-
-                    // Get human-readable label for enum values
-                    const displayValue = value
-                      ? propertyLabels[`${field}:${value}`] || value
-                      : '(empty)';
-
-                    return (
-                      <td
-                        key={record.id}
-                        className={isNonMaster && shouldAnimateExit ? 'merge-exit' : ''}
-                        style={{
-                          padding: '12px 16px',
-                          background: isMaster ? C.indigoDim : 'transparent',
-                        }}
-                      >
-                        <label
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            cursor: mergeState === 'idle' ? 'pointer' : 'not-allowed',
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name={`field_${field}`}
-                            checked={isSelected}
-                            disabled={mergeState !== 'idle'}
-                            onChange={() =>
-                              setFieldSelections((prev) => ({
-                                ...prev,
-                                [field]: record.id,
-                              }))
-                            }
-                            style={{ cursor: mergeState === 'idle' ? 'pointer' : 'not-allowed' }}
-                          />
-                          <span
-                            className={isMaster && isRescuedField ? 'master-value' : ''}
-                            style={{
-                              color: value ? C.text : C.text3,
-                              fontStyle: value ? 'normal' : 'italic',
-                            }}
-                          >
-                            {displayValue}
-                          </span>
-                        </label>
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+            {/* Add field row */}
+            <tr style={{ borderBottom: `0.5px solid ${C.border}` }}>
+              <td colSpan={visibleRecords.length + 1} style={{ padding: '12px 16px' }}>
+                <FieldPicker
+                  availableProperties={availableFieldsForPicker}
+                  onAddField={handleAddField}
+                  disabled={mergeState !== 'idle'}
+                />
+              </td>
+            </tr>
           </tbody>
         </table>
       </Card>
@@ -736,7 +1169,10 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         <GhostBtn onClick={handleReject} disabled={rejecting || mergeState !== 'idle' || skipping}>
           {rejecting ? 'Rejecting...' : 'Not duplicates'}
         </GhostBtn>
-        <PrimaryBtn onClick={handleMerge} disabled={!masterId || mergeState !== 'idle' || rejecting || skipping}>
+        <PrimaryBtn
+          onClick={handleMerge}
+          disabled={!masterId || mergeState !== 'idle' || rejecting || skipping}
+        >
           {mergeState === 'merging' ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Loader2 size={12} className="animate-spin" />
@@ -793,8 +1229,8 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
             right: 24,
             padding: '12px 16px',
             background: C.surface,
-            border: `1px solid ${C.border}`,
-            borderRadius: 8,
+            border: `0.5px solid ${C.border}`,
+            borderRadius: 0,
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
             display: 'flex',
             alignItems: 'center',
