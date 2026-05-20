@@ -77,3 +77,71 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to load harmonies' }, { status: 500 });
   }
 }
+
+/**
+ * POST /api/harmonies
+ *
+ * Create a new custom harmony
+ */
+export async function POST(request: NextRequest) {
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  if (!isSupabaseConfigured() || !supabase) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
+  }
+
+  try {
+    const body = await request.json();
+    const { name, description, category, field, approach } = body;
+
+    // Validate required fields
+    if (!name || !field || !category) {
+      return NextResponse.json(
+        { error: 'Missing required fields: name, field, category' },
+        { status: 400 }
+      );
+    }
+
+    // Generate harmony ID (slug from name + timestamp for uniqueness)
+    const harmonyId = `${name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')}-${Date.now()}`;
+
+    // Create harmony record
+    const { data, error } = await supabase
+      .from('harmonies')
+      .insert({
+        id: harmonyId,
+        org_id: ctx.orgId,
+        name,
+        description,
+        category,
+        field,
+        object_type: category,
+        approach: approach || 'reference_list',
+        is_preset: false,
+        is_active: false,
+        created_by: ctx.userId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      captureWithOrgContext(error, ctx.orgId, { route: '/api/harmonies POST' });
+      console.error('[Create Harmony] Failed:', error);
+      return NextResponse.json({ error: 'Failed to create harmony' }, { status: 500 });
+    }
+
+    return NextResponse.json({ id: data.id, success: true });
+  } catch (error) {
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/harmonies POST' });
+    console.error('[Create Harmony] Unexpected error:', error);
+    return NextResponse.json({ error: 'Failed to create harmony' }, { status: 500 });
+  }
+}

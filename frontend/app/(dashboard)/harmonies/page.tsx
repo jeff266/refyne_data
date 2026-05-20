@@ -5,6 +5,7 @@ import { Plus, AlertTriangle, ChevronDown, Database } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, Chip, PrimaryBtn, GhostBtn, Tooltip } from '@/components/refyne';
 import { ReferenceDataTable } from '@/components/harmonies/ReferenceDataTable';
+import { HarmonyWizard } from '@/components/harmonies/HarmonyWizard';
 
 interface HarmonyItem {
   id: string;
@@ -497,6 +498,16 @@ export default function HarmoniesPage() {
           </Card>
         )}
       </div>
+
+      {/* Harmony Wizard */}
+      <HarmonyWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onSuccess={() => {
+          fetchHarmonies();
+          setWizardOpen(false);
+        }}
+      />
     </div>
   );
 }
