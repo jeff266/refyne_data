@@ -47,6 +47,7 @@ const LIBRARY_HARMONY_FILES = [
   'contact-title-standard.yaml',
   'contact-email-lower.yaml',
   'contact-location.yaml',
+  'website-social-media.yaml',
 ] as const;
 
 /**

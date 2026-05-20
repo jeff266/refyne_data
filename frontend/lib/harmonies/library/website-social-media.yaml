@@ -5,7 +5,7 @@ id: website-social-media
 version: 1.0.0
 name: Website Social Media Domain Flag
 description: Compliance flag for records using social media or directory domains as their primary website (indicates incomplete or low-quality data)
-category: compliance
+category: custom
 author: revops-impact
 
 applies_to:

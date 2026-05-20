@@ -34,23 +34,28 @@ rules:
       (
         $cleaned := $clean_whitespace(value);
 
+        /* Detect if input has mixed case (not all uppercase) */
+        $inputHasLower := $exists($match($cleaned, /[a-z]/));
+
         /* Smart title case that preserves acronyms and handles conjunctions */
         $words := $split($cleaned, /\s+/);
         $titleCased := $map($words, function($word, $index) {
           (
-            /* Preserve ALL CAPS acronyms (2-4 chars): LLC, INC, USA, AI, ABA */
-            $isAcronym := $match($word, /^[A-Z]{2,4}$/).matched;
-
-            /* Preserve mixed case words: iPhone, ABA4autism */
-            $isMixedCase := $match($word, /[a-z].*[A-Z]|[A-Z].*[a-z].*[A-Z]/).matched;
-
             /* Conjunctions and prepositions (lowercase unless first word) */
             $isConjunction := $lowercase($word) in ["and", "or", "the", "of", "in", "for", "with", "at", "by", "to"];
             $shouldLowercase := $isConjunction and $index > 0;
 
+            /* Preserve 2-3 char acronyms, 4-5 char only if mixed input */
+            $isShortAcronym := $exists($match($word, /^[A-Z]{2,3}$/));
+            $isLongAcronym := $inputHasLower and $exists($match($word, /^[A-Z]{4,5}$/));
+            $isAcronym := ($isShortAcronym or $isLongAcronym) and $not($isConjunction);
+
+            /* Preserve intentional mixed case like iPhone (lowercase + uppercase + 2+ lowercase) */
+            $isMixedCase := $exists($match($word, /^[a-z]+[A-Z][a-z]{2,}/));
+
+            $shouldLowercase ? $lowercase($word) :
             $isAcronym ? $uppercase($word) :
             $isMixedCase ? $word :
-            $shouldLowercase ? $lowercase($word) :
             $normalize_case($word, "title")
           )
         });
