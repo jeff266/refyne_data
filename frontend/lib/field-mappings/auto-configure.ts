@@ -196,8 +196,8 @@ async function cacheHubSpotProperties(
 ): Promise<number> {
   if (!supabase) return 0;
 
-  const standardCompanyNames: Set<string> = new Set(STANDARD_COMPANY_PROPERTIES.map((p) => p.hubspot));
-  const standardContactNames: Set<string> = new Set(STANDARD_CONTACT_PROPERTIES.map((p) => p.hubspot));
+  const standardCompanyNames: Set<string> = new Set(STANDARD_COMPANY_PROPERTIES.map((p) => p.hubspot as string));
+  const standardContactNames: Set<string> = new Set(STANDARD_CONTACT_PROPERTIES.map((p) => p.hubspot as string));
 
   const propsToCache = [];
 
