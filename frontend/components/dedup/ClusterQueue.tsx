@@ -262,7 +262,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
     if (masterEmpty && !absorbedEmpty) {
       return {
         masterColor: C.text3,
-        absorbedColor: '#f59e0b',
+        absorbedColor: C.amber,
         indicator: 'fill',
         showBoth: true,
       };
@@ -280,7 +280,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
       // Different values - conflict (master green, absorbed amber)
       return {
         masterColor: C.green,
-        absorbedColor: '#f59e0b',
+        absorbedColor: C.amber,
         indicator: dataPolicy === 'fill_gaps' ? 'discard' : 'conflict',
         showBoth: true,
       };
@@ -808,6 +808,43 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                                       ★
                                     </span>
                                   )}
+                                  {/* Color-coded dot for merge outcome */}
+                                  {outcome.masterColor === C.green && field.key !== 'name' && (
+                                    <span
+                                      style={{
+                                        fontSize: 8,
+                                        color: C.green,
+                                        marginRight: 4,
+                                      }}
+                                      title="Value will be kept"
+                                    >
+                                      ●
+                                    </span>
+                                  )}
+                                  {outcome.indicator === 'fill' && field.key !== 'name' && (
+                                    <span
+                                      style={{
+                                        fontSize: 8,
+                                        color: C.amber,
+                                        marginRight: 4,
+                                      }}
+                                      title="Fill-gap opportunity"
+                                    >
+                                      ●
+                                    </span>
+                                  )}
+                                  {outcome.indicator === 'conflict' && field.key !== 'name' && (
+                                    <span
+                                      style={{
+                                        fontSize: 8,
+                                        color: C.amber,
+                                        marginRight: 4,
+                                      }}
+                                      title="Conflict: different values"
+                                    >
+                                      ●
+                                    </span>
+                                  )}
                                   <span
                                     style={{
                                       color: outcome.masterColor,
@@ -818,45 +855,17 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                                     {field.masterVal || '—'}
                                   </span>
                                   {outcome.showBoth && field.absorbedVals[0] && (
-                                    <>
-                                      {outcome.indicator === 'fill' && (
-                                        <span
-                                          style={{
-                                            fontSize: 9,
-                                            color: '#f59e0b',
-                                            marginLeft: 4,
-                                            marginRight: 2,
-                                          }}
-                                          title="Gap will be filled from absorbed record"
-                                        >
-                                          ↑
-                                        </span>
-                                      )}
-                                      {outcome.indicator === 'conflict' && (
-                                        <span
-                                          style={{
-                                            fontSize: 9,
-                                            color: '#f59e0b',
-                                            marginLeft: 4,
-                                            marginRight: 2,
-                                          }}
-                                          title="Conflict: absorbed value differs"
-                                        >
-                                          ⚠
-                                        </span>
-                                      )}
-                                      <span
-                                        style={{
-                                          color: outcome.absorbedColor,
-                                          fontSize: 10,
-                                          opacity: 0.8,
-                                        }}
-                                        title={`Absorbed: ${field.absorbedVals[0]}`}
-                                      >
-                                        {' '}
-                                        ({field.absorbedVals[0]})
-                                      </span>
-                                    </>
+                                    <span
+                                      style={{
+                                        color: outcome.absorbedColor,
+                                        fontSize: 10,
+                                        opacity: 0.7,
+                                        marginLeft: 6,
+                                      }}
+                                      title={`Absorbed value: ${field.absorbedVals[0]}`}
+                                    >
+                                      ({field.absorbedVals[0]})
+                                    </span>
                                   )}
                                 </div>
                               );

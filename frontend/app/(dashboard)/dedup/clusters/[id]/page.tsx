@@ -42,6 +42,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
   const [data, setData] = useState<ClusterWithRecords | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [propertyLabels, setPropertyLabels] = useState<Record<string, string>>({});
 
   // Selection state
   const [masterId, setMasterId] = useState<string | null>(null);
@@ -51,6 +52,9 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
   const [merging, setMerging] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [skipping, setSkipping] = useState(false);
+  const [excludingRecordId, setExcludingRecordId] = useState<string | null>(null);
+  const [excludedRecords, setExcludedRecords] = useState<Set<string>>(new Set());
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Fetch cluster data
   useEffect(() => {
@@ -81,6 +85,28 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         if (master) {
           const autoSelections = autoSelectFields(FIELDS_TO_DISPLAY, master, others);
           setFieldSelections(autoSelections);
+        }
+
+        // Fetch HubSpot property definitions for enum field labels
+        try {
+          const propsRes = await fetch('/api/hubspot/properties/companies');
+          if (propsRes.ok) {
+            const propsData = await propsRes.json();
+            const labelMap: Record<string, string> = {};
+
+            propsData.properties.forEach((prop: any) => {
+              if (prop.options && Array.isArray(prop.options)) {
+                prop.options.forEach((opt: any) => {
+                  labelMap[`${prop.name}:${opt.value}`] = opt.label;
+                });
+              }
+            });
+
+            setPropertyLabels(labelMap);
+          }
+        } catch (err) {
+          console.error('Failed to fetch property definitions:', err);
+          // Continue without labels - will show raw values
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch cluster');
@@ -168,6 +194,46 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
     }
   };
 
+  // Handle exclude record
+  const handleExcludeRecord = async (recordId: string, recordName: string) => {
+    setExcludingRecordId(recordId);
+    try {
+      const res = await fetch(`/api/dedup/clusters/${params.id}/exclude-record`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-org-id': 'default',
+        },
+        body: JSON.stringify({ recordId }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to exclude record');
+      }
+
+      const result = await res.json();
+
+      // Add to excluded set (for UI filtering)
+      setExcludedRecords((prev) => new Set([...prev, recordId]));
+
+      // Show toast
+      setToastMessage(`${recordName} excluded from this merge`);
+      setTimeout(() => setToastMessage(null), 5000);
+
+      // If cluster was auto-rejected, redirect to queue
+      if (result.clusterRejected) {
+        setTimeout(() => {
+          router.push('/dedup');
+        }, 2000);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to exclude record');
+    } finally {
+      setExcludingRecordId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div
@@ -193,6 +259,9 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
   }
 
   const { cluster, records } = data;
+
+  // Filter out excluded records
+  const visibleRecords = records.filter((r) => !excludedRecords.has(r.id));
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto', padding: 24 }}>
@@ -265,7 +334,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
             width: '100%',
           }}
         >
-          {records.map((record) => (
+          {visibleRecords.map((record) => (
             <option key={record.id} value={record.id}>
               {record.properties.name || record.id} (ID: {record.id})
             </option>
@@ -299,7 +368,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
               >
                 Field
               </th>
-              {records.map((record) => (
+              {visibleRecords.map((record) => (
                 <th
                   key={record.id}
                   style={{
@@ -311,20 +380,52 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                     background: record.id === masterId ? C.indigoDim : 'transparent',
                   }}
                 >
-                  {record.properties.name || record.id}
-                  {record.id === masterId && (
-                    <span
-                      style={{
-                        marginLeft: 8,
-                        fontSize: 10,
-                        fontWeight: 600,
-                        color: C.indigo,
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      Master
-                    </span>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <div>
+                      {record.properties.name || record.id}
+                      {record.id === masterId && (
+                        <span
+                          style={{
+                            marginLeft: 8,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: C.indigo,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          Master
+                        </span>
+                      )}
+                    </div>
+                    {record.id !== masterId && (
+                      <button
+                        onClick={() => handleExcludeRecord(record.id, record.properties.name || record.id)}
+                        disabled={excludingRecordId === record.id}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          fontWeight: 500,
+                          color: excludingRecordId === record.id ? C.text3 : C.red,
+                          background: 'transparent',
+                          border: `1px solid ${excludingRecordId === record.id ? C.border : C.red}`,
+                          borderRadius: 4,
+                          cursor: excludingRecordId === record.id ? 'not-allowed' : 'pointer',
+                          opacity: excludingRecordId === record.id ? 0.5 : 1,
+                          whiteSpace: 'nowrap',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (excludingRecordId !== record.id) {
+                            e.currentTarget.style.background = C.redDim;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        {excludingRecordId === record.id ? 'Excluding...' : '× Exclude'}
+                      </button>
+                    )}
+                  </div>
                 </th>
               ))}
             </tr>
@@ -345,9 +446,14 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                 >
                   {FIELD_LABELS[field] || field}
                 </td>
-                {records.map((record) => {
+                {visibleRecords.map((record) => {
                   const value = record.properties[field];
                   const isSelected = fieldSelections[field] === record.id;
+
+                  // Get human-readable label for enum values
+                  const displayValue = value
+                    ? propertyLabels[`${field}:${value}`] || value
+                    : '(empty)';
 
                   return (
                     <td
@@ -383,7 +489,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                             fontStyle: value ? 'normal' : 'italic',
                           }}
                         >
-                          {value || '(empty)'}
+                          {displayValue}
                         </span>
                       </label>
                     </td>
@@ -407,6 +513,42 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
           {merging ? 'Merging...' : 'Merge cluster'}
         </PrimaryBtn>
       </div>
+
+      {/* Toast notification */}
+      {toastMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            padding: '12px 16px',
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 8,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            zIndex: 1000,
+            minWidth: 300,
+          }}
+        >
+          <Check size={16} color={C.green} />
+          <span style={{ fontSize: 13, color: C.text, flex: 1 }}>{toastMessage}</span>
+          <button
+            onClick={() => setToastMessage(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: C.text3,
+              padding: 4,
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
