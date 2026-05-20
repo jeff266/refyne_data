@@ -289,10 +289,10 @@ export function ManageFieldsSlideOver({ open, onClose, currentFields, onSave }: 
         {/* Standard Contact Fields */}
         <div style={{ marginBottom: 32 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>
-            Standard Contact Fields
+            Standard Contact Fields {filteredContactFields.length < STANDARD_CONTACT_FIELDS.length && `(${filteredContactFields.length})`}
           </h3>
           <div style={{ display: 'grid', gap: 8 }}>
-            {STANDARD_CONTACT_FIELDS.map((field) => (
+            {filteredContactFields.map((field) => (
               <label
                 key={field.key}
                 style={{
@@ -355,9 +355,9 @@ export function ManageFieldsSlideOver({ open, onClose, currentFields, onSave }: 
             </div>
           )}
 
-          {!cacheEmpty && customProperties.length > 0 && (
+          {!cacheEmpty && filteredCustomProperties.length > 0 && (
             <div style={{ display: 'grid', gap: 8 }}>
-              {customProperties.map((prop) => (
+              {filteredCustomProperties.map((prop) => (
                 <label
                   key={prop.name}
                   style={{
