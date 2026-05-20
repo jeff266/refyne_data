@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
+import { CleanUrl } from '@/components/CleanUrl';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -16,9 +17,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      afterSignUpUrl="/onboarding"
+      fallbackRedirectUrl="/dashboard"
+    >
       <html lang="en">
-        <body>{children}</body>
+        <body>
+          <CleanUrl />
+          {children}
+        </body>
       </html>
     </ClerkProvider>
   );
