@@ -66,28 +66,30 @@ function getApiKey(): string {
 }
 
 /**
- * Map employee count to Apollo size range.
+ * Build Apollo employee range strings (Variation C methodology).
+ * Apollo expects comma-separated min,max pairs like: '51,100', '101,200', '201,500'
  */
-function mapEmployeeRange(min?: number, max?: number): string[] | undefined {
+function buildApolloEmployeeRanges(min?: number, max?: number): string[] | undefined {
   if (!min && !max) return undefined;
 
   const ranges: string[] = [];
-  const sizeRanges = [
-    { range: '1-10', min: 1, max: 10 },
-    { range: '11-50', min: 11, max: 50 },
-    { range: '51-200', min: 51, max: 200 },
-    { range: '201-500', min: 201, max: 500 },
-    { range: '501-1000', min: 501, max: 1000 },
-    { range: '1001-5000', min: 1001, max: 5000 },
-    { range: '5001-10000', min: 5001, max: 10000 },
-    { range: '10001+', min: 10001, max: Infinity },
+  const apolloRanges = [
+    { min: 1, max: 10 },
+    { min: 11, max: 50 },
+    { min: 51, max: 100 },
+    { min: 101, max: 200 },
+    { min: 201, max: 500 },
+    { min: 501, max: 1000 },
+    { min: 1001, max: 2000 },
+    { min: 2001, max: 5000 },
+    { min: 5001, max: 10000 },
+    { min: 10001, max: Infinity },
   ];
 
-  for (const sizeRange of sizeRanges) {
-    const overlaps =
-      (!min || sizeRange.max >= min) && (!max || sizeRange.min <= max);
+  for (const range of apolloRanges) {
+    const overlaps = (!min || range.max >= min) && (!max || range.min <= max);
     if (overlaps) {
-      ranges.push(sizeRange.range);
+      ranges.push(`${range.min},${range.max === Infinity ? '' : range.max}`);
     }
   }
 
@@ -95,7 +97,8 @@ function mapEmployeeRange(min?: number, max?: number): string[] | undefined {
 }
 
 /**
- * Search for companies using Apollo's organization search API.
+ * Search for companies using Apollo's organization search API (Variation C methodology).
+ * Uses organization_locations array and employee ranges for reliable filtering.
  */
 export async function searchCompaniesApollo(
   query: ProspectSearchQuery
@@ -104,8 +107,8 @@ export async function searchCompaniesApollo(
   const apiKey = getApiKey();
 
   try {
-    // Build Apollo search payload
-    // Request more results than needed to compensate for post-filtering
+    // Build Apollo search payload (Variation C)
+    // Request 4x results to compensate for post-filtering
     const requestLimit = query.limit || 25;
     const apolloLimit = Math.min(requestLimit * 4, 100); // Apollo max is 100
 
@@ -115,15 +118,28 @@ export async function searchCompaniesApollo(
       per_page: apolloLimit,
     };
 
-    // Industry filters - use keyword search instead of tag IDs
-    // Apollo's tag IDs require a separate lookup/mapping
-    // For now, search by industry name as keywords
-    if (query.industries && query.industries.length > 0) {
-      payload.q_organization_keyword_tags = query.industries;
+    // Location filter: use organization_locations array (Variation C)
+    if (query.location) {
+      const locations: string[] = [];
+
+      if (query.location.state && query.location.country) {
+        // State-level: "California, United States"
+        locations.push(`${query.location.state}, ${query.location.country}`);
+      } else if (query.location.country) {
+        // Country-level: "United States"
+        locations.push(query.location.country);
+      } else if (query.location.city) {
+        // City-level fallback
+        locations.push(query.location.city);
+      }
+
+      if (locations.length > 0) {
+        payload.organization_locations = locations;
+      }
     }
 
-    // Employee count filters
-    const employeeRanges = mapEmployeeRange(
+    // Employee range: Apollo range string array (Variation C)
+    const employeeRanges = buildApolloEmployeeRanges(
       query.employeeMin,
       query.employeeMax
     );
@@ -131,25 +147,23 @@ export async function searchCompaniesApollo(
       payload.organization_num_employees_ranges = employeeRanges;
     }
 
-    // Location filters
-    if (query.location) {
-      if (query.location.city) {
-        payload.organization_locations = [query.location.city];
-      }
-      if (query.location.state) {
-        payload.person_locations = [query.location.state];
-      }
-      if (query.location.country) {
-        payload.organization_countries = [query.location.country];
-      }
-    }
+    // Keywords and industries: combine into q_organization_name (Variation C)
+    // Industry is soft-filtered by Apollo, hard-filtered post-query
+    const searchTerms: string[] = [];
 
-    // Keywords (search in company name or description)
     if (query.keywords && query.keywords.length > 0) {
-      payload.q_organization_keyword_tags = query.keywords;
+      searchTerms.push(...query.keywords);
     }
 
-    // Technologies filter
+    if (query.industries && query.industries.length > 0) {
+      searchTerms.push(...query.industries);
+    }
+
+    if (searchTerms.length > 0) {
+      payload.q_organization_name = searchTerms.join(' ');
+    }
+
+    // Technologies filter (if supported)
     if (query.technologies && query.technologies.length > 0) {
       payload.organization_technology_slugs = query.technologies;
     }
@@ -199,7 +213,7 @@ export async function searchCompaniesApollo(
     // Apply hard filters (Apollo's standard tier has soft filters)
     const filteredCompanies = postFilterResults(companies, query);
 
-    // Slice to requested limit
+    // Slice to requested limit after filtering
     const finalCompanies = filteredCompanies.slice(0, requestLimit);
 
     return {

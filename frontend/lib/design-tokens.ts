@@ -45,6 +45,7 @@ export const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { divider: true },
   { group: 'Data' },
+  { id: 'prospect',    label: 'Prospect',      icon: 'Users' },
   { id: 'enrich',      label: 'Enrich',        icon: 'Search' },
   { id: 'normalize',   label: 'Normalize',     icon: 'ArrowUpDown' },
   { id: 'dedup',       label: 'Dedup',         icon: 'GitMerge' },
@@ -60,6 +61,7 @@ export const NAV = [
 // Page metadata
 export const PAGE_META: Record<string, { label: string; action: string | null }> = {
   dashboard:    { label: 'Dashboard',      action: null },
+  prospect:     { label: 'Prospect',       action: null },
   enrich:       { label: 'Enrich',         action: 'New search' },
   normalize:    { label: 'Normalize',      action: null },
   dedup:        { label: 'Dedup',          action: 'Run scan' },

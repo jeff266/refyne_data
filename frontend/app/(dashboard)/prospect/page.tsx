@@ -14,7 +14,7 @@ import { ProspectSearchQuery, ProspectSearchResult, ICPConfig } from '@/lib/pros
 export default function ProspectPage() {
   const [searchQuery, setSearchQuery] = useState<ProspectSearchQuery>({
     limit: 25,
-    providers: ['apollo', 'zoominfo'],
+    providers: ['apollo'],
   });
   const [icpConfig, setIcpConfig] = useState<ICPConfig | undefined>(undefined);
   const [results, setResults] = useState<ProspectSearchResult[]>([]);
