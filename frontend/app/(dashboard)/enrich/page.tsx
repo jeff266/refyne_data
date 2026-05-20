@@ -842,7 +842,7 @@ export default function EnrichPage() {
                   <div style={{ marginBottom: 12 }}>
                     Enriching{' '}
                     <strong style={{ color: C.text }}>
-                      {(companyScope === 'segment' ? previewCount : gapAnalysis?.total_companies || 0).toLocaleString()}
+                      {(companyScope === 'segment' ? (previewCount || 0) : (gapAnalysis?.total_companies || 0)).toLocaleString()}
                     </strong>{' '}
                     companies
                   </div>
@@ -892,7 +892,7 @@ export default function EnrichPage() {
                       executeEnrichment();
                     }}
                   >
-                    Enrich {(companyScope === 'segment' ? previewCount : gapAnalysis?.total_companies || 0).toLocaleString()} companies →
+                    Enrich {(companyScope === 'segment' ? (previewCount || 0) : (gapAnalysis?.total_companies || 0)).toLocaleString()} companies →
                   </PrimaryBtn>
                 </div>
               </div>
