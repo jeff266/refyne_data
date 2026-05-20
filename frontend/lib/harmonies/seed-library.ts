@@ -22,6 +22,7 @@ export interface HarmonyRow {
   is_active: boolean;
   rule_count: number;
   yaml_content: string | null;
+  examples?: Array<{ input: any; output: any }> | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -58,6 +59,15 @@ export async function seedHarmonyLibrary(): Promise<{
       const field = spec.applies_to.fields[0] || 'unknown';
       const objectType = spec.applies_to.entity === 'person' ? 'contact' : 'company';
 
+      // Extract examples from tests (first 5 non-null/empty tests)
+      const examples = spec.tests
+        ?.filter((t) => t.input !== null && t.input !== '')
+        .slice(0, 5)
+        .map((t) => ({
+          input: t.input,
+          output: t.expected,
+        })) || [];
+
       return {
         id: spec.id,
         org_id: null, // Preset harmonies have null org_id
@@ -70,6 +80,7 @@ export async function seedHarmonyLibrary(): Promise<{
         is_active: spec.default_enabled !== false, // Default to active unless explicitly disabled
         rule_count: spec.rules?.length || 0,
         yaml_content: null, // Optional: could store full YAML here if needed
+        examples: examples.length > 0 ? examples : null,
       };
     });
 

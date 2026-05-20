@@ -9,6 +9,7 @@ export { StatusDot } from './StatusDot';
 export { RefyneLogo } from './RefyneLogo';
 export { HarmonyBar } from './HarmonyBar';
 export { InsightRow } from './InsightRow';
+export { Tooltip } from './Tooltip';
 export { GlobalStyles } from './GlobalStyles';
 export { Sidebar } from './Sidebar';
 export { TopBar } from './TopBar';

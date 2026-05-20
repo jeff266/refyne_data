@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
       isPreset: h.is_preset,
       ruleCount: h.rule_count,
       recordsAffected: undefined, // TODO: Join with compliance scan results
+      examples: h.examples || [],
     }));
 
     return NextResponse.json({

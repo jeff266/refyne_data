@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, AlertTriangle } from 'lucide-react';
+import { Plus, AlertTriangle, ChevronDown } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
-import { Card, Toggle, Chip, PrimaryBtn, GhostBtn } from '@/components/refyne';
+import { Card, Toggle, Chip, PrimaryBtn, GhostBtn, Tooltip } from '@/components/refyne';
 
 interface HarmonyItem {
   id: string;
@@ -18,6 +18,7 @@ interface HarmonyItem {
   isPreset?: boolean;
   ruleCount?: number;
   recordsAffected?: number;
+  examples?: Array<{ input: any; output: any }>;
 }
 
 interface ComplianceInsight {
@@ -32,43 +33,169 @@ function HarmonyRow({
   isRec,
   enabled,
   onToggle,
-  loading
+  loading,
+  testExpanded,
+  onToggleTest,
 }: {
   h: HarmonyItem;
   isRec?: boolean;
   enabled: boolean;
   onToggle: () => void;
   loading?: boolean;
+  testExpanded: boolean;
+  onToggleTest: () => void;
 }) {
+  const [testInput, setTestInput] = useState('');
+  const [testOutput, setTestOutput] = useState<{
+    matched: boolean;
+    output: string | null;
+    rule: string | null;
+    explanation: string;
+  } | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  // Debounced test API call
+  useEffect(() => {
+    if (!testExpanded || !testInput) {
+      setTestOutput(null);
+      return;
+    }
+
+    setTesting(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/harmonies/${h.id}/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: testInput }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setTestOutput(data);
+        }
+      } catch (err) {
+        console.error('Test failed:', err);
+      } finally {
+        setTesting(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [testInput, testExpanded, h.id]);
+
+  // Generate tooltip content with examples
+  const tooltipContent = h.examples && h.examples.length > 0 ? (
+    <div>
+      <div style={{ fontWeight: 600, marginBottom: 8, color: C.text }}>Examples</div>
+      {h.examples.slice(0, 4).map((ex, i) => (
+        <div key={i} style={{ marginBottom: 6, fontSize: 11, fontFamily: F.mono }}>
+          <span style={{ color: C.text3 }}>{JSON.stringify(ex.input)}</span>
+          <span style={{ color: C.text3, margin: '0 6px' }}>→</span>
+          <span style={{ color: C.green }}>{JSON.stringify(ex.output)}</span>
+        </div>
+      ))}
+      {h.examples.length > 4 && (
+        <div style={{ fontSize: 10, color: C.text3, marginTop: 8 }}>+ {h.examples.length - 4} more examples</div>
+      )}
+    </div>
+  ) : null;
+
   return (
-    <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: enabled ? C.text : C.text3 }}>{h.name}</span>
-            {h.isPreset && <Chip color="amber">Library</Chip>}
-            {isRec && <Chip color="indigo">★ recommended</Chip>}
-          </div>
-          <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>
-            {h.description || h.name}
-          </div>
-          <div style={{ fontSize: 10, fontFamily: F.mono, color: C.text3, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span>{h.fields[0]}</span>
-            {h.ruleCount && <span>• {h.ruleCount} rules</span>}
-            {h.recordsAffected !== undefined && <span>• {h.recordsAffected} records affected</span>}
-          </div>
-          {h.warning && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: C.amberDim, borderRadius: 6, border: `1px solid rgba(245,158,11,0.2)`, marginTop: 8 }}>
-              <AlertTriangle size={11} color={C.amber} />
-              <span style={{ fontSize: 11, color: C.amber }}>{h.warning}</span>
+    <div style={{ borderBottom: `1px solid ${C.border}` }}>
+      <Tooltip content={tooltipContent} disabled={!tooltipContent}>
+        <div style={{ padding: '14px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: enabled ? C.text : C.text3 }}>{h.name}</span>
+                {h.isPreset && <Chip color="amber">Library</Chip>}
+                {isRec && <Chip color="indigo">★ recommended</Chip>}
+              </div>
+              <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>
+                {h.description || h.name}
+              </div>
+              <div style={{ fontSize: 10, fontFamily: F.mono, color: C.text3, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span>{h.fields[0]}</span>
+                {h.ruleCount && <span>• {h.ruleCount} rules</span>}
+                {h.recordsAffected !== undefined && <span>• {h.recordsAffected} records affected</span>}
+              </div>
+              {h.warning && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: C.amberDim, borderRadius: 6, border: `1px solid rgba(245,158,11,0.2)`, marginTop: 8 }}>
+                  <AlertTriangle size={11} color={C.amber} />
+                  <span style={{ fontSize: 11, color: C.amber }}>{h.warning}</span>
+                </div>
+              )}
             </div>
-          )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              {h.score !== undefined && <span style={{ fontSize: 11, fontFamily: F.mono, color: h.score >= 90 ? C.green : C.amber }}>{h.score}%</span>}
+              <button
+                onClick={onToggleTest}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  color: testExpanded ? C.indigo : C.text3,
+                  background: testExpanded ? C.indigoDim : 'transparent',
+                  border: `1px solid ${testExpanded ? C.indigoBrd : C.border}`,
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                Test
+                <ChevronDown size={12} style={{ transform: testExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+              </button>
+              <Toggle on={enabled} onToggle={onToggle} disabled={loading} />
+            </div>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-          {h.score !== undefined && <span style={{ fontSize: 11, fontFamily: F.mono, color: h.score >= 90 ? C.green : C.amber }}>{h.score}%</span>}
-          <Toggle on={enabled} onToggle={onToggle} disabled={loading} />
+      </Tooltip>
+
+      {/* Inline tester */}
+      {testExpanded && (
+        <div style={{ padding: '12px 20px', background: C.surface, borderTop: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 11, color: C.text3, marginBottom: 8 }}>Try a value:</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <input
+              type="text"
+              value={testInput}
+              onChange={(e) => setTestInput(e.target.value)}
+              placeholder="Type to test transformation..."
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                fontSize: 13,
+                fontFamily: F.mono,
+                background: C.bg,
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                color: C.text,
+              }}
+            />
+            <span style={{ fontSize: 13, color: C.text3 }}>→</span>
+            <div style={{ flex: 1, padding: '8px 12px', fontSize: 13, fontFamily: F.mono, minHeight: 36 }}>
+              {testing ? (
+                <span style={{ color: C.text3 }}>...</span>
+              ) : testOutput ? (
+                testOutput.matched ? (
+                  <span style={{ color: C.green }}>{testOutput.output} ✓</span>
+                ) : (
+                  <div>
+                    <span style={{ color: C.amber }}>No match ⚠</span>
+                    <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>
+                      Would appear as unmatched in compliance score
+                    </div>
+                  </div>
+                )
+              ) : (
+                <span style={{ color: C.text3 }}>Type to see output</span>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -80,6 +207,7 @@ export default function HarmoniesPage() {
   const [insights, setInsights] = useState<Map<string, ComplianceInsight>>(new Map());
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
 
   // Fetch harmonies and enabled state
   const fetchHarmonies = useCallback(async () => {
@@ -227,6 +355,8 @@ export default function HarmoniesPage() {
                 enabled={enabledIds.has(h.id)}
                 onToggle={() => toggle(h.id)}
                 loading={togglingId === h.id}
+                testExpanded={expandedTestId === h.id}
+                onToggleTest={() => setExpandedTestId(expandedTestId === h.id ? null : h.id)}
               />
             ))}
           </Card>
@@ -243,6 +373,8 @@ export default function HarmoniesPage() {
                 enabled={enabledIds.has(h.id)}
                 onToggle={() => toggle(h.id)}
                 loading={togglingId === h.id}
+                testExpanded={expandedTestId === h.id}
+                onToggleTest={() => setExpandedTestId(expandedTestId === h.id ? null : h.id)}
               />
             ))}
           </Card>
