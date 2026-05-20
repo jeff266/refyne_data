@@ -117,7 +117,7 @@ export default function NormalizePage() {
       if (data.preview && data.preview.length > 0) {
         addToast('success', `Found ${data.preview.length} potential changes`);
       } else {
-        addToast('info', 'No changes detected. All records match harmonies.');
+        addToast('success', 'No changes detected. All records match harmonies.');
       }
 
       // Auto-select all changes by default
