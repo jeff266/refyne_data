@@ -16,6 +16,10 @@ export async function POST(request: NextRequest) {
     return authError(e) ?? NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   }
 
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+  }
+
   const body = await request.json();
   const { provider } = body;
 

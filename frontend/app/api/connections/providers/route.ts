@@ -14,6 +14,10 @@ export async function GET(request: NextRequest) {
     return authError(e) ?? NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
+  }
+
   const { data: connections, error } = await supabase
     .from('provider_connections')
     .select('provider, status, key_hint, last_tested_at, last_error')
