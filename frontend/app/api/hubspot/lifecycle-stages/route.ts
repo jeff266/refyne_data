@@ -49,6 +49,20 @@ export async function GET() {
     );
 
     if (!propRes.ok) {
+      // If 403, return basic lifecycle stages
+      if (propRes.status === 403) {
+        console.warn('[Lifecycle Stages] Insufficient permissions, using defaults');
+        return NextResponse.json({
+          stages: [
+            { value: '', label: 'All', count: 0 },
+            { value: 'lead', label: 'Lead', count: 0 },
+            { value: 'marketingqualifiedlead', label: 'Marketing Qualified Lead', count: 0 },
+            { value: 'salesqualifiedlead', label: 'Sales Qualified Lead', count: 0 },
+            { value: 'opportunity', label: 'Opportunity', count: 0 },
+            { value: 'customer', label: 'Customer', count: 0 },
+          ],
+        });
+      }
       throw new Error(`HubSpot API error: ${propRes.status}`);
     }
 

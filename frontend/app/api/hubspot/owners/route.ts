@@ -75,6 +75,13 @@ export async function GET() {
     );
 
     if (!ownersRes.ok) {
+      // If 403, return empty list (insufficient permissions)
+      if (ownersRes.status === 403) {
+        console.warn('[HubSpot Owners] Insufficient permissions to fetch owners');
+        return NextResponse.json({
+          owners: [{ id: '', name: 'All owners', email: null }],
+        });
+      }
       throw new Error(`HubSpot API error: ${ownersRes.status}`);
     }
 
