@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import { Workflow, Plus, Play, Edit, Clock } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn, GhostBtn } from '@/components/refyne';
@@ -48,8 +49,12 @@ function formatTimeAgo(dateString: string): string {
 
 export default function ArrangementsPage() {
   const router = useRouter();
+  const { orgRole } = useAuth();
   const [arrangements, setArrangements] = useState<Arrangement[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const isViewer = orgRole === 'org:viewer';
+  const canCreate = !isViewer;
 
   useEffect(() => {
     fetchArrangements();
@@ -70,8 +75,27 @@ export default function ArrangementsPage() {
     }
   };
 
-  const handleCreateNew = () => {
-    router.push('/arrangements/new');
+  const handleCreateNew = async () => {
+    try {
+      // Check onboarding status
+      const res = await fetch('/api/arrangements/onboarding');
+      if (res.ok) {
+        const { arrangements_onboarding_complete } = await res.json();
+
+        if (!arrangements_onboarding_complete) {
+          // Redirect to calibration with onboarding flag
+          router.push('/settings?tab=calibration&onboarding=true');
+          return;
+        }
+      }
+
+      // Onboarding complete, proceed to wizard
+      router.push('/arrangements/new');
+    } catch (error) {
+      console.error('Failed to check onboarding status:', error);
+      // Proceed anyway on error
+      router.push('/arrangements/new');
+    }
   };
 
   const handleRun = async (id: string) => {
@@ -126,7 +150,7 @@ export default function ArrangementsPage() {
             marginBottom: 8,
           }}
         >
-          Your first Arrangement takes 3 minutes to build.
+          {isViewer ? 'No Arrangements Yet' : 'Your first Arrangement takes 3 minutes to build.'}
         </h2>
         <p
           style={{
@@ -138,7 +162,9 @@ export default function ArrangementsPage() {
             lineHeight: '1.6',
           }}
         >
-          Enrich 10x more records with multi-provider waterfalls.
+          {isViewer
+            ? 'Your workspace admin hasn\'t created any arrangements yet.'
+            : 'Enrich 10x more records with multi-provider waterfalls.'}
         </p>
         <p
           style={{
@@ -150,12 +176,20 @@ export default function ArrangementsPage() {
             lineHeight: '1.6',
           }}
         >
-          Apollo fills what it can. Clearbit fills the gaps. Serper catches what both miss. Set it
-          up once, run it whenever your data needs refreshing.
+          {isViewer ? (
+            'Arrangements are multi-provider enrichment pipelines that keep your CRM data fresh.'
+          ) : (
+            <>
+              Apollo fills what it can. Clearbit fills the gaps. Serper catches what both miss. Set it
+              up once, run it whenever your data needs refreshing.
+            </>
+          )}
         </p>
-        <PrimaryBtn onClick={handleCreateNew}>
-          Build your first Arrangement →
-        </PrimaryBtn>
+        {canCreate && (
+          <PrimaryBtn onClick={handleCreateNew}>
+            Build your first Arrangement →
+          </PrimaryBtn>
+        )}
       </div>
     );
   }
@@ -177,10 +211,12 @@ export default function ArrangementsPage() {
           </h1>
           <p style={{ fontSize: 14, color: C.text3 }}>Multi-provider enrichment pipelines</p>
         </div>
-        <PrimaryBtn onClick={handleCreateNew}>
-          <Plus size={16} />
-          New arrangement
-        </PrimaryBtn>
+        {canCreate && (
+          <PrimaryBtn onClick={handleCreateNew}>
+            <Plus size={16} />
+            New arrangement
+          </PrimaryBtn>
+        )}
       </div>
 
       {/* Arrangements list */}
@@ -280,36 +316,40 @@ export default function ArrangementsPage() {
 
               {/* Actions */}
               <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => handleRun(arr.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '8px 16px',
-                    background: C.indigo,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 6,
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.opacity = '0.9';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.opacity = '1';
-                  }}
-                >
-                  Run again
-                </button>
+                {canCreate && (
+                  <>
+                    <button
+                      onClick={() => handleRun(arr.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '8px 16px',
+                        background: C.indigo,
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 6,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = '0.9';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = '1';
+                      }}
+                    >
+                      Run again
+                    </button>
+                    <GhostBtn onClick={() => router.push(`/arrangements/${arr.id}`)}>
+                      <Edit size={14} />
+                      Edit
+                    </GhostBtn>
+                  </>
+                )}
                 <GhostBtn onClick={() => router.push(`/arrangements/${arr.id}`)}>
-                  <Edit size={14} />
-                  Edit
-                </GhostBtn>
-                <GhostBtn onClick={() => router.push(`/arrangements/${arr.id}/history`)}>
-                  View history
+                  {isViewer ? 'View details' : 'View details'}
                 </GhostBtn>
               </div>
             </div>

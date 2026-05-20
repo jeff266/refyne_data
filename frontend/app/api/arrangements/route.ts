@@ -89,12 +89,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Validate required fields
-    if (!body.name || !body.source_type || !body.source_config || !body.enrichment_steps || !body.output_destination || !body.output_config) {
+    if (!body.name || !body.source_type || !body.source_config || !body.output_destination || !body.output_config) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
+
+    // Support both v1 (enrichment_steps) and v2 (field_configs)
+    const enrichmentSteps = body.enrichment_steps || [];
+    const fieldConfigs = body.field_configs || null;
 
     // Create arrangement
     const { data: arrangement, error } = await supabase
@@ -105,7 +109,8 @@ export async function POST(request: NextRequest) {
         description: body.description || null,
         source_type: body.source_type,
         source_config: body.source_config,
-        enrichment_steps: body.enrichment_steps,
+        enrichment_steps: enrichmentSteps, // v1 (legacy)
+        field_configs: fieldConfigs, // v2 (waterfall)
         output_destination: body.output_destination,
         output_config: body.output_config,
         created_by: ctx.userId,

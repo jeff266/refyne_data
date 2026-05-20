@@ -10,6 +10,10 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:preflight": "npx tsx tests/arrangements-v2-preflight.test.ts",
+    "test:preflight:headful": "HEADLESS=false npx tsx tests/arrangements-v2-preflight.test.ts",
+    "test:waterfall": "npx tsx tests/waterfall-builder.test.ts",
+    "test:waterfall:headful": "HEADLESS=false npx tsx tests/waterfall-builder.test.ts",
     "worker:webhooks": "npx tsx scripts/start-webhook-worker.ts",
     "worker:digest": "npx tsx scripts/start-digest-worker.ts"
   },

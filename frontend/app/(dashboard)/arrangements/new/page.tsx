@@ -1,12 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import { ChevronLeft, ChevronRight, Check, Sparkles } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn } from '@/components/refyne';
 import { addToast } from '@/components/ui/toast';
 import { RehearsalAISummary } from './RehearsalAISummary';
+import { ArrangementWaterfallBuilder, FieldConfig, ProviderConnection } from '@/components/arrangements/ArrangementWaterfallBuilder';
+import { ManageFieldsSlideOver } from '@/components/arrangements/ManageFieldsSlideOver';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -20,12 +23,14 @@ interface ArrangementConfig {
     fields: string[];
     order: number;
   }>;
+  field_configs: FieldConfig[]; // v2: field-level waterfall
   output_destination: string;
   output_config: Record<string, unknown>;
 }
 
 export default function NewArrangementPage() {
   const router = useRouter();
+  const { orgRole } = useAuth();
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [config, setConfig] = useState<Partial<ArrangementConfig>>({
     name: '',
@@ -33,11 +38,49 @@ export default function NewArrangementPage() {
     source_type: 'hubspot_list',
     source_config: {},
     enrichment_steps: [],
+    field_configs: [],
     output_destination: 'hubspot',
     output_config: {},
   });
   const [rehearsalResults, setRehearsalResults] = useState<any>(null);
   const [readyToRun, setReadyToRun] = useState<boolean>(true);
+  const [providers, setProviders] = useState<ProviderConnection[]>([
+    { provider: 'refyne', connected: true, hasError: false }, // Always available
+  ]);
+  const [showManageFields, setShowManageFields] = useState(false);
+
+  // Redirect viewers - they cannot create arrangements
+  useEffect(() => {
+    if (orgRole === 'org:viewer') {
+      addToast('error', 'You need operator or admin access to create arrangements');
+      router.push('/arrangements');
+    }
+  }, [orgRole, router]);
+
+  // Load provider connections
+  useEffect(() => {
+    loadProviders();
+  }, []);
+
+  const loadProviders = async () => {
+    try {
+      const res = await fetch('/api/providers/connections');
+      if (res.ok) {
+        const { connections } = await res.json();
+        setProviders([
+          { provider: 'refyne', connected: true, hasError: false },
+          ...connections.map((c: any) => ({
+            provider: c.provider,
+            connected: c.status === 'active',
+            hasError: c.status === 'error',
+          })),
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to load providers:', error);
+      // Keep Refyne Data as fallback
+    }
+  };
 
   const handleNext = () => {
     if (currentStep < 5) {
@@ -92,8 +135,10 @@ export default function NewArrangementPage() {
 
       if (!response.ok) throw new Error('Failed to create arrangement');
 
+      const { arrangement } = await response.json();
+
       addToast('success', 'Arrangement created successfully');
-      router.push('/arrangements');
+      router.push(`/arrangements/${arrangement.id}`);
     } catch (error) {
       console.error('Failed to create arrangement:', error);
       addToast('error', 'Failed to create arrangement');
@@ -236,59 +281,22 @@ export default function NewArrangementPage() {
           </div>
         )}
 
-        {/* Step 3: Configure Enrichment */}
+        {/* Step 3: Configure Enrichment (v2 waterfall builder) */}
         {currentStep === 3 && (
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 24 }}>
-              Step 3: Configure Enrichment
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+              Step 3: Build Your Waterfall
             </h2>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 14, color: C.text2, marginBottom: 8 }}>
-                Provider
-              </label>
-              <select
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  background: C.bg,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 6,
-                  color: C.text,
-                  fontSize: 14,
-                }}
-              >
-                <option value="apollo">Apollo</option>
-                <option value="zoominfo">ZoomInfo</option>
-                <option value="clearbit">Clearbit</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 14, color: C.text2, marginBottom: 8 }}>
-                Fields to Enrich
-              </label>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {['domain', 'employee_count', 'industry', 'revenue', 'phone'].map((field) => (
-                  <label
-                    key={field}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: 12,
-                      background: C.bg,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <input type="checkbox" />
-                    <span style={{ fontSize: 14, color: C.text }}>
-                      {field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            <p style={{ fontSize: 14, color: C.text3, marginBottom: 24 }}>
+              Configure field-level provider chains. Each field gets its own waterfall.
+            </p>
+
+            <ArrangementWaterfallBuilder
+              value={config.field_configs || []}
+              onChange={(fieldConfigs) => setConfig({ ...config, field_configs: fieldConfigs })}
+              providers={providers}
+              onManageFields={() => setShowManageFields(true)}
+            />
           </div>
         )}
 
@@ -468,6 +476,34 @@ export default function NewArrangementPage() {
           </PrimaryBtn>
         )}
       </div>
+
+      {/* Manage Fields Slide-Over */}
+      {showManageFields && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setShowManageFields(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 9998,
+            }}
+          />
+          <ManageFieldsSlideOver
+            open={showManageFields}
+            onClose={() => setShowManageFields(false)}
+            currentFields={config.field_configs || []}
+            onSave={(fields) => {
+              setConfig({ ...config, field_configs: fields });
+              setShowManageFields(false);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }
