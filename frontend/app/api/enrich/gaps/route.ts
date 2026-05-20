@@ -32,22 +32,10 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabaseClient();
 
-    // Check cache first
-    const cacheKey = `${ctx.orgId}:enrich:gaps`;
-    const { data: cached } = await supabase
-      .from('cache')
-      .select('value, expires_at')
-      .eq('key', cacheKey)
-      .single();
-
-    if (cached && new Date(cached.expires_at) > new Date()) {
-      return NextResponse.json(cached.value);
-    }
-
-    // Get HubSpot connection
+    // Get HubSpot connection first (need portal_id for cache key)
     const { data: connection } = await supabase
       .from('hubspot_connections')
-      .select('access_token')
+      .select('access_token, portal_id')
       .eq('org_id', ctx.orgId)
       .single();
 
@@ -58,28 +46,55 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Fetch all companies from HubSpot with required properties
+    // Check cache with portal_id included
+    const cacheKey = `${ctx.orgId}:${connection.portal_id}:enrich:gaps`;
+    const { data: cached } = await supabase
+      .from('cache')
+      .select('value, expires_at')
+      .eq('key', cacheKey)
+      .single();
+
+    if (cached && new Date(cached.expires_at) > new Date()) {
+      return NextResponse.json(cached.value);
+    }
+
+    // Fetch ALL companies from HubSpot with pagination
     const properties = ENRICHABLE_FIELDS.join(',');
-    const response = await fetch(
-      `https://api.hubapi.com/crm/v3/objects/companies?limit=100&properties=${properties}`,
-      {
+    const allCompanies: any[] = [];
+    let after: string | undefined;
+    let hasMore = true;
+
+    while (hasMore) {
+      const url = after
+        ? `https://api.hubapi.com/crm/v3/objects/companies?limit=100&properties=${properties}&after=${after}`
+        : `https://api.hubapi.com/crm/v3/objects/companies?limit=100&properties=${properties}`;
+
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${connection.access_token}`,
         },
-      }
-    );
+      });
 
-    if (!response.ok) {
-      throw new Error(`HubSpot API error: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HubSpot API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      allCompanies.push(...(data.results || []));
+
+      // Check for next page
+      if (data.paging?.next?.after) {
+        after = data.paging.next.after;
+      } else {
+        hasMore = false;
+      }
     }
 
-    const data = await response.json();
-    const companies = data.results || [];
-    const totalCompanies = companies.length;
+    const totalCompanies = allCompanies.length;
 
-    // Count missing values per field
+    // Count missing values per field across ALL companies
     const fieldGaps = ENRICHABLE_FIELDS.map(field => {
-      const missing = companies.filter((company: any) => {
+      const missing = allCompanies.filter((company: any) => {
         const value = company.properties[field];
         return !value || value === '' || value === 'null';
       }).length;

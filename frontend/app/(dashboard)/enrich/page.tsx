@@ -118,35 +118,66 @@ export default function EnrichPage() {
 
     setRunning(true);
     try {
+      // Determine source type and config
+      let source_type: 'hubspot_filter' | 'hubspot_list';
+      let source_config: any = {};
+
+      if (companyScope === 'list') {
+        source_type = 'hubspot_list';
+        source_config = { listId: selectedList };
+      } else {
+        source_type = 'hubspot_filter';
+        if (companyScope === 'filter' && lifecycleStage) {
+          source_config = { filters: { lifecyclestage: lifecycleStage } };
+        } else {
+          // "All companies with missing fields" - filter for companies missing selected fields
+          source_config = { filters: { missing_fields: selectedFields } };
+        }
+      }
+
+      // Build field_configs in v2 format
+      const field_configs = selectedFields.map((field_key, index) => ({
+        field_key,
+        field_type: 'text', // simplified for now, can be enhanced
+        aggregation_strategy: 'waterfall',
+        apply_harmony: true,
+        steps: selectedProviders.map((provider, providerIndex) => ({
+          order: providerIndex + 1,
+          provider,
+          policy: writePolicy === 'fill_empty' ? 'overwrite_if_blank_or_ours' : 'always_overwrite',
+        })),
+      }));
+
       const response = await fetch('/api/arrangements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: `Enrich missing fields - ${new Date().toLocaleDateString()}`,
-          type: 'enrichment',
-          source: {
-            type: companyScope === 'all' ? 'hubspot_all' : companyScope === 'list' ? 'hubspot_list' : 'hubspot_filter',
-            list_id: companyScope === 'list' ? selectedList : undefined,
-            filter: companyScope === 'filter' ? { lifecycle_stage: lifecycleStage } : undefined,
-          },
-          field_configs: selectedFields.map(field => ({
-            field,
-            providers: selectedProviders,
-            write_policy: writePolicy,
-          })),
-          auto_activate: true,
+          description: `Fill gaps in ${selectedFields.join(', ')} using ${selectedProviders.join(', ')}`,
+          source_type,
+          source_config,
+          field_configs,
+          output_destination: 'hubspot',
+          output_config: { object_type: 'companies' },
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create enrichment arrangement');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create enrichment arrangement');
       }
 
       const data = await response.json();
-      router.push(`/arrangements/${data.arrangement_id}`);
+      const arrangementId = data.arrangement?.id || data.arrangement_id;
+
+      if (!arrangementId) {
+        throw new Error('No arrangement ID returned');
+      }
+
+      router.push(`/arrangements/${arrangementId}`);
     } catch (error) {
       console.error('Failed to create enrichment:', error);
-      alert('Failed to create enrichment. Please try again.');
+      alert(`Failed to create enrichment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setRunning(false);
     }
