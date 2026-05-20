@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { getSupabaseClient } from '@/lib/db/client';
+import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 
 // Fields to analyze for gaps
 const ENRICHABLE_FIELDS = [
@@ -30,7 +30,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const supabase = getSupabaseClient();
+    if (!isSupabaseConfigured() || !supabase) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 503 }
+      );
+    }
 
     // Get HubSpot connection first (need portal_id for cache key)
     const { data: connection } = await supabase
