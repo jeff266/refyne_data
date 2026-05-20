@@ -14,6 +14,8 @@ interface ScanProgress {
   message: string;
   progress: number;
   pairsFound: number;
+  scanType?: 'full' | 'incremental';
+  recordsScanned?: number;
   gradeBreakdown?: {
     A: number;
     B: number;
@@ -130,7 +132,11 @@ export function ScanningState({ jobId, orgId, onComplete }: ScanningStateProps) 
           color: C.text,
           textAlign: 'center',
         }}>
-          {showComplete ? 'Scan complete' : 'Scanning companies'}
+          {showComplete
+            ? `${progress.scanType === 'incremental' ? 'Incremental' : 'Full'} scan complete`
+            : progress.scanType === 'incremental'
+            ? 'Incremental scan in progress'
+            : 'Full scan in progress'}
         </div>
 
         {/* Message */}

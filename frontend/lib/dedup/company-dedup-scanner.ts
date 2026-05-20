@@ -8,10 +8,11 @@
 import { Queue, Worker, Job } from 'bullmq';
 import { createRedisConnection, isRedisConfigured } from '../queue/redis';
 import { supabase, isSupabaseConfigured } from '../db/supabase';
-import { createHubSpotClient } from '../hubspot/client';
+import { HubSpotClient, createHubSpotClient } from '../hubspot/client';
 import { evaluateCompanyPair, type CompanyProperties, normalizeDomain } from './company-signals';
 import type { FiredSignal, PairGrade } from './types';
 import { UnionFind } from './union-find';
+import { runDedupScan } from './incremental-scanner';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -44,6 +45,7 @@ export interface CompanyDedupScanJobData {
   accessToken: string;
   connectionId: string;
   initiatedBy: string;
+  forceFullScan?: boolean;
 }
 
 export interface CompanyDedupScanResult {
@@ -106,7 +108,8 @@ export async function enqueueCompanyDedupScan(
   orgId: string,
   accessToken: string,
   connectionId: string,
-  initiatedBy: string
+  initiatedBy: string,
+  forceFullScan = false
 ): Promise<{ queued: boolean; jobId?: string; reason?: string }> {
   const queue = getCompanyDedupScanQueue();
 
@@ -123,7 +126,7 @@ export async function enqueueCompanyDedupScan(
   try {
     const job = await queue.add(
       'company-dedup-scan',
-      { orgId, accessToken, connectionId, initiatedBy },
+      { orgId, accessToken, connectionId, initiatedBy, forceFullScan },
       { jobId }
     );
 
@@ -640,18 +643,70 @@ async function buildClusters(
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Process a company dedup scan job.
+ * Process a company dedup scan job using incremental scanner.
  */
 async function processScanJob(
   job: Job<CompanyDedupScanJobData, CompanyDedupScanResult>
 ): Promise<CompanyDedupScanResult> {
-  const { orgId, accessToken, connectionId, initiatedBy } = job.data;
+  const { orgId, accessToken, connectionId, initiatedBy, forceFullScan = false } = job.data;
+  const startTime = Date.now();
 
-  console.log(`[Company Dedup Worker] Processing scan job for org ${orgId}, user ${initiatedBy}`);
+  console.log(`[Company Dedup Worker] Processing scan job for org ${orgId}, user ${initiatedBy}, forceFullScan=${forceFullScan}`);
 
   try {
-    const result = await runCompanyDedupScan(orgId, accessToken, connectionId, job);
-    return result;
+    // Get portal ID from connection
+    if (!isSupabaseConfigured() || !supabase) {
+      throw new Error('Supabase not configured');
+    }
+
+    const { data: connection, error: connError } = await supabase
+      .from('hubspot_connections')
+      .select('portal_id')
+      .eq('id', connectionId)
+      .single();
+
+    if (connError || !connection) {
+      throw new Error(`Connection not found: ${connError?.message}`);
+    }
+
+    const portalId = connection.portal_id;
+
+    // Create HubSpot client
+    const client = new HubSpotClient(accessToken, portalId, undefined, connectionId, orgId);
+
+    // Emit started progress
+    await job.updateProgress({
+      phase: 'started',
+      message: 'Initializing scan...',
+      progress: 0,
+      pairsFound: 0,
+    });
+
+    // Run incremental scan (auto-detects full vs incremental unless forced)
+    const result = await runDedupScan(orgId, portalId, client, connectionId, forceFullScan);
+
+    // Emit completion progress
+    await job.updateProgress({
+      phase: 'completed',
+      message: `${result.scanType} scan complete: ${result.pairsFound} pairs found`,
+      progress: 100,
+      pairsFound: result.pairsFound,
+    });
+
+    const durationMs = Date.now() - startTime;
+
+    // Convert to expected result format
+    return {
+      orgId,
+      companiesScanned: result.recordsScanned,
+      pairsDetected: result.pairsFound,
+      pairsGradeA: 0, // TODO: Track by grade in incremental scanner
+      pairsGradeB: 0,
+      pairsGradeC: 0,
+      pairsGradeD: 0,
+      durationMs,
+      completedAt: new Date().toISOString(),
+    };
   } catch (error) {
     console.error(`[Company Dedup Worker] Scan failed:`, error);
     throw error;

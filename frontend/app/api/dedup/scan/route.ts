@@ -35,6 +35,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Parse request body for optional forceFullScan parameter
+    let forceFullScan = false;
+    try {
+      const body = await request.json();
+      forceFullScan = body.forceFullScan === true;
+    } catch {
+      // No body or invalid JSON - use default
+    }
+
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
         { error: 'Database not configured' },
@@ -73,7 +82,8 @@ export async function POST(request: NextRequest) {
       ctx.orgId,
       accessToken,
       connection.id,
-      ctx.userId
+      ctx.userId,
+      forceFullScan
     );
 
     if (!result.queued) {
@@ -83,12 +93,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[Dedup Scan API] Enqueued company dedup scan: jobId=${result.jobId}`);
+    console.log(`[Dedup Scan API] Enqueued company dedup scan: jobId=${result.jobId}, forceFullScan=${forceFullScan}`);
 
     return NextResponse.json({
       queued: true,
       jobId: result.jobId,
       portalId: connection.portal_id,
+      scanType: forceFullScan ? 'full' : 'auto',
     });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/scan' });

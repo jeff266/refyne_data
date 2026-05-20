@@ -37,7 +37,9 @@ import { checkMissedJobs } from '../lib/monitoring/check-missed-jobs';
 import {
   startCompanyDedupScanWorker,
   stopCompanyDedupScanWorker,
+  enqueueCompanyDedupScan,
 } from '../lib/dedup/company-dedup-scanner';
+import { getAccessToken } from '../lib/hubspot/get-access-token';
 
 async function main() {
   console.log('═'.repeat(60));
@@ -161,6 +163,49 @@ async function main() {
         } else {
           console.log(`[${new Date().toISOString()}] Monthly API counters reset successfully`);
         }
+      }
+
+      // Run incremental dedup scans for all active connections
+      try {
+        const { data: connections, error: connError } = await supabase
+          .from('hubspot_connections')
+          .select('id, org_id, portal_id')
+          .eq('connection_status', 'active');
+
+        if (connError) {
+          console.error('Error fetching active connections for dedup scan:', connError);
+        } else if (connections && connections.length > 0) {
+          console.log(`[${new Date().toISOString()}] Running dedup scans for ${connections.length} active connections`);
+
+          for (const connection of connections) {
+            try {
+              const accessToken = await getAccessToken(connection.org_id);
+              if (!accessToken) {
+                console.warn(`[Nightly Dedup] No access token for org ${connection.org_id}`);
+                continue;
+              }
+
+              const result = await enqueueCompanyDedupScan(
+                connection.org_id,
+                accessToken,
+                connection.id,
+                'system:nightly-maintenance',
+                false // auto-detect scan type (incremental on weekdays, full on Sundays)
+              );
+
+              if (result.queued) {
+                console.log(`[${new Date().toISOString()}] Dedup scan enqueued for portal ${connection.portal_id}: jobId=${result.jobId}`);
+              } else {
+                console.warn(`[Nightly Dedup] Failed to enqueue scan for portal ${connection.portal_id}: ${result.reason}`);
+              }
+            } catch (scanError) {
+              console.error(`[Nightly Dedup] Error scanning portal ${connection.portal_id}:`, scanError);
+              // Continue with other connections
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error running nightly dedup scans:', error);
       }
 
     } catch (error) {

@@ -109,14 +109,14 @@ export async function GET(request: NextRequest) {
       if (firstRecordIds.length > 0) {
         const { data: companyRecords } = await supabase
           .from('company_dedup_index')
-          .select('record_id, name_full')
+          .select('hubspot_company_id, name_full')
           .eq('org_id', orgId)
-          .in('record_id', firstRecordIds);
+          .in('hubspot_company_id', firstRecordIds);
 
         if (companyRecords) {
           for (const record of companyRecords) {
             if (record.name_full) {
-              companyNames[record.record_id] = record.name_full;
+              companyNames[record.hubspot_company_id] = record.name_full;
             }
           }
         }
