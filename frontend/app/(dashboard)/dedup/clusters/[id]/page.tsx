@@ -8,6 +8,7 @@ import { Card, GhostBtn, PrimaryBtn } from '@/components/refyne';
 import type { ClusterWithRecords } from '@/lib/dedup/cluster-types';
 import type { HubSpotCompany } from '@/lib/dedup/select-master';
 import { autoSelectFields } from '@/lib/dedup/select-master';
+import { MergeHistory } from '@/components/dedup/MergeHistory';
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'Company Name',
@@ -285,6 +286,13 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
           {cluster.recordIds.length} duplicate companies
         </p>
       </div>
+
+      {/* Merge History (for merged clusters) */}
+      {cluster.status === 'merged' && (
+        <div style={{ marginBottom: 32 }}>
+          <MergeHistory clusterId={params.id} />
+        </div>
+      )}
 
       {/* Error state */}
       {error && (

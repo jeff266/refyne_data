@@ -79,6 +79,23 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const recordsToMerge = clusterData.recordIds.filter((id) => id !== masterId);
 
     try {
+      // Step 0: Capture pre-merge snapshots for audit trail
+      const preMergeSnapshots: Record<string, any> = {};
+
+      for (const recordId of clusterData.recordIds) {
+        const snapshotRes = await fetch(
+          `https://api.hubapi.com/crm/v3/objects/companies/${recordId}`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+
+        if (snapshotRes.ok) {
+          const data = await snapshotRes.json();
+          preMergeSnapshots[recordId] = data.properties;
+        }
+      }
+
       // Step 1: Merge each record into master
       for (const recordId of recordsToMerge) {
         const mergeRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies/merge', {
@@ -143,6 +160,49 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             const error = await updateRes.text();
             console.error(`[Merge Cluster] Failed to update master ${masterId}:`, error);
           }
+        }
+      }
+
+      // Step 2.5: Capture post-merge snapshot and save history
+      const postMergeRes = await fetch(
+        `https://api.hubapi.com/crm/v3/objects/companies/${masterId}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+
+      let postMergeSnapshot = {};
+      if (postMergeRes.ok) {
+        const data = await postMergeRes.json();
+        postMergeSnapshot = data.properties;
+      }
+
+      // Save merge history for each merged record
+      for (const recordId of recordsToMerge) {
+        const historyEntry = {
+          org_id: orgId,
+          cluster_id: id,
+          merged_by: ctx.userId,
+          merged_by_name: null, // TODO: Fetch from Clerk user profile
+          merged_at: new Date().toISOString(),
+          merge_method: 'manual',
+          survivor_record_id: masterId,
+          merged_record_id: recordId,
+          survivor_snapshot: preMergeSnapshots[masterId] || {},
+          merged_snapshot: preMergeSnapshots[recordId] || {},
+          result_snapshot: postMergeSnapshot,
+          field_selections: body.fieldSelections || null,
+          confidence_score: clusterData.grade === 'A' ? 95 : clusterData.grade === 'B' ? 75 : 50,
+          similarity_signals: null, // TODO: Extract from pair data if needed
+        };
+
+        const { error: historyError } = await supabase
+          .from('dedup_merge_history')
+          .insert(historyEntry);
+
+        if (historyError) {
+          console.error('[Merge History] Failed to save history:', historyError);
+          // Don't fail the merge if history save fails - just log it
         }
       }
 

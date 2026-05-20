@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
-import { Workflow, Plus, Play, Edit, Clock } from 'lucide-react';
+import { Workflow, Plus, Play, Edit, Clock, Trash2 } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn, GhostBtn } from '@/components/refyne';
 import { addToast } from '@/components/ui/toast';
@@ -52,6 +52,9 @@ export default function ArrangementsPage() {
   const { orgRole } = useAuth();
   const [arrangements, setArrangements] = useState<Arrangement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [arrangementToDelete, setArrangementToDelete] = useState<Arrangement | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const isViewer = orgRole === 'org:viewer';
   const canCreate = !isViewer;
@@ -110,6 +113,35 @@ export default function ArrangementsPage() {
     } catch (error) {
       console.error('Failed to start run:', error);
       addToast('error', 'Failed to start run');
+    }
+  };
+
+  const handleDeleteClick = (arrangement: Arrangement) => {
+    setArrangementToDelete(arrangement);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!arrangementToDelete) return;
+
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/arrangements/${arrangementToDelete.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete arrangement');
+
+      addToast('success', 'Arrangement deleted successfully');
+      setDeleteModalOpen(false);
+      setArrangementToDelete(null);
+
+      // Refresh the list
+      await fetchArrangements();
+    } catch (error) {
+      console.error('Failed to delete arrangement:', error);
+      addToast('error', 'Failed to delete arrangement');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -349,13 +381,121 @@ export default function ArrangementsPage() {
                   </>
                 )}
                 <GhostBtn onClick={() => router.push(`/arrangements/${arr.id}`)}>
-                  {isViewer ? 'View details' : 'View details'}
+                  View details
                 </GhostBtn>
+                {canCreate && (
+                  <button
+                    onClick={() => handleDeleteClick(arr)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 12px',
+                      background: 'transparent',
+                      border: `1px solid ${C.border2}`,
+                      borderRadius: 6,
+                      fontSize: 13,
+                      color: C.red,
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = C.redDim;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteModalOpen && arrangementToDelete && (
+        <>
+          {/* Backdrop */}
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.6)',
+              zIndex: 9998,
+            }}
+            onClick={() => !deleting && setDeleteModalOpen(false)}
+          />
+          {/* Modal */}
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 480,
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              zIndex: 9999,
+              padding: 24,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <Trash2 size={24} color={C.red} />
+              <div style={{ fontSize: 16, fontWeight: 600, color: C.text }}>
+                Delete arrangement?
+              </div>
+            </div>
+            <div style={{ fontSize: 13, color: C.text3, marginBottom: 8 }}>
+              Are you sure you want to delete <strong style={{ color: C.text }}>{arrangementToDelete.name}</strong>?
+            </div>
+            <div style={{ fontSize: 13, color: C.text3, marginBottom: 20 }}>
+              This will archive the arrangement and preserve its run history. This action cannot be undone.
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deleting}
+                style={{
+                  padding: '8px 16px',
+                  background: C.surface,
+                  border: `1px solid ${C.border2}`,
+                  borderRadius: 6,
+                  color: C.text,
+                  fontSize: 13,
+                  fontFamily: F.sans,
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  opacity: deleting ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                style={{
+                  padding: '8px 16px',
+                  background: C.red,
+                  border: 'none',
+                  borderRadius: 6,
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: F.sans,
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  opacity: deleting ? 0.6 : 1,
+                }}
+              >
+                {deleting ? 'Deleting...' : 'Delete arrangement'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
