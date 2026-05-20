@@ -6,76 +6,78 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 /**
  * POST /api/harmonies/:id/toggle
  *
- * Toggles a harmony on/off for the organization.
+ * Toggles the is_active state of a harmony in the harmonies table.
  */
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  // Add auth check
+  // Auth check
   let ctx;
-  try { ctx = await getOrgContext(); }
-  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
 
   try {
+    if (!isSupabaseConfigured() || !supabase) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
+    }
+
+    const orgId = ctx.orgId;
     const harmonyId = params.id;
 
-    if (!isSupabaseConfigured() || !supabase) {
-      return NextResponse.json(
-        { error: 'Database not configured' },
-        { status: 503 }
-      );
+    // Fetch the harmony (preset or org-specific)
+    const { data: harmonies, error: fetchError } = await supabase
+      .from('harmonies')
+      .select('*')
+      .eq('id', harmonyId)
+      .or(`org_id.is.null,org_id.eq.${orgId}`);
+
+    if (fetchError || !harmonies || harmonies.length === 0) {
+      return NextResponse.json({ error: 'Harmony not found' }, { status: 404 });
     }
 
-    // Check if harmony is currently enabled
-    const { data: existing } = await supabase
-      .from('pipelines')
-      .select('harmony_ids')
-      .eq('org_id', ctx.orgId)
-      .eq('is_default', true)
-      .single();
+    const harmony = harmonies[0];
 
-    const currentIds = existing?.harmony_ids || [];
-    const isEnabled = currentIds.includes(harmonyId);
+    // Toggle the is_active field
+    const { error: updateError } = await supabase
+      .from('harmonies')
+      .update({
+        is_active: !harmony.is_active,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', harmonyId)
+      .or(`org_id.is.null,org_id.eq.${orgId}`);
 
-    // Toggle: add if not present, remove if present
-    const newIds = isEnabled
-      ? currentIds.filter((id: string) => id !== harmonyId)
-      : [...currentIds, harmonyId];
-
-    // Upsert the default pipeline
-    const { error } = await supabase
-      .from('pipelines')
-      .upsert({
-        org_id: ctx.orgId,
-        name: 'Default Pipeline',
-        harmony_ids: newIds,
-        is_default: true,
-      }, {
-        onConflict: 'org_id',
-        ignoreDuplicates: false,
+    if (updateError) {
+      captureWithOrgContext(updateError, orgId, {
+        route: '/api/harmonies/[id]/toggle',
+        harmonyId,
       });
-
-    if (error) {
-      captureWithOrgContext(error, ctx.orgId, { route: '/api/harmonies/[id]/toggle' });
-      console.error('Failed to toggle harmony:', error);
-      return NextResponse.json(
-        { error: 'Failed to toggle harmony' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to toggle harmony' }, { status: 500 });
     }
+
+    // Return updated list of all active harmony IDs for this org
+    const { data: allHarmonies } = await supabase
+      .from('harmonies')
+      .select('id, is_active')
+      .or(`org_id.is.null,org_id.eq.${orgId}`)
+      .eq('is_active', true);
+
+    const activeIds = (allHarmonies || []).map((h) => h.id);
 
     return NextResponse.json({
-      harmonyId,
-      enabled: !isEnabled,
-      harmonies: newIds,
+      success: true,
+      harmonies: activeIds,
     });
   } catch (error) {
-    captureWithOrgContext(error, ctx.orgId, { route: '/api/harmonies/[id]/toggle' });
+    captureWithOrgContext(error, ctx.orgId, {
+      route: '/api/harmonies/[id]/toggle',
+      harmonyId: params.id,
+    });
     console.error('Failed to toggle harmony:', error);
-    return NextResponse.json(
-      { error: 'Failed to toggle harmony' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to toggle harmony' }, { status: 500 });
   }
 }

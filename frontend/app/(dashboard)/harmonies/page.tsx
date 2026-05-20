@@ -8,11 +8,16 @@ import { Card, Toggle, Chip, PrimaryBtn, GhostBtn } from '@/components/refyne';
 interface HarmonyItem {
   id: string;
   name: string;
+  description?: string;
   category: string;
   fields: string[];
   version?: string;
   score?: number;
   warning?: string;
+  isActive?: boolean;
+  isPreset?: boolean;
+  ruleCount?: number;
+  recordsAffected?: number;
 }
 
 interface ComplianceInsight {
@@ -39,17 +44,23 @@ function HarmonyRow({
     <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, fontFamily: F.mono, color: enabled ? C.text : C.text3, fontWeight: 500 }}>{h.id}</span>
-            {h.version && <span style={{ fontSize: 10, fontFamily: F.mono, color: C.text3 }}>{h.version}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: enabled ? C.text : C.text3 }}>{h.name}</span>
+            {h.isPreset && <Chip color="amber">Library</Chip>}
             {isRec && <Chip color="indigo">★ recommended</Chip>}
           </div>
-          <div style={{ fontSize: 11, color: C.text3, marginBottom: h.warning ? 8 : 0 }}>{h.name}</div>
+          <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>
+            {h.description || h.name}
+          </div>
+          <div style={{ fontSize: 10, fontFamily: F.mono, color: C.text3, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span>{h.fields[0]}</span>
+            {h.ruleCount && <span>• {h.ruleCount} rules</span>}
+            {h.recordsAffected !== undefined && <span>• {h.recordsAffected} records affected</span>}
+          </div>
           {h.warning && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: C.amberDim, borderRadius: 6, border: `1px solid rgba(245,158,11,0.2)` }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: C.amberDim, borderRadius: 6, border: `1px solid rgba(245,158,11,0.2)`, marginTop: 8 }}>
               <AlertTriangle size={11} color={C.amber} />
               <span style={{ fontSize: 11, color: C.amber }}>{h.warning}</span>
-              <span style={{ fontSize: 10, color: C.amber, textDecoration: 'underline', marginLeft: 2, cursor: 'pointer' }}>Edit rule</span>
             </div>
           )}
         </div>
@@ -73,20 +84,21 @@ export default function HarmoniesPage() {
   // Fetch harmonies and enabled state
   const fetchHarmonies = useCallback(async () => {
     try {
-      const [harmoniesRes, pipelineRes, insightsRes] = await Promise.all([
+      const [harmoniesRes, insightsRes] = await Promise.all([
         fetch('/api/harmonies'),
-        fetch('/api/pipelines/default', { headers: { 'x-org-id': orgId } }),
         fetch(`/api/compliance/insights?orgId=${orgId}`)
       ]);
 
       if (harmoniesRes.ok) {
         const data = await harmoniesRes.json();
-        setHarmonies(data.harmonies || []);
-      }
+        const harmoniesList = data.harmonies || [];
+        setHarmonies(harmoniesList);
 
-      if (pipelineRes.ok) {
-        const pipeline = await pipelineRes.json();
-        setEnabledIds(new Set(pipeline.harmony_ids || []));
+        // Set enabled IDs based on isActive field from database
+        const activeIds = harmoniesList
+          .filter((h: HarmonyItem) => h.isActive)
+          .map((h: HarmonyItem) => h.id);
+        setEnabledIds(new Set(activeIds));
       }
 
       if (insightsRes.ok) {
