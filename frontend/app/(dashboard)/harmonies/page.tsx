@@ -291,6 +291,7 @@ export default function HarmoniesPage() {
   const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
   const [expandedHarmonyId, setExpandedHarmonyId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   // Fetch harmonies and enabled state
   const fetchHarmonies = useCallback(async () => {
@@ -446,7 +447,7 @@ export default function HarmoniesPage() {
             outline: 'none',
           }}
         />
-        <PrimaryBtn onClick={() => alert('Custom harmony creation coming soon. For now, harmonies are managed through the library system.')}>
+        <PrimaryBtn onClick={() => setWizardOpen(true)}>
           <Plus size={12} /> New harmony
         </PrimaryBtn>
         <GhostBtn onClick={() => alert('YAML import coming soon. You can currently manage reference data inline by clicking the "Data" button on lookup harmonies.')}>

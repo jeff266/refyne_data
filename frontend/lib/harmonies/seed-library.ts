@@ -23,6 +23,8 @@ export interface HarmonyRow {
   rule_count: number;
   yaml_content: string | null;
   examples?: Array<{ input: any; output: any }> | null;
+  output_format?: string;
+  output_formats_available?: Array<{ key: string; label: string; default?: boolean }> | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -81,6 +83,8 @@ export async function seedHarmonyLibrary(): Promise<{
         rule_count: spec.rules?.length || 0,
         yaml_content: null, // Optional: could store full YAML here if needed
         examples: examples.length > 0 ? examples : null,
+        output_format: 'default',
+        output_formats_available: spec.output_formats || null,
       };
     });
 

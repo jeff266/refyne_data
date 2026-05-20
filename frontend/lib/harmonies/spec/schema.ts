@@ -95,6 +95,22 @@ export const HarmonyScopeSchema = z.object({
 export type HarmonyScope = z.infer<typeof HarmonyScopeSchema>;
 
 /**
+ * Output format option for structured harmonies.
+ * Defines available output formats when harmony returns an object.
+ */
+export const OutputFormatOptionSchema = z.object({
+  // Key to extract from output object (e.g., 'abbreviation', 'name', 'iso2')
+  key: z.string().min(1),
+
+  // Display label for UI (e.g., 'Abbreviation (CA)', 'Full name (California)')
+  label: z.string().min(1),
+
+  // Is this the default format?
+  default: z.boolean().optional(),
+});
+export type OutputFormatOption = z.infer<typeof OutputFormatOptionSchema>;
+
+/**
  * Complete Harmony specification.
  * This is the schema for YAML Harmony documents.
  */
@@ -146,6 +162,13 @@ export const HarmonySpecSchema = z.object({
 
   // Optional: is this Harmony enabled by default in new pipelines?
   default_enabled: z.boolean().default(true),
+
+  // Optional: output format options for structured harmonies
+  // If present, harmony returns an object and user can choose which field to extract
+  output_formats: z.array(OutputFormatOptionSchema).optional(),
+
+  // Optional: rule explanation template with {{oldValue}} and {{newValue}} placeholders
+  ruleExplanation: z.string().optional(),
 });
 export type HarmonySpec = z.infer<typeof HarmonySpecSchema>;
 

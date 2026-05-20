@@ -16,6 +16,14 @@ applies_to:
 
 ruleExplanation: "Normalizing state from '{{oldValue}}' to '{{newValue}}' (US state standardization)"
 
+# Output format options for structured output
+output_formats:
+  - key: abbreviation
+    label: Abbreviation (CA)
+    default: true
+  - key: name
+    label: Full name (California)
+
 sources: []
 
 rules:
