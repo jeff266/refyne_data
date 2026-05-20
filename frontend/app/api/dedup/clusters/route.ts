@@ -101,6 +101,28 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * perPage;
     clusters = clusters.slice(offset, offset + perPage);
 
+    // Fetch company names for the first record in each cluster
+    const companyNames: Record<string, string> = {};
+    if (clusters.length > 0) {
+      const firstRecordIds = clusters.map((c) => c.record_ids[0]).filter(Boolean);
+
+      if (firstRecordIds.length > 0) {
+        const { data: companyRecords } = await supabase
+          .from('company_dedup_index')
+          .select('record_id, name_full')
+          .eq('org_id', orgId)
+          .in('record_id', firstRecordIds);
+
+        if (companyRecords) {
+          for (const record of companyRecords) {
+            if (record.name_full) {
+              companyNames[record.record_id] = record.name_full;
+            }
+          }
+        }
+      }
+    }
+
     // Get counts for sidebar
     const [gradeCountsResult, statusCountsResult] = await Promise.all([
       supabase.from('dedup_clusters').select('grade').eq('org_id', orgId),
@@ -128,7 +150,10 @@ export async function GET(request: NextRequest) {
     }
 
     const response: ClustersListResponse = {
-      clusters: clusters.map(rowToCluster),
+      clusters: clusters.map((cluster) => ({
+        ...rowToCluster(cluster),
+        clusterName: companyNames[cluster.record_ids[0]] || undefined,
+      })),
       total: count || 0,
       counts: { byGrade, byStatus } as ClustersCounts,
     };

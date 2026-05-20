@@ -289,8 +289,8 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
   // Action handlers
   // ─────────────────────────────────────────────────────────────
 
-  const handleBulkMerge = async () => {
-    if (selectedIds.size === 0) return;
+  const handleBulkMerge = async (allGradeA = false) => {
+    if (!allGradeA && selectedIds.size === 0) return;
     setBulkMergeLoading(true);
     try {
       const res = await fetch('/api/dedup/clusters/bulk-merge', {
@@ -299,7 +299,11 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
           'Content-Type': 'application/json',
           'x-org-id': orgId,
         },
-        body: JSON.stringify({ clusterIds: Array.from(selectedIds) }),
+        body: JSON.stringify(
+          allGradeA
+            ? { allGradeA: true }
+            : { clusterIds: Array.from(selectedIds) }
+        ),
       });
 
       if (!res.ok) {
@@ -441,14 +445,12 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
               </button>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {gradeAClusters.length > 0 && selectedIds.size === 0 && (
+              {counts.byGrade.A > 0 && selectedIds.size === 0 && (
                 <PrimaryBtn
-                  onClick={() => {
-                    const ids = new Set(gradeAClusters.map((c) => c.id));
-                    setSelectedIds(ids);
-                  }}
+                  onClick={() => handleBulkMerge(true)}
+                  disabled={bulkMergeLoading}
                 >
-                  Select all Grade A ({gradeAClusters.length})
+                  {bulkMergeLoading ? 'Merging...' : `Select all ${counts.byGrade.A} Grade A`}
                 </PrimaryBtn>
               )}
               {selectedIds.size > 0 && (
@@ -456,7 +458,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                   <GhostBtn onClick={() => setSelectedIds(new Set())}>
                     Clear selection
                   </GhostBtn>
-                  <PrimaryBtn onClick={handleBulkMerge} disabled={bulkMergeLoading}>
+                  <PrimaryBtn onClick={() => handleBulkMerge(false)} disabled={bulkMergeLoading}>
                     {bulkMergeLoading ? 'Merging...' : `Bulk merge ${selectedIds.size}`}
                   </PrimaryBtn>
                 </>
@@ -620,7 +622,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             marginBottom: 8,
                           }}
                         >
-                          Cluster {cluster.id.slice(0, 8)}
+                          {cluster.clusterName || `Cluster ${cluster.id.slice(0, 8)}`}
                         </div>
                         {/* Mini table with key fields */}
                         <div
@@ -773,7 +775,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             marginBottom: 4,
                           }}
                         >
-                          Cluster {cluster.id.slice(0, 8)}
+                          {cluster.clusterName || `Cluster ${cluster.id.slice(0, 8)}`}
                         </div>
                         <div style={{ fontSize: 11, color: C.text3 }}>
                           {cluster.recordIds.length} companies

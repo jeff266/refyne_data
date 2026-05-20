@@ -9,7 +9,8 @@ import { selectMaster, type HubSpotCompany } from '@/lib/dedup/select-master';
 import { revalidatePath } from 'next/cache';
 
 interface BulkMergeRequest {
-  clusterIds: string[];
+  clusterIds?: string[];
+  allGradeA?: boolean; // If true, merge all Grade A pending clusters
 }
 
 /**
@@ -48,23 +49,33 @@ export async function POST(request: NextRequest) {
     const orgId = ctx.orgId;
     const body = (await request.json()) as BulkMergeRequest;
 
-    if (!body.clusterIds || body.clusterIds.length === 0) {
-      return NextResponse.json({ error: 'No cluster IDs provided' }, { status: 400 });
-    }
-
     // Get access token
     const accessToken = await getAccessToken(orgId);
     if (!accessToken) {
       return NextResponse.json({ error: 'HubSpot not connected' }, { status: 400 });
     }
 
-    // Fetch all clusters
-    const { data: clusters, error: clustersError } = await supabase
+    // Fetch clusters based on request type
+    let clustersQuery = supabase
       .from('dedup_clusters')
       .select('*')
-      .in('id', body.clusterIds)
       .eq('org_id', orgId)
       .eq('status', 'pending');
+
+    if (body.allGradeA) {
+      // Fetch all Grade A pending clusters
+      clustersQuery = clustersQuery.eq('grade', 'A');
+    } else if (body.clusterIds && body.clusterIds.length > 0) {
+      // Fetch specific clusters
+      clustersQuery = clustersQuery.in('id', body.clusterIds);
+    } else {
+      return NextResponse.json(
+        { error: 'Either clusterIds or allGradeA must be provided' },
+        { status: 400 }
+      );
+    }
+
+    const { data: clusters, error: clustersError } = await clustersQuery;
 
     if (clustersError || !clusters || clusters.length === 0) {
       return NextResponse.json({ error: 'No valid clusters found' }, { status: 404 });

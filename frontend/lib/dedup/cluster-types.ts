@@ -21,6 +21,7 @@ export interface DedupCluster {
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  clusterName?: string; // Company name from first record
 }
 
 export interface DedupClusterRow {
