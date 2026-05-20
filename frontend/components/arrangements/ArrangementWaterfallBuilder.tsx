@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { C } from '@/lib/design-tokens';
 import { GhostBtn, PrimaryBtn } from '@/components/refyne';
 import { addToast } from '@/components/ui/toast';
+import { LockedProviderChip } from '@/components/providers/LockedProviderChip';
 import {
   ChevronDown,
   ChevronRight,
@@ -84,6 +85,16 @@ const AGGREGATION_STRATEGIES = [
   { value: 'min', label: 'Min' },
   { value: 'average', label: 'Average' },
   { value: 'cluster_average', label: 'Cluster Average' },
+];
+
+// Full provider registry (all supported providers in the platform)
+const PROVIDER_REGISTRY = [
+  { key: 'apollo', label: 'Apollo' },
+  { key: 'zoominfo', label: 'ZoomInfo' },
+  { key: 'clearbit', label: 'Clearbit' },
+  { key: 'cognism', label: 'Cognism' },
+  { key: 'hunter', label: 'Hunter' },
+  { key: 'people-data-labs', label: 'People Data Labs' },
 ];
 
 // Sortable provider step component
@@ -238,6 +249,8 @@ function FieldRow({
   rehearsalCoverage?: RehearsalCoverage;
   harmonies: Array<{ id: string; name: string }>;
 }) {
+  const [showProviderPicker, setShowProviderPicker] = useState(false);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -488,19 +501,13 @@ function FieldRow({
               </DndContext>
             )}
 
-            {/* Add provider button */}
-            {unusedProviders.length > 0 && (
+            {/* Add provider button and popover */}
+            {!showProviderPicker && (
               <div style={{ marginTop: 12 }}>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    // Show provider picker (simplified - just pick first for now)
-                    const firstAvailable = unusedProviders.find((p) => p.connected);
-                    if (firstAvailable) {
-                      handleAddProvider(firstAvailable.provider);
-                    } else {
-                      addToast('error', 'No more connected providers available');
-                    }
+                    setShowProviderPicker(true);
                   }}
                   style={{
                     width: '100%',
@@ -527,6 +534,87 @@ function FieldRow({
                 >
                   <Plus size={14} />
                   Add provider
+                </button>
+              </div>
+            )}
+
+            {/* Provider picker popover */}
+            {showProviderPicker && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 16,
+                  background: C.bg,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 8,
+                }}
+              >
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 12 }}>
+                  Select a provider to add to this field's waterfall:
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {/* Connected providers - clickable */}
+                  {PROVIDER_REGISTRY.filter(
+                    (p) =>
+                      availableProviders.some((ap) => ap.provider === p.key && ap.connected) &&
+                      !config.steps.some((s) => s.provider === p.key)
+                  ).map((provider) => (
+                    <button
+                      key={provider.key}
+                      onClick={() => {
+                        handleAddProvider(provider.key);
+                        setShowProviderPicker(false);
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        fontSize: 13,
+                        color: C.text,
+                        background: C.surface,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = C.hover;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = C.surface;
+                      }}
+                    >
+                      {provider.label}
+                    </button>
+                  ))}
+
+                  {/* Locked providers - show chip */}
+                  {PROVIDER_REGISTRY.filter(
+                    (p) =>
+                      !availableProviders.some((ap) => ap.provider === p.key) &&
+                      !config.steps.some((s) => s.provider === p.key)
+                  ).map((provider) => (
+                    <LockedProviderChip
+                      key={provider.key}
+                      provider={provider.key}
+                      providerLabel={provider.label}
+                      currentPath="/arrangements/new"
+                    />
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setShowProviderPicker(false)}
+                  style={{
+                    marginTop: 12,
+                    padding: '6px 0',
+                    fontSize: 12,
+                    color: C.text3,
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
                 </button>
               </div>
             )}

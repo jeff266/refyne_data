@@ -164,6 +164,7 @@ export default function ConnectionsPage() {
     fetchHubSpotConnections();
     fetchProviderConnections();
     handleOAuthCallback();
+    handleProviderDeepLink();
   }, []);
 
   async function fetchHubSpotConnections() {
@@ -199,7 +200,14 @@ export default function ConnectionsPage() {
     if (connected === 'true') {
       showToast('Portal connected successfully', 'success');
       fetchHubSpotConnections();
-      window.history.replaceState({}, '', '/connections');
+
+      // Check for return URL param and redirect after successful connection
+      const returnUrl = searchParams?.get('return');
+      if (returnUrl) {
+        window.location.href = decodeURIComponent(returnUrl);
+      } else {
+        window.history.replaceState({}, '', '/connections');
+      }
     } else if (error) {
       if (error === 'access_denied') {
         showToast('Connection cancelled', 'error');
@@ -207,6 +215,19 @@ export default function ConnectionsPage() {
         showToast('Connection failed — try again', 'error');
       }
       window.history.replaceState({}, '', '/connections');
+    }
+  }
+
+  function handleProviderDeepLink() {
+    const provider = searchParams?.get('provider');
+    if (provider && isAdmin) {
+      // Auto-open the connection dialog for the specified provider
+      setShowAddDialog(true);
+      setAddDialogTab('enrichment'); // Most providers are enrichment
+      // Auto-expand the provider's API key input
+      setTimeout(() => {
+        setShowApiKeyInput(provider);
+      }, 100);
     }
   }
 
@@ -277,6 +298,14 @@ export default function ConnectionsPage() {
         setApiKey('');
         setConnectionError(null);
         await fetchProviderConnections();
+
+        // Check for return URL param and redirect after successful connection
+        const returnUrl = searchParams?.get('return');
+        if (returnUrl) {
+          setTimeout(() => {
+            window.location.href = decodeURIComponent(returnUrl);
+          }, 1000); // Brief delay to show success toast
+        }
       } else {
         setConnectionError(data.error || 'Failed to connect provider');
       }

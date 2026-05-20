@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Chip, PrimaryBtn, HowItWorksStrip } from '@/components/refyne';
+import { LockedProviderChip } from '@/components/providers/LockedProviderChip';
 
 // TODO: wire to API - replace with search results from enrichment providers
 const rows = [
@@ -13,6 +14,15 @@ const rows = [
   { name: 'Spectrum Bridge LLC',     domain: 'spectrumbridge.io',size: 67,  score: 79, sel: false },
   { name: 'ABA Solutions Group',     domain: 'abasolutions.com', size: 89,  score: 65, sel: false },
   { name: 'Behavioral Health Co.',   domain: 'bh-co.com',        size: 34,  score: 58, sel: false },
+];
+
+// Full provider registry (all supported providers in the platform)
+const PROVIDER_REGISTRY = [
+  { key: 'apollo', label: 'Apollo' },
+  { key: 'zoominfo', label: 'ZoomInfo' },
+  { key: 'clearbit', label: 'Clearbit' },
+  { key: 'hunter', label: 'Hunter' },
+  { key: 'people-data-labs', label: 'People Data Labs' },
 ];
 
 function MatchBar({ n }: { n: number }) {
@@ -29,6 +39,28 @@ function MatchBar({ n }: { n: number }) {
 
 export default function EnrichPage() {
   const [view, setView] = useState<'table' | 'grid'>('table');
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
+  const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch connected providers on mount
+  useEffect(() => {
+    async function fetchConnections() {
+      try {
+        const res = await fetch('/api/providers/connections');
+        if (res.ok) {
+          const data = await res.json();
+          const providerKeys = data.connections.map((c: any) => c.provider);
+          setConnectedProviders(providerKeys);
+        }
+      } catch (error) {
+        console.error('Failed to fetch provider connections:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchConnections();
+  }, []);
 
   const prospectingSteps = [
     {
@@ -49,30 +81,90 @@ export default function EnrichPage() {
     <div style={{ display: 'flex', height: '100%', fontFamily: F.sans }}>
       {/* Filters sidebar */}
       <div style={{ width: 248, background: C.sidebar, borderRight: `1px solid ${C.border}`, padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 0, overflowY: 'auto', flexShrink: 0 }}>
-        {[
-          { label: 'Industry',      chips: ['Healthcare', 'Behavioral'] },
-          { label: 'Company size',  range: true },
-          { label: 'Location',      chips: ['United States'] },
-          { label: 'Provider',      chips: ['Apollo', 'ZoomInfo'] },
-        ].map(f => (
-          <div key={f.label} style={{ marginBottom: 22 }}>
-            <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 9 }}>{f.label}</div>
-            {'range' in f && f.range ? (
-              <div style={{ height: 3, background: C.hover, borderRadius: 2, position: 'relative', margin: '10px 0' }}>
-                <div style={{ position: 'absolute', left: '10%', right: '50%', height: '100%', background: C.indigo, borderRadius: 2 }} />
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                {f.chips?.map(c => (
-                  <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: C.indigoDim, color: C.indigoLt, borderRadius: 5, fontSize: 11, border: `1px solid ${C.indigoBrd}` }}>
-                    {c} <X size={9} />
-                  </span>
-                ))}
-                <span style={{ padding: '3px 7px', color: C.text3, fontSize: 11 }}>+ Add</span>
-              </div>
-            )}
+        {/* Industry filter */}
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 9 }}>Industry</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {['Healthcare', 'Behavioral'].map(c => (
+              <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: C.indigoDim, color: C.indigoLt, borderRadius: 5, fontSize: 11, border: `1px solid ${C.indigoBrd}` }}>
+                {c} <X size={9} />
+              </span>
+            ))}
+            <span style={{ padding: '3px 7px', color: C.text3, fontSize: 11 }}>+ Add</span>
           </div>
-        ))}
+        </div>
+
+        {/* Company size filter */}
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 9 }}>Company size</div>
+          <div style={{ height: 3, background: C.hover, borderRadius: 2, position: 'relative', margin: '10px 0' }}>
+            <div style={{ position: 'absolute', left: '10%', right: '50%', height: '100%', background: C.indigo, borderRadius: 2 }} />
+          </div>
+        </div>
+
+        {/* Location filter */}
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 9 }}>Location</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: C.indigoDim, color: C.indigoLt, borderRadius: 5, fontSize: 11, border: `1px solid ${C.indigoBrd}` }}>
+              United States <X size={9} />
+            </span>
+            <span style={{ padding: '3px 7px', color: C.text3, fontSize: 11 }}>+ Add</span>
+          </div>
+        </div>
+
+        {/* Provider filter - dynamic */}
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 9 }}>Provider</div>
+          {loading ? (
+            <div style={{ fontSize: 11, color: C.text3 }}>Loading...</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {/* Connected providers - selectable */}
+              {PROVIDER_REGISTRY.filter(p => connectedProviders.includes(p.key)).map(provider => {
+                const isSelected = selectedProviders.includes(provider.key);
+                return (
+                  <button
+                    key={provider.key}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedProviders(prev => prev.filter(k => k !== provider.key));
+                      } else {
+                        setSelectedProviders(prev => [...prev, provider.key]);
+                      }
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '3px 8px',
+                      background: isSelected ? C.indigoDim : C.surface,
+                      color: isSelected ? C.indigoLt : C.text2,
+                      borderRadius: 5,
+                      fontSize: 11,
+                      border: `1px solid ${isSelected ? C.indigoBrd : C.border2}`,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    {provider.label}
+                    {isSelected && <X size={9} />}
+                  </button>
+                );
+              })}
+
+              {/* Locked providers */}
+              {PROVIDER_REGISTRY.filter(p => !connectedProviders.includes(p.key)).map(provider => (
+                <LockedProviderChip
+                  key={provider.key}
+                  provider={provider.key}
+                  providerLabel={provider.label}
+                  currentPath="/enrich"
+                />
+              ))}
+            </div>
+          )}
+        </div>
         <div style={{ marginBottom: 22 }}>
           <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 9 }}>Keywords</div>
           <div style={{ background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 7, padding: '7px 10px', fontSize: 12, color: C.text3 }}>ABA therapy...</div>
