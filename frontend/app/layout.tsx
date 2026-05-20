@@ -19,7 +19,7 @@ export default function RootLayout({
   return (
     <ClerkProvider
       afterSignUpUrl="/onboarding"
-      fallbackRedirectUrl="/dashboard"
+      signInFallbackRedirectUrl="/dashboard"
     >
       <html lang="en">
         <body>
