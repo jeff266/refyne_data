@@ -64,7 +64,7 @@ async function test() {
   console.log('First 5 results with ICP scores:\n');
   scored.slice(0, 5).forEach((c, i) => {
     console.log(`${i + 1}. ${c.name}`);
-    console.log(`   Employee count: ${c.employee_count !== null ? c.employee_count.toLocaleString() : 'null'}`);
+    console.log(`   Employee count: ${c.employee_count != null ? c.employee_count.toLocaleString() : 'null'}`);
     console.log(`   ICP score: ${c.icp_score}`);
     console.log(`   Industry: ${c.industry || 'N/A'}`);
     console.log(`   Location: ${[c.city, c.state].filter(Boolean).join(', ')}`);
