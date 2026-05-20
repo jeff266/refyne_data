@@ -95,18 +95,42 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ preview: [], summary: { total: 0, fuzzy: 0, phonetic: 0 } });
     }
 
+    // Fetch org-specific settings for preset harmonies
+    const presetHarmonyIds = harmoniesData.filter((h) => h.is_preset).map((h) => h.id);
+    const { data: orgSettings } = presetHarmonyIds.length > 0
+      ? await supabase
+          .from('harmony_org_settings')
+          .select('harmony_id, output_format')
+          .eq('org_id', ctx.orgId)
+          .in('harmony_id', presetHarmonyIds)
+      : { data: [] };
+
+    const orgSettingsMap = new Map(
+      (orgSettings || []).map((s: any) => [s.harmony_id, s])
+    );
+
     // Transform harmonies to engine format
-    const harmonies: Harmony[] = harmoniesData.map((h) => ({
-      id: h.id,
-      name: h.name,
-      field: h.field,
-      objectType: h.object_type as 'company' | 'contact',
-      transformType: h.transform_type || 'lookup',
-      referenceTable: h.reference_table,
-      fuzzyThreshold: h.fuzzy_threshold || 0.8,
-      phoneticEnabled: h.phonetic_enabled || false,
-      isActive: h.is_active,
-    }));
+    const harmonies: Harmony[] = harmoniesData.map((h) => {
+      const orgSetting = orgSettingsMap.get(h.id);
+      const effectiveOutputFormat = h.is_preset && orgSetting?.output_format
+        ? orgSetting.output_format
+        : h.output_format || 'default';
+
+      return {
+        id: h.id,
+        name: h.name,
+        field: h.field,
+        objectType: h.object_type as 'company' | 'contact',
+        transformType: h.transform_type || 'lookup',
+        referenceTable: h.reference_table,
+        fuzzyThreshold: h.fuzzy_threshold || 0.8,
+        phoneticEnabled: h.phonetic_enabled || false,
+        isActive: h.is_active,
+        outputFormat: effectiveOutputFormat,
+        outputFormatsAvailable: h.output_formats_available || [],
+        isPreset: h.is_preset || false,
+      };
+    });
 
     // Fetch HubSpot companies
     const client = new HubSpotClient(accessToken, connection.portal_id);

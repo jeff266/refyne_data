@@ -10,6 +10,7 @@
  */
 
 import { supabase } from '@/lib/db/supabase';
+import { extractHarmonyOutput, getEffectiveOutputFormat } from './output';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -28,6 +29,9 @@ export interface Harmony {
   fuzzyThreshold?: number;
   phoneticEnabled?: boolean;
   isActive: boolean;
+  outputFormat?: string;
+  outputFormatsAvailable?: Array<{ key: string; label: string; default?: boolean }>;
+  isPreset?: boolean;
 }
 
 export interface NormalizationResult {
@@ -211,13 +215,35 @@ export async function applyLookupHarmony(
     if (!result || result.matchType === 'none') continue;
     if (result.canonical === raw) continue;
 
+    // Extract the appropriate field from canonical value based on output format
+    let finalValue = result.canonical;
+
+    // Check if canonical value is JSON (structured output)
+    if (result.canonical && result.canonical.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(result.canonical);
+        if (harmony.outputFormatsAvailable && harmony.outputFormatsAvailable.length > 0) {
+          const effectiveFormat = harmony.outputFormat || 'default';
+          finalValue = extractHarmonyOutput(parsed, effectiveFormat, harmony.outputFormatsAvailable);
+        } else {
+          // No output formats defined, use first value from JSON
+          finalValue = typeof parsed === 'object' ? String(Object.values(parsed)[0] || result.canonical) : result.canonical;
+        }
+      } catch (e) {
+        // Not valid JSON, use as-is
+        finalValue = result.canonical;
+      }
+    }
+
+    if (finalValue === raw) continue;
+
     changes.push({
       hubspotRecordId: record.id,
       field: harmony.field,
       harmonyId: harmony.id,
       before: raw,
       beforeDisplay: await getDisplayLabel(harmony.field, raw),
-      after: result.canonical,
+      after: finalValue,
       matchType: result.matchType,
       confidence: result.confidence,
       requiresReview: result.matchType !== 'exact',
