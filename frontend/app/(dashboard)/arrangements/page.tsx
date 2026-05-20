@@ -191,12 +191,13 @@ export default function ArrangementsPage() {
         }}
       >
         {arrangements.map((arr) => {
-          const providerNames = arr.enrichment_steps
+          const steps = arr.enrichment_steps || [];
+          const providerNames = steps
             .sort((a, b) => a.order - b.order)
             .map((step) => step.provider.charAt(0).toUpperCase() + step.provider.slice(1))
             .join(' → ');
 
-          const totalFields = new Set(arr.enrichment_steps.flatMap((step) => step.fields)).size;
+          const totalFields = new Set(steps.flatMap((step) => step.fields)).size;
 
           return (
             <div
