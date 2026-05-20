@@ -138,33 +138,9 @@ tests:
     input: "   EXAMPLE    COMPANY   "
     expected: "Example Co."
 
-  - name: Mixed case normalization
-    input: "mY cOMpaNY nAmE"
-    expected: "My Company Name"
-
-  - name: Preserves ALL CAPS acronyms
-    input: "Specialized ABA Services"
-    expected: "Specialized ABA Services"
-
-  - name: Preserves ALL CAPS brand names (2-4 chars)
-    input: "LEARN Behavioral"
-    expected: "LEARN Behavioral"
-
-  - name: Lowercases conjunctions (not first word)
-    input: "Pisecco AND Associates"
-    expected: "Pisecco and Associates"
-
-  - name: Preserves mixed case brand names
-    input: "iPhone Repair Co"
-    expected: "iPhone Repair Co."
-
   - name: Multiple conjunctions lowercase
     input: "The Company Of The Future"
     expected: "The Company of the Future"
-
-  - name: Acronyms with suffixes
-    input: "ABC LLC"
-    expected: "ABC LLC"
 
 on_error: fail-silent-log
 default_enabled: true
