@@ -9,6 +9,12 @@
  *   npx tsx scripts/test-prospect-providers.ts
  */
 
+import { config } from 'dotenv';
+import { resolve } from 'path';
+
+// Load environment variables from .env.local
+config({ path: resolve(__dirname, '../.env.local') });
+
 import { searchCompaniesApollo } from '../lib/prospect/providers/apollo';
 import { searchCompaniesZoomInfo } from '../lib/prospect/providers/zoominfo';
 import { ProspectSearchQuery } from '../lib/prospect/types';

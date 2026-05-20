@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Settings } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Settings, Check, X } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { HowItWorksStrip } from '@/components/refyne';
 import { DedupSettings, ClusterQueue } from '@/components/dedup';
@@ -17,8 +18,38 @@ type DedupTab = 'queue' | 'settings';
 // ─────────────────────────────────────────────────────────────
 
 export default function DedupPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<DedupTab>('queue');
   const hasTrackedVisit = useRef(false);
+  const [showMergeBanner, setShowMergeBanner] = useState(false);
+  const [mergeData, setMergeData] = useState<{
+    name: string;
+    rescued: number;
+  } | null>(null);
+
+  // Check for merge success params
+  useEffect(() => {
+    const merged = searchParams?.get('merged');
+    const name = searchParams?.get('name');
+    const rescued = searchParams?.get('rescued');
+
+    if (merged === 'true' && name) {
+      setShowMergeBanner(true);
+      setMergeData({
+        name: decodeURIComponent(name),
+        rescued: rescued ? parseInt(rescued, 10) : 0,
+      });
+
+      // Auto-dismiss after 6 seconds
+      const timer = setTimeout(() => {
+        setShowMergeBanner(false);
+        router.replace('/dedup');
+      }, 6000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, router]);
 
   // Track page visit for onboarding
   useEffect(() => {
@@ -32,6 +63,11 @@ export default function DedupPage() {
       });
     }
   }, []);
+
+  const handleDismissBanner = () => {
+    setShowMergeBanner(false);
+    router.replace('/dedup');
+  };
 
   const dedupSteps = [
     {
@@ -97,6 +133,59 @@ export default function DedupPage() {
       {/* Review queue tab content */}
       {tab === 'queue' && (
         <div style={{ padding: '28px 32px' }}>
+          {/* Merge success banner */}
+          {showMergeBanner && mergeData && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                marginBottom: 16,
+                background: 'rgba(46, 204, 138, 0.08)',
+                border: '0.5px solid rgba(46, 204, 138, 0.3)',
+                borderLeft: '3px solid #2ecc8a',
+                borderRadius: 0,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Check size={16} color="#2ecc8a" />
+                <div>
+                  <div style={{ fontSize: 13, color: '#2ecc8a', fontWeight: 500 }}>
+                    {mergeData.name} merged successfully
+                  </div>
+                  {mergeData.rescued > 0 && (
+                    <div style={{ fontSize: 12, color: C.text2, marginTop: 2 }}>
+                      {mergeData.rescued} fields rescued from duplicate records
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={handleDismissBanner}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: C.text3,
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 12,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = C.text;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = C.text3;
+                }}
+              >
+                Dismiss <X size={14} />
+              </button>
+            </div>
+          )}
+
           <HowItWorksStrip steps={dedupSteps} storageKey="how-it-works-dedup" />
           <ClusterQueue />
         </div>
