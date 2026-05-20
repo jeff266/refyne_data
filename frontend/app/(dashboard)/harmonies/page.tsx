@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Plus, AlertTriangle, ChevronDown, Database } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, Chip, PrimaryBtn, GhostBtn, Tooltip } from '@/components/refyne';
+import { ReferenceDataTable } from '@/components/harmonies/ReferenceDataTable';
 
 interface HarmonyItem {
   id: string;
@@ -19,6 +20,9 @@ interface HarmonyItem {
   ruleCount?: number;
   recordsAffected?: number;
   examples?: Array<{ input: any; output: any }>;
+  transformType?: 'lookup' | 'format';
+  referenceTable?: string;
+  unmatchedCount?: number;
 }
 
 interface ComplianceInsight {
@@ -36,6 +40,8 @@ function HarmonyRow({
   loading,
   testExpanded,
   onToggleTest,
+  expanded,
+  onToggleExpand,
 }: {
   h: HarmonyItem;
   isRec?: boolean;
@@ -44,12 +50,15 @@ function HarmonyRow({
   loading?: boolean;
   testExpanded: boolean;
   onToggleTest: () => void;
+  expanded: boolean;
+  onToggleExpand: () => void;
 }) {
   const [testInput, setTestInput] = useState('');
   const [testOutput, setTestOutput] = useState<{
     matched: boolean;
     output: string | null;
-    rule: string | null;
+    matchType?: 'exact' | 'fuzzy' | 'phonetic' | 'none';
+    confidence?: number;
     explanation: string;
   } | null>(null);
   const [testing, setTesting] = useState(false);
@@ -111,6 +120,9 @@ function HarmonyRow({
                 <span style={{ fontSize: 13, fontWeight: 600, color: enabled ? C.text : C.text3 }}>{h.name}</span>
                 {h.isPreset && <Chip color="amber">Library</Chip>}
                 {isRec && <Chip color="indigo">★ recommended</Chip>}
+                {h.unmatchedCount && h.unmatchedCount > 0 && (
+                  <Chip color="red">{h.unmatchedCount} unmatched</Chip>
+                )}
               </div>
               <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>
                 {h.description || h.name}
@@ -129,6 +141,27 @@ function HarmonyRow({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               {h.score !== undefined && <span style={{ fontSize: 11, fontFamily: F.mono, color: h.score >= 90 ? C.green : C.amber }}>{h.score}%</span>}
+              {h.transformType === 'lookup' && h.referenceTable && (
+                <button
+                  onClick={onToggleExpand}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: 11,
+                    color: expanded ? C.indigo : C.text3,
+                    background: expanded ? C.indigoDim : 'transparent',
+                    border: `1px solid ${expanded ? C.indigoBrd : C.border}`,
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <Database size={12} />
+                  Data
+                  <ChevronDown size={12} style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+                </button>
+              )}
               <button
                 onClick={onToggleTest}
                 style={{
@@ -180,12 +213,28 @@ function HarmonyRow({
                 <span style={{ color: C.text3 }}>...</span>
               ) : testOutput ? (
                 testOutput.matched ? (
-                  <span style={{ color: C.green }}>{testOutput.output} ✓</span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: C.green }}>{testOutput.output} ✓</span>
+                      {testOutput.matchType === 'exact' && (
+                        <span style={{ fontSize: 10, color: C.green }}>exact</span>
+                      )}
+                      {testOutput.matchType === 'fuzzy' && (
+                        <span style={{ fontSize: 10, color: C.amber }}>fuzzy {testOutput.confidence}%</span>
+                      )}
+                      {testOutput.matchType === 'phonetic' && (
+                        <span style={{ fontSize: 10, color: '#f97316' }}>phonetic {testOutput.confidence}%</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>
+                      {testOutput.explanation}
+                    </div>
+                  </div>
                 ) : (
                   <div>
                     <span style={{ color: C.amber }}>No match ⚠</span>
                     <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>
-                      Would appear as unmatched in compliance score
+                      {testOutput.explanation || 'Would appear as unmatched in compliance score'}
                     </div>
                   </div>
                 )
@@ -196,8 +245,40 @@ function HarmonyRow({
           </div>
         </div>
       )}
+
+      {/* Reference data table for lookup harmonies */}
+      {expanded && h.transformType === 'lookup' && h.referenceTable && (
+        <div style={{ borderTop: `1px solid ${C.border}`, padding: '16px 20px' }}>
+          <ReferenceDataTable
+            harmonyId={h.id}
+            tableName={h.referenceTable}
+            orgId="default"
+          />
+        </div>
+      )}
+
+      {/* Algorithm description for format harmonies */}
+      {expanded && h.transformType === 'format' && (
+        <div style={{ padding: '16px 20px', background: C.surface, borderTop: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 8 }}>Algorithm</div>
+          <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.6 }}>
+            {getAlgorithmDescription(h.id)}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+// Algorithm descriptions for format harmonies
+function getAlgorithmDescription(harmonyId: string): string {
+  const descriptions: Record<string, string> = {
+    'phone-e164': 'Normalizes phone numbers to E.164 format. Strips all non-digits, adds +1 for US numbers (10 digits), or preserves country code for 11-digit numbers starting with 1.',
+    'email-lowercase': 'Converts email addresses to lowercase and trims whitespace. This ensures consistent email formatting across your CRM.',
+    'linkedin-url': 'Normalizes LinkedIn URLs to canonical format (https://linkedin.com/in/slug or https://linkedin.com/company/slug). Extracts slug from various LinkedIn URL formats.',
+    'company-name': 'Applies smart title case to company names. Capitalizes first letter of each word, but keeps common legal suffixes uppercase (LLC, INC, CORP, LTD, PLC, LP, LLP).',
+  };
+  return descriptions[harmonyId] || 'This harmony applies an algorithmic transformation to normalize field values.';
 }
 
 export default function HarmoniesPage() {
@@ -208,6 +289,7 @@ export default function HarmoniesPage() {
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
+  const [expandedHarmonyId, setExpandedHarmonyId] = useState<string | null>(null);
 
   // Fetch harmonies and enabled state
   const fetchHarmonies = useCallback(async () => {
@@ -319,6 +401,7 @@ export default function HarmoniesPage() {
     return {
       ...h,
       warning: insight ? `${insight.record_count} records — ${insight.message}` : undefined,
+      unmatchedCount: insight?.record_count || 0,
       score: undefined, // TODO: fetch compliance scores from API
     };
   });
@@ -357,6 +440,8 @@ export default function HarmoniesPage() {
                 loading={togglingId === h.id}
                 testExpanded={expandedTestId === h.id}
                 onToggleTest={() => setExpandedTestId(expandedTestId === h.id ? null : h.id)}
+                expanded={expandedHarmonyId === h.id}
+                onToggleExpand={() => setExpandedHarmonyId(expandedHarmonyId === h.id ? null : h.id)}
               />
             ))}
           </Card>
@@ -375,6 +460,8 @@ export default function HarmoniesPage() {
                 loading={togglingId === h.id}
                 testExpanded={expandedTestId === h.id}
                 onToggleTest={() => setExpandedTestId(expandedTestId === h.id ? null : h.id)}
+                expanded={expandedHarmonyId === h.id}
+                onToggleExpand={() => setExpandedHarmonyId(expandedHarmonyId === h.id ? null : h.id)}
               />
             ))}
           </Card>

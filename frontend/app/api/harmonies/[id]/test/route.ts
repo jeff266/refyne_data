@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
-import { getHarmonyById } from '@/lib/harmonies/library';
-import { HarmonyExecutor } from '@/lib/harmonies/engine/harmony-executor';
 
 /**
  * POST /api/harmonies/:id/test
  *
  * Tests a harmony transformation with a given input value.
- * Returns the transformed output and metadata about which rule matched.
+ * Uses the new fuzzy matching engine for lookup harmonies.
+ * Returns the transformed output, match type, confidence, and matched input value.
  */
 export async function POST(
   request: NextRequest,
@@ -23,59 +23,116 @@ export async function POST(
   }
 
   try {
+    if (!isSupabaseConfigured() || !supabase) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 503 }
+      );
+    }
+
     const harmonyId = params.id;
     const body = await request.json();
     const { input } = body;
 
-    if (input === undefined) {
+    if (input === undefined || input === null || input === '') {
       return NextResponse.json({ error: 'Input is required' }, { status: 400 });
     }
 
-    // Load the harmony from the library
-    const harmony = getHarmonyById(harmonyId);
+    // Fetch harmony from database
+    const { data: harmony, error: harmonyError } = await supabase
+      .from('harmonies')
+      .select('*')
+      .eq('id', harmonyId)
+      .single();
 
-    if (!harmony) {
+    if (harmonyError || !harmony) {
       return NextResponse.json({ error: 'Harmony not found' }, { status: 404 });
     }
 
-    // Apply the harmony transformation
-    try {
-      const executor = new HarmonyExecutor(harmony);
-      const result = await executor.execute({
-        value: input,
-        source: 'test' // Testing source
+    const transformType = harmony.transform_type || 'lookup';
+
+    // Handle lookup harmonies with fuzzy matching
+    if (transformType === 'lookup' && harmony.reference_table) {
+      const { data, error } = await supabase.rpc('lookup_harmony_value', {
+        p_table_name: harmony.reference_table,
+        p_input_value: input,
+        p_org_id: ctx.orgId,
+        p_fuzzy_threshold: harmony.fuzzy_threshold || 0.8,
+        p_phonetic_enabled: harmony.phonetic_enabled || false,
       });
 
-      // Check if the value was transformed
-      const matched = result.value !== input;
-      const output = result.value;
+      if (error) {
+        console.error('[Harmony Test] Lookup failed:', error);
+        return NextResponse.json({
+          matched: false,
+          output: null,
+          matchType: 'none',
+          confidence: 0,
+          explanation: `Error: ${error.message}`,
+        });
+      }
 
-      // Find which rule matched (if any)
-      let matchedRule = result.ruleApplied;
+      const result = data?.[0];
+
+      if (!result || !result.canonical_value || result.match_type === 'none') {
+        return NextResponse.json({
+          matched: false,
+          output: input,
+          matchType: 'none',
+          confidence: 0,
+          explanation: 'No matching value found in reference data',
+        });
+      }
+
+      // Build explanation based on match type
       let explanation = '';
-
-      if (result.ruleApplied) {
-        explanation = 'Transformation applied';
-      } else {
-        explanation = 'No matching rule found - value would pass through unchanged';
+      if (result.match_type === 'exact') {
+        explanation = 'Exact match found in reference data';
+      } else if (result.match_type === 'fuzzy') {
+        explanation = `Fuzzy match (${result.confidence}% similarity via trigram matching)`;
+      } else if (result.match_type === 'phonetic') {
+        explanation = `Phonetic match (${result.confidence}% confidence - sounds similar)`;
       }
 
       return NextResponse.json({
-        matched,
-        output,
-        rule: matchedRule,
+        matched: true,
+        output: result.canonical_value,
+        matchType: result.match_type,
+        confidence: result.confidence,
         explanation,
       });
-    } catch (error) {
-      // Transformation error
-      const msg = error instanceof Error ? error.message : 'Transformation failed';
+    }
+
+    // Handle format harmonies with algorithmic transformations
+    if (transformType === 'format') {
+      const formatResult = applyFormatTransform(harmonyId, input);
+
+      if (!formatResult || formatResult === input) {
+        return NextResponse.json({
+          matched: false,
+          output: input,
+          matchType: 'none',
+          confidence: 0,
+          explanation: 'No transformation applied',
+        });
+      }
+
       return NextResponse.json({
-        matched: false,
-        output: null,
-        rule: null,
-        explanation: `Error: ${msg}`,
+        matched: true,
+        output: formatResult,
+        matchType: 'exact',
+        confidence: 100,
+        explanation: 'Algorithmic transformation applied',
       });
     }
+
+    return NextResponse.json({
+      matched: false,
+      output: input,
+      matchType: 'none',
+      confidence: 0,
+      explanation: 'Unknown harmony type',
+    });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, {
       route: '/api/harmonies/[id]/test',
@@ -84,4 +141,43 @@ export async function POST(
     console.error('Failed to test harmony:', error);
     return NextResponse.json({ error: 'Failed to test harmony' }, { status: 500 });
   }
+}
+
+// Format transformation functions
+function applyFormatTransform(harmonyId: string, value: string): string | null {
+  if (harmonyId === 'phone-e164') {
+    const digits = value.replace(/\D/g, '');
+    if (digits.length === 10) {
+      return `+1${digits}`;
+    } else if (digits.length === 11 && digits[0] === '1') {
+      return `+${digits}`;
+    }
+    return null;
+  }
+
+  if (harmonyId === 'email-lowercase') {
+    return value.toLowerCase().trim();
+  }
+
+  if (harmonyId === 'linkedin-url') {
+    const match = value.match(/linkedin\.com\/(?:in|company)\/([^/?]+)/i);
+    if (!match) return null;
+    const slug = match[1];
+    return value.includes('/company/')
+      ? `https://linkedin.com/company/${slug}`
+      : `https://linkedin.com/in/${slug}`;
+  }
+
+  if (harmonyId === 'company-name') {
+    const words = value.toLowerCase().split(' ');
+    const titleCased = words.map((word) => {
+      if (['llc', 'inc', 'corp', 'ltd', 'plc', 'lp', 'llp'].includes(word)) {
+        return word.toUpperCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    });
+    return titleCased.join(' ');
+  }
+
+  return null;
 }
