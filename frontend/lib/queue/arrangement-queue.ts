@@ -13,6 +13,16 @@ import { estimateRunCost } from '../arrangements/estimate-cost';
 import type { ProviderAdapter } from '../providers/types';
 import { ApolloAdapter } from '../providers/apollo';
 import { ZoomInfoAdapter } from '../providers/zoominfo';
+import {
+  waterfallStrategy,
+  maxStrategy,
+  minStrategy,
+  averageStrategy,
+  clusterAverageStrategy,
+  type ProviderValue,
+  type AggregationResult,
+} from '../arrangements/aggregation-strategies';
+import { normalizeWithHarmony } from '../arrangements/harmony-normalizer';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -40,10 +50,27 @@ const RETRY_SETTINGS = {
 // Job Types
 // ─────────────────────────────────────────────────────────────
 
+// Legacy format (backward compatibility)
 export interface EnrichmentStep {
   provider: string;
   fields: string[];
   order: number;
+}
+
+// New field-first waterfall format
+export interface FieldConfigStep {
+  order: number;
+  provider: string;
+  policy: 'fill_empty' | 'overwrite';
+}
+
+export interface FieldConfig {
+  field_key: string;
+  field_type: 'categorical' | 'numeric' | 'url' | 'text' | 'boolean';
+  aggregation_strategy: 'waterfall' | 'max' | 'min' | 'average' | 'cluster_average';
+  apply_harmony: boolean;
+  harmony_id: string | null;
+  steps: FieldConfigStep[];
 }
 
 export interface ArrangementConfig {
@@ -51,7 +78,10 @@ export interface ArrangementConfig {
   name: string;
   source_type: string;
   source_config: Record<string, unknown>;
-  enrichment_steps: EnrichmentStep[];
+  // Legacy format (still supported for backward compatibility)
+  enrichment_steps?: EnrichmentStep[];
+  // New format (preferred)
+  field_configs?: FieldConfig[];
   output_destination: string;
   output_config: Record<string, unknown>;
 }
@@ -254,7 +284,7 @@ async function processPreflightJob(
   }
 
   // Check 4: Estimate credits and check balance
-  if (supabase) {
+  if (supabase && config.enrichment_steps) {
     const { data: org } = await supabase
       .from('organizations')
       .select('credits_remaining')
@@ -321,29 +351,76 @@ async function processRehearsalJob(
       ? DEMO_COMPANIES.slice(0, sampleSize)
       : await fetchSampleRecords(config.source_config, sampleSize);
 
-    // Process each record through enrichment steps
+    // Check if using new field_configs format or legacy enrichment_steps
+    const usingFieldConfigs = config.field_configs && config.field_configs.length > 0;
+
+    if (!usingFieldConfigs && config.enrichment_steps) {
+      console.warn(`[Rehearsal] Arrangement ${config.id} using legacy enrichment_steps format. Migrate to field_configs.`);
+    }
+
+    // Process each record
     for (const company of companies) {
       try {
         const enrichedData: Record<string, unknown> = { ...company };
         let recordCredits = 0;
+        const fieldDetail: Record<string, any> = {};
+        let fieldsAttempted = 0;
+        let fieldsWritten = 0;
+        let fieldsSkipped = 0;
 
-        // Execute enrichment steps in order
-        for (const step of config.enrichment_steps.sort((a, b) => a.order - b.order)) {
-          if (mode === 'demo') {
-            // Demo mode: use synthetic data
-            const stepResult = getDemoEnrichmentResult(company as any, step.provider, step.fields);
-            Object.assign(enrichedData, stepResult);
-            recordCredits += 1; // Nominal credit for demo
-          } else {
-            // Live mode: make real API calls
-            const provider = getProviderAdapter(step.provider);
-            const result = await provider.enrichCompany({ domain: company.domain });
+        if (usingFieldConfigs) {
+          // NEW PATH: Use field_configs
+          for (const fieldConfig of config.field_configs!) {
+            fieldsAttempted++;
 
-            if (result) {
-              for (const field of step.fields) {
-                enrichedData[field] = result.normalized?.[field] ?? result.raw[field];
+            const result = await processFieldConfig(
+              fieldConfig,
+              company,
+              orgId,
+              company[fieldConfig.field_key],
+              mode
+            );
+
+            if (result.written) {
+              enrichedData[fieldConfig.field_key] = result.value;
+              fieldsWritten++;
+              recordCredits += fieldConfig.steps.length; // Rough estimate
+
+              fieldDetail[fieldConfig.field_key] = {
+                provider: result.provider,
+                strategy: result.strategy,
+                raw: result.raw,
+                normalized: result.normalized,
+                written: true,
+                metadata: result.metadata,
+              };
+            } else if (result.skipped) {
+              fieldsSkipped++;
+              fieldDetail[fieldConfig.field_key] = {
+                skipped: true,
+                reason: result.skipReason,
+              };
+            }
+          }
+        } else {
+          // LEGACY PATH: Use enrichment_steps
+          for (const step of config.enrichment_steps!.sort((a, b) => a.order - b.order)) {
+            if (mode === 'demo') {
+              // Demo mode: use synthetic data
+              const stepResult = getDemoEnrichmentResult(company as any, step.provider, step.fields);
+              Object.assign(enrichedData, stepResult);
+              recordCredits += 1; // Nominal credit for demo
+            } else {
+              // Live mode: make real API calls
+              const provider = getProviderAdapter(step.provider);
+              const result = await provider.enrichCompany({ domain: company.domain });
+
+              if (result) {
+                for (const field of step.fields) {
+                  enrichedData[field] = result.normalized?.[field] ?? result.raw[field];
+                }
+                recordCredits += step.fields.length;
               }
-              recordCredits += step.fields.length;
             }
           }
         }
@@ -420,6 +497,13 @@ async function processLiveRunJob(
   let failedCount = 0;
   let creditsUsed = 0;
 
+  // Check if using new field_configs format or legacy enrichment_steps
+  const usingFieldConfigs = config.field_configs && config.field_configs.length > 0;
+
+  if (!usingFieldConfigs && config.enrichment_steps) {
+    console.warn(`[Live Run] Arrangement ${config.id} using legacy enrichment_steps format. Migrate to field_configs.`);
+  }
+
   try {
     // Fetch records (with pagination/cursor from checkpoint)
     const records = await fetchRecordsForProcessing(
@@ -442,41 +526,91 @@ async function processLiveRunJob(
           break;
         }
 
-        // Process record through enrichment steps
+        // Process record
         const enrichedData: Record<string, unknown> = { ...record };
         let recordCredits = 0;
+        const fieldDetail: Record<string, any> = {};
+        let fieldsAttempted = 0;
+        let fieldsWritten = 0;
+        let fieldsSkipped = 0;
 
-        for (const step of config.enrichment_steps.sort((a, b) => a.order - b.order)) {
-          try {
-            const provider = getProviderAdapter(step.provider);
-            const result = await provider.enrichCompany({ domain: record.domain });
+        if (usingFieldConfigs) {
+          // NEW PATH: Use field_configs
+          for (const fieldConfig of config.field_configs!) {
+            fieldsAttempted++;
 
-            if (result) {
-              for (const field of step.fields) {
-                enrichedData[field] = result.normalized?.[field] ?? result.raw[field];
+            try {
+              const result = await processFieldConfig(
+                fieldConfig,
+                record,
+                orgId,
+                record[fieldConfig.field_key],
+                'live'
+              );
+
+              if (result.written) {
+                enrichedData[fieldConfig.field_key] = result.value;
+                fieldsWritten++;
+                recordCredits += fieldConfig.steps.length; // Rough estimate
+
+                fieldDetail[fieldConfig.field_key] = {
+                  provider: result.provider,
+                  strategy: result.strategy,
+                  raw: result.raw,
+                  normalized: result.normalized,
+                  written: true,
+                  metadata: result.metadata,
+                };
+              } else if (result.skipped) {
+                fieldsSkipped++;
+                fieldDetail[fieldConfig.field_key] = {
+                  skipped: true,
+                  reason: result.skipReason,
+                };
               }
-              recordCredits += step.fields.length;
+            } catch (fieldError) {
+              console.error(`[Live Run] Field ${fieldConfig.field_key} failed:`, fieldError);
+              fieldsSkipped++;
+              fieldDetail[fieldConfig.field_key] = {
+                skipped: true,
+                reason: `Error: ${fieldError instanceof Error ? fieldError.message : 'Unknown error'}`,
+              };
             }
+          }
+        } else {
+          // LEGACY PATH: Use enrichment_steps
+          for (const step of config.enrichment_steps!.sort((a, b) => a.order - b.order)) {
+            try {
+              const provider = getProviderAdapter(step.provider);
+              const result = await provider.enrichCompany({ domain: record.domain });
 
-          } catch (providerError) {
-            // Handle provider failures
-            if (isAuthError(providerError)) {
-              // Pause run on 401
-              await supabase
-                .from('arrangement_runs')
-                .update({
-                  status: 'paused',
-                  error_message: 'Provider authentication failed',
-                })
-                .eq('id', runId);
+              if (result) {
+                for (const field of step.fields) {
+                  enrichedData[field] = result.normalized?.[field] ?? result.raw[field];
+                }
+                recordCredits += step.fields.length;
+              }
 
-              throw new Error('Provider auth failed - run paused');
-            }
+            } catch (providerError) {
+              // Handle provider failures
+              if (isAuthError(providerError)) {
+                // Pause run on 401
+                await supabase
+                  .from('arrangement_runs')
+                  .update({
+                    status: 'paused',
+                    error_message: 'Provider authentication failed',
+                  })
+                  .eq('id', runId);
 
-            if (isRateLimitError(providerError)) {
-              // Backoff on 429
-              await new Promise(resolve => setTimeout(resolve, 5000));
-              // Retry this step (could be more sophisticated)
+                throw new Error('Provider auth failed - run paused');
+              }
+
+              if (isRateLimitError(providerError)) {
+                // Backoff on 429
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                // Retry this step (could be more sophisticated)
+              }
             }
           }
         }
@@ -487,7 +621,7 @@ async function processLiveRunJob(
         successfulCount++;
         creditsUsed += recordCredits;
 
-        // Track progress in database
+        // Track progress in database with detailed field tracking
         await supabase.from('arrangement_run_progress').insert({
           run_id: runId,
           org_id: orgId,
@@ -496,6 +630,12 @@ async function processLiveRunJob(
           enrichment_results: enrichedData,
           credits_used: recordCredits,
           completed_at: new Date().toISOString(),
+          result: usingFieldConfigs ? {
+            fields_attempted: fieldsAttempted,
+            fields_written: fieldsWritten,
+            fields_skipped: fieldsSkipped,
+            field_detail: fieldDetail,
+          } : undefined,
         });
 
       } catch (error) {
@@ -629,6 +769,230 @@ async function saveCheckpoint(
       actual_credits_used: creditsUsed,
     })
     .eq('id', runId);
+}
+
+/**
+ * Process a single field using field_configs format.
+ *
+ * Handles aggregation strategies, harmony normalization, and detailed tracking.
+ */
+async function processFieldConfig(
+  fieldConfig: FieldConfig,
+  record: any,
+  orgId: string,
+  currentFieldValue: any,
+  mode: 'demo' | 'live'
+): Promise<{
+  value: any;
+  written: boolean;
+  skipped: boolean;
+  skipReason?: string;
+  provider?: string;
+  strategy?: string;
+  raw?: any;
+  normalized?: any;
+  metadata?: Record<string, any>;
+}> {
+  const { field_key, field_type, aggregation_strategy, apply_harmony, harmony_id, steps } = fieldConfig;
+
+  try {
+    // Step 1: Collect provider values based on aggregation strategy
+    const providerValues: ProviderValue[] = [];
+
+    if (aggregation_strategy === 'waterfall') {
+      // For waterfall, query providers in order until we get a value
+      for (const step of steps.sort((a, b) => a.order - b.order)) {
+        const providerValue = await queryProvider(step.provider, record, field_key, mode);
+
+        if (providerValue !== null && providerValue !== undefined && providerValue !== '') {
+          providerValues.push({
+            provider: step.provider,
+            value: providerValue,
+            order: step.order,
+          });
+
+          // For waterfall, we can stop after first non-null value
+          const result = waterfallStrategy(providerValues, {
+            currentValue: currentFieldValue,
+            policy: step.policy,
+          });
+
+          if (result) {
+            // Check if we should skip due to fill_empty policy
+            if (result.source === 'existing') {
+              return {
+                value: currentFieldValue,
+                written: false,
+                skipped: true,
+                skipReason: result.metadata?.reason,
+                metadata: result.metadata,
+              };
+            }
+
+            // Apply harmony normalization if configured
+            if (apply_harmony && harmony_id) {
+              const harmonyResult = await normalizeWithHarmony({
+                orgId,
+                harmonyId: harmony_id,
+                rawValue: result.value,
+              });
+
+              const finalValue = harmonyResult.matched ? harmonyResult.normalized : result.value;
+
+              return {
+                value: finalValue,
+                written: true,
+                skipped: false,
+                provider: result.source,
+                raw: result.value,
+                normalized: harmonyResult.matched ? harmonyResult.normalized : undefined,
+                metadata: {
+                  ...result.metadata,
+                  harmony: harmonyResult.matched ? {
+                    matched: true,
+                    harmonyId: harmony_id,
+                    outputFormat: harmonyResult.outputFormat,
+                  } : { matched: false },
+                },
+              };
+            }
+
+            // No harmony, return raw value
+            return {
+              value: result.value,
+              written: true,
+              skipped: false,
+              provider: result.source,
+              raw: result.value,
+              metadata: result.metadata,
+            };
+          }
+
+          break; // Stop after first value for waterfall
+        }
+      }
+    } else {
+      // For other strategies (max, min, average, cluster_average), query all providers
+      for (const step of steps) {
+        try {
+          const providerValue = await queryProvider(step.provider, record, field_key, mode);
+
+          if (providerValue !== null && providerValue !== undefined && providerValue !== '') {
+            providerValues.push({
+              provider: step.provider,
+              value: providerValue,
+              order: step.order,
+            });
+          }
+        } catch (providerError) {
+          console.warn(`[Field Processing] Provider ${step.provider} failed for ${field_key}:`, providerError);
+          // Continue with other providers
+        }
+      }
+
+      // Apply aggregation strategy
+      let aggregationResult: AggregationResult | null = null;
+
+      switch (aggregation_strategy) {
+        case 'max':
+          aggregationResult = maxStrategy(providerValues);
+          break;
+        case 'min':
+          aggregationResult = minStrategy(providerValues);
+          break;
+        case 'average':
+          aggregationResult = averageStrategy(providerValues, field_type);
+          break;
+        case 'cluster_average':
+          aggregationResult = clusterAverageStrategy(providerValues, field_type);
+          break;
+      }
+
+      if (aggregationResult) {
+        // For aggregated strategies, always overwrite (policy is ignored)
+        // Apply harmony normalization if configured
+        if (apply_harmony && harmony_id) {
+          const harmonyResult = await normalizeWithHarmony({
+            orgId,
+            harmonyId: harmony_id,
+            rawValue: aggregationResult.value,
+          });
+
+          const finalValue = harmonyResult.matched ? harmonyResult.normalized : aggregationResult.value;
+
+          return {
+            value: finalValue,
+            written: true,
+            skipped: false,
+            strategy: aggregation_strategy,
+            raw: aggregationResult.value,
+            normalized: harmonyResult.matched ? harmonyResult.normalized : undefined,
+            metadata: {
+              ...aggregationResult.metadata,
+              harmony: harmonyResult.matched ? {
+                matched: true,
+                harmonyId: harmony_id,
+                outputFormat: harmonyResult.outputFormat,
+              } : { matched: false },
+            },
+          };
+        }
+
+        // No harmony, return aggregated value
+        return {
+          value: aggregationResult.value,
+          written: true,
+          skipped: false,
+          strategy: aggregation_strategy,
+          raw: aggregationResult.value,
+          metadata: aggregationResult.metadata,
+        };
+      }
+    }
+
+    // No value obtained from any provider
+    return {
+      value: null,
+      written: false,
+      skipped: true,
+      skipReason: 'No non-null value from any provider',
+    };
+
+  } catch (error) {
+    console.error(`[Field Processing] Failed to process ${field_key}:`, error);
+    return {
+      value: null,
+      written: false,
+      skipped: true,
+      skipReason: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    };
+  }
+}
+
+/**
+ * Query a provider for a specific field value.
+ */
+async function queryProvider(
+  provider: string,
+  record: any,
+  fieldKey: string,
+  mode: 'demo' | 'live'
+): Promise<any> {
+  if (mode === 'demo') {
+    // Demo mode: use synthetic data
+    const demoResult = getDemoEnrichmentResult(record, provider, [fieldKey]);
+    return demoResult[fieldKey];
+  }
+
+  // Live mode: make real API call
+  const providerAdapter = getProviderAdapter(provider);
+  const result = await providerAdapter.enrichCompany({ domain: record.domain });
+
+  if (result) {
+    return result.normalized?.[fieldKey] ?? result.raw[fieldKey];
+  }
+
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────
