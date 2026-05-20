@@ -88,12 +88,16 @@ export async function GET(req: NextRequest) {
         const willApply = !isNormalizationHarmony;
 
         // Get example from reference data
-        const { data: referenceData } = await supabase
-          .from('harmony_reference_data')
-          .select('raw_value, normalized_value')
-          .eq('harmony_id', harmony.id)
-          .limit(1)
-          .single();
+        let referenceData = null;
+        if (supabase) {
+          const { data } = await supabase
+            .from('harmony_reference_data')
+            .select('raw_value, normalized_value')
+            .eq('harmony_id', harmony.id)
+            .limit(1)
+            .single();
+          referenceData = data;
+        }
 
         let reason = '';
         if (willApply) {
