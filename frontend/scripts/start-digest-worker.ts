@@ -39,6 +39,7 @@ import {
   stopCompanyDedupScanWorker,
   enqueueCompanyDedupScan,
 } from '../lib/dedup/company-dedup-scanner';
+import { startArrangementWorker, stopArrangementWorker } from '../lib/queue/arrangement-queue';
 import { getAccessToken } from '../lib/hubspot/get-access-token';
 
 async function main() {
@@ -79,6 +80,16 @@ async function main() {
     console.log('⚠️  Company dedup scan worker disabled (Redis not configured)');
   } else {
     console.log('✅ Company dedup scan worker started successfully\n');
+  }
+
+  // Start the arrangement worker (field_configs + aggregation strategies)
+  console.log('Starting arrangement worker...');
+  const arrangementWorker = startArrangementWorker();
+
+  if (!arrangementWorker) {
+    console.log('⚠️  Arrangement worker disabled (Redis not configured)');
+  } else {
+    console.log('✅ Arrangement worker started successfully\n');
   }
 
   // Display initial queue stats
@@ -223,6 +234,7 @@ async function main() {
     clearInterval(nightlyMaintenanceInterval);
     await stopDigestWorker();
     await stopCompanyDedupScanWorker();
+    await stopArrangementWorker();
     console.log('Workers stopped.');
     process.exit(0);
   };
