@@ -100,6 +100,13 @@ export async function POST(request: NextRequest) {
     const enrichmentSteps = body.enrichment_steps || [];
     const fieldConfigs = body.field_configs || null;
 
+    // Merge test mode settings into source_config if provided
+    const sourceConfig = { ...body.source_config };
+    if (body.test_mode) {
+      sourceConfig.test_mode = true;
+      sourceConfig.record_limit = body.record_limit || 10;
+    }
+
     // Create arrangement
     const { data: arrangement, error } = await supabase
       .from('arrangements')
@@ -108,7 +115,7 @@ export async function POST(request: NextRequest) {
         name: body.name,
         description: body.description || null,
         source_type: body.source_type,
-        source_config: body.source_config,
+        source_config: sourceConfig,
         enrichment_steps: enrichmentSteps, // v1 (legacy)
         field_configs: fieldConfigs, // v2 (waterfall)
         output_destination: body.output_destination,

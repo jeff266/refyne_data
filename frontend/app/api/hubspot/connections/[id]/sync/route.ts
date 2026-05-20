@@ -3,6 +3,7 @@ import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { enqueueScan } from '@/lib/compliance/compliance-scanner';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
 
 /**
  * POST /api/hubspot/connections/:id/sync
@@ -34,10 +35,10 @@ export async function POST(
       );
     }
 
-    // Fetch connection to verify ownership and get access token
+    // Fetch connection to verify ownership
     const { data: connection, error: fetchError } = await supabase
       .from('hubspot_connections')
-      .select('org_id, last_sync_status, access_token, has_export_scope')
+      .select('org_id, last_sync_status, has_export_scope')
       .eq('id', connectionId)
       .single();
 
@@ -64,6 +65,15 @@ export async function POST(
       );
     }
 
+    // Get valid access token (handles token refresh)
+    const accessToken = await getAccessToken(ctx.orgId);
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'Failed to get access token' },
+        { status: 500 }
+      );
+    }
+
     // Update sync status to 'running'
     const { error: updateError } = await supabase
       .from('hubspot_connections')
@@ -86,7 +96,7 @@ export async function POST(
     // Enqueue BullMQ compliance scan job
     const scanResult = await enqueueScan(
       ctx.orgId,
-      connection.access_token,
+      accessToken,
       connection.has_export_scope || false
     );
 

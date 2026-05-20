@@ -17,6 +17,20 @@ interface GapAnalysis {
   scanned_at: string;
 }
 
+interface HarmonyPreview {
+  field_key: string;
+  field_label: string;
+  harmony: {
+    id: string;
+    name: string;
+    approach: string;
+    will_apply: boolean;
+    reason: string;
+    example_input: string | null;
+    example_output: string | null;
+  } | null;
+}
+
 const ENRICHABLE_FIELDS = [
   { key: 'industry', label: 'Industry' },
   { key: 'numberofemployees', label: 'Employee count' },
@@ -34,16 +48,17 @@ const PROVIDER_REGISTRY = [
   { key: 'refyne', label: 'Refyne Data' },
 ];
 
-const LIFECYCLE_STAGES = [
-  'subscriber',
-  'lead',
-  'marketingqualifiedlead',
-  'salesqualifiedlead',
-  'opportunity',
-  'customer',
-  'evangelist',
-  'other',
-];
+interface LifecycleStage {
+  value: string;
+  label: string;
+  count: number;
+}
+
+interface Owner {
+  id: string;
+  name: string;
+  email: string | null;
+}
 
 export default function EnrichPage() {
   const router = useRouter();
@@ -53,13 +68,31 @@ export default function EnrichPage() {
   const [running, setRunning] = useState(false);
 
   // Configuration state
-  const [companyScope, setCompanyScope] = useState<'all' | 'list' | 'filter'>('all');
+  const [companyScope, setCompanyScope] = useState<'all' | 'list' | 'segment'>('all');
   const [selectedList, setSelectedList] = useState<string>('');
   const [lifecycleStage, setLifecycleStage] = useState<string>('');
+  const [ownerId, setOwnerId] = useState<string>('');
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
   const [writePolicy, setWritePolicy] = useState<'fill_empty' | 'overwrite'>('fill_empty');
   const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
+  const [harmonyPreviews, setHarmonyPreviews] = useState<HarmonyPreview[]>([]);
+  const [loadingHarmonies, setLoadingHarmonies] = useState(false);
+
+  // Subsegment filter data
+  const [lifecycleStages, setLifecycleStages] = useState<LifecycleStage[]>([]);
+  const [owners, setOwners] = useState<Owner[]>([]);
+  const [industries, setIndustries] = useState<string[]>([]);
+  const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [sampleNames, setSampleNames] = useState<string[]>([]);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  // Test mode state
+  const [testMode, setTestMode] = useState(false);
+  const [testRecordLimit, setTestRecordLimit] = useState(10);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Fetch gap analysis on mount
   useEffect(() => {
@@ -101,9 +134,116 @@ export default function EnrichPage() {
       }
     }
 
+    async function fetchLifecycleStages() {
+      try {
+        const res = await fetch('/api/hubspot/lifecycle-stages');
+        if (res.ok) {
+          const data = await res.json();
+          setLifecycleStages(data.stages || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch lifecycle stages:', error);
+      }
+    }
+
+    async function fetchOwners() {
+      try {
+        const res = await fetch('/api/hubspot/owners');
+        if (res.ok) {
+          const data = await res.json();
+          setOwners(data.owners || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch owners:', error);
+      }
+    }
+
+    async function fetchIndustries() {
+      try {
+        // Fetch industries from harmony_reference_data for controlled taxonomy
+        const res = await fetch('/api/harmonies/industry/reference');
+        if (res.ok) {
+          const data = await res.json();
+          setIndustries(data.industries || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch industries:', error);
+        // Fallback to basic industry list
+        setIndustries(['Healthcare', 'Software', 'Education', 'Manufacturing', 'Retail']);
+      }
+    }
+
     fetchGaps();
     fetchConnections();
+    fetchLifecycleStages();
+    fetchOwners();
+    fetchIndustries();
   }, []);
+
+  // Fetch harmony preview when selected fields change
+  useEffect(() => {
+    async function fetchHarmonyPreview() {
+      if (selectedFields.length === 0) {
+        setHarmonyPreviews([]);
+        return;
+      }
+
+      setLoadingHarmonies(true);
+      try {
+        const res = await fetch(`/api/enrich/harmony-preview?fields=${selectedFields.join(',')}`);
+        if (res.ok) {
+          const data = await res.json();
+          setHarmonyPreviews(data.fields || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch harmony preview:', error);
+      } finally {
+        setLoadingHarmonies(false);
+      }
+    }
+
+    fetchHarmonyPreview();
+  }, [selectedFields]);
+
+  // Fetch preview count when segment filters change (debounced)
+  useEffect(() => {
+    if (companyScope !== 'segment' || selectedFields.length === 0) {
+      setPreviewCount(null);
+      setSampleNames([]);
+      return;
+    }
+
+    const timeoutId = setTimeout(async () => {
+      setLoadingPreview(true);
+      try {
+        const res = await fetch('/api/enrich/preview-count', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: 'segment',
+            segment: {
+              lifecycle_stage: lifecycleStage || undefined,
+              owner_id: ownerId || undefined,
+              industries: selectedIndustries.length > 0 ? selectedIndustries : undefined,
+            },
+            fields: selectedFields,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setPreviewCount(data.count);
+          setSampleNames(data.sample_names || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch preview count:', error);
+      } finally {
+        setLoadingPreview(false);
+      }
+    }, 400); // 400ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [companyScope, lifecycleStage, ownerId, selectedIndustries, selectedFields]);
 
   // Run enrichment
   async function handleRunEnrichment() {
@@ -116,6 +256,17 @@ export default function EnrichPage() {
       return;
     }
 
+    // Show confirmation modal for large runs without test mode
+    const estimatedCount = companyScope === 'segment' ? (previewCount || 0) : gapAnalysis?.total_companies || 0;
+    if (!testMode && estimatedCount > 100) {
+      setShowConfirmModal(true);
+      return;
+    }
+
+    await executeEnrichment();
+  }
+
+  async function executeEnrichment() {
     setRunning(true);
     try {
       // Determine source type and config
@@ -127,8 +278,19 @@ export default function EnrichPage() {
         source_config = { listId: selectedList };
       } else {
         source_type = 'hubspot_filter';
-        if (companyScope === 'filter' && lifecycleStage) {
-          source_config = { filters: { lifecyclestage: lifecycleStage } };
+        if (companyScope === 'segment') {
+          // Apply segment filters
+          const filters: any = { missing_fields: selectedFields };
+          if (lifecycleStage) {
+            filters.lifecyclestage = lifecycleStage;
+          }
+          if (ownerId) {
+            filters.hubspot_owner_id = ownerId;
+          }
+          if (selectedIndustries.length > 0) {
+            filters.industry = selectedIndustries;
+          }
+          source_config = { filters };
         } else {
           // "All companies with missing fields" - filter for companies missing selected fields
           source_config = { filters: { missing_fields: selectedFields } };
@@ -148,18 +310,28 @@ export default function EnrichPage() {
         })),
       }));
 
+      // Add test mode flags if enabled
+      const arrangementPayload: any = {
+        name: testMode
+          ? `Test enrichment - ${new Date().toLocaleDateString()}`
+          : `Enrich missing fields - ${new Date().toLocaleDateString()}`,
+        description: `Fill gaps in ${selectedFields.join(', ')} using ${selectedProviders.join(', ')}`,
+        source_type,
+        source_config,
+        field_configs,
+        output_destination: 'hubspot',
+        output_config: { object_type: 'companies' },
+      };
+
+      if (testMode) {
+        arrangementPayload.test_mode = true;
+        arrangementPayload.record_limit = testRecordLimit;
+      }
+
       const response = await fetch('/api/arrangements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: `Enrich missing fields - ${new Date().toLocaleDateString()}`,
-          description: `Fill gaps in ${selectedFields.join(', ')} using ${selectedProviders.join(', ')}`,
-          source_type,
-          source_config,
-          field_configs,
-          output_destination: 'hubspot',
-          output_config: { object_type: 'companies' },
-        }),
+        body: JSON.stringify(arrangementPayload),
       });
 
       if (!response.ok) {
@@ -305,31 +477,93 @@ export default function EnrichPage() {
                         placeholder="Enter list ID..."
                         value={selectedList}
                         onChange={(e) => setSelectedList(e.target.value)}
-                        style={{ marginLeft: 8, padding: '4px 8px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12 }}
+                        style={{ marginLeft: 8, padding: '4px 8px', background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontSize: 12 }}
                       />
                     )}
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      checked={companyScope === 'filter'}
-                      onChange={() => setCompanyScope('filter')}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: 13, color: C.text2 }}>Filter by lifecycle stage</span>
-                    {companyScope === 'filter' && (
-                      <select
-                        value={lifecycleStage}
-                        onChange={(e) => setLifecycleStage(e.target.value)}
-                        style={{ marginLeft: 8, padding: '4px 8px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12 }}
-                      >
-                        <option value="">Select stage...</option>
-                        {LIFECYCLE_STAGES.map(stage => (
-                          <option key={stage} value={stage}>{stage}</option>
-                        ))}
-                      </select>
+                  <div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        checked={companyScope === 'segment'}
+                        onChange={() => setCompanyScope('segment')}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 13, color: C.text2 }}>Filter by segment:</span>
+                    </label>
+                    {companyScope === 'segment' && (
+                      <div style={{ marginLeft: 28, marginTop: 12, padding: 12, background: C.bg, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <label style={{ fontSize: 12, color: C.text3, minWidth: 100 }}>
+                            Lifecycle stage
+                          </label>
+                          <select
+                            value={lifecycleStage}
+                            onChange={(e) => setLifecycleStage(e.target.value)}
+                            style={{ flex: 1, padding: '6px 8px', background: C.surface, border: `1px solid ${C.border}`, color: C.text, fontSize: 12 }}
+                          >
+                            {lifecycleStages.map(stage => (
+                              <option key={stage.value} value={stage.value}>
+                                {stage.label} {stage.count > 0 ? `(${stage.count})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <label style={{ fontSize: 12, color: C.text3, minWidth: 100 }}>
+                            Owner
+                          </label>
+                          <select
+                            value={ownerId}
+                            onChange={(e) => setOwnerId(e.target.value)}
+                            style={{ flex: 1, padding: '6px 8px', background: C.surface, border: `1px solid ${C.border}`, color: C.text, fontSize: 12 }}
+                          >
+                            {owners.map(owner => (
+                              <option key={owner.id} value={owner.id}>
+                                {owner.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'start', gap: 12 }}>
+                          <label style={{ fontSize: 12, color: C.text3, minWidth: 100, paddingTop: 6 }}>
+                            Industry
+                          </label>
+                          <select
+                            multiple
+                            value={selectedIndustries}
+                            onChange={(e) => {
+                              const selected = Array.from(e.target.selectedOptions, option => option.value);
+                              setSelectedIndustries(selected);
+                            }}
+                            style={{ flex: 1, padding: '6px 8px', background: C.surface, border: `1px solid ${C.border}`, color: C.text, fontSize: 12, minHeight: 80 }}
+                          >
+                            {industries.map(industry => (
+                              <option key={industry} value={industry}>
+                                {industry}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {loadingPreview ? (
+                          <div style={{ fontSize: 12, color: C.text3 }}>
+                            Calculating match...
+                          </div>
+                        ) : previewCount !== null && (
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
+                              Matching: {previewCount.toLocaleString()} companies
+                            </div>
+                            {sampleNames.length > 0 && (
+                              <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>
+                                e.g. {sampleNames.join(', ')}...
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
-                  </label>
+                  </div>
                 </div>
               </div>
 
@@ -358,6 +592,96 @@ export default function EnrichPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Harmony Preview */}
+              {selectedFields.length > 0 && (
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 12 }}>
+                    Harmonies that will apply:
+                  </div>
+                  <div style={{ border: `1px solid ${C.border}`, borderRadius: 4, padding: 16, background: C.bg }}>
+                    {loadingHarmonies ? (
+                      <div style={{ fontSize: 12, color: C.text3, padding: 8 }}>
+                        Loading harmony preview...
+                      </div>
+                    ) : harmonyPreviews.length === 0 ? (
+                      <div style={{ fontSize: 12, color: C.text3 }}>
+                        No harmonies configured for selected fields.{' '}
+                        <a href="/harmonies" style={{ color: '#2E6BA8', textDecoration: 'none' }}>
+                          Browse harmony library →
+                        </a>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {harmonyPreviews.map((preview) => {
+                          const harmony = preview.harmony;
+                          if (!harmony) {
+                            return (
+                              <div key={preview.field_key} style={{ fontSize: 12, color: C.text3 }}>
+                                No harmony configured for: {preview.field_label}.{' '}
+                                <a href="/harmonies" style={{ color: '#2E6BA8', textDecoration: 'none' }}>
+                                  Browse harmony library →
+                                </a>
+                              </div>
+                            );
+                          }
+
+                          if (!harmony.will_apply) {
+                            return (
+                              <div key={preview.field_key} style={{ paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+                                <div style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 4 }}>
+                                  <span style={{ fontSize: 14, color: C.text3 }}>✦</span>
+                                  <div style={{ flex: 1 }}>
+                                    <a
+                                      href={`/harmonies/${harmony.id}`}
+                                      style={{ fontSize: 13, fontWeight: 500, color: C.text3, textDecoration: 'none' }}
+                                    >
+                                      {harmony.name}
+                                    </a>
+                                    <span style={{ fontSize: 13, color: C.text3, marginLeft: 8 }}>
+                                      → will not run
+                                    </span>
+                                  </div>
+                                </div>
+                                <div style={{ fontSize: 12, color: C.text3, marginLeft: 22 }}>
+                                  {harmony.reason}
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={preview.field_key} style={{ paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+                              <div style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 4 }}>
+                                <span style={{ fontSize: 14, color: '#2E6BA8' }}>✦</span>
+                                <div style={{ flex: 1 }}>
+                                  <a
+                                    href={`/harmonies/${harmony.id}`}
+                                    style={{ fontSize: 13, fontWeight: 500, color: '#2E6BA8', textDecoration: 'none' }}
+                                  >
+                                    {harmony.name}
+                                  </a>
+                                  <span style={{ fontSize: 13, color: C.text2, marginLeft: 8 }}>
+                                    → {preview.field_label.toLowerCase()} field
+                                  </span>
+                                </div>
+                              </div>
+                              <div style={{ fontSize: 12, color: C.text2, marginLeft: 22, marginBottom: 4 }}>
+                                {harmony.reason}
+                              </div>
+                              {harmony.example_input && harmony.example_output && (
+                                <div style={{ fontSize: 11, fontFamily: F.mono, color: C.text3, marginLeft: 22 }}>
+                                  Example: "{harmony.example_input}" → "{harmony.example_output}"
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Providers */}
               <div style={{ marginBottom: 24 }}>
@@ -419,10 +743,159 @@ export default function EnrichPage() {
                 </div>
               </div>
 
+              {/* Advanced options */}
+              <div style={{ marginBottom: 24, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                <div
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: showAdvanced ? 16 : 0 }}
+                >
+                  <span style={{ fontSize: 16, color: C.text2 }}>
+                    {showAdvanced ? '▼' : '▶'}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
+                    Advanced options
+                  </span>
+                </div>
+
+                {showAdvanced && (
+                  <div style={{ marginLeft: 24, padding: 16, background: C.bg, border: `1px solid ${C.border}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 8 }}>
+                      Test mode
+                    </div>
+                    <div style={{ fontSize: 12, color: C.text2, marginBottom: 12 }}>
+                      Run on a sample of records before enriching your full database.
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={testMode}
+                        onChange={(e) => setTestMode(e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 13, color: C.text2 }}>Limit to</span>
+                      <input
+                        type="number"
+                        value={testRecordLimit}
+                        onChange={(e) => setTestRecordLimit(Math.max(1, parseInt(e.target.value) || 10))}
+                        disabled={!testMode}
+                        style={{
+                          width: 60,
+                          padding: '4px 8px',
+                          background: testMode ? C.surface : C.bg,
+                          border: `1px solid ${C.border}`,
+                          color: testMode ? C.text : C.text3,
+                          fontSize: 12,
+                        }}
+                      />
+                      <span style={{ fontSize: 13, color: C.text2 }}>records</span>
+                    </label>
+                    <div style={{ fontSize: 11, color: C.text3, marginTop: 8, marginLeft: 28 }}>
+                      Refyne will select records randomly from your filtered set.
+                      After reviewing the results, run the full enrichment.
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Run button */}
               <PrimaryBtn onClick={handleRunEnrichment} disabled={running}>
-                {running ? 'Creating enrichment...' : 'Run enrichment →'}
+                {running
+                  ? 'Creating enrichment...'
+                  : testMode
+                  ? `Run test (${testRecordLimit} records) →`
+                  : 'Run enrichment →'}
               </PrimaryBtn>
+            </div>
+          )}
+
+          {/* Confirmation modal */}
+          {showConfirmModal && (
+            <div
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0,0,0,0.7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+              }}
+              onClick={() => setShowConfirmModal(false)}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
+                  padding: 32,
+                  maxWidth: 480,
+                  width: '90%',
+                }}
+              >
+                <div style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 20 }}>
+                  Confirm enrichment run
+                </div>
+                <div style={{ fontSize: 14, color: C.text2, marginBottom: 16 }}>
+                  <div style={{ marginBottom: 12 }}>
+                    Enriching{' '}
+                    <strong style={{ color: C.text }}>
+                      {(companyScope === 'segment' ? previewCount : gapAnalysis?.total_companies || 0).toLocaleString()}
+                    </strong>{' '}
+                    companies
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
+                    <strong style={{ color: C.text2 }}>Fields:</strong> {selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label || f).join(', ')}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
+                    <strong style={{ color: C.text2 }}>Provider:</strong> {selectedProviders.join(', ')}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
+                    <strong style={{ color: C.text2 }}>Policy:</strong> {writePolicy === 'fill_empty' ? 'Fill empty only' : 'Overwrite'}
+                  </div>
+                  {harmonyPreviews.some(p => p.harmony?.will_apply) && (
+                    <div style={{ fontSize: 12, color: C.text3 }}>
+                      <strong style={{ color: C.text2 }}>Harmonies:</strong> {harmonyPreviews.filter(p => p.harmony?.will_apply).map(p => p.harmony!.name).join(', ')} will run
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontSize: 13, color: C.text2, marginBottom: 20, padding: 12, background: C.bg, border: `1px solid ${C.border}` }}>
+                  This will make changes to your HubSpot records.
+                  Changes can be reviewed in the arrangement history.
+                </div>
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 20 }}>
+                  Not sure?{' '}
+                  <button
+                    onClick={() => {
+                      setShowConfirmModal(false);
+                      setTestMode(true);
+                      setTestRecordLimit(10);
+                      setShowAdvanced(true);
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#2E6BA8', cursor: 'pointer', textDecoration: 'underline', fontSize: 12 }}
+                  >
+                    Run a test on 10 records first
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => setShowConfirmModal(false)}
+                    style={{ padding: '8px 16px', background: C.hover, border: `1px solid ${C.border}`, color: C.text2, cursor: 'pointer', fontSize: 13 }}
+                  >
+                    Cancel
+                  </button>
+                  <PrimaryBtn
+                    onClick={() => {
+                      setShowConfirmModal(false);
+                      executeEnrichment();
+                    }}
+                  >
+                    Enrich {(companyScope === 'segment' ? previewCount : gapAnalysis?.total_companies || 0).toLocaleString()} companies →
+                  </PrimaryBtn>
+                </div>
+              </div>
             </div>
           )}
         </>

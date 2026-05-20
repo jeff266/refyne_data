@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError, requireOperatorOrAbove } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
 
 /**
  * POST /api/hubspot/sync-properties
@@ -25,14 +26,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get HubSpot connection
-    const { data: connection, error: connError } = await supabase
-      .from('hubspot_oauth_tokens')
-      .select('access_token')
-      .eq('org_id', ctx.orgId)
-      .single();
-
-    if (connError || !connection) {
+    // Get valid access token (handles token refresh)
+    const accessToken = await getAccessToken(ctx.orgId);
+    if (!accessToken) {
       return NextResponse.json(
         { error: 'HubSpot not connected' },
         { status: 400 }
@@ -44,7 +40,7 @@ export async function POST(request: NextRequest) {
       'https://api.hubapi.com/crm/v3/properties/companies',
       {
         headers: {
-          Authorization: `Bearer ${connection.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
       }
