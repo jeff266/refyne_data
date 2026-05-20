@@ -17,6 +17,19 @@ interface DomainExclusion {
   createdAt: string;
 }
 
+interface ScanRun {
+  id: string;
+  scanType: 'full' | 'incremental';
+  status: 'running' | 'completed' | 'failed';
+  startedAt: string;
+  completedAt: string | null;
+  recordsScanned: number;
+  newPairsFound: number;
+  newClustersFound: number;
+  durationMs: number | null;
+  errorMessage: string | null;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────
@@ -89,10 +102,13 @@ export function DedupSettings({ isAdmin = true }: DedupSettingsProps) {
   const [formValues, setFormValues] = useState<FormValues | null>(null);
   const [rules, setRules] = useState<SuppressionRule[]>([]);
   const [exclusions, setExclusions] = useState<DomainExclusion[]>([]);
+  const [scanRuns, setScanRuns] = useState<ScanRun[]>([]);
+  const [loadingScans, setLoadingScans] = useState(false);
   const [newDomain, setNewDomain] = useState('');
   const [addingDomain, setAddingDomain] = useState(false);
   const [removingDomain, setRemovingDomain] = useState<string | null>(null);
   const [domainError, setDomainError] = useState<string | null>(null);
+  const [runningFullScan, setRunningFullScan] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +144,26 @@ export function DedupSettings({ isAdmin = true }: DedupSettingsProps) {
 
     fetchData();
   }, []);
+
+  // Fetch scan runs
+  const fetchScanRuns = useCallback(async () => {
+    setLoadingScans(true);
+    try {
+      const res = await fetch('/api/dedup/scan-runs?limit=5');
+      if (res.ok) {
+        const data = await res.json();
+        setScanRuns(data.runs);
+      }
+    } catch (err) {
+      console.error('Failed to fetch scan runs:', err);
+    } finally {
+      setLoadingScans(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchScanRuns();
+  }, [fetchScanRuns]);
 
   // Convert config to form values (strip metadata)
   function configToForm(cfg: DedupConfig): FormValues {
@@ -241,6 +277,32 @@ export function DedupSettings({ isAdmin = true }: DedupSettingsProps) {
       setDomainError(err instanceof Error ? err.message : 'Failed to remove domain');
     } finally {
       setRemovingDomain(null);
+    }
+  };
+
+  // Run full scan
+  const handleRunFullScan = async () => {
+    setRunningFullScan(true);
+    try {
+      const res = await fetch('/api/dedup/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forceFullScan: true }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to start scan');
+      }
+
+      // Refresh scan runs after a delay
+      setTimeout(() => {
+        fetchScanRuns();
+      }, 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start scan');
+    } finally {
+      setRunningFullScan(false);
     }
   };
 
@@ -659,6 +721,132 @@ export function DedupSettings({ isAdmin = true }: DedupSettingsProps) {
 
         <div style={{ fontSize: 11, color: C.text3, marginTop: 12 }}>
           Preset list maintained by Refyne. Add domains specific to your industry as needed.
+        </div>
+      </Card>
+
+      {/* Section 6.7: Scan History */}
+      <Card style={{ padding: 20, ...sectionStyle }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={sectionTitleStyle}>Scan History</div>
+          <button
+            onClick={handleRunFullScan}
+            disabled={runningFullScan}
+            style={{
+              padding: '6px 12px',
+              fontSize: 12,
+              fontWeight: 500,
+              color: runningFullScan ? C.text3 : C.text,
+              background: C.hover,
+              border: `1px solid ${C.border}`,
+              borderRadius: 6,
+              cursor: runningFullScan ? 'not-allowed' : 'pointer',
+              opacity: runningFullScan ? 0.5 : 1,
+            }}
+          >
+            {runningFullScan ? 'Starting...' : 'Run full scan now'}
+          </button>
+        </div>
+
+        {loadingScans ? (
+          <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: C.text3 }}>
+            Loading scan history...
+          </div>
+        ) : scanRuns.length === 0 ? (
+          <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: C.text3 }}>
+            No scans yet. Run your first scan to see history.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3 }}>
+                    Type
+                  </th>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3 }}>
+                    Date
+                  </th>
+                  <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 600, color: C.text3 }}>
+                    Scanned
+                  </th>
+                  <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 600, color: C.text3 }}>
+                    New Clusters
+                  </th>
+                  <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 600, color: C.text3 }}>
+                    Duration
+                  </th>
+                  <th style={{ padding: '8px 12px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: C.text3 }}>
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {scanRuns.map((run) => {
+                  const scanDate = new Date(run.startedAt);
+                  const isToday = scanDate.toDateString() === new Date().toDateString();
+                  const isSunday = scanDate.getUTCDay() === 0;
+
+                  return (
+                    <tr key={run.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: '10px 12px', fontSize: 12, color: C.text }}>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            fontFamily: F.mono,
+                            background: run.scanType === 'full' ? C.indigoDim : C.hover,
+                            color: run.scanType === 'full' ? C.indigo : C.text2,
+                            border: `1px solid ${run.scanType === 'full' ? C.indigoBrd : C.border}`,
+                          }}
+                        >
+                          {run.scanType === 'full' ? 'Full' : 'Incremental'}
+                          {run.scanType === 'full' && isSunday && (
+                            <span style={{ fontSize: 10, opacity: 0.7 }}>(Sunday)</span>
+                          )}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 12, color: C.text2 }}>
+                        {isToday
+                          ? scanDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                          : scanDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 12, color: C.text2, textAlign: 'right', fontFamily: F.mono }}>
+                        {run.recordsScanned.toLocaleString()}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 12, color: C.text2, textAlign: 'right', fontFamily: F.mono }}>
+                        {run.newClustersFound > 0 ? (
+                          <span style={{ color: C.orange, fontWeight: 600 }}>{run.newClustersFound}</span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 12, color: C.text2, textAlign: 'right', fontFamily: F.mono }}>
+                        {run.durationMs ? `${(run.durationMs / 1000).toFixed(1)}s` : '—'}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 12, textAlign: 'center' }}>
+                        {run.status === 'completed' ? (
+                          <span style={{ color: C.green }}>✓</span>
+                        ) : run.status === 'failed' ? (
+                          <span style={{ color: C.red }} title={run.errorMessage || 'Failed'}>✗</span>
+                        ) : (
+                          <span style={{ color: C.text3 }}>…</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{ fontSize: 11, color: C.text3, marginTop: 12 }}>
+          Full scans run automatically every Sunday. Incremental scans check only modified records.
         </div>
       </Card>
 

@@ -215,6 +215,9 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
     >
   >({});
 
+  // Data policies for merge outcome preview
+  const [dataPolicy, setDataPolicy] = useState<'fill_gaps' | 'overwrite_always' | 'overwrite_if_stale'>('fill_gaps');
+
   // Selection state for bulk merge
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -222,6 +225,67 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
   const [bulkMergeLoading, setBulkMergeLoading] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+
+  // ─────────────────────────────────────────────────────────────
+  // Helper: Determine merge outcome for a field
+  // ─────────────────────────────────────────────────────────────
+
+  function getMergeOutcome(masterValue: string | undefined, absorbedValue: string | undefined): {
+    masterColor: string;
+    absorbedColor: string;
+    indicator?: 'fill' | 'conflict' | 'discard';
+    showBoth: boolean;
+  } {
+    const masterEmpty = !masterValue || masterValue === '—';
+    const absorbedEmpty = !absorbedValue || absorbedValue === '—';
+
+    // Both empty - show once in muted
+    if (masterEmpty && absorbedEmpty) {
+      return {
+        masterColor: C.text3,
+        absorbedColor: C.text3,
+        showBoth: false,
+      };
+    }
+
+    // Master has value, absorbed empty - master wins (green)
+    if (!masterEmpty && absorbedEmpty) {
+      return {
+        masterColor: C.green,
+        absorbedColor: C.text3,
+        indicator: undefined,
+        showBoth: false,
+      };
+    }
+
+    // Master empty, absorbed has value - fill gap (amber)
+    if (masterEmpty && !absorbedEmpty) {
+      return {
+        masterColor: C.text3,
+        absorbedColor: '#f59e0b',
+        indicator: 'fill',
+        showBoth: true,
+      };
+    }
+
+    // Both have values
+    if (masterValue === absorbedValue) {
+      // Identical - show once in muted
+      return {
+        masterColor: C.text3,
+        absorbedColor: C.text3,
+        showBoth: false,
+      };
+    } else {
+      // Different values - conflict (master green, absorbed amber)
+      return {
+        masterColor: C.green,
+        absorbedColor: '#f59e0b',
+        indicator: dataPolicy === 'fill_gaps' ? 'discard' : 'conflict',
+        showBoth: true,
+      };
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────
   // Fetch clusters
@@ -284,6 +348,24 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
   useEffect(() => {
     fetchClusters();
   }, [fetchClusters]);
+
+  // Fetch data policies
+  useEffect(() => {
+    async function fetchPolicies() {
+      try {
+        const res = await fetch('/api/org/data-policies', {
+          headers: { 'x-org-id': orgId },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDataPolicy(data.existingValuePolicy);
+        }
+      } catch (error) {
+        console.error('Failed to fetch data policies:', error);
+      }
+    }
+    fetchPolicies();
+  }, [orgId]);
 
   // ─────────────────────────────────────────────────────────────
   // Action handlers
@@ -650,104 +732,136 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             Lifecycle Stage
                           </div>
 
-                          {/* Data rows */}
-                          {cluster.recordIds.slice(0, 3).map((id, idx) => {
-                            const company = companyData[id];
-                            if (!company) return null;
+                          {/* Data rows - Master and absorbed records with merge outcome preview */}
+                          {(() => {
+                            const masterRecord = companyData[cluster.recordIds[0]];
+                            const absorbedRecords = cluster.recordIds.slice(1, 3).map(id => companyData[id]).filter(Boolean);
 
-                            const isMaster = idx === 0; // First record is the suggested master
+                            if (!masterRecord) return null;
 
-                            return (
-                              <>
+                            const fields: Array<{
+                              key: string;
+                              label: string;
+                              masterVal: string | undefined;
+                              absorbedVals: (string | undefined)[];
+                            }> = [
+                              {
+                                key: 'name',
+                                label: 'Company Name',
+                                masterVal: masterRecord.name,
+                                absorbedVals: absorbedRecords.map(r => r.name),
+                              },
+                              {
+                                key: 'domain',
+                                label: 'Domain',
+                                masterVal: masterRecord.domain,
+                                absorbedVals: absorbedRecords.map(r => r.domain),
+                              },
+                              {
+                                key: 'phone',
+                                label: 'Phone',
+                                masterVal: masterRecord.phone,
+                                absorbedVals: absorbedRecords.map(r => r.phone),
+                              },
+                              {
+                                key: 'website',
+                                label: 'Website',
+                                masterVal: masterRecord.website,
+                                absorbedVals: absorbedRecords.map(r => r.website),
+                              },
+                              {
+                                key: 'lifecyclestage',
+                                label: 'Lifecycle Stage',
+                                masterVal: masterRecord.lifecyclestage,
+                                absorbedVals: absorbedRecords.map(r => r.lifecyclestage),
+                              },
+                            ];
+
+                            return fields.map((field) => {
+                              // Check if any absorbed record has a different value
+                              const hasConflict = field.absorbedVals.some(
+                                v => v && v !== '—' && v !== field.masterVal
+                              );
+                              const outcome = getMergeOutcome(field.masterVal, field.absorbedVals[0]);
+
+                              return (
                                 <div
-                                  key={`${id}-name`}
+                                  key={field.key}
                                   style={{
                                     fontSize: 11,
-                                    color: isMaster ? C.text : C.text2,
-                                    fontWeight: isMaster ? 600 : 400,
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
                                     whiteSpace: 'nowrap',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
+                                    fontFamily: field.key === 'domain' ? F.mono : F.sans,
                                   }}
-                                  title={company.name}
                                 >
-                                  {isMaster && (
+                                  {field.key === 'name' && (
                                     <span
                                       style={{
                                         fontSize: 10,
                                         color: C.green,
                                         fontWeight: 600,
+                                        marginRight: 6,
                                       }}
-                                      title="Surviving record (based on survivorship strategy)"
+                                      title="Master record (surviving)"
                                     >
                                       ★
                                     </span>
                                   )}
-                                  {company.name}
+                                  <span
+                                    style={{
+                                      color: outcome.masterColor,
+                                      fontWeight: field.key === 'name' ? 600 : 400,
+                                    }}
+                                    title={`Master: ${field.masterVal || '(empty)'}`}
+                                  >
+                                    {field.masterVal || '—'}
+                                  </span>
+                                  {outcome.showBoth && field.absorbedVals[0] && (
+                                    <>
+                                      {outcome.indicator === 'fill' && (
+                                        <span
+                                          style={{
+                                            fontSize: 9,
+                                            color: '#f59e0b',
+                                            marginLeft: 4,
+                                            marginRight: 2,
+                                          }}
+                                          title="Gap will be filled from absorbed record"
+                                        >
+                                          ↑
+                                        </span>
+                                      )}
+                                      {outcome.indicator === 'conflict' && (
+                                        <span
+                                          style={{
+                                            fontSize: 9,
+                                            color: '#f59e0b',
+                                            marginLeft: 4,
+                                            marginRight: 2,
+                                          }}
+                                          title="Conflict: absorbed value differs"
+                                        >
+                                          ⚠
+                                        </span>
+                                      )}
+                                      <span
+                                        style={{
+                                          color: outcome.absorbedColor,
+                                          fontSize: 10,
+                                          opacity: 0.8,
+                                        }}
+                                        title={`Absorbed: ${field.absorbedVals[0]}`}
+                                      >
+                                        {' '}
+                                        ({field.absorbedVals[0]})
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
-                                <div
-                                  key={`${id}-domain`}
-                                  style={{
-                                    fontSize: 11,
-                                    color: isMaster ? C.text : C.text3,
-                                    fontWeight: isMaster ? 600 : 400,
-                                    fontFamily: F.mono,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                  title={company.domain}
-                                >
-                                  {company.domain || '—'}
-                                </div>
-                                <div
-                                  key={`${id}-phone`}
-                                  style={{
-                                    fontSize: 11,
-                                    color: isMaster ? C.text : C.text3,
-                                    fontWeight: isMaster ? 600 : 400,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                  title={company.phone}
-                                >
-                                  {company.phone || '—'}
-                                </div>
-                                <div
-                                  key={`${id}-website`}
-                                  style={{
-                                    fontSize: 11,
-                                    color: isMaster ? C.text : C.text3,
-                                    fontWeight: isMaster ? 600 : 400,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                  title={company.website}
-                                >
-                                  {company.website || '—'}
-                                </div>
-                                <div
-                                  key={`${id}-lifecycle`}
-                                  style={{
-                                    fontSize: 11,
-                                    color: isMaster ? C.text : C.text3,
-                                    fontWeight: isMaster ? 600 : 400,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                  title={company.lifecyclestage}
-                                >
-                                  {company.lifecyclestage || '—'}
-                                </div>
-                              </>
-                            );
-                          })}
+                              );
+                            });
+                          })()}
                         </div>
                         {/* See more link */}
                         <div
