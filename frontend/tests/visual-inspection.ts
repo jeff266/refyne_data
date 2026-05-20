@@ -12,6 +12,9 @@ import * as path from 'path';
 const BASE_URL = process.env.TEST_BASE_URL || 'https://app.refynedata.com';
 const SCREENSHOT_DIR = path.join(__dirname, '..', 'test-results', 'visual-inspection');
 
+// Helper function to wait for a specific duration
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 const ADMIN_CREDENTIALS = {
   email: process.env.TEST_ADMIN_EMAIL || 'admin@test.refynedata.com',
   password: process.env.TEST_ADMIN_PASSWORD || 'test-password',
@@ -43,16 +46,16 @@ async function navigateToStep3(page: any) {
   });
 
   await page.goto(`${BASE_URL}/arrangements/new`, { waitUntil: 'networkidle2' });
-  await page.waitForTimeout(1000);
+  await wait(1000);
 
   // Step 1: Fill name
   await page.type('input[placeholder*="Enrich"]', 'Visual Inspection Test');
   await page.click('text=/Next/i');
-  await page.waitForTimeout(1000);
+  await wait(1000);
 
   // Step 2: Select source
   await page.click('text=/Next/i');
-  await page.waitForTimeout(1000);
+  await wait(1000);
 }
 
 async function main() {
@@ -79,7 +82,7 @@ async function main() {
 
     console.log('📸 Capturing: Manage fields slide-over...');
     await page.click('text=/Manage fields/i');
-    await page.waitForTimeout(1000);
+    await wait(1000);
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, '02-manage-fields-slide.png'),
       fullPage: true,
@@ -89,7 +92,7 @@ async function main() {
     const checkboxes = await page.$$('input[type="checkbox"]');
     for (let i = 0; i < Math.min(3, checkboxes.length); i++) {
       await checkboxes[i].click();
-      await page.waitForTimeout(200);
+      await wait(200);
     }
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, '03-fields-selected.png'),
@@ -98,7 +101,7 @@ async function main() {
 
     console.log('📸 Capturing: Fields added (collapsed)...');
     await page.click('text=/^Save$/i');
-    await page.waitForTimeout(1000);
+    await wait(1000);
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, '04-fields-collapsed.png'),
       fullPage: true,
@@ -108,7 +111,7 @@ async function main() {
     const fieldRows = await page.$$('[style*="cursor: pointer"]');
     if (fieldRows.length > 0) {
       await fieldRows[0].click();
-      await page.waitForTimeout(500);
+      await wait(500);
     }
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, '05-field-expanded.png'),
@@ -124,7 +127,7 @@ async function main() {
     console.log('📸 Capturing: All fields expanded...');
     for (let i = 1; i < Math.min(3, fieldRows.length); i++) {
       await fieldRows[i].click();
-      await page.waitForTimeout(300);
+      await wait(300);
     }
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, '07-all-fields-expanded.png'),
@@ -139,7 +142,7 @@ async function main() {
 
     console.log('📸 Capturing: Settings calibration tab...');
     await page.goto(`${BASE_URL}/settings?tab=calibration`, { waitUntil: 'networkidle2' });
-    await page.waitForTimeout(1000);
+    await wait(1000);
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, '09-calibration-tab.png'),
       fullPage: true,
@@ -154,7 +157,7 @@ async function main() {
       });
     });
     await page.goto(`${BASE_URL}/arrangements/new`, { waitUntil: 'networkidle2' });
-    await page.waitForTimeout(2000);
+    await wait(2000);
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, '10-onboarding-modal.png'),
       fullPage: true,
@@ -275,7 +278,7 @@ LOW PRIORITY:
   } finally {
     // Keep browser open for 10 seconds to allow manual inspection
     console.log('\n⏸️  Browser will stay open for 10 seconds...');
-    await page.waitForTimeout(10000);
+    await wait(10000);
     await browser.close();
   }
 }
