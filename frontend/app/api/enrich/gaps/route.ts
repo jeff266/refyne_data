@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
 
 // Fields to analyze for gaps
 const ENRICHABLE_FIELDS = [
@@ -37,10 +38,13 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get HubSpot connection first (need portal_id for cache key)
+    // Get valid access token (handles token refresh)
+    const accessToken = await getAccessToken(ctx.orgId);
+
+    // Get portal_id for cache key
     const { data: connection } = await supabase
       .from('hubspot_connections')
-      .select('access_token, portal_id')
+      .select('portal_id')
       .eq('org_id', ctx.orgId)
       .single();
 
@@ -76,7 +80,7 @@ export async function GET(req: NextRequest) {
 
       const response = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${connection.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       });
 
