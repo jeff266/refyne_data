@@ -180,11 +180,11 @@ export function getArrangementQueue(): Queue | null {
         attempts: RETRY_SETTINGS.attempts,
         backoff: RETRY_SETTINGS.backoff,
         removeOnComplete: {
-          count: 500,
+          count: 100, // Keep last 100 completed jobs only
           age: 30 * 24 * 60 * 60, // 30 days
         },
         removeOnFail: {
-          count: 1000,
+          count: 50, // Keep last 50 failed jobs for debugging
           age: 90 * 24 * 60 * 60, // 90 days
         },
       },
@@ -1031,6 +1031,12 @@ export function startArrangementWorker(): Worker | null {
     {
       connection,
       concurrency: WORKER_CONCURRENCY,
+      // Reduce polling overhead for cost optimization
+      stalledInterval: 30000, // Check for stalled jobs every 30s
+      maxStalledCount: 2,     // Mark as stalled after 2 checks
+      settings: {
+        drainDelay: 5,        // Wait 5s when queue is empty before re-polling
+      },
     }
   );
 

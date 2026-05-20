@@ -87,11 +87,11 @@ export function getCompanyDedupScanQueue(): Queue<CompanyDedupScanJobData, Compa
           delay: 30000, // 30s, 60s, 120s
         },
         removeOnComplete: {
-          count: 100,
+          count: 100, // Keep last 100 completed jobs only
           age: 7 * 24 * 60 * 60, // 7 days
         },
         removeOnFail: {
-          count: 500,
+          count: 50, // Keep last 50 failed jobs for debugging
           age: 30 * 24 * 60 * 60, // 30 days
         },
       },
@@ -734,6 +734,12 @@ export function startCompanyDedupScanWorker(): Worker<CompanyDedupScanJobData, C
     {
       connection,
       concurrency: WORKER_CONCURRENCY,
+      // Reduce polling overhead for cost optimization
+      stalledInterval: 30000, // Check for stalled jobs every 30s
+      maxStalledCount: 2,     // Mark as stalled after 2 checks
+      settings: {
+        drainDelay: 5,        // Wait 5s when queue is empty before re-polling
+      },
     }
   );
 

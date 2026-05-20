@@ -76,11 +76,11 @@ export function getDigestQueue(): Queue<DigestJobData, DigestJobResult> | null {
       defaultJobOptions: {
         attempts: RETRY_SETTINGS.attempts,
         removeOnComplete: {
-          count: 100, // Keep last 100 completed jobs
+          count: 100, // Keep last 100 completed jobs only
           age: 30 * 24 * 60 * 60, // Remove after 30 days
         },
         removeOnFail: {
-          count: 500, // Keep last 500 failed jobs
+          count: 50, // Keep last 50 failed jobs for debugging
           age: 90 * 24 * 60 * 60, // Remove after 90 days
         },
       },
@@ -158,6 +158,13 @@ export function startDigestWorker(): Worker<DigestJobData, DigestJobResult> | nu
     {
       connection,
       concurrency: WORKER_CONCURRENCY,
+      // Reduce polling overhead for cost optimization
+      // Default 1000ms polling = ~86k polls/day per worker
+      stalledInterval: 30000, // Check for stalled jobs every 30s
+      maxStalledCount: 2,     // Mark as stalled after 2 checks
+      settings: {
+        drainDelay: 5,        // Wait 5s when queue is empty before re-polling
+      },
     }
   );
 
