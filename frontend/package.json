@@ -14,6 +14,7 @@
     "test:preflight:headful": "HEADLESS=false npx tsx tests/arrangements-v2-preflight.test.ts",
     "test:waterfall": "npx tsx tests/waterfall-builder.test.ts",
     "test:waterfall:headful": "HEADLESS=false npx tsx tests/waterfall-builder.test.ts",
+    "test:visual": "HEADLESS=false npx tsx tests/visual-inspection.ts",
     "worker:webhooks": "npx tsx scripts/start-webhook-worker.ts",
     "worker:digest": "npx tsx scripts/start-digest-worker.ts"
   },
