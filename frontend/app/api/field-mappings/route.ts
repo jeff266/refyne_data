@@ -21,6 +21,9 @@ export interface FieldMapping {
  * GET /api/field-mappings
  *
  * Returns all field mappings for the current org.
+ * Query params:
+ * - object_type: Filter by object type (company, contact, deal)
+ * - portal_id: Filter by portal ID
  */
 export async function GET(request: NextRequest) {
   let ctx;
@@ -38,11 +41,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
+    const { searchParams } = new URL(request.url);
+    const objectType = searchParams.get('object_type') || 'company';
+    const portalId = searchParams.get('portal_id');
+
+    let query = supabase
       .from('field_mappings')
       .select('*')
       .eq('org_id', ctx.orgId)
-      .order('canonical_field', { ascending: true });
+      .eq('object_type', objectType);
+
+    if (portalId) {
+      query = query.or(`portal_id.eq.${portalId},portal_id.is.null`);
+    }
+
+    const { data, error } = await query.order('is_system', { ascending: false }).order('canonical_field', { ascending: true });
 
     if (error) {
       captureWithOrgContext(error, ctx.orgId, { route: '/api/field-mappings' });
@@ -54,7 +67,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      mappings: transformArray<FieldMapping>(data || [])
+      mappings: transformArray<FieldMapping>(data || []),
     });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/field-mappings' });

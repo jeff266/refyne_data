@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { upsertSchemaFieldMappings } from '@/lib/hubspot/repository';
 import { HubSpotClient } from '@/lib/hubspot';
+import { seedFieldMappings } from '@/lib/field-mappings/auto-configure';
 
 // Force dynamic rendering for OAuth callback
 export const dynamic = 'force-dynamic';
@@ -201,6 +202,22 @@ export async function GET(request: NextRequest) {
     } catch (schemaSyncError) {
       console.error('[OAuth callback] Schema sync failed (non-fatal):', schemaSyncError);
       // Don't fail the connection - schema sync is best-effort
+    }
+
+    // Auto-configure field mappings for standard HubSpot properties
+    try {
+      const { systemMappingsCreated, propertiesCached } = await seedFieldMappings(
+        stateRecord.org_id,
+        portalId,
+        access_token
+      );
+
+      console.log(
+        `[OAuth callback] Field mappings auto-configured: ${systemMappingsCreated} system mappings, ${propertiesCached} properties cached`
+      );
+    } catch (autoConfigError) {
+      console.error('[OAuth callback] Auto-configure failed (non-fatal):', autoConfigError);
+      // Don't fail the connection - auto-config is best-effort
     }
 
     // Redirect to connections page with success, preserving org context
