@@ -61,7 +61,7 @@ export const NAV = [
 export const PAGE_META: Record<string, { label: string; action: string | null }> = {
   dashboard:    { label: 'Dashboard',      action: null },
   enrich:       { label: 'Enrich',         action: 'New search' },
-  normalize:    { label: 'Normalize',      action: 'Load records' },
+  normalize:    { label: 'Normalize',      action: null },
   dedup:        { label: 'Dedup',          action: 'Run scan' },
   quarantine:   { label: 'Quarantine',     action: null },
   arrangements: { label: 'Arrangements',   action: 'New arrangement' },

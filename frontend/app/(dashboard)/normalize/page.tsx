@@ -94,10 +94,17 @@ export default function NormalizePage() {
   }, [pollingRunId]);
 
   const fetchPreview = async () => {
+    if (active.length === 0) {
+      addToast('error', 'Please enable at least one harmony');
+      return;
+    }
+
     setPreviewLoading(true);
 
     try {
-      const response = await fetch('/api/normalize/preview?limit=50');
+      // Pass active harmony IDs to API
+      const harmonyIdsParam = `&harmonyIds=${active.join(',')}`;
+      const response = await fetch(`/api/normalize/preview?limit=50${harmonyIdsParam}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch preview');
@@ -106,6 +113,13 @@ export default function NormalizePage() {
       const data = await response.json();
       setPreview(data.preview || []);
 
+      // Show feedback based on results
+      if (data.preview && data.preview.length > 0) {
+        addToast('success', `Found ${data.preview.length} potential changes`);
+      } else {
+        addToast('info', 'No changes detected. All records match harmonies.');
+      }
+
       // Auto-select all changes by default
       const allIds = new Set<string>(
         (data.preview || []).map((r: PreviewRecord) => `${r.hubspotCompanyId}:${r.field}`)
@@ -113,7 +127,7 @@ export default function NormalizePage() {
       setSelectedChanges(allIds);
     } catch (error) {
       console.error('Failed to fetch preview:', error);
-      addToast('error', 'Failed to load preview');
+      addToast('error', 'Failed to load preview. Check console for details.');
     } finally {
       setPreviewLoading(false);
     }
