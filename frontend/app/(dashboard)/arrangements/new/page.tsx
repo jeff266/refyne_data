@@ -122,9 +122,12 @@ export default function NewArrangementPage() {
           <ChevronLeft size={16} />
           Back to arrangements
         </button>
-        <h1 style={{ fontSize: 24, fontWeight: 600, color: C.text }}>
+        <h1 style={{ fontSize: 24, fontWeight: 600, color: C.text, marginBottom: 4 }}>
           New Arrangement
         </h1>
+        <p style={{ fontSize: 14, color: C.text3 }}>
+          Build a waterfall · Rehearse · Run with confidence
+        </p>
       </div>
 
       {/* Progress Steps */}
