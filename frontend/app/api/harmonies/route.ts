@@ -52,20 +52,45 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to load harmonies' }, { status: 500 });
     }
 
+    // Fetch org-specific settings for preset harmonies
+    const presetHarmonyIds = (harmonies || []).filter((h: any) => h.is_preset).map((h: any) => h.id);
+    const { data: orgSettings } = presetHarmonyIds.length > 0
+      ? await supabase
+          .from('harmony_org_settings')
+          .select('harmony_id, output_format')
+          .eq('org_id', orgId)
+          .in('harmony_id', presetHarmonyIds)
+      : { data: [] };
+
+    const orgSettingsMap = new Map(
+      (orgSettings || []).map((s: any) => [s.harmony_id, s])
+    );
+
     // Format response for the Harmonies page
-    const formattedHarmonies = (harmonies || []).map((h) => ({
-      id: h.id,
-      name: h.name,
-      description: h.description,
-      category: h.object_type, // Map object_type to category for backward compat
-      fields: [h.field],
-      version: undefined,
-      isActive: h.is_active,
-      isPreset: h.is_preset,
-      ruleCount: h.rule_count,
-      recordsAffected: undefined, // TODO: Join with compliance scan results
-      examples: h.examples || [],
-    }));
+    const formattedHarmonies = (harmonies || []).map((h) => {
+      const orgSetting = orgSettingsMap.get(h.id);
+      const effectiveOutputFormat = h.is_preset && orgSetting?.output_format
+        ? orgSetting.output_format
+        : h.output_format || 'default';
+
+      return {
+        id: h.id,
+        name: h.name,
+        description: h.description,
+        category: h.object_type, // Map object_type to category for backward compat
+        fields: [h.field],
+        version: undefined,
+        isActive: h.is_active,
+        isPreset: h.is_preset,
+        ruleCount: h.rule_count,
+        recordsAffected: undefined, // TODO: Join with compliance scan results
+        examples: h.examples || [],
+        outputFormat: effectiveOutputFormat,
+        outputFormatsAvailable: h.output_formats_available || [],
+        transformType: h.transform_type || 'lookup',
+        referenceTable: h.reference_table,
+      };
+    });
 
     return NextResponse.json({
       harmonies: formattedHarmonies,
