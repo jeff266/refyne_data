@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
@@ -14,6 +15,7 @@ import {
   Settings,
   HelpCircle,
   User,
+  ChevronDown,
 } from 'lucide-react';
 import { C, F, NAV } from '@/lib/design-tokens';
 import { RefyneLogo } from './RefyneLogo';
@@ -31,6 +33,7 @@ const ICONS: Record<string, React.ElementType> = {
 export function Sidebar() {
   const pathname = usePathname();
   const currentPage = pathname.split('/')[1] || 'dashboard';
+  const [showHelpMenu, setShowHelpMenu] = useState(false);
 
   return (
     <div
@@ -209,25 +212,81 @@ export function Sidebar() {
           <Settings size={14} />
           Settings
         </Link>
-        <button
-          style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '6px 8px',
-            borderRadius: 7,
-            color: C.text3,
-            fontSize: 13,
-            marginBottom: 1,
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          <HelpCircle size={14} />
-          Help & docs
-        </button>
+        <div>
+          <button
+            onClick={() => setShowHelpMenu(!showHelpMenu)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 8px',
+              borderRadius: 7,
+              color: C.text3,
+              fontSize: 13,
+              marginBottom: 1,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <HelpCircle size={14} />
+              Help & docs
+            </div>
+            <ChevronDown
+              size={14}
+              style={{
+                transform: showHelpMenu ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s'
+              }}
+            />
+          </button>
+          {showHelpMenu && (
+            <div style={{ paddingLeft: 30, marginTop: 4, marginBottom: 4 }}>
+              <Link
+                href="/privacy"
+                style={{
+                  display: 'block',
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  color: C.text3,
+                  textDecoration: 'none',
+                  borderRadius: 4,
+                }}
+              >
+                Privacy Policy
+              </Link>
+              <Link
+                href="/security"
+                style={{
+                  display: 'block',
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  color: C.text3,
+                  textDecoration: 'none',
+                  borderRadius: 4,
+                }}
+              >
+                Security
+              </Link>
+              <Link
+                href="/terms"
+                style={{
+                  display: 'block',
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  color: C.text3,
+                  textDecoration: 'none',
+                  borderRadius: 4,
+                }}
+              >
+                Terms of Service
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

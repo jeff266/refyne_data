@@ -40,6 +40,8 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
           <span>·</span>
           <Link href="/privacy" style={{ color: C.text2, textDecoration: 'none' }}>Privacy</Link>
           <span>·</span>
+          <Link href="/security" style={{ color: C.text2, textDecoration: 'none' }}>Security</Link>
+          <span>·</span>
           <Link href="/terms" style={{ color: C.text2, textDecoration: 'none' }}>Terms</Link>
           <span>·</span>
           <a href="mailto:jeff@revopsimpact.us" style={{ color: C.text2, textDecoration: 'none' }}>Support</a>

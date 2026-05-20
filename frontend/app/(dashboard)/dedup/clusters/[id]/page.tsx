@@ -215,7 +215,11 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
       const result = await res.json();
 
       // Add to excluded set (for UI filtering)
-      setExcludedRecords((prev) => new Set([...prev, recordId]));
+      setExcludedRecords((prev) => {
+        const next = new Set(prev);
+        next.add(recordId);
+        return next;
+      });
 
       // Show toast
       setToastMessage(`${recordName} excluded from this merge`);
