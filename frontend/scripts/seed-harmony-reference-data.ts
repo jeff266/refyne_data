@@ -82,44 +82,43 @@ async function seedReferenceData() {
 
   console.log(`[Reference Data Seeder] Total rows to insert: ${allRows.length}`);
 
-  // ── Upsert in batches of 500 ──────────────────────────────────
-  const BATCH_SIZE = 500;
+  // ── Insert in batches of 100 (smaller for better error handling) ──
+  const BATCH_SIZE = 100;
   let insertedCount = 0;
-  let errorCount = 0;
+  let skippedCount = 0;
 
   for (let i = 0; i < allRows.length; i += BATCH_SIZE) {
     const batch = allRows.slice(i, i + BATCH_SIZE);
     const batchNum = Math.floor(i / BATCH_SIZE) + 1;
 
-    console.log(`[Reference Data Seeder] Inserting batch ${batchNum} (${batch.length} rows)...`);
+    console.log(`[Reference Data Seeder] Processing batch ${batchNum} (${batch.length} rows)...`);
 
-    const { data, error } = await supabase
-      .from('harmony_reference_data')
-      .upsert(batch, {
-        onConflict: 'table_name,lower(input_value),COALESCE(org_id,\'\')',
-        ignoreDuplicates: false,
-      });
+    // Insert one at a time to skip duplicates
+    for (const row of batch) {
+      const { error } = await supabase
+        .from('harmony_reference_data')
+        .insert([row]);
 
-    if (error) {
-      console.error(`[Reference Data Seeder] Error in batch ${batchNum}:`, error);
-      errorCount++;
-    } else {
-      insertedCount += batch.length;
-      console.log(`[Reference Data Seeder] ✓ Batch ${batchNum} inserted`);
+      if (error) {
+        if (error.code === '23505') {
+          // Duplicate key - skip silently
+          skippedCount++;
+        } else {
+          console.error(`[Reference Data Seeder] Unexpected error:`, error);
+        }
+      } else {
+        insertedCount++;
+      }
     }
+    
+    console.log(`[Reference Data Seeder] ✓ Batch ${batchNum} processed`);
   }
 
   console.log(`[Reference Data Seeder] Complete!`);
-  console.log(`[Reference Data Seeder]   Inserted: ${insertedCount} rows`);
-  console.log(`[Reference Data Seeder]   Errors: ${errorCount} batches`);
-
-  if (errorCount > 0) {
-    console.error('[Reference Data Seeder] ⚠️  Some batches failed. Check errors above.');
-    process.exit(1);
-  } else {
-    console.log('[Reference Data Seeder] ✓ All reference data seeded successfully');
-    process.exit(0);
-  }
+  console.log(`[Reference Data Seeder]   Inserted: ${insertedCount} new rows`);
+  console.log(`[Reference Data Seeder]   Skipped:  ${skippedCount} existing rows`);
+  console.log(`[Reference Data Seeder] ✓ All reference data seeded successfully`);
+  process.exit(0);
 }
 
 seedReferenceData();

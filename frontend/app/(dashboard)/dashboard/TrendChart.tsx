@@ -9,15 +9,15 @@ interface TrendChartProps {
   benchmark?: number;
 }
 
-type Period = '1m' | '3m' | '6m' | 'all';
+type Period = '7d' | '30d' | '90d';
 
 export function TrendChart({ data, benchmark }: TrendChartProps) {
-  const [period, setPeriod] = useState<Period>('6m');
+  const [period, setPeriod] = useState<Period>('30d');
 
   // Load period from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('refyne:score-trend-period');
-    if (saved && ['1m', '3m', '6m', 'all'].includes(saved)) {
+    if (saved && ['7d', '30d', '90d'].includes(saved)) {
       setPeriod(saved as Period);
     }
   }, []);
@@ -28,12 +28,11 @@ export function TrendChart({ data, benchmark }: TrendChartProps) {
     localStorage.setItem('refyne:score-trend-period', newPeriod);
   };
 
-  // Filter data based on period
+  // Filter data based on period (approximate by data points)
   const getFilteredData = () => {
-    if (period === 'all') return data;
-    const monthsMap: Record<Period, number> = { '1m': 1, '3m': 3, '6m': 6, 'all': 999 };
-    const months = monthsMap[period];
-    return data.slice(-months);
+    const pointsMap: Record<Period, number> = { '7d': 7, '30d': 30, '90d': 90 };
+    const points = pointsMap[period];
+    return data.slice(-Math.ceil(points / 7)); // Assuming weekly data points
   };
 
   const filteredData = getFilteredData();
@@ -90,7 +89,7 @@ export function TrendChart({ data, benchmark }: TrendChartProps) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 4 }}>
-          {(['1m', '3m', '6m', 'all'] as Period[]).map((p) => (
+          {(['7d', '30d', '90d'] as Period[]).map((p) => (
             <button
               key={p}
               onClick={() => handlePeriodChange(p)}
@@ -103,10 +102,9 @@ export function TrendChart({ data, benchmark }: TrendChartProps) {
                 fontSize: 10,
                 fontFamily: F.mono,
                 cursor: 'pointer',
-                textTransform: 'uppercase',
               }}
             >
-              {p === 'all' ? 'All time' : `${p.substring(0, 1)} month${p === '1m' ? '' : 's'}`}
+              {p}
             </button>
           ))}
         </div>

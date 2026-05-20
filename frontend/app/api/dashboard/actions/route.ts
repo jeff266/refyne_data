@@ -6,13 +6,11 @@ import { supabase } from '@/lib/db/supabase';
 import { getBreakdownByHarmony } from '@/lib/compliance';
 
 interface DashboardAction {
-  type: 'fix_harmony' | 'review_dedup' | 'quarantine' | 'enrich';
-  label: string;
+  type: string;
+  priority: 'high' | 'medium' | 'low';
+  title: string;
   description: string;
-  estimatedMinutes: number;
-  estimatedScoreImpact: number;
-  route: string;
-  primaryCta: string;
+  href: string;
   count?: number;
 }
 
@@ -26,8 +24,8 @@ interface DashboardAction {
  * - normalization_runs (recently available actions)
  *
  * Returns top 3 actions sorted by:
- * 1. Estimated score impact (highest first)
- * 2. Time to complete (quickest first as tiebreaker)
+ * 1. Priority (high > medium > low)
+ * 2. Count (descending, as tiebreaker)
  */
 export async function GET(request: NextRequest) {
   // Add auth check
@@ -65,13 +63,11 @@ export async function GET(request: NextRequest) {
     for (const harmony of harmonies) {
       if (harmony.rate < 60 && harmony.actionable && harmony.recordsAffected > 0) {
         actions.push({
-          type: 'fix_harmony',
-          label: `Fix ${harmony.harmonyName || harmony.harmonyId} (${Math.round(harmony.rate)}%)`,
-          description: `${harmony.recordsAffected} records would be fixed · ${harmony.description || 'Apply harmony normalization'}`,
-          estimatedMinutes: Math.min(5, Math.ceil(harmony.recordsAffected / 50)), // 1 min per 50 records, max 5
-          estimatedScoreImpact: harmony.estimatedScoreImpact,
-          route: harmony.actionRoute || `/harmonies?harmony=${harmony.harmonyId}`,
-          primaryCta: 'Edit harmony',
+          type: 'harmony_unmatched',
+          priority: 'medium',
+          title: `${harmony.harmonyName || harmony.harmonyId} has ${harmony.recordsAffected} unmatched values`,
+          description: `${harmony.recordsAffected} records with unknown ${harmony.harmonyId} are dragging your compliance score down`,
+          href: harmony.actionRoute || `/harmonies?harmony=${harmony.harmonyId}`,
           count: harmony.recordsAffected,
         });
       }
@@ -87,16 +83,12 @@ export async function GET(request: NextRequest) {
 
     const gradeACount = dedupPairs?.length || 0;
     if (gradeACount > 0) {
-      // Estimate: each Grade A pair is ~1 point of score impact (if 100 total records = 1%)
-      const estimatedImpact = Math.round((gradeACount / 100) * 100) / 100;
       actions.push({
-        type: 'review_dedup',
-        label: `Review ${gradeACount} Grade A duplicates`,
-        description: `High confidence matches · ~${Math.ceil(gradeACount * 0.5)} min`,
-        estimatedMinutes: Math.ceil(gradeACount * 0.5), // 30 sec per pair
-        estimatedScoreImpact: Math.max(1, estimatedImpact),
-        route: '/dedup?grade=A',
-        primaryCta: 'Review duplicates',
+        type: 'grade_a_duplicates',
+        priority: 'high',
+        title: `${gradeACount} high-confidence duplicates ready to review`,
+        description: 'Grade A clusters — safe to merge with one click',
+        href: '/dedup?grade=A',
         count: gradeACount,
       });
     }
@@ -110,13 +102,11 @@ export async function GET(request: NextRequest) {
 
     if (quarantineCount && quarantineCount > 0) {
       actions.push({
-        type: 'quarantine',
-        label: `Review ${quarantineCount} quarantined records`,
-        description: `Records flagged for manual review · ~${Math.ceil(quarantineCount * 1)} min`,
-        estimatedMinutes: Math.ceil(quarantineCount * 1), // 1 min per record
-        estimatedScoreImpact: 2, // Moderate impact
-        route: '/quarantine',
-        primaryCta: 'Review records',
+        type: 'quarantine_pending',
+        priority: 'high',
+        title: `${quarantineCount} records pending quarantine review`,
+        description: 'Flagged for manual approval before pushing to HubSpot',
+        href: '/quarantine',
         count: quarantineCount,
       });
     }
@@ -139,25 +129,24 @@ export async function GET(request: NextRequest) {
         const hoursSince = (Date.now() - completedAt.getTime()) / (1000 * 60 * 60);
         if (hoursSince < 24) {
           actions.push({
-            type: 'enrich',
-            label: `Push ${recordsProcessed} normalized records`,
-            description: `Apply enriched data to HubSpot · ~${Math.ceil(recordsProcessed / 100)} min`,
-            estimatedMinutes: Math.max(1, Math.ceil(recordsProcessed / 100)), // 1 min per 100 records
-            estimatedScoreImpact: 5, // Good impact
-            route: `/normalize/runs/${latestRun.id}`,
-            primaryCta: 'Push to HubSpot',
+            type: 'enrichment_available',
+            priority: 'low',
+            title: `${recordsProcessed} normalized records ready to push`,
+            description: 'Apply enriched data to your HubSpot portal',
+            href: `/normalize/runs/${latestRun.id}`,
             count: recordsProcessed,
           });
         }
       }
     }
 
-    // Sort by score impact (descending), then by time (ascending)
+    // Sort by priority (high > medium > low), then by count (descending)
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
     actions.sort((a, b) => {
-      if (b.estimatedScoreImpact !== a.estimatedScoreImpact) {
-        return b.estimatedScoreImpact - a.estimatedScoreImpact;
+      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
       }
-      return a.estimatedMinutes - b.estimatedMinutes;
+      return (b.count || 0) - (a.count || 0);
     });
 
     // Return top 3

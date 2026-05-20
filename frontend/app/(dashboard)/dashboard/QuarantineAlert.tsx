@@ -12,23 +12,15 @@ export function QuarantineAlert({ count, oldestDays }: QuarantineAlertProps) {
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
-    // Check if dismissed today
-    const dismissed = localStorage.getItem('quarantine_alert_dismissed');
+    // Check if dismissed in this session
+    const dismissed = sessionStorage.getItem('quarantine_alert_dismissed');
     if (dismissed) {
-      const dismissedDate = new Date(dismissed);
-      const today = new Date();
-      if (
-        dismissedDate.getDate() === today.getDate() &&
-        dismissedDate.getMonth() === today.getMonth() &&
-        dismissedDate.getFullYear() === today.getFullYear()
-      ) {
-        setIsDismissed(true);
-      }
+      setIsDismissed(true);
     }
   }, []);
 
   const handleDismiss = () => {
-    localStorage.setItem('quarantine_alert_dismissed', new Date().toISOString());
+    sessionStorage.setItem('quarantine_alert_dismissed', 'true');
     setIsDismissed(true);
   };
 

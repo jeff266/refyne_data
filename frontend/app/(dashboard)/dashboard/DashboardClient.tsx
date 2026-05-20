@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { C } from '@/lib/design-tokens';
 import { PortalFilter } from './PortalFilter';
 import { TodaysActions } from './TodaysActions';
 import { DedupSummary } from './DedupSummary';
@@ -11,16 +12,15 @@ interface Portal {
   id: string;
   name: string;
   recordCount: number;
+  score?: number;
 }
 
 interface Action {
-  type: 'fix_harmony' | 'review_dedup' | 'quarantine' | 'enrich';
-  label: string;
+  type: string;
+  priority: 'high' | 'medium' | 'low';
+  title: string;
   description: string;
-  estimatedMinutes: number;
-  estimatedScoreImpact: number;
-  route: string;
-  primaryCta: string;
+  href: string;
   count?: number;
 }
 
@@ -80,6 +80,48 @@ export function DashboardClient({
           selectedPortalId={selectedPortalId}
           onSelectPortal={setSelectedPortalId}
         />
+
+        {/* Per-portal health dots - shown when multiple portals */}
+        {portals.length > 1 && (
+          <div style={{
+            display: 'flex',
+            gap: 12,
+            marginTop: 8,
+            paddingTop: 8,
+            borderTop: `1px solid ${C.border2}`,
+          }}>
+            {portals.map((portal) => {
+              const score = portal.score ?? 75;
+              const filledDots = Math.round((score / 100) * 5);
+              return (
+                <div
+                  key={portal.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                  title={`${portal.name}: ${score}%`}
+                >
+                  <div style={{ fontSize: 10, color: C.text3 }}>{portal.name.substring(0, 12)}</div>
+                  <div style={{ display: 'flex', gap: 2 }}>
+                    {Array.from({ length: 5 }).map((_, dotIdx) => (
+                      <div
+                        key={dotIdx}
+                        style={{
+                          width: 4,
+                          height: 4,
+                          borderRadius: '50%',
+                          background: dotIdx < filledDots ? C.indigo : C.border2,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Quarantine Alert */}

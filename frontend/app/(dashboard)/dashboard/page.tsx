@@ -134,12 +134,13 @@ async function StatCards() {
     ? Math.floor((Date.now() - new Date(scoreData.lastComputedAt).getTime()) / 60000)
     : 14;
 
-  // Breakpoint label with color
+  // Breakpoint label with color (Spec Step 7)
+  // Excellent 90-100, Good 80-89, Needs attention 70-79, At risk 60-69, Critical <60
   const breakpointLabels: Record<string, { text: string; color: string }> = {
     critical: { text: 'Critical', color: C.red },
-    needs_work: { text: 'Needs work', color: C.amber },
-    good: { text: 'Good', color: C.indigoLt },
-    great: { text: 'Great', color: C.green },
+    at_risk: { text: 'At risk', color: C.amber },
+    needs_attention: { text: 'Needs attention', color: C.amber },
+    good: { text: 'Good', color: C.indigo },
     excellent: { text: 'Excellent', color: C.green },
   };
   const breakpointInfo = breakpointLabels[breakpoint] || breakpointLabels.good;
@@ -172,9 +173,18 @@ async function StatCards() {
           <div style={{ fontSize: 11, fontWeight: 600, color: breakpointInfo.color }}>
             {breakpointInfo.text}
           </div>
-          {benchmark && (
+          {benchmark && benchmark.average && (
             <div style={{ fontSize: 11, color: C.text3 }}>
-              Better than {benchmark.percentile}% of similar portals
+              {(() => {
+                const delta = Math.round(score - benchmark.average);
+                if (delta > 0) {
+                  return `+${delta}pts vs similar portals`;
+                } else if (delta < 0) {
+                  return `${delta}pts vs similar portals`;
+                } else {
+                  return 'At industry average';
+                }
+              })()}
             </div>
           )}
         </div>
@@ -508,12 +518,30 @@ async function ClientData() {
     fetchQuarantineData(DEFAULT_ORG_ID),
   ]);
 
-  // Transform connections to portal format
-  const portals = (connectionsData?.connections || []).map((conn: any) => ({
-    id: conn.portalId || conn.id || String(Math.random()),
-    name: conn.name || 'Unknown Portal',
-    recordCount: conn.companyCount || 0,
-  }));
+  // Transform connections to portal format with scores
+  const portals = await Promise.all(
+    (connectionsData?.connections || []).map(async (conn: any) => {
+      // Fetch per-portal score if available
+      let score = 75; // Default score
+      if (conn.portalId) {
+        try {
+          const scoreData = await fetchScore(`${DEFAULT_ORG_ID}-${conn.portalId}`);
+          if (scoreData?.score) {
+            score = Math.round(scoreData.score);
+          }
+        } catch {
+          // Use default score on error
+        }
+      }
+
+      return {
+        id: conn.portalId || conn.id || String(Math.random()),
+        name: conn.name || 'Unknown Portal',
+        recordCount: conn.companyCount || 0,
+        score,
+      };
+    })
+  );
 
   return (
     <DashboardClient
