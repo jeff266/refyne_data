@@ -91,10 +91,9 @@ const AGGREGATION_STRATEGIES = [
 const PROVIDER_REGISTRY = [
   { key: 'apollo', label: 'Apollo' },
   { key: 'zoominfo', label: 'ZoomInfo' },
-  { key: 'clearbit', label: 'Clearbit' },
   { key: 'cognism', label: 'Cognism' },
-  { key: 'hunter', label: 'Hunter' },
-  { key: 'people-data-labs', label: 'People Data Labs' },
+  { key: 'clearbit', label: 'Clearbit' },
+  { key: 'refyne', label: 'Refyne Data' },
 ];
 
 // Sortable provider step component

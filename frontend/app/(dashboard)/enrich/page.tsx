@@ -29,9 +29,9 @@ const ENRICHABLE_FIELDS = [
 const PROVIDER_REGISTRY = [
   { key: 'apollo', label: 'Apollo' },
   { key: 'zoominfo', label: 'ZoomInfo' },
+  { key: 'cognism', label: 'Cognism' },
   { key: 'clearbit', label: 'Clearbit' },
-  { key: 'hunter', label: 'Hunter' },
-  { key: 'people-data-labs', label: 'People Data Labs' },
+  { key: 'refyne', label: 'Refyne Data' },
 ];
 
 const LIFECYCLE_STAGES = [
