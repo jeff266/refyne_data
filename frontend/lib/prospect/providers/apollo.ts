@@ -70,9 +70,11 @@ export async function searchCompaniesApollo(
       per_page: query.limit || 25,
     };
 
-    // Industry filters
+    // Industry filters - use keyword search instead of tag IDs
+    // Apollo's tag IDs require a separate lookup/mapping
+    // For now, search by industry name as keywords
     if (query.industries && query.industries.length > 0) {
-      payload.organization_industry_tag_ids = query.industries;
+      payload.q_organization_keyword_tags = query.industries;
     }
 
     // Employee count filters
@@ -108,7 +110,7 @@ export async function searchCompaniesApollo(
     }
 
     const response = await fetch(
-      `${APOLLO_BASE_URL}/mixed_companies/search`,
+      `${APOLLO_BASE_URL}/organizations/search`,
       {
         method: 'POST',
         headers: {
