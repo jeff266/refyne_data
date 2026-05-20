@@ -59,6 +59,7 @@ export function ManageFieldsSlideOver({ open, onClose, currentFields, onSave }: 
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [cacheEmpty, setCacheEmpty] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -171,6 +172,22 @@ export function ManageFieldsSlideOver({ open, onClose, currentFields, onSave }: 
     return 'text';
   };
 
+  // Filter fields based on search query
+  const filteredCompanyFields = STANDARD_COMPANY_FIELDS.filter((field) =>
+    field.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    field.key.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredContactFields = STANDARD_CONTACT_FIELDS.filter((field) =>
+    field.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    field.key.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredCustomProperties = customProperties.filter((prop) =>
+    prop.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    prop.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (!open) return null;
 
   return (
@@ -213,15 +230,34 @@ export function ManageFieldsSlideOver({ open, onClose, currentFields, onSave }: 
         </button>
       </div>
 
+      {/* Search input */}
+      <div style={{ padding: '0 24px 16px', borderBottom: `1px solid ${C.border}` }}>
+        <input
+          type="text"
+          placeholder="Search fields..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '10px 12px',
+            background: C.bg,
+            border: `1px solid ${C.border}`,
+            borderRadius: 6,
+            fontSize: 13,
+            color: C.text,
+          }}
+        />
+      </div>
+
       {/* Content */}
       <div style={{ flex: 1, overflow: 'auto', padding: 24 }}>
         {/* Standard Company Fields */}
         <div style={{ marginBottom: 32 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>
-            Standard Company Fields
+            Standard Company Fields {filteredCompanyFields.length < STANDARD_COMPANY_FIELDS.length && `(${filteredCompanyFields.length})`}
           </h3>
           <div style={{ display: 'grid', gap: 8 }}>
-            {STANDARD_COMPANY_FIELDS.map((field) => (
+            {filteredCompanyFields.map((field) => (
               <label
                 key={field.key}
                 style={{
@@ -253,10 +289,10 @@ export function ManageFieldsSlideOver({ open, onClose, currentFields, onSave }: 
         {/* Standard Contact Fields */}
         <div style={{ marginBottom: 32 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>
-            Standard Contact Fields
+            Standard Contact Fields {filteredContactFields.length < STANDARD_CONTACT_FIELDS.length && `(${filteredContactFields.length})`}
           </h3>
           <div style={{ display: 'grid', gap: 8 }}>
-            {STANDARD_CONTACT_FIELDS.map((field) => (
+            {filteredContactFields.map((field) => (
               <label
                 key={field.key}
                 style={{
@@ -319,9 +355,9 @@ export function ManageFieldsSlideOver({ open, onClose, currentFields, onSave }: 
             </div>
           )}
 
-          {!cacheEmpty && customProperties.length > 0 && (
+          {!cacheEmpty && filteredCustomProperties.length > 0 && (
             <div style={{ display: 'grid', gap: 8 }}>
-              {customProperties.map((prop) => (
+              {filteredCustomProperties.map((prop) => (
                 <label
                   key={prop.name}
                   style={{

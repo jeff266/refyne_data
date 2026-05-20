@@ -35,7 +35,7 @@ export function ArrangementsOnboardingModal({ onComplete, onSkip }: OnboardingMo
 
       if (!res.ok) throw new Error('Failed to skip onboarding');
 
-      addToast('info', 'Onboarding skipped - you can run calibration later from Settings');
+      addToast('success', 'Onboarding skipped - you can run calibration later from Settings');
       onSkip();
     } catch (error) {
       console.error('Failed to skip onboarding:', error);

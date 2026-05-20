@@ -14,6 +14,7 @@ import {
   AlertCircle,
   CheckCircle,
   Lock,
+  Loader,
 } from 'lucide-react';
 import {
   DndContext,
@@ -129,7 +130,7 @@ function SortableProviderStep({
       }}
     >
       {/* Drag handle */}
-      <div {...attributes} {...listeners} style={{ cursor: 'grab', color: C.text3 }}>
+      <div {...attributes} {...listeners} style={{ cursor: 'grab', color: C.text }}>
         <GripVertical size={16} />
       </div>
 
@@ -498,7 +499,7 @@ function FieldRow({
                     if (firstAvailable) {
                       handleAddProvider(firstAvailable.provider);
                     } else {
-                      addToast('warning', 'No more connected providers available');
+                      addToast('error', 'No more connected providers available');
                     }
                   }}
                   style={{
@@ -612,6 +613,8 @@ export function ArrangementWaterfallBuilder({
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
   const [calibrationScores, setCalibrationScores] = useState<Record<string, string>>({});
   const [harmonies, setHarmonies] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingCalibration, setLoadingCalibration] = useState(false);
+  const [showApplyToAllDialog, setShowApplyToAllDialog] = useState(false);
 
   useEffect(() => {
     loadCalibrationData();
@@ -619,6 +622,7 @@ export function ArrangementWaterfallBuilder({
   }, []);
 
   const loadCalibrationData = async () => {
+    setLoadingCalibration(true);
     try {
       const res = await fetch('/api/arrangements/calibration/scores');
       if (res.ok) {
@@ -634,6 +638,8 @@ export function ArrangementWaterfallBuilder({
       }
     } catch (error) {
       console.error('Failed to load calibration:', error);
+    } finally {
+      setLoadingCalibration(false);
     }
   };
 
@@ -667,18 +673,23 @@ export function ArrangementWaterfallBuilder({
   };
 
   const handleApplyToAll = () => {
+    setShowApplyToAllDialog(true);
+  };
+
+  const confirmApplyToAll = () => {
     // Apply first provider order to all fields
     if (value.length === 0) return;
 
     const firstField = value[0];
     if (firstField.steps.length === 0) {
-      addToast('warning', 'Configure at least one field first');
+      addToast('error', 'Configure at least one field first');
+      setShowApplyToAllDialog(false);
       return;
     }
 
-    const templateSteps = firstField.steps.map((s) => ({
+    const templateSteps: ProviderStep[] = firstField.steps.map((s) => ({
       ...s,
-      policy: 'fill_empty',
+      policy: 'fill_empty' as const,
     }));
 
     const updated = value.map((config) => ({
@@ -688,6 +699,7 @@ export function ArrangementWaterfallBuilder({
 
     onChange(updated);
     addToast('success', 'Provider order applied to all fields');
+    setShowApplyToAllDialog(false);
   };
 
   const connectedProviders = providers.filter((p) => p.connected);
@@ -709,16 +721,31 @@ export function ArrangementWaterfallBuilder({
         {/* Legend */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <span style={{ fontSize: 12, color: C.text3, fontWeight: 500 }}>Providers:</span>
-          {connectedProviders.map((p) => (
+          {providers.map((p) => (
             <div key={p.provider} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: PROVIDER_COLORS[p.provider] || C.text3,
-                }}
-              />
+              <div style={{ position: 'relative' }}>
+                <div
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: PROVIDER_COLORS[p.provider] || C.text3,
+                  }}
+                />
+                {/* Status indicator */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: -2,
+                    right: -2,
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: p.hasError ? C.red : p.connected ? C.green : C.text3,
+                    border: `1px solid ${C.surface}`,
+                  }}
+                />
+              </div>
               <span style={{ fontSize: 12, color: C.text2 }}>
                 {p.provider.charAt(0).toUpperCase() + p.provider.slice(1)}
               </span>
@@ -750,19 +777,27 @@ export function ArrangementWaterfallBuilder({
       {value.length === 0 && (
         <div
           style={{
-            padding: 40,
+            padding: 60,
             textAlign: 'center',
             border: `2px dashed ${C.border}`,
             borderRadius: 8,
-            color: C.text3,
+            background: C.bg,
           }}
         >
-          <p style={{ fontSize: 14, marginBottom: 12 }}>No fields configured yet</p>
+          <div style={{ marginBottom: 16 }}>
+            <Settings size={48} color={C.text3} style={{ margin: '0 auto' }} />
+          </div>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+            No fields configured yet
+          </h3>
+          <p style={{ fontSize: 13, color: C.text3, marginBottom: 20, maxWidth: 400, margin: '0 auto 20px' }}>
+            Add fields to start building your enrichment waterfall. Choose from standard company and contact fields, or sync custom fields from your HubSpot portal.
+          </p>
           {onManageFields && (
-            <GhostBtn onClick={onManageFields}>
+            <PrimaryBtn onClick={onManageFields}>
               <Plus size={14} />
-              Add fields
-            </GhostBtn>
+              Add fields to get started
+            </PrimaryBtn>
           )}
         </div>
       )}
@@ -821,6 +856,53 @@ export function ArrangementWaterfallBuilder({
             </a>
           </div>
         </div>
+      )}
+
+      {/* Apply to all confirmation dialog */}
+      {showApplyToAllDialog && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setShowApplyToAllDialog(false)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 9998,
+            }}
+          />
+          {/* Dialog */}
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 12,
+              padding: 24,
+              maxWidth: 440,
+              width: '90%',
+              zIndex: 9999,
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+            }}
+          >
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 12 }}>
+              Apply provider order to all fields?
+            </h3>
+            <p style={{ fontSize: 13, color: C.text2, marginBottom: 20, lineHeight: 1.5 }}>
+              This will replace the provider configuration on all {value.length} fields with the order from the first field. Existing provider sequences will be overwritten.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <GhostBtn onClick={() => setShowApplyToAllDialog(false)}>Cancel</GhostBtn>
+              <PrimaryBtn onClick={confirmApplyToAll}>Apply to all</PrimaryBtn>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
