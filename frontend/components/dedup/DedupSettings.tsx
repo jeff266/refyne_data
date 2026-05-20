@@ -820,7 +820,7 @@ export function DedupSettings({ isAdmin = true }: DedupSettingsProps) {
                       </td>
                       <td style={{ padding: '10px 12px', fontSize: 12, color: C.text2, textAlign: 'right', fontFamily: F.mono }}>
                         {run.newClustersFound > 0 ? (
-                          <span style={{ color: '#f59e0b', fontWeight: 600 }}>{run.newClustersFound}</span>
+                          <span style={{ color: C.amber, fontWeight: 600 }}>{run.newClustersFound}</span>
                         ) : (
                           '—'
                         )}
