@@ -735,11 +735,10 @@ export function startCompanyDedupScanWorker(): Worker<CompanyDedupScanJobData, C
       connection,
       concurrency: WORKER_CONCURRENCY,
       // Reduce polling overhead for cost optimization
-      stalledInterval: 30000, // Check for stalled jobs every 30s
-      maxStalledCount: 2,     // Mark as stalled after 2 checks
-      settings: {
-        drainDelay: 5,        // Wait 5s when queue is empty before re-polling
-      },
+      // BullMQ automatically uses BRPOP with blocking which is efficient
+      // These settings reduce overhead when jobs are stalled
+      stalledInterval: 30000, // Check for stalled jobs every 30s (default 30s)
+      maxStalledCount: 2,     // Mark as stalled after 2 checks (default 1)
     }
   );
 

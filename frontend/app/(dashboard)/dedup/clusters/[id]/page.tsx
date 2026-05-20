@@ -413,6 +413,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                       <button
                         onClick={() => handleExcludeRecord(record.id, record.properties.name || record.id)}
                         disabled={excludingRecordId === record.id}
+                        title="Mark this record as not a duplicate. It will remain in HubSpot as a separate company."
                         style={{
                           padding: '4px 8px',
                           fontSize: 10,
@@ -434,7 +435,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                           e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        {excludingRecordId === record.id ? 'Excluding...' : '× Exclude'}
+                        {excludingRecordId === record.id ? 'Excluding...' : 'Not a duplicate'}
                       </button>
                     )}
                   </div>

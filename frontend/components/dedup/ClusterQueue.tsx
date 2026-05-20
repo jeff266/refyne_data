@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, RefreshCw, X } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
@@ -704,7 +704,21 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             marginBottom: 8,
                           }}
                         >
-                          {cluster.clusterName || `Cluster ${cluster.id.slice(0, 8)}`}
+                          {(() => {
+                            const survivorRecord = companyData[cluster.recordIds[0]];
+                            if (survivorRecord?.name) {
+                              // Use actual company name from survivor record
+                              return survivorRecord.name;
+                            }
+                            // Fallback: apply title case to cluster name
+                            if (cluster.clusterName) {
+                              return cluster.clusterName
+                                .split(' ')
+                                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                .join(' ');
+                            }
+                            return `Cluster ${cluster.id.slice(0, 8)}`;
+                          })()}
                         </div>
                         {/* Mini table with key fields */}
                         <div
@@ -732,161 +746,120 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             Lifecycle Stage
                           </div>
 
-                          {/* Data rows - Master and absorbed records with merge outcome preview */}
+                          {/* Data rows - All records stacked vertically */}
                           {(() => {
-                            const masterRecord = companyData[cluster.recordIds[0]];
-                            const absorbedRecords = cluster.recordIds.slice(1, 3).map(id => companyData[id]).filter(Boolean);
+                            const allRecords = cluster.recordIds.map(id => companyData[id]).filter(Boolean);
+                            if (allRecords.length === 0) return null;
 
-                            if (!masterRecord) return null;
+                            const recordsToShow = cluster.recordIds.length > 3
+                              ? allRecords.slice(0, 3)
+                              : allRecords;
 
-                            const fields: Array<{
-                              key: string;
-                              label: string;
-                              masterVal: string | undefined;
-                              absorbedVals: (string | undefined)[];
-                            }> = [
-                              {
-                                key: 'name',
-                                label: 'Company Name',
-                                masterVal: masterRecord.name,
-                                absorbedVals: absorbedRecords.map(r => r.name),
-                              },
-                              {
-                                key: 'domain',
-                                label: 'Domain',
-                                masterVal: masterRecord.domain,
-                                absorbedVals: absorbedRecords.map(r => r.domain),
-                              },
-                              {
-                                key: 'phone',
-                                label: 'Phone',
-                                masterVal: masterRecord.phone,
-                                absorbedVals: absorbedRecords.map(r => r.phone),
-                              },
-                              {
-                                key: 'website',
-                                label: 'Website',
-                                masterVal: masterRecord.website,
-                                absorbedVals: absorbedRecords.map(r => r.website),
-                              },
-                              {
-                                key: 'lifecyclestage',
-                                label: 'Lifecycle Stage',
-                                masterVal: masterRecord.lifecyclestage,
-                                absorbedVals: absorbedRecords.map(r => r.lifecyclestage),
-                              },
-                            ];
-
-                            return fields.map((field) => {
-                              // Check if any absorbed record has a different value
-                              const hasConflict = field.absorbedVals.some(
-                                v => v && v !== '—' && v !== field.masterVal
-                              );
-                              const outcome = getMergeOutcome(field.masterVal, field.absorbedVals[0]);
-
+                            return recordsToShow.map((record, recordIndex) => {
+                              const isMaster = recordIndex === 0;
                               return (
-                                <div
-                                  key={field.key}
-                                  style={{
-                                    fontSize: 11,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    fontFamily: field.key === 'domain' ? F.mono : F.sans,
-                                  }}
-                                >
-                                  {field.key === 'name' && (
-                                    <span
-                                      style={{
-                                        fontSize: 10,
-                                        color: C.green,
-                                        fontWeight: 600,
-                                        marginRight: 6,
-                                      }}
-                                      title="Master record (surviving)"
-                                    >
-                                      ★
-                                    </span>
-                                  )}
-                                  {/* Color-coded dot for merge outcome */}
-                                  {outcome.masterColor === C.green && field.key !== 'name' && (
-                                    <span
-                                      style={{
-                                        fontSize: 8,
-                                        color: C.green,
-                                        marginRight: 4,
-                                      }}
-                                      title="Value will be kept"
-                                    >
-                                      ●
-                                    </span>
-                                  )}
-                                  {outcome.indicator === 'fill' && field.key !== 'name' && (
-                                    <span
-                                      style={{
-                                        fontSize: 8,
-                                        color: C.amber,
-                                        marginRight: 4,
-                                      }}
-                                      title="Fill-gap opportunity"
-                                    >
-                                      ●
-                                    </span>
-                                  )}
-                                  {outcome.indicator === 'conflict' && field.key !== 'name' && (
-                                    <span
-                                      style={{
-                                        fontSize: 8,
-                                        color: C.amber,
-                                        marginRight: 4,
-                                      }}
-                                      title="Conflict: different values"
-                                    >
-                                      ●
-                                    </span>
-                                  )}
-                                  <span
+                                <React.Fragment key={cluster.recordIds[recordIndex]}>
+                                  <div
                                     style={{
-                                      color: outcome.masterColor,
-                                      fontWeight: field.key === 'name' ? 600 : 400,
+                                      fontSize: 11,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      fontFamily: F.sans,
                                     }}
-                                    title={`Master: ${field.masterVal || '(empty)'}`}
                                   >
-                                    {field.masterVal || '—'}
-                                  </span>
-                                  {outcome.showBoth && field.absorbedVals[0] && (
+                                    {isMaster && (
+                                      <span
+                                        style={{
+                                          fontSize: 10,
+                                          color: C.green,
+                                          fontWeight: 600,
+                                          marginRight: 6,
+                                        }}
+                                        title="Master record (surviving)"
+                                      >
+                                        ★
+                                      </span>
+                                    )}
                                     <span
                                       style={{
-                                        color: outcome.absorbedColor,
-                                        fontSize: 10,
-                                        opacity: 0.7,
-                                        marginLeft: 6,
+                                        color: isMaster ? C.green : C.text2,
+                                        fontWeight: isMaster ? 600 : 400,
                                       }}
-                                      title={`Absorbed value: ${field.absorbedVals[0]}`}
                                     >
-                                      ({field.absorbedVals[0]})
+                                      {record.name || '—'}
                                     </span>
-                                  )}
-                                </div>
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      fontFamily: F.mono,
+                                      color: C.text2,
+                                    }}
+                                  >
+                                    {record.domain || '—'}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      fontFamily: F.sans,
+                                      color: C.text2,
+                                    }}
+                                  >
+                                    {record.phone || '—'}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      fontFamily: F.sans,
+                                      color: C.text2,
+                                    }}
+                                  >
+                                    {record.website || '—'}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      fontFamily: F.sans,
+                                      color: C.text2,
+                                    }}
+                                  >
+                                    {record.lifecyclestage || '—'}
+                                  </div>
+                                </React.Fragment>
                               );
                             });
                           })()}
                         </div>
-                        {/* See more link */}
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: C.indigo,
-                            marginTop: 4,
-                            cursor: 'pointer',
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/dedup/clusters/${cluster.id}`);
-                          }}
-                        >
-                          See more →
-                        </div>
+                        {/* See more link - only if cluster has more than 3 records */}
+                        {cluster.recordIds.length > 3 && (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: C.indigo,
+                              marginTop: 4,
+                              cursor: 'pointer',
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/dedup/clusters/${cluster.id}`);
+                            }}
+                          >
+                            See more →
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
@@ -898,7 +871,16 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             marginBottom: 4,
                           }}
                         >
-                          {cluster.clusterName || `Cluster ${cluster.id.slice(0, 8)}`}
+                          {(() => {
+                            // Apply title case to cluster name as fallback
+                            if (cluster.clusterName) {
+                              return cluster.clusterName
+                                .split(' ')
+                                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                .join(' ');
+                            }
+                            return `Cluster ${cluster.id.slice(0, 8)}`;
+                          })()}
                         </div>
                         <div style={{ fontSize: 11, color: C.text3 }}>
                           {cluster.recordIds.length} companies
