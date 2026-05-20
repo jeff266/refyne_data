@@ -24,6 +24,8 @@ interface HarmonyItem {
   transformType?: 'lookup' | 'format';
   referenceTable?: string;
   unmatchedCount?: number;
+  outputFormat?: string;
+  outputFormatsAvailable?: Array<{ key: string; label: string; default?: boolean }>;
 }
 
 interface ComplianceInsight {
@@ -31,6 +33,74 @@ interface ComplianceInsight {
   harmony_id: string;
   message: string;
   record_count: number;
+}
+
+function OutputFormatSelector({
+  harmonyId,
+  currentFormat,
+  availableFormats,
+}: {
+  harmonyId: string;
+  currentFormat: string;
+  availableFormats: Array<{ key: string; label: string; default?: boolean }>;
+}) {
+  const [selectedFormat, setSelectedFormat] = useState(currentFormat);
+  const [saving, setSaving] = useState(false);
+
+  const handleChange = async (formatKey: string) => {
+    setSelectedFormat(formatKey);
+    setSaving(true);
+
+    try {
+      const res = await fetch(`/api/harmonies/${harmonyId}/output-format`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outputFormat: formatKey }),
+      });
+
+      if (!res.ok) {
+        console.error('Failed to save output format');
+        setSelectedFormat(currentFormat); // Revert on error
+      }
+    } catch (err) {
+      console.error('Failed to save output format:', err);
+      setSelectedFormat(currentFormat); // Revert on error
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ fontSize: 11, color: C.text3 }}>
+      <span style={{ marginRight: 8 }}>Output format:</span>
+      {availableFormats.map((format) => (
+        <label
+          key={format.key}
+          style={{
+            marginRight: 16,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            opacity: saving ? 0.5 : 1,
+          }}
+        >
+          <input
+            type="radio"
+            name={`format-${harmonyId}`}
+            value={format.key}
+            checked={selectedFormat === format.key}
+            onChange={() => handleChange(format.key)}
+            disabled={saving}
+            style={{ cursor: 'pointer' }}
+          />
+          <span style={{ color: selectedFormat === format.key ? C.text : C.text3 }}>
+            {format.label}
+          </span>
+        </label>
+      ))}
+    </div>
+  );
 }
 
 function HarmonyRow({
@@ -137,6 +207,15 @@ function HarmonyRow({
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: C.amberDim, borderRadius: 6, border: `1px solid rgba(245,158,11,0.2)`, marginTop: 8 }}>
                   <AlertTriangle size={11} color={C.amber} />
                   <span style={{ fontSize: 11, color: C.amber }}>{h.warning}</span>
+                </div>
+              )}
+              {h.outputFormatsAvailable && h.outputFormatsAvailable.length > 1 && (
+                <div style={{ marginTop: 10 }}>
+                  <OutputFormatSelector
+                    harmonyId={h.id}
+                    currentFormat={h.outputFormat || 'default'}
+                    availableFormats={h.outputFormatsAvailable}
+                  />
                 </div>
               )}
             </div>

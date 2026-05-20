@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
+import { clearLookupCache } from '@/lib/harmonies/normalization-engine';
 
 /**
  * POST /api/harmonies/:id/output-format
@@ -86,6 +87,9 @@ export async function POST(
         return NextResponse.json({ error: 'Failed to update format' }, { status: 500 });
       }
     }
+
+    // Invalidate lookup cache for this harmony
+    await clearLookupCache(ctx.orgId, params.id);
 
     return NextResponse.json({ success: true, outputFormat });
   } catch (error) {
