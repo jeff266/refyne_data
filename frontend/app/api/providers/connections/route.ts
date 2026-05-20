@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     // For now, return empty array since we haven't created the table yet
     // This will be populated when BYOK providers are configured
 
-    const connections = [
+    const connections: Array<{ provider: string; status: string }> = [
       // Placeholder - real implementation would query provider_connections table
       // { provider: 'apollo', status: 'active' },
       // { provider: 'zoominfo', status: 'error' },
