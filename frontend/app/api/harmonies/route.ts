@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { seedHarmonyLibrary } from '@/lib/harmonies/seed-library';
 
 /**
  * GET /api/harmonies
  *
  * Returns all preset harmonies (org_id IS NULL) plus custom harmonies for this org.
+ * Seeds the library on first request if no preset harmonies exist.
  */
 export async function GET(request: NextRequest) {
   // Auth check
@@ -23,6 +25,18 @@ export async function GET(request: NextRequest) {
     }
 
     const orgId = ctx.orgId;
+
+    // Check if preset harmonies exist, if not, seed them
+    const { data: presetCheck, error: checkError } = await supabase
+      .from('harmonies')
+      .select('id')
+      .is('org_id', null)
+      .limit(1);
+
+    if (!checkError && (!presetCheck || presetCheck.length === 0)) {
+      console.log('[Harmonies API] No preset harmonies found, seeding library...');
+      await seedHarmonyLibrary();
+    }
 
     // Fetch all preset harmonies (org_id IS NULL) + org-specific harmonies
     const { data: harmonies, error } = await supabase
