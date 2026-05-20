@@ -106,9 +106,16 @@ async function performScan(
     fieldName: string;
   }
 ) {
+  if (!supabase) {
+    console.error('[Scan Job] Supabase not configured');
+    return;
+  }
+
+  const db = supabase; // Capture for TypeScript
+
   try {
     // Update job status to scanning
-    await supabase
+    await db
       .from('harmony_scan_jobs')
       .update({
         status: 'scanning',
@@ -120,7 +127,7 @@ async function performScan(
     const distinctValues = await scanHubSpotField({
       ...options,
       onProgress: async (progress, totalRecords) => {
-        await supabase
+        await db
           .from('harmony_scan_jobs')
           .update({
             progress,
@@ -131,7 +138,7 @@ async function performScan(
     });
 
     // Update job with results
-    await supabase
+    await db
       .from('harmony_scan_jobs')
       .update({
         status: 'completed',
@@ -144,7 +151,7 @@ async function performScan(
     console.error('[Scan Job] Scan failed:', error);
 
     // Update job with error
-    await supabase
+    await db
       .from('harmony_scan_jobs')
       .update({
         status: 'failed',
