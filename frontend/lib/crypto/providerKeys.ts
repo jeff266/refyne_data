@@ -1,10 +1,13 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 
-const SECRET = process.env.PROVIDER_KEY_SECRET;
+const SECRET_RAW = process.env.PROVIDER_KEY_SECRET;
 
-if (!SECRET || SECRET.length < 32) {
+if (!SECRET_RAW || SECRET_RAW.length < 32) {
   throw new Error('PROVIDER_KEY_SECRET must be 32+ characters');
 }
+
+// Type-safe validated secret
+const SECRET: string = SECRET_RAW;
 
 /**
  * Encrypts an API key using AES-256-CBC
