@@ -4,7 +4,7 @@
  * GET /api/enrich/harmony-preview
  *
  * Shows which harmonies will apply to selected fields during enrichment.
- * Returns harmony details with example input/output from reference data.
+ * Uses proper two-step lookup: HubSpot property → canonical field → harmony.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -27,80 +27,33 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get fields from query params
+    // Get fields from query params (HubSpot property names)
     const { searchParams } = new URL(req.url);
     const fieldsParam = searchParams.get('fields');
     if (!fieldsParam) {
       return NextResponse.json({ fields: [] });
     }
 
-    const fieldKeys = fieldsParam.split(',').filter(Boolean);
-    if (fieldKeys.length === 0) {
+    const hubspotProperties = fieldsParam.split(',').filter(Boolean);
+    if (hubspotProperties.length === 0) {
       return NextResponse.json({ fields: [] });
     }
 
-    // Fetch active harmonies for these fields
-    const { data: harmonies, error: harmoniesError } = await supabase
-      .from('harmonies')
-      .select('*')
-      .in('field', fieldKeys)
-      .eq('is_active', true)
-      .or(`org_id.is.null,org_id.eq.${ctx.orgId}`);
+    // Get portal_id for field mapping lookup
+    const { data: connection } = await supabase
+      .from('hubspot_connections')
+      .select('portal_id')
+      .eq('org_id', ctx.orgId)
+      .eq('connection_status', 'active')
+      .single();
 
-    if (harmoniesError) {
-      console.error('[Harmony Preview] Failed to fetch harmonies:', harmoniesError);
-      return NextResponse.json({ error: 'Failed to fetch harmonies' }, { status: 500 });
+    if (!connection) {
+      return NextResponse.json({ error: 'HubSpot not connected' }, { status: 400 });
     }
 
-    // Fetch org-specific settings for preset harmonies
-    const presetHarmonyIds = (harmonies || []).filter((h) => h.is_preset).map((h) => h.id);
-    const { data: orgSettings } = presetHarmonyIds.length > 0
-      ? await supabase
-          .from('harmony_org_settings')
-          .select('harmony_id, output_format')
-          .eq('org_id', ctx.orgId)
-          .in('harmony_id', presetHarmonyIds)
-      : { data: [] };
+    const portalId = connection.portal_id;
 
-    const orgSettingsMap = new Map(
-      (orgSettings || []).map((s: any) => [s.harmony_id, s])
-    );
-
-    // Build field-to-harmony mapping
-    const harmonyByField = new Map<string, any>();
-    (harmonies || []).forEach((harmony) => {
-      const orgSetting = orgSettingsMap.get(harmony.id);
-      const effectiveOutputFormat = harmony.is_preset && orgSetting?.output_format
-        ? orgSetting.output_format
-        : harmony.output_format || 'default';
-
-      harmonyByField.set(harmony.field, {
-        ...harmony,
-        output_format: effectiveOutputFormat,
-      });
-    });
-
-    // Fetch example data from harmony_reference_data for each harmony
-    const harmonyIds = Array.from(harmonyByField.values()).map((h) => h.id);
-    const { data: referenceData } = harmonyIds.length > 0
-      ? await supabase
-          .from('harmony_reference_data')
-          .select('harmony_id, raw_value, normalized_value')
-          .in('harmony_id', harmonyIds)
-          .limit(1)
-      : { data: [] };
-
-    const examplesByHarmonyId = new Map<string, { input: string; output: string }>();
-    (referenceData || []).forEach((ref: any) => {
-      if (!examplesByHarmonyId.has(ref.harmony_id)) {
-        examplesByHarmonyId.set(ref.harmony_id, {
-          input: ref.raw_value,
-          output: ref.normalized_value,
-        });
-      }
-    });
-
-    // Build response for each field
+    // Hardcoded field labels (HubSpot property name → display label)
     const fieldLabels: Record<string, string> = {
       industry: 'Industry',
       numberofemployees: 'Employee count',
@@ -110,46 +63,60 @@ export async function GET(req: NextRequest) {
       annualrevenue: 'Revenue',
     };
 
-    const fields = fieldKeys.map((field_key) => {
-      const harmony = harmonyByField.get(field_key);
+    // Build response for each HubSpot property
+    const fields = await Promise.all(
+      hubspotProperties.map(async (hubspotProperty) => {
+        const harmony = await getHarmonyForHubSpotProperty(
+          ctx.orgId,
+          portalId,
+          'company',
+          hubspotProperty
+        );
 
-      if (!harmony) {
+        if (!harmony) {
+          return {
+            field_key: hubspotProperty,
+            field_label: fieldLabels[hubspotProperty] || hubspotProperty,
+            harmony: null,
+          };
+        }
+
+        // Determine if harmony will apply during enrichment
+        // Reference list harmonies apply to incoming values
+        // Normalization harmonies (Company Name, Domain) apply to existing values only
+        const isNormalizationHarmony = ['name', 'domain'].includes(harmony.canonical_field);
+        const willApply = !isNormalizationHarmony;
+
+        // Get example from reference data
+        const { data: referenceData } = await supabase
+          .from('harmony_reference_data')
+          .select('raw_value, normalized_value')
+          .eq('harmony_id', harmony.id)
+          .limit(1)
+          .single();
+
+        let reason = '';
+        if (willApply) {
+          reason = 'Maps raw provider values to your canonical taxonomy.';
+        } else {
+          reason = 'Not applied during enrichment (normalizes existing values, not incoming ones).';
+        }
+
         return {
-          field_key,
-          field_label: fieldLabels[field_key] || field_key,
-          harmony: null,
+          field_key: hubspotProperty,
+          field_label: fieldLabels[hubspotProperty] || hubspotProperty,
+          harmony: {
+            id: harmony.id,
+            name: harmony.name,
+            approach: harmony.transform_type || 'lookup',
+            will_apply: willApply,
+            reason,
+            example_input: referenceData?.raw_value || null,
+            example_output: referenceData?.normalized_value || null,
+          },
         };
-      }
-
-      // Determine if harmony will apply during enrichment
-      // Reference list harmonies apply to incoming values
-      // Normalization harmonies (Company Name, Domain) apply to existing values only
-      const isNormalizationHarmony = ['company_name', 'domain'].includes(harmony.field);
-      const willApply = !isNormalizationHarmony;
-
-      const example = examplesByHarmonyId.get(harmony.id);
-
-      let reason = '';
-      if (willApply) {
-        reason = 'Maps raw provider values to your canonical taxonomy.';
-      } else {
-        reason = 'Not applied during enrichment (normalizes existing values, not incoming ones).';
-      }
-
-      return {
-        field_key,
-        field_label: fieldLabels[field_key] || field_key,
-        harmony: {
-          id: harmony.id,
-          name: harmony.name,
-          approach: harmony.transform_type || 'lookup',
-          will_apply: willApply,
-          reason,
-          example_input: example?.input || null,
-          example_output: example?.output || null,
-        },
-      };
-    });
+      })
+    );
 
     return NextResponse.json({ fields });
   } catch (error) {
@@ -162,4 +129,51 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Clean two-step lookup: HubSpot property → canonical field → harmony
+ * No fuzzy matching. Uses explicit field_mappings table.
+ */
+async function getHarmonyForHubSpotProperty(
+  orgId: string,
+  portalId: string,
+  objectType: string,
+  hubspotProperty: string
+): Promise<any | null> {
+  if (!supabase) return null;
+
+  // Step 1: HubSpot property → Refyne canonical field
+  const { data: mapping } = await supabase
+    .from('field_mappings')
+    .select('canonical_field')
+    .eq('org_id', orgId)
+    .eq('portal_id', portalId)
+    .eq('object_type', objectType)
+    .eq('hubspot_property', hubspotProperty)
+    .maybeSingle();
+
+  if (!mapping) {
+    console.log(`[Harmony Preview] No field mapping for ${hubspotProperty}`);
+    return null;
+  }
+
+  const canonicalField = mapping.canonical_field;
+
+  // Step 2: Refyne canonical field → active harmony
+  const { data: harmony } = await supabase
+    .from('harmonies')
+    .select('*')
+    .eq('field', canonicalField)
+    .eq('is_active', true)
+    .or(`org_id.is.null,org_id.eq.${orgId}`)
+    .maybeSingle();
+
+  if (!harmony) {
+    console.log(`[Harmony Preview] No harmony for canonical field ${canonicalField}`);
+    return null;
+  }
+
+  // Add canonical_field to result for normalization check
+  return { ...harmony, canonical_field: canonicalField };
 }
