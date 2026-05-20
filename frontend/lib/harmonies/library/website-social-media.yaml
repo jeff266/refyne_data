@@ -1,0 +1,137 @@
+# Website Social Media Domain Flag
+# Flags records where website/domain matches social media or directory platforms
+
+id: website-social-media
+version: 1.0.0
+name: Website Social Media Domain Flag
+description: Compliance flag for records using social media or directory domains as their primary website (indicates incomplete or low-quality data)
+category: compliance
+author: revops-impact
+
+applies_to:
+  fields:
+    - company.domain
+    - company.website
+  entity: company
+
+ruleExplanation: "Normalizing social media URL from '{{oldValue}}' to '{{newValue}}' (URL standardization)"
+
+sources: []
+
+# Configurable list of social/directory domains
+config:
+  excluded_domains:
+    - facebook.com
+    - linkedin.com
+    - instagram.com
+    - yelp.com
+    - youtube.com
+    - twitter.com
+    - x.com
+    - google.com
+    - healthgrades.com
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values (no flag)
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings (no flag)
+    when: value = ""
+    transform: "null"
+
+  - id: flag-social-media-domain
+    description: Flag if domain matches social media or directory platforms
+    transform: |
+      (
+        $domain := $extract_domain(value);
+        $normalized := $domain ? $lowercase($replace($domain, /^www\./, "")) : null;
+
+        $excludedDomains := [
+          "facebook.com",
+          "linkedin.com",
+          "instagram.com",
+          "yelp.com",
+          "youtube.com",
+          "twitter.com",
+          "x.com",
+          "google.com",
+          "healthgrades.com"
+        ];
+
+        $normalized and $normalized in $excludedDomains ? {
+          "flagged": true,
+          "reason": "social_media_or_directory_domain",
+          "domain": $normalized,
+          "severity": "warning"
+        } : {
+          "flagged": false,
+          "domain": $normalized
+        }
+      )
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string returns null
+    input: ""
+    expected: null
+
+  - name: Flags facebook.com domain
+    input: "https://www.facebook.com/companypage"
+    expected:
+      flagged: true
+      reason: "social_media_or_directory_domain"
+      domain: "facebook.com"
+      severity: "warning"
+
+  - name: Flags linkedin.com domain
+    input: "linkedin.com/company/example"
+    expected:
+      flagged: true
+      reason: "social_media_or_directory_domain"
+      domain: "linkedin.com"
+      severity: "warning"
+
+  - name: Flags x.com (Twitter rebrand)
+    input: "https://x.com/companyhandle"
+    expected:
+      flagged: true
+      reason: "social_media_or_directory_domain"
+      domain: "x.com"
+      severity: "warning"
+
+  - name: Does not flag legitimate company domain
+    input: "https://www.acme-corp.com"
+    expected:
+      flagged: false
+      domain: "acme-corp.com"
+
+  - name: Handles case insensitivity
+    input: "HTTPS://WWW.YELP.COM/biz/test"
+    expected:
+      flagged: true
+      reason: "social_media_or_directory_domain"
+      domain: "yelp.com"
+      severity: "warning"
+
+  - name: Removes www prefix before checking
+    input: "www.youtube.com"
+    expected:
+      flagged: true
+      reason: "social_media_or_directory_domain"
+      domain: "youtube.com"
+      severity: "warning"
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - compliance
+  - data-quality
+  - company
+  - website
+  - flag
