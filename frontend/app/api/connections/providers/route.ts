@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireOperatorOrAbove } from '@/lib/auth/middleware';
+import { requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 
 /**
@@ -7,9 +7,11 @@ import { supabase } from '@/lib/db/supabase';
  * List all provider connections for the org (sanitized)
  */
 export async function GET(request: NextRequest) {
-  const ctx = await requireOperatorOrAbove(request);
-  if (!ctx) {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+  let ctx;
+  try {
+    ctx = await requireOperatorOrAbove();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
   const { data: connections, error } = await supabase

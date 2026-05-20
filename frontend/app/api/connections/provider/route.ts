@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth/middleware';
+import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 import { encryptKey, keyHint } from '@/lib/crypto/providerKeys';
 import { validateProviderKey } from '@/lib/providers/validate';
@@ -11,9 +11,11 @@ const ALLOWED_PROVIDERS = ['apollo', 'zoominfo', 'cognism', 'clearbit', 'proxycu
  * Connect a new BYOK provider
  */
 export async function POST(request: NextRequest) {
-  const ctx = await requireAdmin(request);
-  if (!ctx) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  let ctx;
+  try {
+    ctx = await requireAdmin();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   }
 
   const body = await request.json();
@@ -88,9 +90,11 @@ export async function POST(request: NextRequest) {
  * Disconnect a provider (soft delete)
  */
 export async function DELETE(request: NextRequest) {
-  const ctx = await requireAdmin(request);
-  if (!ctx) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  let ctx;
+  try {
+    ctx = await requireAdmin();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   }
 
   const body = await request.json();

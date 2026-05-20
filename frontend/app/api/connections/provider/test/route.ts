@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth/middleware';
+import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 import { decryptKey } from '@/lib/crypto/providerKeys';
 import { validateProviderKey } from '@/lib/providers/validate';
@@ -9,9 +9,11 @@ import { validateProviderKey } from '@/lib/providers/validate';
  * Test an existing provider connection
  */
 export async function POST(request: NextRequest) {
-  const ctx = await requireAdmin(request);
-  if (!ctx) {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  let ctx;
+  try {
+    ctx = await requireAdmin();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Admin access required' }, { status: 403 });
   }
 
   const body = await request.json();
