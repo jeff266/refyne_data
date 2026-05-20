@@ -125,7 +125,7 @@ export function CalibrationTab() {
 
   const handleRunCalibration = (fieldKey: string, fieldType: string) => {
     // This will open a modal - implement in next phase
-    addToast('info', 'Calibration modal coming soon');
+    addToast('success', 'Calibration modal coming soon');
   };
 
   const handleOnboardingComplete = () => {
