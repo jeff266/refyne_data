@@ -25,14 +25,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Query provider_connections table (if it exists)
-    // For now, return empty array since we haven't created the table yet
-    // This will be populated when BYOK providers are configured
+    // Query provider_connections table for active connections
+    const { data: providerConnections, error: dbError } = await supabase
+      .from('provider_connections')
+      .select('provider, status')
+      .eq('org_id', ctx.orgId)
+      .eq('status', 'active');
 
-    const connections: Array<{ provider: string; status: string }> = [
-      // Placeholder - real implementation would query provider_connections table
-      // { provider: 'apollo', status: 'active' },
-      // { provider: 'zoominfo', status: 'error' },
+    if (dbError) {
+      console.error('Failed to query provider_connections:', dbError);
+      // If table doesn't exist yet, return empty array
+      return NextResponse.json({ connections: [] });
+    }
+
+    // Always include Refyne Data as a managed provider
+    const connections = [
+      { provider: 'refyne', status: 'active' },
+      ...(providerConnections || []).map((conn) => ({
+        provider: conn.provider,
+        status: conn.status,
+      })),
     ];
 
     return NextResponse.json({ connections });

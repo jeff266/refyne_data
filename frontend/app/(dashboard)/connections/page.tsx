@@ -153,12 +153,16 @@ export default function ConnectionsPage() {
   const [syncHistory, setSyncHistory] = useState<Record<string, SyncHistory>>({});
   const [loadingHistory, setLoadingHistory] = useState<Record<string, boolean>>({});
   const [syncing, setSyncing] = useState<Record<string, boolean>>({});
+  const [providerConnections, setProviderConnections] = useState<Array<{ provider: string; status: string; hint: string; last_tested_at: string | null }>>([]);
+  const [connectingProvider, setConnectingProvider] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
   const isAdmin = orgRole === 'org:admin';
 
   useEffect(() => {
     fetchHubSpotConnections();
+    fetchProviderConnections();
     handleOAuthCallback();
   }, []);
 
@@ -173,6 +177,18 @@ export default function ConnectionsPage() {
       console.error('Failed to fetch HubSpot connections:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchProviderConnections() {
+    try {
+      const res = await fetch('/api/connections/providers');
+      if (res.ok) {
+        const data = await res.json();
+        setProviderConnections(data.connections || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch provider connections:', err);
     }
   }
 
@@ -237,13 +253,83 @@ export default function ConnectionsPage() {
   function handleConnectProvider(providerId: string) {
     setShowApiKeyInput(providerId);
     setApiKey('');
+    setConnectionError(null);
   }
 
-  function handleSaveApiKey() {
-    // TODO: Save API key to backend
-    showToast(`${showApiKeyInput} connected`, 'success');
-    setShowApiKeyInput(null);
-    setApiKey('');
+  async function handleSaveApiKey() {
+    if (!showApiKeyInput || !apiKey.trim()) return;
+
+    setConnectingProvider(true);
+    setConnectionError(null);
+
+    try {
+      const res = await fetch('/api/connections/provider', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: showApiKeyInput, apiKey: apiKey.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        showToast(`${showApiKeyInput} connected successfully`, 'success');
+        setShowApiKeyInput(null);
+        setApiKey('');
+        setConnectionError(null);
+        await fetchProviderConnections();
+      } else {
+        setConnectionError(data.error || 'Failed to connect provider');
+      }
+    } catch (error) {
+      setConnectionError('Network error — please try again');
+    } finally {
+      setConnectingProvider(false);
+    }
+  }
+
+  async function handleDisconnectProvider(providerId: string) {
+    if (!confirm('Disconnecting this provider will stop enrichment arrangements that use it. Continue?')) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/connections/provider', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: providerId }),
+      });
+
+      if (res.ok) {
+        showToast(`${providerId} disconnected`, 'success');
+        await fetchProviderConnections();
+      } else {
+        showToast('Failed to disconnect provider', 'error');
+      }
+    } catch (error) {
+      showToast('Failed to disconnect provider', 'error');
+    }
+  }
+
+  async function handleTestProvider(providerId: string) {
+    try {
+      const res = await fetch('/api/connections/provider/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: providerId }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        showToast(`${providerId} connection test passed`, 'success');
+      } else {
+        showToast(data.error || 'Connection test failed', 'error');
+      }
+
+      await fetchProviderConnections();
+    } catch (error) {
+      showToast('Failed to test connection', 'error');
+    }
   }
 
   function handleEditName(connection: HubSpotConnection) {
@@ -811,30 +897,113 @@ export default function ConnectionsPage() {
 
               {addDialogTab === 'enrichment' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {PROVIDERS.filter(p => p.category === 'enrichment' || p.category === 'research').map((provider) => (
-                    <div
-                      key={provider.id}
-                      style={{ cursor: provider.managed ? 'default' : 'pointer', opacity: provider.managed ? 0.6 : 1 }}
-                      onClick={() => !provider.managed && handleConnectProvider(provider.id)}
-                    >
-                      <Card style={{ padding: 16 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 4 }}>
-                          <div style={{ fontSize: 14, fontWeight: 500 }}>{provider.name}</div>
-                          {provider.managed && (
-                            <Chip>Managed</Chip>
+                  {PROVIDERS.filter(p => p.category === 'enrichment' || p.category === 'research').map((provider) => {
+                    const isConnected = providerConnections.some(c => c.provider === provider.id);
+                    const connection = providerConnections.find(c => c.provider === provider.id);
+                    const isExpanded = showApiKeyInput === provider.id;
+
+                    return (
+                      <div key={provider.id}>
+                        <Card style={{ padding: 16 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 4 }}>
+                            <div style={{ fontSize: 14, fontWeight: 500 }}>{provider.name}</div>
+                            {provider.managed && <Chip>Managed</Chip>}
+                            {isConnected && !provider.managed && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <StatusDot color={C.green} />
+                                <span style={{ fontSize: 12, color: C.text2 }}>••••••••{connection?.hint}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 12, color: C.text3, marginBottom: provider.managedCredits ? 4 : 0 }}>
+                            {provider.description}
+                          </div>
+                          {provider.managedCredits && (
+                            <div style={{ fontSize: 11, color: C.text3, fontStyle: 'italic', marginBottom: 8 }}>
+                              {provider.managedCredits}
+                            </div>
                           )}
+
+                          {/* API Key Input (expanded state) */}
+                          {isExpanded && !isConnected && (
+                            <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                              <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 6, color: C.text }}>
+                                API key
+                              </label>
+                              <input
+                                type="password"
+                                value={apiKey}
+                                onChange={(e) => setApiKey(e.target.value)}
+                                placeholder="Enter your API key"
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  background: C.bg,
+                                  border: `1px solid ${C.border}`,
+                                  borderRadius: 6,
+                                  fontSize: 13,
+                                  color: C.text,
+                                  fontFamily: F.sans,
+                                  marginBottom: 8,
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveApiKey();
+                                }}
+                              />
+                              <div style={{ fontSize: 11, color: C.text3, marginBottom: 12, lineHeight: 1.5 }}>
+                                Your key is encrypted before storage and never returned to the browser. Hint: last 4 chars shown.
+                              </div>
+
+                              {connectionError && (
+                                <div style={{
+                                  padding: '8px 12px',
+                                  background: C.redDim,
+                                  border: `1px solid ${C.redBrd}`,
+                                  borderRadius: 6,
+                                  fontSize: 12,
+                                  color: C.red,
+                                  marginBottom: 12,
+                                }}>
+                                  {connectionError}
+                                </div>
+                              )}
+
+                              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                <GhostBtn onClick={() => { setShowApiKeyInput(null); setApiKey(''); setConnectionError(null); }}>
+                                  Cancel
+                                </GhostBtn>
+                                <PrimaryBtn onClick={handleSaveApiKey} disabled={connectingProvider || !apiKey.trim()}>
+                                  {connectingProvider ? 'Connecting...' : 'Connect'}
+                                </PrimaryBtn>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Action buttons */}
+                          {!isExpanded && (
+                            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                              {!isConnected && !provider.managed && isAdmin && (
+                                <PrimaryBtn onClick={() => handleConnectProvider(provider.id)}>
+                                  Connect
+                                </PrimaryBtn>
+                              )}
+                              {isConnected && !provider.managed && isAdmin && (
+                                <>
+                                  <GhostBtn onClick={() => handleTestProvider(provider.id)}>Test</GhostBtn>
+                                  <GhostBtn onClick={() => handleDisconnectProvider(provider.id)}>Disconnect</GhostBtn>
+                                </>
+                              )}
+                              {provider.managed && (
+                                <div style={{ fontSize: 12, color: C.text3 }}>
+                                  Included in your Refyne plan
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </Card>
                       </div>
-                      <div style={{ fontSize: 12, color: C.text3, marginBottom: provider.managedCredits ? 4 : 0 }}>
-                        {provider.description}
-                      </div>
-                      {provider.managedCredits && (
-                        <div style={{ fontSize: 11, color: C.text3, fontStyle: 'italic' }}>
-                          {provider.managedCredits}
-                        </div>
-                      )}
-                      </Card>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
