@@ -171,7 +171,7 @@ export default function RunStatusPage({ params }: { params: { runId: string } })
     apollo: C.indigo,
     clearbit: C.green,
     zoominfo: C.amber,
-    serper: C.purple,
+    serper: C.yellow,
   };
 
   const estimateTimeRemaining = () => {

@@ -38,7 +38,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   apollo: C.indigo,
   clearbit: C.green,
   zoominfo: C.amber,
-  serper: C.purple,
+  serper: C.yellow,
 };
 
 export function RehearsalResults({
