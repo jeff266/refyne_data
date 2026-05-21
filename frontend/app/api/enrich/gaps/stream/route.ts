@@ -22,7 +22,7 @@ const ENRICHABLE_FIELDS = [
   'annualrevenue',
 ];
 
-const PAGE_SIZE = 200; // Maximum HubSpot allows
+const PAGE_SIZE = 100; // Maximum HubSpot allows for companies endpoint
 const DELAY_BETWEEN_PAGES_MS = 100; // Small delay to avoid rate limits
 
 function sleep(ms: number) {
