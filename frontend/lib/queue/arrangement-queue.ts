@@ -1159,7 +1159,12 @@ async function queryProvider(
 
   // Live mode: make real API call
   const providerAdapter = await getProviderAdapter(provider, orgId);
-  const result = await providerAdapter.enrichCompany({ domain: record.domain });
+
+  // HubSpot records have properties nested: record.properties.domain
+  const domain = record.properties?.domain || record.domain;
+  const name = record.properties?.name || record.name;
+
+  const result = await providerAdapter.enrichCompany({ domain, name });
 
   if (result) {
     return result.normalized?.[fieldKey] ?? result.raw[fieldKey];
