@@ -1164,6 +1164,8 @@ async function queryProvider(
   const domain = record.properties?.domain || record.domain;
   const name = record.properties?.name || record.name;
 
+  console.log('[queryProvider] Calling Apollo with:', { domain, name, recordId: record.id });
+
   const result = await providerAdapter.enrichCompany({ domain, name });
 
   if (result) {
