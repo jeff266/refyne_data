@@ -24,6 +24,7 @@ interface ProviderBenchmarkResult {
   field_coverage: Record<string, number>;
   tested: number;
   matched: number;
+  matched_company_ids: string[]; // Track which companies matched
 }
 
 interface BenchmarkRecommendation {
@@ -40,6 +41,13 @@ interface BenchmarkRecommendation {
     apollo_count: number;
     refyne_count: number;
   }>;
+  overlap?: {
+    apollo_and_refyne: number;  // Both matched
+    apollo_only: number;         // Only Apollo matched
+    refyne_only: number;         // Only Refyne matched
+    neither: number;             // Neither matched
+    total_tested: number;
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -155,6 +163,7 @@ async function benchmarkApollo(
   const BATCH_SIZE = 25;
   let matched = 0;
   const fieldMatches: Record<string, number> = {};
+  const matchedCompanyIds: string[] = [];
 
   for (let i = 0; i < companies.length; i += BATCH_SIZE) {
     const batch = companies.slice(i, i + BATCH_SIZE);
@@ -170,9 +179,10 @@ async function benchmarkApollo(
       })
     );
 
-    // Count matches
+    // Count matches and track company IDs
     for (let j = 0; j < results.length; j++) {
       const result = results[j];
+      const company = batch[j];
       if (result) {
         let hasMatch = false;
         for (const field of fields) {
@@ -184,7 +194,10 @@ async function benchmarkApollo(
             hasMatch = true;
           }
         }
-        if (hasMatch) matched++;
+        if (hasMatch) {
+          matched++;
+          matchedCompanyIds.push(company.id);
+        }
       }
     }
 
@@ -206,7 +219,8 @@ async function benchmarkApollo(
     match_rate: matched / companies.length,
     field_coverage: fieldMatches,
     tested: companies.length,
-    matched
+    matched,
+    matched_company_ids: matchedCompanyIds
   };
 }
 
@@ -234,6 +248,8 @@ async function benchmarkGraphIQ(
     console.error('[Benchmark GraphIQ] CRITICAL: GRAPHIQ_API_KEY environment variable not set');
   }
 
+  const matchedCompanyIds: string[] = [];
+
   for (let i = 0; i < companies.length; i += BATCH_SIZE) {
     const batch = companies.slice(i, i + BATCH_SIZE);
     const results = await Promise.all(
@@ -248,8 +264,10 @@ async function benchmarkGraphIQ(
       })
     );
 
-    // Count matches
-    for (const result of results) {
+    // Count matches and track company IDs
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      const company = batch[j];
       if (result) {
         let hasMatch = false;
         for (const field of fields) {
@@ -258,7 +276,10 @@ async function benchmarkGraphIQ(
             hasMatch = true;
           }
         }
-        if (hasMatch) matched++;
+        if (hasMatch) {
+          matched++;
+          matchedCompanyIds.push(company.id);
+        }
       }
     }
 
@@ -280,7 +301,8 @@ async function benchmarkGraphIQ(
     match_rate: matched / companies.length,
     field_coverage: fieldMatches,
     tested: companies.length,
-    matched
+    matched,
+    matched_company_ids: matchedCompanyIds
   };
 }
 
@@ -422,6 +444,15 @@ function generateRecommendation(
     };
   });
 
+  // Calculate overlap statistics
+  const apolloIds = new Set(apollo?.matched_company_ids || []);
+  const refyneIds = new Set(refyne.matched_company_ids);
+
+  const bothMatched = [...apolloIds].filter(id => refyneIds.has(id)).length;
+  const apolloOnly = apolloIds.size - bothMatched;
+  const refyneOnly = refyneIds.size - bothMatched;
+  const neither = sampleSize - (apolloOnly + refyneOnly + bothMatched);
+
   return {
     best_provider: bestProvider,
     top_industries: topIndustries,
@@ -430,5 +461,12 @@ function generateRecommendation(
     refyne_coverage: refyneRate,
     message: `${message} Estimated ${estimatedFills.toLocaleString()} companies would be enriched.`,
     field_breakdown: fieldBreakdown,
+    overlap: {
+      apollo_and_refyne: bothMatched,
+      apollo_only: apolloOnly,
+      refyne_only: refyneOnly,
+      neither,
+      total_tested: sampleSize,
+    },
   };
 }

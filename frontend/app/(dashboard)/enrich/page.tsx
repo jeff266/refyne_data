@@ -122,6 +122,13 @@ interface BenchmarkRecommendation {
     apollo_count: number;
     refyne_count: number;
   }>;
+  overlap?: {
+    apollo_and_refyne: number;
+    apollo_only: number;
+    refyne_only: number;
+    neither: number;
+    total_tested: number;
+  };
 }
 
 export default function EnrichPage() {
@@ -1359,6 +1366,83 @@ export default function EnrichPage() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* Venn Diagram - Provider Overlap */}
+              {benchmarkResults.overlap && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', marginBottom: 8 }}>
+                    Provider Overlap
+                  </div>
+                  <div style={{
+                    padding: 16,
+                    background: C.bg,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                  }}>
+                    {/* SVG Venn Diagram */}
+                    <svg width="300" height="180" viewBox="0 0 300 180">
+                      {/* Left circle (Apollo) */}
+                      <circle
+                        cx="100"
+                        cy="90"
+                        r="60"
+                        fill="#E0E7FF"
+                        fillOpacity="0.6"
+                        stroke="#6366F1"
+                        strokeWidth="2"
+                      />
+                      {/* Right circle (Refyne) */}
+                      <circle
+                        cx="200"
+                        cy="90"
+                        r="60"
+                        fill="#D1FAE5"
+                        fillOpacity="0.6"
+                        stroke="#10B981"
+                        strokeWidth="2"
+                      />
+
+                      {/* Labels */}
+                      <text x="70" y="95" fontSize="12" fontWeight="600" fill={C.text} textAnchor="middle">
+                        Apollo
+                      </text>
+                      <text x="70" y="110" fontSize="20" fontWeight="700" fill={C.text} textAnchor="middle">
+                        {benchmarkResults.overlap.apollo_only}
+                      </text>
+
+                      <text x="230" y="95" fontSize="12" fontWeight="600" fill={C.text} textAnchor="middle">
+                        Refyne
+                      </text>
+                      <text x="230" y="110" fontSize="20" fontWeight="700" fill={C.text} textAnchor="middle">
+                        {benchmarkResults.overlap.refyne_only}
+                      </text>
+
+                      {/* Overlap (center) */}
+                      <text x="150" y="85" fontSize="11" fontWeight="600" fill={C.text} textAnchor="middle">
+                        Both
+                      </text>
+                      <text x="150" y="102" fontSize="18" fontWeight="700" fill={C.text} textAnchor="middle">
+                        {benchmarkResults.overlap.apollo_and_refyne}
+                      </text>
+
+                      {/* Neither (bottom) */}
+                      <text x="150" y="160" fontSize="10" fill={C.text3} textAnchor="middle">
+                        Neither: {benchmarkResults.overlap.neither}
+                      </text>
+                    </svg>
+
+                    {/* Summary */}
+                    <div style={{ marginTop: 12, fontSize: 11, color: C.text2, textAlign: 'center' }}>
+                      <strong>{benchmarkResults.overlap.apollo_and_refyne}</strong> companies matched by both providers
+                      <br />
+                      <strong>{benchmarkResults.overlap.apollo_only + benchmarkResults.overlap.refyne_only}</strong> additional companies covered by using both
+                    </div>
                   </div>
                 </div>
               )}
