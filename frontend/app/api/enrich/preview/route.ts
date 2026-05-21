@@ -321,10 +321,18 @@ export async function POST(req: NextRequest) {
       },
     };
 
+    // Debug logging
+    console.log('[Preview API] Built response:', {
+      results_count: results.length,
+      first_company: results[0]?.company_name,
+      first_company_fields: results[0]?.fields?.length
+    });
+
     // Cache results in Redis for 30 minutes
     const cacheKey = `${ctx.orgId}:enrich:preview:${previewId}`;
     await redis.setex(cacheKey, 1800, JSON.stringify(response));
 
+    console.log('[Preview API] Returning response with', results.length, 'companies');
     return NextResponse.json(response);
   } catch (error) {
     console.error('[Preview] Error:', error);
