@@ -1,67 +1,87 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getConnection, HubSpotClient } from '@/lib/hubspot';
-import { getAccessToken } from '@/lib/hubspot/get-access-token';
-import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { captureWithOrgContext } from '@/lib/monitoring/sentry';
-import { checkOrgRateLimit, rateLimitErrorResponse } from '@/lib/hubspot/org-rate-limiter';
-
 /**
+ * HubSpot Lists API
+ *
  * GET /api/hubspot/lists
  *
- * Get company lists from the connected HubSpot portal.
+ * Fetches static company lists from HubSpot for list selection dropdown.
+ * Returns list name and member count.
  */
-export async function GET(request: NextRequest) {
-  // Add auth check
-  let ctx;
-  try { ctx = await getOrgContext(); }
-  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 
-  // Check org rate limit
-  const rateLimitCheck = await checkOrgRateLimit(ctx.orgId, '/api/hubspot/lists');
-  if (!rateLimitCheck.allowed) {
-    return NextResponse.json(
-      rateLimitErrorResponse(rateLimitCheck.resetAt!, rateLimitCheck.remaining!),
-      { status: 429 }
-    );
+import { NextResponse } from 'next/server';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
+import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+
+export async function GET() {
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
   try {
-    const orgId = ctx.orgId;
+    if (!isSupabaseConfigured() || !supabase) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 503 }
+      );
+    }
 
-    const connection = await getConnection(orgId);
+    const { data: connection } = await supabase
+      .from('hubspot_connections')
+      .select('portal_id')
+      .eq('org_id', ctx.orgId)
+      .single();
 
     if (!connection) {
-      return NextResponse.json(
-        { error: 'HubSpot not connected' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'HubSpot not connected' }, { status: 400 });
     }
 
-    const accessToken = await getAccessToken(orgId);
+    const cacheKey = `${ctx.orgId}:${connection.portal_id}:hubspot:lists`;
+    const { data: cached } = await supabase
+      .from('cache')
+      .select('value, expires_at')
+      .eq('key', cacheKey)
+      .single();
 
-    const client = new HubSpotClient(accessToken, connection.portalId);
-    const lists = await client.getCompanyLists();
+    if (cached && new Date(cached.expires_at) > new Date()) {
+      return NextResponse.json(cached.value);
+    }
 
-    return NextResponse.json({
-      portalId: connection.portalId,
-      lists,
-      total: lists.length,
+    const accessToken = await getAccessToken(ctx.orgId);
+    if (!accessToken) {
+      return NextResponse.json({ error: 'HubSpot not connected' }, { status: 400 });
+    }
+
+    const listsRes = await fetch('https://api.hubapi.com/contacts/v1/lists/static', {
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     });
-  } catch (error) {
-    captureWithOrgContext(error, ctx.orgId, { route: '/api/hubspot/lists' });
-    console.error('Failed to get HubSpot lists:', error);
 
-    // Check if it's an auth error
-    if (error instanceof Error && error.message.includes('401')) {
-      return NextResponse.json(
-        { error: 'HubSpot token expired or invalid. Please reconnect.' },
-        { status: 401 }
-      );
+    if (!listsRes.ok) {
+      if (listsRes.status === 403) {
+        return NextResponse.json({ lists: [], insufficientPermissions: true });
+      }
+      throw new Error(`HubSpot API error: ${listsRes.status}`);
     }
 
-    return NextResponse.json(
-      { error: 'Failed to fetch lists from HubSpot' },
-      { status: 500 }
-    );
+    const listsData = await listsRes.json();
+    const lists = (listsData.lists || [])
+      .filter((list: any) => list.listType === 'STATIC')
+      .map((list: any) => ({
+        id: list.listId.toString(),
+        name: list.name,
+        memberCount: list.metaData?.size || 0,
+      }))
+      .sort((a: any, b: any) => b.memberCount - a.memberCount);
+
+    const result = { lists, insufficientPermissions: false };
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    await supabase.from('cache').upsert({ key: cacheKey, value: result, expires_at: expiresAt });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('[HubSpot Lists] Error:', error);
+    return NextResponse.json({ error: 'Failed to fetch lists' }, { status: 500 });
   }
 }

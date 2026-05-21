@@ -31,6 +31,11 @@ interface HarmonyPreview {
   } | null;
 }
 
+interface HubSpotList {
+  listId: string;
+  name: string;
+}
+
 const ENRICHABLE_FIELDS = [
   { key: 'industry', label: 'Industry' },
   { key: 'numberofemployees', label: 'Employee count' },
@@ -64,17 +69,20 @@ export default function EnrichPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
-  const [showConfig, setShowConfig] = useState(false);
   const [running, setRunning] = useState(false);
 
   // Configuration state
-  const [companyScope, setCompanyScope] = useState<'all' | 'list' | 'segment'>('all');
+  const [companyScope, setCompanyScope] = useState<'all' | 'list' | 'segment' | 'csv'>('all');
   const [selectedList, setSelectedList] = useState<string>('');
+  const [hubspotLists, setHubspotLists] = useState<HubSpotList[]>([]);
+  const [listPermissionError, setListPermissionError] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvText, setCsvText] = useState<string>('');
   const [lifecycleStage, setLifecycleStage] = useState<string>('');
   const [ownerId, setOwnerId] = useState<string>('');
   const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
-  const [selectedFields, setSelectedFields] = useState<string[]>([]);
-  const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
+  const [selectedFields, setSelectedFields] = useState<string[]>(['industry', 'numberofemployees']);
+  const [selectedProviders, setSelectedProviders] = useState<string[]>(['apollo']);
   const [writePolicy, setWritePolicy] = useState<'fill_empty' | 'overwrite'>('fill_empty');
   const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
   const [harmonyPreviews, setHarmonyPreviews] = useState<HarmonyPreview[]>([]);
@@ -91,7 +99,6 @@ export default function EnrichPage() {
   // Test mode state
   const [testMode, setTestMode] = useState(false);
   const [testRecordLimit, setTestRecordLimit] = useState(10);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Fetch gap analysis on mount
@@ -102,13 +109,6 @@ export default function EnrichPage() {
         if (res.ok) {
           const data = await res.json();
           setGapAnalysis(data);
-
-          // Pre-select fields with most missing values
-          const topGaps = data.field_gaps
-            .sort((a: FieldGap, b: FieldGap) => b.missing - a.missing)
-            .slice(0, 3)
-            .map((g: FieldGap) => g.field);
-          setSelectedFields(topGaps);
         }
       } catch (error) {
         console.error('Failed to fetch gap analysis:', error);
@@ -124,13 +124,24 @@ export default function EnrichPage() {
           const data = await res.json();
           const providerKeys = data.connections.map((c: any) => c.provider);
           setConnectedProviders(providerKeys);
-          // Pre-select Apollo if connected
-          if (providerKeys.includes('apollo')) {
-            setSelectedProviders(['apollo']);
-          }
         }
       } catch (error) {
         console.error('Failed to fetch provider connections:', error);
+      }
+    }
+
+    async function fetchHubSpotLists() {
+      try {
+        const res = await fetch('/api/hubspot/lists');
+        if (res.ok) {
+          const data = await res.json();
+          setHubspotLists(data.lists || []);
+        } else if (res.status === 403) {
+          setListPermissionError(true);
+        }
+      } catch (error) {
+        console.error('Failed to fetch HubSpot lists:', error);
+        setListPermissionError(true);
       }
     }
 
@@ -160,7 +171,6 @@ export default function EnrichPage() {
 
     async function fetchIndustries() {
       try {
-        // Fetch industries from harmony_reference_data for controlled taxonomy
         const res = await fetch('/api/harmonies/industry/reference');
         if (res.ok) {
           const data = await res.json();
@@ -168,13 +178,13 @@ export default function EnrichPage() {
         }
       } catch (error) {
         console.error('Failed to fetch industries:', error);
-        // Fallback to basic industry list
         setIndustries(['Healthcare', 'Software', 'Education', 'Manufacturing', 'Retail']);
       }
     }
 
     fetchGaps();
     fetchConnections();
+    fetchHubSpotLists();
     fetchLifecycleStages();
     fetchOwners();
     fetchIndustries();
@@ -240,10 +250,25 @@ export default function EnrichPage() {
       } finally {
         setLoadingPreview(false);
       }
-    }, 400); // 400ms debounce
+    }, 400);
 
     return () => clearTimeout(timeoutId);
   }, [companyScope, lifecycleStage, ownerId, selectedIndustries, selectedFields]);
+
+  // Handle CSV file upload
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCsvFile(file);
+      // Read file contents
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const text = evt.target?.result as string;
+        setCsvText(text);
+      };
+      reader.readAsText(file);
+    }
+  }
 
   // Run enrichment
   async function handleRunEnrichment() {
@@ -270,12 +295,15 @@ export default function EnrichPage() {
     setRunning(true);
     try {
       // Determine source type and config
-      let source_type: 'hubspot_filter' | 'hubspot_list';
+      let source_type: 'hubspot_filter' | 'hubspot_list' | 'csv_domains';
       let source_config: any = {};
 
       if (companyScope === 'list') {
         source_type = 'hubspot_list';
         source_config = { listId: selectedList };
+      } else if (companyScope === 'csv') {
+        source_type = 'csv_domains';
+        source_config = { domains: csvText.split('\n').filter(d => d.trim()) };
       } else {
         source_type = 'hubspot_filter';
         if (companyScope === 'segment') {
@@ -292,7 +320,7 @@ export default function EnrichPage() {
           }
           source_config = { filters };
         } else {
-          // "All companies with missing fields" - filter for companies missing selected fields
+          // "All companies with missing fields"
           source_config = { filters: { missing_fields: selectedFields } };
         }
       }
@@ -300,7 +328,7 @@ export default function EnrichPage() {
       // Build field_configs in v2 format
       const field_configs = selectedFields.map((field_key, index) => ({
         field_key,
-        field_type: 'text', // simplified for now, can be enhanced
+        field_type: 'text',
         aggregation_strategy: 'waterfall',
         apply_harmony: true,
         steps: selectedProviders.map((provider, providerIndex) => ({
@@ -355,10 +383,41 @@ export default function EnrichPage() {
     }
   }
 
+  // Handle field row click in gap analysis
+  function handleFieldClick(fieldKey: string) {
+    if (selectedFields.includes(fieldKey)) {
+      setSelectedFields(prev => prev.filter(f => f !== fieldKey));
+    } else {
+      setSelectedFields(prev => [...prev, fieldKey]);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto', fontFamily: F.sans }}>
+        <div style={{ padding: 40, textAlign: 'center', color: C.text3 }}>
+          <p>Scanning your HubSpot companies...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!gapAnalysis) {
+    return (
+      <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto', fontFamily: F.sans }}>
+        <div style={{ padding: 40, textAlign: 'center', color: C.red }}>
+          <p>Failed to load gap analysis. Please refresh the page.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const maxMissing = gapAnalysis.field_gaps.reduce((sum, g) => Math.max(sum, g.missing), 0);
+
   return (
-    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto', fontFamily: F.sans }}>
+    <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto', fontFamily: F.sans }}>
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
+      <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 4, color: C.text }}>
           Enrich
         </h1>
@@ -367,18 +426,402 @@ export default function EnrichPage() {
         </p>
       </div>
 
-      {/* Gap Analysis */}
-      {loading ? (
-        <div style={{ padding: 40, textAlign: 'center', color: C.text3 }}>
-          <p>Scanning your HubSpot companies...</p>
+      {/* Two-panel layout */}
+      <div style={{ display: 'flex', gap: 24 }}>
+        {/* Left panel - Configuration */}
+        <div style={{ width: 320, flexShrink: 0 }}>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 20 }}>
+              Configure enrichment
+            </div>
+
+            {/* Source selection */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 8 }}>
+                Source
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    checked={companyScope === 'all'}
+                    onChange={() => setCompanyScope('all')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: 12, color: C.text2 }}>
+                    All companies ({maxMissing.toLocaleString()})
+                  </span>
+                </label>
+
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      checked={companyScope === 'list'}
+                      onChange={() => setCompanyScope('list')}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 12, color: C.text2 }}>HubSpot list</span>
+                  </label>
+                  {companyScope === 'list' && (
+                    <div style={{ marginLeft: 22, marginTop: 8 }}>
+                      {listPermissionError ? (
+                        <input
+                          type="text"
+                          placeholder="Enter list ID..."
+                          value={selectedList}
+                          onChange={(e) => setSelectedList(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            background: C.bg,
+                            border: `1px solid ${C.border}`,
+                            color: C.text,
+                            fontSize: 12,
+                            borderRadius: 4,
+                          }}
+                        />
+                      ) : (
+                        <select
+                          value={selectedList}
+                          onChange={(e) => setSelectedList(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            background: C.bg,
+                            border: `1px solid ${C.border}`,
+                            color: C.text,
+                            fontSize: 12,
+                            borderRadius: 4,
+                          }}
+                        >
+                          <option value="">Select a list...</option>
+                          {hubspotLists.map(list => (
+                            <option key={list.listId} value={list.listId}>
+                              {list.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      checked={companyScope === 'segment'}
+                      onChange={() => setCompanyScope('segment')}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 12, color: C.text2 }}>Segment filter</span>
+                  </label>
+                  {companyScope === 'segment' && (
+                    <div style={{ marginLeft: 22, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <select
+                        value={lifecycleStage}
+                        onChange={(e) => setLifecycleStage(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '6px 8px',
+                          background: C.bg,
+                          border: `1px solid ${C.border}`,
+                          color: C.text,
+                          fontSize: 11,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <option value="">Lifecycle...</option>
+                        {lifecycleStages.map(stage => (
+                          <option key={stage.value} value={stage.value}>
+                            {stage.label} {stage.count > 0 ? `(${stage.count})` : ''}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={ownerId}
+                        onChange={(e) => setOwnerId(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '6px 8px',
+                          background: C.bg,
+                          border: `1px solid ${C.border}`,
+                          color: C.text,
+                          fontSize: 11,
+                          borderRadius: 4,
+                        }}
+                      >
+                        <option value="">Owner...</option>
+                        {owners.map(owner => (
+                          <option key={owner.id} value={owner.id}>
+                            {owner.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        multiple
+                        value={selectedIndustries}
+                        onChange={(e) => {
+                          const selected = Array.from(e.target.selectedOptions, option => option.value);
+                          setSelectedIndustries(selected);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '6px 8px',
+                          background: C.bg,
+                          border: `1px solid ${C.border}`,
+                          color: C.text,
+                          fontSize: 11,
+                          minHeight: 60,
+                          borderRadius: 4,
+                        }}
+                      >
+                        {industries.map(industry => (
+                          <option key={industry} value={industry}>
+                            {industry}
+                          </option>
+                        ))}
+                      </select>
+
+                      {loadingPreview ? (
+                        <div style={{ fontSize: 11, color: C.text3 }}>Calculating...</div>
+                      ) : previewCount !== null && (
+                        <div style={{ fontSize: 11, color: C.text2 }}>
+                          {previewCount.toLocaleString()} matches
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      checked={companyScope === 'csv'}
+                      onChange={() => setCompanyScope('csv')}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 12, color: C.text2 }}>CSV import</span>
+                  </label>
+                  {companyScope === 'csv' && (
+                    <div style={{ marginLeft: 22, marginTop: 8 }}>
+                      <label
+                        style={{
+                          display: 'block',
+                          padding: 16,
+                          background: C.bg,
+                          border: `2px dashed ${C.border}`,
+                          borderRadius: 4,
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          marginBottom: 8,
+                        }}
+                      >
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={handleFileUpload}
+                          style={{ display: 'none' }}
+                        />
+                        <div style={{ fontSize: 11, color: C.text3 }}>
+                          {csvFile ? csvFile.name : 'Upload CSV'}
+                        </div>
+                      </label>
+                      <textarea
+                        placeholder="Or paste domains..."
+                        value={csvText}
+                        onChange={(e) => setCsvText(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '6px 8px',
+                          background: C.bg,
+                          border: `1px solid ${C.border}`,
+                          color: C.text,
+                          fontSize: 11,
+                          fontFamily: F.mono,
+                          minHeight: 60,
+                          borderRadius: 4,
+                          resize: 'vertical',
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Fields to fill */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 8 }}>
+                Fields to fill
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {ENRICHABLE_FIELDS.map(field => (
+                  <label key={field.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedFields.includes(field.key)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedFields(prev => [...prev, field.key]);
+                        } else {
+                          setSelectedFields(prev => prev.filter(f => f !== field.key));
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 12, color: C.text2 }}>{field.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Harmonies section */}
+            {selectedFields.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 8 }}>
+                  Harmonies
+                </div>
+                <div style={{
+                  padding: 12,
+                  background: C.bg,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 4,
+                  maxHeight: 180,
+                  overflowY: 'auto',
+                }}>
+                  {loadingHarmonies ? (
+                    <div style={{ fontSize: 11, color: C.text3 }}>Loading...</div>
+                  ) : harmonyPreviews.length === 0 ? (
+                    <div style={{ fontSize: 11, color: C.text3 }}>
+                      No harmonies configured.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {harmonyPreviews.map((preview) => {
+                        const harmony = preview.harmony;
+                        if (!harmony || !harmony.will_apply) return null;
+
+                        return (
+                          <div key={preview.field_key} style={{ fontSize: 11 }}>
+                            <a
+                              href={`/harmonies/${harmony.id}`}
+                              style={{ color: '#2E6BA8', textDecoration: 'none', fontWeight: 500 }}
+                            >
+                              {harmony.name}
+                            </a>
+                            <div style={{ color: C.text3, fontSize: 10, marginTop: 2 }}>
+                              → {preview.field_label}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Provider selection */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 8 }}>
+                Provider
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {PROVIDER_REGISTRY.filter(p => connectedProviders.includes(p.key)).map(provider => (
+                  <label key={provider.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedProviders.includes(provider.key)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedProviders(prev => [...prev, provider.key]);
+                        } else {
+                          setSelectedProviders(prev => prev.filter(p => p !== provider.key));
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 12, color: C.text2 }}>{provider.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Write policy */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 8 }}>
+                Write policy
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    checked={writePolicy === 'fill_empty'}
+                    onChange={() => setWritePolicy('fill_empty')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: 12, color: C.text2 }}>Fill empty only</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    checked={writePolicy === 'overwrite'}
+                    onChange={() => setWritePolicy('overwrite')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: 12, color: C.text2 }}>Overwrite all</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Test mode */}
+            <div style={{ marginBottom: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={testMode}
+                  onChange={(e) => setTestMode(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 12, color: C.text2 }}>Test mode:</span>
+                <input
+                  type="number"
+                  value={testRecordLimit}
+                  onChange={(e) => setTestRecordLimit(Math.max(1, parseInt(e.target.value) || 10))}
+                  disabled={!testMode}
+                  style={{
+                    width: 50,
+                    padding: '4px 6px',
+                    background: testMode ? C.bg : C.hover,
+                    border: `1px solid ${C.border}`,
+                    color: testMode ? C.text : C.text3,
+                    fontSize: 11,
+                    borderRadius: 4,
+                  }}
+                />
+                <span style={{ fontSize: 12, color: C.text2 }}>records</span>
+              </label>
+            </div>
+
+            {/* Run button */}
+            <PrimaryBtn onClick={handleRunEnrichment} disabled={running}>
+              {running
+                ? 'Creating...'
+                : testMode
+                ? `Test (${testRecordLimit}) →`
+                : 'Run enrichment →'}
+            </PrimaryBtn>
+          </div>
         </div>
-      ) : !gapAnalysis ? (
-        <div style={{ padding: 40, textAlign: 'center', color: C.red }}>
-          <p>Failed to load gap analysis. Please refresh the page.</p>
-        </div>
-      ) : (
-        <>
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24, marginBottom: 24 }}>
+
+        {/* Right panel - Gap Analysis */}
+        <div style={{ flex: 1 }}>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
               Data gaps in your HubSpot
             </div>
@@ -402,503 +845,155 @@ export default function EnrichPage() {
                 </tr>
               </thead>
               <tbody>
-                {gapAnalysis.field_gaps.map((gap) => (
-                  <tr key={gap.field} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '12px 0', fontSize: 14, color: C.text }}>
-                      {ENRICHABLE_FIELDS.find(f => f.key === gap.field)?.label || gap.field}
-                    </td>
-                    <td style={{ padding: '12px 0', textAlign: 'right', fontSize: 14, fontFamily: F.mono, color: C.text2 }}>
-                      {gap.missing.toLocaleString()}
-                    </td>
-                    <td style={{ padding: '12px 0', paddingLeft: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ flex: 1, height: 6, background: C.hover, borderRadius: 3, overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              height: '100%',
-                              width: `${gap.coverage}%`,
-                              background: gap.coverage >= 80 ? C.green : gap.coverage >= 50 ? C.amber : C.red,
-                              borderRadius: 3,
-                            }}
+                {gapAnalysis.field_gaps.map((gap) => {
+                  const isSelected = selectedFields.includes(gap.field);
+                  return (
+                    <tr
+                      key={gap.field}
+                      onClick={() => handleFieldClick(gap.field)}
+                      style={{
+                        borderBottom: `1px solid ${C.border}`,
+                        cursor: 'pointer',
+                        background: isSelected ? C.hover : 'transparent',
+                      }}
+                    >
+                      <td style={{ padding: '12px 8px', fontSize: 14, color: C.text }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            style={{ cursor: 'pointer' }}
                           />
+                          {ENRICHABLE_FIELDS.find(f => f.key === gap.field)?.label || gap.field}
                         </div>
-                        <span style={{ fontSize: 12, fontFamily: F.mono, color: C.text3, minWidth: 40 }}>
-                          {gap.coverage}%
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td style={{ padding: '12px 8px', textAlign: 'right', fontSize: 14, fontFamily: F.mono, color: C.text2 }}>
+                        {gap.missing.toLocaleString()}
+                      </td>
+                      <td style={{ padding: '12px 8px', paddingLeft: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, background: C.hover, borderRadius: 3, overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                height: '100%',
+                                width: `${gap.coverage}%`,
+                                background: gap.coverage >= 80 ? C.green : gap.coverage >= 50 ? C.amber : C.red,
+                                borderRadius: 3,
+                              }}
+                            />
+                          </div>
+                          <span style={{ fontSize: 12, fontFamily: F.mono, color: C.text3, minWidth: 40 }}>
+                            {gap.coverage}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
 
-            <div style={{ marginTop: 20 }}>
-              <PrimaryBtn onClick={() => setShowConfig(!showConfig)}>
-                {showConfig ? 'Hide configuration' : 'Enrich missing fields →'}
+      {/* Confirmation modal */}
+      {showConfirmModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setShowConfirmModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              padding: 32,
+              maxWidth: 480,
+              width: '90%',
+              borderRadius: 8,
+            }}
+          >
+            <div style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 20 }}>
+              Confirm enrichment run
+            </div>
+            <div style={{ fontSize: 14, color: C.text2, marginBottom: 16 }}>
+              <div style={{ marginBottom: 12 }}>
+                Enriching{' '}
+                <strong style={{ color: C.text }}>
+                  {(companyScope === 'segment' ? (previewCount || 0) : (gapAnalysis?.total_companies || 0)).toLocaleString()}
+                </strong>{' '}
+                companies
+              </div>
+              <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
+                <strong style={{ color: C.text2 }}>Fields:</strong> {selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label || f).join(', ')}
+              </div>
+              <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
+                <strong style={{ color: C.text2 }}>Provider:</strong> {selectedProviders.join(', ')}
+              </div>
+              <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
+                <strong style={{ color: C.text2 }}>Policy:</strong> {writePolicy === 'fill_empty' ? 'Fill empty only' : 'Overwrite'}
+              </div>
+              {harmonyPreviews.some(p => p.harmony?.will_apply) && (
+                <div style={{ fontSize: 12, color: C.text3 }}>
+                  <strong style={{ color: C.text2 }}>Harmonies:</strong> {harmonyPreviews.filter(p => p.harmony?.will_apply).map(p => p.harmony!.name).join(', ')} will run
+                </div>
+              )}
+            </div>
+            <div style={{ fontSize: 13, color: C.text2, marginBottom: 20, padding: 12, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4 }}>
+              This will make changes to your HubSpot records.
+              Changes can be reviewed in the arrangement history.
+            </div>
+            <div style={{ fontSize: 12, color: C.text3, marginBottom: 20 }}>
+              Not sure?{' '}
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setTestMode(true);
+                  setTestRecordLimit(10);
+                }}
+                style={{ background: 'none', border: 'none', color: '#2E6BA8', cursor: 'pointer', textDecoration: 'underline', fontSize: 12 }}
+              >
+                Run a test on 10 records first
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  background: C.hover,
+                  border: `1px solid ${C.border}`,
+                  color: C.text2,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  borderRadius: 4,
+                }}
+              >
+                Cancel
+              </button>
+              <PrimaryBtn
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  executeEnrichment();
+                }}
+              >
+                Enrich {(companyScope === 'segment' ? (previewCount || 0) : (gapAnalysis?.total_companies || 0)).toLocaleString()} companies →
               </PrimaryBtn>
             </div>
           </div>
-
-          {/* Configuration Panel */}
-          {showConfig && (
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 20 }}>
-                Configure enrichment
-              </div>
-
-              {/* Which companies */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 8 }}>
-                  Which companies?
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      checked={companyScope === 'all'}
-                      onChange={() => setCompanyScope('all')}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: 13, color: C.text2 }}>
-                      All companies with missing fields ({gapAnalysis.field_gaps.reduce((sum, g) => Math.max(sum, g.missing), 0).toLocaleString()})
-                    </span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      checked={companyScope === 'list'}
-                      onChange={() => setCompanyScope('list')}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: 13, color: C.text2 }}>Specific HubSpot list</span>
-                    {companyScope === 'list' && (
-                      <input
-                        type="text"
-                        placeholder="Enter list ID..."
-                        value={selectedList}
-                        onChange={(e) => setSelectedList(e.target.value)}
-                        style={{ marginLeft: 8, padding: '4px 8px', background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontSize: 12 }}
-                      />
-                    )}
-                  </label>
-                  <div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        checked={companyScope === 'segment'}
-                        onChange={() => setCompanyScope('segment')}
-                        style={{ cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: 13, color: C.text2 }}>Filter by segment:</span>
-                    </label>
-                    {companyScope === 'segment' && (
-                      <div style={{ marginLeft: 28, marginTop: 12, padding: 12, background: C.bg, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <label style={{ fontSize: 12, color: C.text3, minWidth: 100 }}>
-                            Lifecycle stage
-                          </label>
-                          <select
-                            value={lifecycleStage}
-                            onChange={(e) => setLifecycleStage(e.target.value)}
-                            style={{ flex: 1, padding: '6px 8px', background: C.surface, border: `1px solid ${C.border}`, color: C.text, fontSize: 12 }}
-                          >
-                            {lifecycleStages.map(stage => (
-                              <option key={stage.value} value={stage.value}>
-                                {stage.label} {stage.count > 0 ? `(${stage.count})` : ''}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <label style={{ fontSize: 12, color: C.text3, minWidth: 100 }}>
-                            Owner
-                          </label>
-                          <select
-                            value={ownerId}
-                            onChange={(e) => setOwnerId(e.target.value)}
-                            style={{ flex: 1, padding: '6px 8px', background: C.surface, border: `1px solid ${C.border}`, color: C.text, fontSize: 12 }}
-                          >
-                            {owners.map(owner => (
-                              <option key={owner.id} value={owner.id}>
-                                {owner.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'start', gap: 12 }}>
-                          <label style={{ fontSize: 12, color: C.text3, minWidth: 100, paddingTop: 6 }}>
-                            Industry
-                          </label>
-                          <select
-                            multiple
-                            value={selectedIndustries}
-                            onChange={(e) => {
-                              const selected = Array.from(e.target.selectedOptions, option => option.value);
-                              setSelectedIndustries(selected);
-                            }}
-                            style={{ flex: 1, padding: '6px 8px', background: C.surface, border: `1px solid ${C.border}`, color: C.text, fontSize: 12, minHeight: 80 }}
-                          >
-                            {industries.map(industry => (
-                              <option key={industry} value={industry}>
-                                {industry}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        {loadingPreview ? (
-                          <div style={{ fontSize: 12, color: C.text3 }}>
-                            Calculating match...
-                          </div>
-                        ) : previewCount !== null && (
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
-                              Matching: {previewCount.toLocaleString()} companies
-                            </div>
-                            {sampleNames.length > 0 && (
-                              <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>
-                                e.g. {sampleNames.join(', ')}...
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Which fields */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 8 }}>
-                  Which fields to fill?
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {ENRICHABLE_FIELDS.map(field => (
-                    <label key={field.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedFields.includes(field.key)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedFields(prev => [...prev, field.key]);
-                          } else {
-                            setSelectedFields(prev => prev.filter(f => f !== field.key));
-                          }
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: 13, color: C.text2 }}>{field.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Harmony Preview */}
-              {selectedFields.length > 0 && (
-                <div style={{ marginBottom: 24 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 12 }}>
-                    Harmonies that will apply:
-                  </div>
-                  <div style={{ border: `1px solid ${C.border}`, borderRadius: 4, padding: 16, background: C.bg }}>
-                    {loadingHarmonies ? (
-                      <div style={{ fontSize: 12, color: C.text3, padding: 8 }}>
-                        Loading harmony preview...
-                      </div>
-                    ) : harmonyPreviews.length === 0 ? (
-                      <div style={{ fontSize: 12, color: C.text3 }}>
-                        No harmonies configured for selected fields.{' '}
-                        <a href="/harmonies" style={{ color: '#2E6BA8', textDecoration: 'none' }}>
-                          Browse harmony library →
-                        </a>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {harmonyPreviews.map((preview) => {
-                          const harmony = preview.harmony;
-                          if (!harmony) {
-                            return (
-                              <div key={preview.field_key} style={{ fontSize: 12, color: C.text3 }}>
-                                No harmony configured for: {preview.field_label}.{' '}
-                                <a href="/harmonies" style={{ color: '#2E6BA8', textDecoration: 'none' }}>
-                                  Browse harmony library →
-                                </a>
-                              </div>
-                            );
-                          }
-
-                          if (!harmony.will_apply) {
-                            return (
-                              <div key={preview.field_key} style={{ paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
-                                <div style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 4 }}>
-                                  <span style={{ fontSize: 14, color: C.text3 }}>✦</span>
-                                  <div style={{ flex: 1 }}>
-                                    <a
-                                      href={`/harmonies/${harmony.id}`}
-                                      style={{ fontSize: 13, fontWeight: 500, color: C.text3, textDecoration: 'none' }}
-                                    >
-                                      {harmony.name}
-                                    </a>
-                                    <span style={{ fontSize: 13, color: C.text3, marginLeft: 8 }}>
-                                      → will not run
-                                    </span>
-                                  </div>
-                                </div>
-                                <div style={{ fontSize: 12, color: C.text3, marginLeft: 22 }}>
-                                  {harmony.reason}
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <div key={preview.field_key} style={{ paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
-                              <div style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 4 }}>
-                                <span style={{ fontSize: 14, color: '#2E6BA8' }}>✦</span>
-                                <div style={{ flex: 1 }}>
-                                  <a
-                                    href={`/harmonies/${harmony.id}`}
-                                    style={{ fontSize: 13, fontWeight: 500, color: '#2E6BA8', textDecoration: 'none' }}
-                                  >
-                                    {harmony.name}
-                                  </a>
-                                  <span style={{ fontSize: 13, color: C.text2, marginLeft: 8 }}>
-                                    → {preview.field_label.toLowerCase()} field
-                                  </span>
-                                </div>
-                              </div>
-                              <div style={{ fontSize: 12, color: C.text2, marginLeft: 22, marginBottom: 4 }}>
-                                {harmony.reason}
-                              </div>
-                              {harmony.example_input && harmony.example_output && (
-                                <div style={{ fontSize: 11, fontFamily: F.mono, color: C.text3, marginLeft: 22 }}>
-                                  Example: "{harmony.example_input}" → "{harmony.example_output}"
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Providers */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 8 }}>
-                  Using providers:
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {PROVIDER_REGISTRY.filter(p => connectedProviders.includes(p.key)).map(provider => (
-                    <label key={provider.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedProviders.includes(provider.key)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedProviders(prev => [...prev, provider.key]);
-                          } else {
-                            setSelectedProviders(prev => prev.filter(p => p !== provider.key));
-                          }
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: 13, color: C.text2 }}>{provider.label}</span>
-                    </label>
-                  ))}
-                  {connectedProviders.length === 0 && (
-                    <span style={{ fontSize: 13, color: C.text3 }}>No providers connected. Go to Connections to add providers.</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Write policy */}
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 8 }}>
-                  Write policy:
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      checked={writePolicy === 'fill_empty'}
-                      onChange={() => setWritePolicy('fill_empty')}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: 13, color: C.text2 }}>
-                      Fill empty only — never overwrite existing values
-                    </span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      checked={writePolicy === 'overwrite'}
-                      onChange={() => setWritePolicy('overwrite')}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: 13, color: C.text2 }}>
-                      Overwrite — use provider value even if field has data
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Advanced options */}
-              <div style={{ marginBottom: 24, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-                <div
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: showAdvanced ? 16 : 0 }}
-                >
-                  <span style={{ fontSize: 16, color: C.text2 }}>
-                    {showAdvanced ? '▼' : '▶'}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
-                    Advanced options
-                  </span>
-                </div>
-
-                {showAdvanced && (
-                  <div style={{ marginLeft: 24, padding: 16, background: C.bg, border: `1px solid ${C.border}` }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 8 }}>
-                      Test mode
-                    </div>
-                    <div style={{ fontSize: 12, color: C.text2, marginBottom: 12 }}>
-                      Run on a sample of records before enriching your full database.
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={testMode}
-                        onChange={(e) => setTestMode(e.target.checked)}
-                        style={{ cursor: 'pointer' }}
-                      />
-                      <span style={{ fontSize: 13, color: C.text2 }}>Limit to</span>
-                      <input
-                        type="number"
-                        value={testRecordLimit}
-                        onChange={(e) => setTestRecordLimit(Math.max(1, parseInt(e.target.value) || 10))}
-                        disabled={!testMode}
-                        style={{
-                          width: 60,
-                          padding: '4px 8px',
-                          background: testMode ? C.surface : C.bg,
-                          border: `1px solid ${C.border}`,
-                          color: testMode ? C.text : C.text3,
-                          fontSize: 12,
-                        }}
-                      />
-                      <span style={{ fontSize: 13, color: C.text2 }}>records</span>
-                    </label>
-                    <div style={{ fontSize: 11, color: C.text3, marginTop: 8, marginLeft: 28 }}>
-                      Refyne will select records randomly from your filtered set.
-                      After reviewing the results, run the full enrichment.
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Run button */}
-              <PrimaryBtn onClick={handleRunEnrichment} disabled={running}>
-                {running
-                  ? 'Creating enrichment...'
-                  : testMode
-                  ? `Run test (${testRecordLimit} records) →`
-                  : 'Run enrichment →'}
-              </PrimaryBtn>
-            </div>
-          )}
-
-          {/* Confirmation modal */}
-          {showConfirmModal && (
-            <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'rgba(0,0,0,0.7)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 1000,
-              }}
-              onClick={() => setShowConfirmModal(false)}
-            >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  background: C.surface,
-                  border: `1px solid ${C.border}`,
-                  padding: 32,
-                  maxWidth: 480,
-                  width: '90%',
-                }}
-              >
-                <div style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 20 }}>
-                  Confirm enrichment run
-                </div>
-                <div style={{ fontSize: 14, color: C.text2, marginBottom: 16 }}>
-                  <div style={{ marginBottom: 12 }}>
-                    Enriching{' '}
-                    <strong style={{ color: C.text }}>
-                      {(companyScope === 'segment' ? (previewCount || 0) : (gapAnalysis?.total_companies || 0)).toLocaleString()}
-                    </strong>{' '}
-                    companies
-                  </div>
-                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
-                    <strong style={{ color: C.text2 }}>Fields:</strong> {selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label || f).join(', ')}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
-                    <strong style={{ color: C.text2 }}>Provider:</strong> {selectedProviders.join(', ')}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
-                    <strong style={{ color: C.text2 }}>Policy:</strong> {writePolicy === 'fill_empty' ? 'Fill empty only' : 'Overwrite'}
-                  </div>
-                  {harmonyPreviews.some(p => p.harmony?.will_apply) && (
-                    <div style={{ fontSize: 12, color: C.text3 }}>
-                      <strong style={{ color: C.text2 }}>Harmonies:</strong> {harmonyPreviews.filter(p => p.harmony?.will_apply).map(p => p.harmony!.name).join(', ')} will run
-                    </div>
-                  )}
-                </div>
-                <div style={{ fontSize: 13, color: C.text2, marginBottom: 20, padding: 12, background: C.bg, border: `1px solid ${C.border}` }}>
-                  This will make changes to your HubSpot records.
-                  Changes can be reviewed in the arrangement history.
-                </div>
-                <div style={{ fontSize: 12, color: C.text3, marginBottom: 20 }}>
-                  Not sure?{' '}
-                  <button
-                    onClick={() => {
-                      setShowConfirmModal(false);
-                      setTestMode(true);
-                      setTestRecordLimit(10);
-                      setShowAdvanced(true);
-                    }}
-                    style={{ background: 'none', border: 'none', color: '#2E6BA8', cursor: 'pointer', textDecoration: 'underline', fontSize: 12 }}
-                  >
-                    Run a test on 10 records first
-                  </button>
-                </div>
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => setShowConfirmModal(false)}
-                    style={{ padding: '8px 16px', background: C.hover, border: `1px solid ${C.border}`, color: C.text2, cursor: 'pointer', fontSize: 13 }}
-                  >
-                    Cancel
-                  </button>
-                  <PrimaryBtn
-                    onClick={() => {
-                      setShowConfirmModal(false);
-                      executeEnrichment();
-                    }}
-                  >
-                    Enrich {(companyScope === 'segment' ? (previewCount || 0) : (gapAnalysis?.total_companies || 0)).toLocaleString()} companies →
-                  </PrimaryBtn>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
     </div>
   );
