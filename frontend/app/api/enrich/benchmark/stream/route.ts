@@ -33,6 +33,13 @@ interface BenchmarkRecommendation {
   apollo_coverage?: number;
   refyne_coverage?: number;
   message: string;
+  field_breakdown?: Array<{
+    field: string;
+    apollo_rate: number;
+    refyne_rate: number;
+    apollo_count: number;
+    refyne_count: number;
+  }>;
 }
 
 export async function GET(req: NextRequest) {
@@ -115,7 +122,8 @@ export async function GET(req: NextRequest) {
           refyneResults,
           distribution,
           totalMissing,
-          sampleSize
+          sampleSize,
+          fields
         );
         send({ type: 'complete', recommendation });
 
@@ -369,7 +377,8 @@ function generateRecommendation(
   refyne: ProviderBenchmarkResult,
   distribution: Record<string, number>,
   totalMissing: number,
-  sampleSize: number
+  sampleSize: number,
+  fields: string[]
 ): BenchmarkRecommendation {
   const topIndustries = Object.entries(distribution)
     .sort((a, b) => b[1] - a[1])
@@ -397,6 +406,22 @@ function generateRecommendation(
   // Extrapolate to full database
   const estimatedFills = Math.round(totalMissing * combinedCoverage);
 
+  // Build per-field breakdown
+  const fieldBreakdown = fields.map(field => {
+    const apolloCount = apollo?.field_coverage[field] || 0;
+    const refyneCount = refyne.field_coverage[field] || 0;
+    const apolloFieldRate = sampleSize > 0 ? apolloCount / sampleSize : 0;
+    const refyneFieldRate = sampleSize > 0 ? refyneCount / sampleSize : 0;
+
+    return {
+      field,
+      apollo_rate: apolloFieldRate,
+      refyne_rate: refyneFieldRate,
+      apollo_count: apolloCount,
+      refyne_count: refyneCount,
+    };
+  });
+
   return {
     best_provider: bestProvider,
     top_industries: topIndustries,
@@ -404,5 +429,6 @@ function generateRecommendation(
     apollo_coverage: apolloRate,
     refyne_coverage: refyneRate,
     message: `${message} Estimated ${estimatedFills.toLocaleString()} companies would be enriched.`,
+    field_breakdown: fieldBreakdown,
   };
 }

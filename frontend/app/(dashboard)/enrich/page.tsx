@@ -115,6 +115,13 @@ interface BenchmarkRecommendation {
   apollo_coverage?: number;
   refyne_coverage?: number;
   message: string;
+  field_breakdown?: Array<{
+    field: string;
+    apollo_rate: number;
+    refyne_rate: number;
+    apollo_count: number;
+    refyne_count: number;
+  }>;
 }
 
 export default function EnrichPage() {
@@ -1308,6 +1315,52 @@ export default function EnrichPage() {
                   <div style={{ fontSize: 10, color: C.text3 }}>match rate</div>
                 </div>
               </div>
+
+              {/* Field-by-field breakdown */}
+              {benchmarkResults.field_breakdown && benchmarkResults.field_breakdown.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', marginBottom: 8 }}>
+                    Field Coverage Comparison
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {benchmarkResults.field_breakdown.map(({ field, apollo_rate, refyne_rate, apollo_count, refyne_count }) => {
+                      const fieldLabel = ENRICHABLE_FIELDS.find(f => f.key === field)?.label || field;
+                      return (
+                        <div key={field} style={{
+                          padding: 12,
+                          background: C.bg,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 6
+                        }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: C.text2, marginBottom: 8 }}>
+                            {fieldLabel}
+                          </div>
+                          <div style={{ display: 'flex', gap: 12 }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 9, color: C.text3, marginBottom: 4 }}>Apollo</div>
+                              <div style={{ fontSize: 16, fontWeight: 600, color: C.text }}>
+                                {Math.round(apollo_rate * 100)}%
+                              </div>
+                              <div style={{ fontSize: 9, color: C.text3 }}>
+                                {apollo_count} / {benchmarkSampleSize}
+                              </div>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 9, color: C.text3, marginBottom: 4 }}>Refyne</div>
+                              <div style={{ fontSize: 16, fontWeight: 600, color: refyne_rate > apollo_rate ? C.green : C.text }}>
+                                {Math.round(refyne_rate * 100)}%
+                              </div>
+                              <div style={{ fontSize: 9, color: C.text3 }}>
+                                {refyne_count} / {benchmarkSampleSize}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Extrapolation */}
               <div style={{ padding: 16, background: C.indigoDim, border: `1px solid ${C.indigoBrd}`, borderRadius: 6, marginBottom: 16 }}>
