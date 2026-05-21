@@ -80,6 +80,13 @@ export async function GET(req: NextRequest) {
         };
 
         try {
+          // Safety check for supabase (already checked above but TS needs reassurance)
+          if (!supabase) {
+            send({ type: 'error', error: 'Database not configured' });
+            controller.close();
+            return;
+          }
+
           // Check cache first
           const { data: cached } = await supabase
             .from('cache')
