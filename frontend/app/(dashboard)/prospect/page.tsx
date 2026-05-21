@@ -215,7 +215,9 @@ export default function ProspectPage() {
       {/* Saved Searches Bar */}
       {savedSearches.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>SAVED SEARCHES</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, marginBottom: 10, letterSpacing: '0.5px' }}>
+            SAVED SEARCHES
+          </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {savedSearches.map((search) => (
               <SavedSearchChip
@@ -589,9 +591,9 @@ function ChipInput({
 }
 
 /**
- * Range slider component
+ * Dual-handle range slider component
  */
-function RangeSlider({
+function DualHandleRangeSlider({
   min,
   max,
   onChange,
@@ -600,28 +602,196 @@ function RangeSlider({
   max: number;
   onChange: (min: number, max: number) => void;
 }) {
+  const ABSOLUTE_MIN = 1;
+  const ABSOLUTE_MAX = 10000;
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState<'min' | 'max' | null>(null);
+
+  const minPercent = ((min - ABSOLUTE_MIN) / (ABSOLUTE_MAX - ABSOLUTE_MIN)) * 100;
+  const maxPercent = ((max - ABSOLUTE_MIN) / (ABSOLUTE_MAX - ABSOLUTE_MIN)) * 100;
+
+  function handleMouseDown(handle: 'min' | 'max') {
+    setDragging(handle);
+  }
+
+  useEffect(() => {
+    if (!dragging || !trackRef.current) return;
+
+    function handleMouseMove(e: MouseEvent) {
+      if (!trackRef.current) return;
+      const rect = trackRef.current.getBoundingClientRect();
+      const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+      const percent = x / rect.width;
+      const value = Math.round(ABSOLUTE_MIN + percent * (ABSOLUTE_MAX - ABSOLUTE_MIN));
+
+      if (dragging === 'min') {
+        onChange(Math.min(value, max - 10), max);
+      } else {
+        onChange(min, Math.max(value, min + 10));
+      }
+    }
+
+    function handleMouseUp() {
+      setDragging(null);
+    }
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragging, min, max, onChange]);
+
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input
-          type="number"
-          value={min}
-          onChange={(e) => onChange(Number(e.target.value), max)}
+      {/* Value labels */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+        <span style={{ fontSize: 12, color: C.text2 }}>{min.toLocaleString()}</span>
+        <span style={{ fontSize: 12, color: C.text2 }}>{max.toLocaleString()}</span>
+      </div>
+
+      {/* Track */}
+      <div
+        ref={trackRef}
+        style={{
+          position: 'relative',
+          height: 6,
+          background: C.hover,
+          borderRadius: 0,
+          cursor: 'pointer',
+        }}
+      >
+        {/* Active range */}
+        <div
           style={{
-            ...darkInputStyle,
-            width: '100px',
+            position: 'absolute',
+            left: `${minPercent}%`,
+            right: `${100 - maxPercent}%`,
+            height: '100%',
+            background: C.indigo,
           }}
         />
-        <span style={{ color: C.text3 }}>to</span>
-        <input
-          type="number"
-          value={max}
-          onChange={(e) => onChange(min, Number(e.target.value))}
+
+        {/* Min handle */}
+        <div
+          onMouseDown={() => handleMouseDown('min')}
           style={{
-            ...darkInputStyle,
-            width: '100px',
+            position: 'absolute',
+            left: `${minPercent}%`,
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 16,
+            height: 16,
+            background: C.indigo,
+            borderRadius: 0,
+            cursor: 'ew-resize',
+            zIndex: dragging === 'min' ? 2 : 1,
           }}
         />
+
+        {/* Max handle */}
+        <div
+          onMouseDown={() => handleMouseDown('max')}
+          style={{
+            position: 'absolute',
+            left: `${maxPercent}%`,
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 16,
+            height: 16,
+            background: C.indigo,
+            borderRadius: 0,
+            cursor: 'ew-resize',
+            zIndex: dragging === 'max' ? 2 : 1,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Provider status pills
+ */
+function ProviderPills() {
+  const [providers, setProviders] = useState<{
+    apollo: 'connected' | 'not_connected';
+    refyne: 'managed' | 'not_connected';
+  }>({
+    apollo: 'not_connected',
+    refyne: 'managed',
+  });
+
+  // Fetch provider status on mount
+  useEffect(() => {
+    async function fetchProviderStatus() {
+      try {
+        const res = await fetch('/api/providers/status');
+        if (res.ok) {
+          const data = await res.json();
+          setProviders(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch provider status:', err);
+      }
+    }
+    fetchProviderStatus();
+  }, []);
+
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      {/* Apollo pill */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '4px 10px',
+          background: providers.apollo === 'connected' ? C.greenDim : C.hover,
+          border: `1px solid ${providers.apollo === 'connected' ? C.greenBrd : C.border}`,
+          borderRadius: 0,
+          fontSize: 12,
+        }}
+      >
+        <div
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: providers.apollo === 'connected' ? C.green : C.text3,
+          }}
+        />
+        <span style={{ color: providers.apollo === 'connected' ? C.greenLt : C.text3 }}>
+          Apollo
+        </span>
+      </div>
+
+      {/* Refyne pill */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '4px 10px',
+          background: providers.refyne === 'managed' ? C.indigoDim : C.hover,
+          border: `1px solid ${providers.refyne === 'managed' ? C.indigoBrd : C.border}`,
+          borderRadius: 0,
+          fontSize: 12,
+        }}
+      >
+        <div
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: providers.refyne === 'managed' ? C.indigo : C.text3,
+          }}
+        />
+        <span style={{ color: providers.refyne === 'managed' ? C.indigoLt : C.text3 }}>
+          Refyne Data
+        </span>
       </div>
     </div>
   );
@@ -642,14 +812,14 @@ function SavedSearchChip({
   return (
     <div
       style={{
-        background: C.surface,
+        background: C.hover,
         border: `1px solid ${C.border}`,
-        borderRadius: 6,
-        padding: '6px 10px',
+        borderRadius: 0,
+        padding: '6px 12px',
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        fontSize: 13,
+        gap: 10,
+        fontSize: 12,
       }}
     >
       <button
@@ -657,10 +827,11 @@ function SavedSearchChip({
         style={{
           background: 'none',
           border: 'none',
-          color: C.text,
+          color: C.text2,
           cursor: 'pointer',
           padding: 0,
-          fontSize: 13,
+          fontSize: 12,
+          fontFamily: 'Jost, system-ui',
         }}
       >
         {search.name}
@@ -673,7 +844,8 @@ function SavedSearchChip({
           color: C.text3,
           cursor: 'pointer',
           padding: 0,
-          fontSize: 14,
+          fontSize: 16,
+          lineHeight: 1,
         }}
       >
         ×

@@ -296,7 +296,7 @@ async function enrichWithGraphIQ(
       },
       body: JSON.stringify({
         organization: {
-          website: domain,
+          website_url: domain,
         },
         limit: 1,
       }),

@@ -167,14 +167,58 @@ export class GraphiqAdapter implements ProviderAdapter {
       throw new ProviderError('graphiq', 'api_error', 'Must provide either domain or name');
     }
 
-    const searchTerm = query.name || query.domain || '';
-    const results = await searchOrganizations(searchTerm, undefined, undefined, 1);
+    // If domain provided, search by website_url for better accuracy
+    if (query.domain) {
+      const results = await this.searchByDomain(query.domain);
+      if (results.length === 0) {
+        return null;
+      }
+      return createProviderResponse(this.id, results[0], results[0]);
+    }
+
+    // Otherwise search by name
+    const results = await searchOrganizations(query.name, undefined, undefined, 1);
 
     if (results.length === 0) {
       return null;
     }
 
     return createProviderResponse(this.id, results[0], results[0]);
+  }
+
+  /**
+   * Search by domain using website_url field (most accurate).
+   */
+  private async searchByDomain(domain: string): Promise<Record<string, unknown>[]> {
+    const apiKey = getApiKey();
+
+    const response = await fetch(`${GRAPHIQ_BASE_URL}/organizations/search`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        organization: {
+          website_url: domain,
+        },
+        limit: 1,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new ProviderError(
+        'graphiq',
+        'api_error',
+        `API request failed: ${response.statusText}`,
+        response.status
+      );
+    }
+
+    const data = await response.json();
+    const entities = data.entities || [];
+
+    return entities.map(transformOrganization);
   }
 
   /**
