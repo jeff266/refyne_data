@@ -169,8 +169,8 @@ async function benchmarkApollo(
         for (const field of fields) {
           // Map common field names to Apollo response structure
           const apolloField = mapFieldToApollo(field);
-          const value = result.fields?.[apolloField] || (result.normalized as any)?.[apolloField];
-          if (value) {
+          const value = (result.normalized as any)?.[apolloField] || result.raw?.[apolloField];
+          if (value && value !== '' && value !== null && value !== undefined) {
             fieldMatches[field] = (fieldMatches[field] || 0) + 1;
             hasMatch = true;
           }

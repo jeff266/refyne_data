@@ -1235,6 +1235,143 @@ export default function EnrichPage() {
 
         {/* Right panel - Gap Analysis or Preview Results */}
         <div style={{ flex: 1 }}>
+          {/* Benchmark Progress */}
+          {benchmarking && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24, marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Running benchmark...</div>
+
+              {benchmarkSampleSize > 0 && (
+                <div style={{ fontSize: 12, color: C.text2, marginBottom: 16 }}>
+                  Testing {benchmarkSampleSize} companies (from {benchmarkTotalMissing.toLocaleString()} with gaps)
+                </div>
+              )}
+
+              {Object.entries(benchmarkProgress).map(([provider, progress]) => {
+                const percentage = progress.total > 0 ? (progress.tested / progress.total) * 100 : 0;
+                const matchRate = progress.tested > 0 ? (progress.matched / progress.tested) * 100 : 0;
+
+                return (
+                  <div key={provider} style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, marginBottom: 4, color: C.text }}>
+                      {provider === 'apollo' ? 'Apollo' : 'Refyne Data'}
+                      {provider === 'refyne' && <span style={{ color: C.text3, fontSize: 11 }}> (batching 10 at a time)</span>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ flex: 1, height: 8, background: C.bg, borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${percentage}%`,
+                          height: '100%',
+                          background: C.green,
+                          transition: 'width 0.3s ease'
+                        }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: C.text3, minWidth: 140 }}>
+                        {progress.tested}/{progress.total} · matched: {progress.matched} ({Math.round(matchRate)}%)
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Benchmark Results */}
+          {benchmarkResults && !benchmarking && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24, marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Benchmark Results</div>
+
+              {/* Match rate scorecard */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                {benchmarkResults.apollo_coverage !== undefined && (
+                  <div style={{ padding: 16, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+                    <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>Apollo</div>
+                    <div style={{ fontSize: 24, fontWeight: 600, color: C.text }}>
+                      {Math.round(benchmarkResults.apollo_coverage * 100)}%
+                    </div>
+                    <div style={{ fontSize: 10, color: C.text3 }}>match rate</div>
+                  </div>
+                )}
+                <div style={{ padding: 16, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+                  <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>Refyne Data</div>
+                  <div style={{ fontSize: 24, fontWeight: 600, color: C.text }}>
+                    {Math.round(benchmarkResults.refyne_coverage! * 100)}%
+                  </div>
+                  <div style={{ fontSize: 10, color: C.text3 }}>match rate</div>
+                </div>
+              </div>
+
+              {/* Extrapolation */}
+              <div style={{ padding: 16, background: C.indigoDim, border: `1px solid ${C.indigoBrd}`, borderRadius: 6, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: C.text2, marginBottom: 8 }}>
+                  <strong>Waterfall Coverage</strong>
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+                  {Math.round(benchmarkResults.combined_waterfall_coverage * 100)}%
+                </div>
+                <div style={{ fontSize: 11, color: C.text2 }}>
+                  {benchmarkResults.message}
+                </div>
+              </div>
+
+              {/* Top industries */}
+              {benchmarkResults.top_industries.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', marginBottom: 8 }}>
+                    Sample Distribution
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {benchmarkResults.top_industries.map(({ industry, count }) => (
+                      <div key={industry} style={{
+                        padding: '4px 8px',
+                        background: C.bg,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 4,
+                        fontSize: 10,
+                        color: C.text2
+                      }}>
+                        {industry} ({count})
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  onClick={applyBenchmarkConfig}
+                  style={{
+                    padding: '10px 16px',
+                    background: C.indigo,
+                    border: 'none',
+                    borderRadius: 6,
+                    color: 'white',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Run enrichment with {benchmarkResults.best_provider === 'refyne' ? 'Refyne → Apollo' : 'Apollo → Refyne'} waterfall
+                </button>
+                <button
+                  onClick={() => setBenchmarkResults(null)}
+                  style={{
+                    padding: '10px 16px',
+                    background: 'transparent',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    color: C.text2,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+
           {previewLoading ? (
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
