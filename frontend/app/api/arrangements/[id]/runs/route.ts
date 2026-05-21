@@ -39,7 +39,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       .select('*')
       .eq('arrangement_id', arrangementId)
       .eq('org_id', ctx.orgId)
-      .order('created_at', { ascending: false });
+      .order('started_at', { ascending: false });
 
     if (runsError) {
       console.error('[Arrangement Runs] Failed to fetch runs:', runsError);
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
             records_failed: 0,
             fields_filled: {},
             fields_normalized: 0,
-            started_at: run.created_at,
+            started_at: run.started_at,
             completed_at: run.completed_at,
             error: run.error_message,
           };
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
             records_failed: 0,
             fields_filled: {},
             fields_normalized: 0,
-            started_at: run.created_at,
+            started_at: run.started_at,
             completed_at: run.completed_at,
             error: run.error_message,
           };
@@ -126,7 +126,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
           records_failed,
           fields_filled: fieldsFilledMap,
           fields_normalized,
-          started_at: run.created_at,
+          started_at: run.started_at,
           completed_at: run.completed_at,
           error: run.error_message,
         };
