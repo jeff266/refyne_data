@@ -80,7 +80,7 @@ async function runMagicalExperienceTest() {
     // Enable console logging from page
     page.on('console', msg => {
       const type = msg.type();
-      if (type === 'error' || type === 'warning') {
+      if (type === 'error' || type === 'warn') {
         console.log(`[Browser ${type}]`, msg.text());
       }
     });
@@ -122,7 +122,7 @@ async function runMagicalExperienceTest() {
     // Set record limit to 5
     const recordLimitInput = await page.$('input[type="number"]');
     if (recordLimitInput) {
-      await recordLimitInput.click({ clickCount: 3 }); // Select all
+      await recordLimitInput.click({ count: 3 }); // Select all
       await recordLimitInput.type('5');
       console.log('✓ Record limit set to 5');
       await sleep(500);
