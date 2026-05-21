@@ -726,17 +726,25 @@ async function processLiveRunJob(
 // ─────────────────────────────────────────────────────────────
 
 async function getProviderAdapter(provider: string, orgId: string): Promise<ProviderAdapter> {
+  // Generic provider key lookup
+  const { getProviderKey } = await import('../providers/provider-key');
+  const apiKey = await getProviderKey(orgId, provider);
+
+  if (!apiKey) {
+    throw new Error(`${provider} API key not configured for org ${orgId}`);
+  }
+
   switch (provider) {
-    case 'apollo': {
-      const { getApolloKey } = await import('../providers/apollo-key');
-      const apiKey = await getApolloKey(orgId);
-      if (!apiKey) {
-        throw new Error(`Apollo API key not configured for org ${orgId}`);
-      }
+    case 'apollo':
       return new ApolloAdapter(apiKey);
-    }
+    case 'graphiq':
+      const { GraphIQAdapter } = await import('../providers/graphiq');
+      return new GraphIQAdapter(apiKey);
+    case 'cognism':
+      const { CognismAdapter } = await import('../providers/cognism');
+      return new CognismAdapter(apiKey);
     case 'zoominfo':
-      return new ZoomInfoAdapter();
+      return new ZoomInfoAdapter(apiKey);
     default:
       throw new Error(`Unknown provider: ${provider}`);
   }
@@ -771,22 +779,11 @@ async function fetchRecordsForProcessing(
     throw new Error('Database or orgId not available');
   }
 
-  // Debug: Log environment and query details
-  console.log('[fetchRecords] Environment check:', {
-    hasSupabaseUrl: !!process.env.SUPABASE_URL,
-    hasNextPublicUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-    hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    orgId,
-  });
-
   const { data: connection, error } = await supabase
     .from('hubspot_connections')
     .select('portal_id')
     .eq('org_id', orgId)
     .single();
-
-  console.log('[fetchRecords] Query result:', { connection, error });
 
   if (!connection) {
     throw new Error(`HubSpot connection not found for org_id: ${orgId}`);
@@ -1163,8 +1160,6 @@ async function queryProvider(
   // HubSpot records have properties nested: record.properties.domain
   const domain = record.properties?.domain || record.domain;
   const name = record.properties?.name || record.name;
-
-  console.log('[queryProvider] Calling Apollo with:', { domain, name, recordId: record.id });
 
   const result = await providerAdapter.enrichCompany({ domain, name });
 

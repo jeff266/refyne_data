@@ -187,12 +187,20 @@ export default function EnrichPage() {
   // Live run state
   const [arrangementId, setArrangementId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'complete' | 'failed'>('idle');
-  const [runProgress, setRunProgress] = useState({
+  const [runProgress, setRunProgress] = useState<{
+    records_processed: number;
+    records_total: number;
+    fields_filled: Record<string, number>;
+    fields_skipped: number;
+    started_at?: string;
+    duration?: number;
+    latest_results?: Array<{ company_name: string; field_key: string; field_label?: string; value: any }>;
+  }>({
     records_processed: 0,
     records_total: 0,
-    fields_filled: 0,
-    harmonies_applied: 0,
+    fields_filled: {},
     fields_skipped: 0,
+    latest_results: [],
   });
   const [liveFeed, setLiveFeed] = useState<Array<{
     company_name: string;
@@ -284,27 +292,19 @@ export default function EnrichPage() {
         setRunProgress({
           records_processed: latestRun.records_processed || 0,
           records_total: latestRun.records_total || runProgress.records_total,
-          fields_filled: latestRun.fields_filled || 0,
-          harmonies_applied: latestRun.harmonies_applied || 0,
+          fields_filled: latestRun.fields_filled || {},
           fields_skipped: latestRun.fields_skipped || 0,
+          started_at: latestRun.started_at,
+          latest_results: [], // TODO: Fetch from progress records if needed
         });
 
-        // Update live feed with new progress records
-        if (latestRun.progress && Array.isArray(latestRun.progress)) {
-          const newRecords = latestRun.progress.slice(-20).map((p: any) => ({
-            company_name: p.company_name || 'Unknown',
-            field_label: p.field_label || p.field_key,
-            before: p.before_value || '(empty)',
-            after: p.after_value || '(not found)',
-            harmony_applied: p.harmony_applied || false,
-          }));
-          setLiveFeed(newRecords);
-        }
-
         // Check if complete
-        if (latestRun.status === 'complete') {
+        if (latestRun.status === 'completed') {
           setRunStatus('complete');
           clearInterval(pollInterval);
+
+          // Auto-refresh gap analysis
+          loadGapAnalysis();
         } else if (latestRun.status === 'failed') {
           setRunStatus('failed');
           clearInterval(pollInterval);
@@ -1631,6 +1631,193 @@ export default function EnrichPage() {
                 >
                   Close
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Running State */}
+          {runStatus === 'running' && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Enrichment in progress</div>
+
+              {/* Provider and config summary */}
+              <div style={{ fontSize: 12, color: C.text2, marginBottom: 20 }}>
+                {selectedProvider === 'apollo' ? 'Apollo' : selectedProvider} · {selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label).join(', ')} · {policy === 'always_overwrite' ? 'Overwrite all' : policy === 'fill_empty' ? 'Fill empty' : 'Never overwrite'}
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ height: 24, background: C.bg, borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
+                  <div style={{
+                    width: `${runProgress.records_total > 0 ? (runProgress.records_processed / runProgress.records_total) * 100 : 0}%`,
+                    height: '100%',
+                    background: C.indigo,
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.text2 }}>
+                  <span>{runProgress.records_processed.toLocaleString()} / {runProgress.records_total.toLocaleString()}</span>
+                  {runProgress.records_processed > 0 && runProgress.records_total > 0 && (
+                    <span>
+                      {(() => {
+                        const elapsed = Date.now() - new Date(runProgress.started_at || Date.now()).getTime();
+                        const rate = runProgress.records_processed / (elapsed / 1000);
+                        const remaining = (runProgress.records_total - runProgress.records_processed) / rate;
+                        const mins = Math.floor(remaining / 60);
+                        const secs = Math.floor(remaining % 60);
+                        return remaining > 0 ? `Estimated ${mins}m ${secs}s remaining` : '';
+                      })()}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div style={{ fontSize: 12, color: C.text2, marginBottom: 20 }}>
+                Fields filled: {Object.values(runProgress.fields_filled || {}).reduce((a, b) => a + b, 0)} · Skipped: {runProgress.fields_skipped || 0}
+              </div>
+
+              {/* Live feed header */}
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', marginBottom: 12 }}>
+                Latest Enrichments
+              </div>
+
+              {/* Table */}
+              {runProgress.latest_results && runProgress.latest_results.length > 0 ? (
+                <div style={{ maxHeight: 300, overflowY: 'auto', border: `1px solid ${C.border}`, borderRadius: 4 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead style={{ position: 'sticky', top: 0, background: C.surface, zIndex: 1 }}>
+                      <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <th style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: C.text3 }}>Company</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: C.text3 }}>Field</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: C.text3 }}>After</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {runProgress.latest_results.slice(0, 20).map((result: any, i: number) => (
+                        <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          <td style={{ padding: '6px 8px', color: C.text }}>{result.company_name || 'Unknown'}</td>
+                          <td style={{ padding: '6px 8px', color: C.text2 }}>{result.field_label || result.field_key}</td>
+                          <td style={{ padding: '6px 8px', color: result.value ? C.text : C.text3, fontStyle: result.value ? 'normal' : 'italic' }}>
+                            {result.value || '(not found)'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ padding: 20, textAlign: 'center', color: C.text3, fontSize: 11 }}>
+                  Processing records...
+                </div>
+              )}
+
+              {/* View details link */}
+              {arrangementId && (
+                <div style={{ marginTop: 16 }}>
+                  <a
+                    href={`/arrangements/${arrangementId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 12, color: C.indigo, textDecoration: 'none' }}
+                  >
+                    View full details →
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Complete State */}
+          {runStatus === 'complete' && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: C.green }}>✓ Enrichment complete</div>
+
+              {/* Summary */}
+              <div style={{ fontSize: 13, color: C.text2, marginBottom: 20 }}>
+                {runProgress.records_processed.toLocaleString()} companies processed{runProgress.duration && ` in ${Math.floor(runProgress.duration / 60)}m ${runProgress.duration % 60}s`}
+              </div>
+
+              {/* Field breakdown */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', marginBottom: 12 }}>
+                  Summary by field
+                </div>
+                {Object.entries(runProgress.fields_filled || {}).map(([fieldKey, count]) => {
+                  const fieldLabel = ENRICHABLE_FIELDS.find(f => f.key === fieldKey)?.label || fieldKey;
+                  const missing = gapAnalysis?.field_gaps.find(fg => fg.field === fieldKey)?.missing || 0;
+                  const percentage = missing > 0 ? Math.round((count as number / missing) * 100) : 0;
+
+                  return (
+                    <div key={fieldKey} style={{ fontSize: 12, color: C.text2, marginBottom: 8 }}>
+                      <strong>{fieldLabel}</strong>: {(count as number).toLocaleString()} filled ({percentage}% of missing)
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => {
+                    setRunStatus('idle');
+                    setArrangementId(null);
+                    setRunProgress({ records_processed: 0, records_total: 0, fields_filled: {}, fields_skipped: 0, latest_results: [] });
+                  }}
+                  style={{
+                    padding: '8px 14px',
+                    background: C.indigo,
+                    border: 'none',
+                    borderRadius: 6,
+                    color: 'white',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Run again
+                </button>
+                <button
+                  onClick={() => {
+                    setRunStatus('idle');
+                    setArrangementId(null);
+                    setRunProgress({ records_processed: 0, records_total: 0, fields_filled: {}, fields_skipped: 0, latest_results: [] });
+                    // Trigger gap analysis refresh
+                    loadGapAnalysis();
+                  }}
+                  style={{
+                    padding: '8px 14px',
+                    background: 'transparent',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    color: C.text,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Enrich more fields
+                </button>
+                {arrangementId && (
+                  <a
+                    href={`/arrangements/${arrangementId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      padding: '8px 14px',
+                      background: 'transparent',
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 6,
+                      color: C.text2,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      textDecoration: 'none',
+                      display: 'inline-block',
+                    }}
+                  >
+                    View all results →
+                  </a>
+                )}
               </div>
             </div>
           )}
