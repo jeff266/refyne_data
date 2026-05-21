@@ -508,7 +508,8 @@ async function processLiveRunJob(
     // Fetch records (with pagination/cursor from checkpoint)
     const records = await fetchRecordsForProcessing(
       config.source_config,
-      checkpointData?.lastProcessedId
+      checkpointData?.lastProcessedId,
+      orgId
     );
 
     for (const record of records) {
@@ -629,7 +630,8 @@ async function processLiveRunJob(
           await writeToDestination(
             config.output_config,
             record.id,
-            propertiesToWrite
+            propertiesToWrite,
+            orgId
           );
         }
 
@@ -755,14 +757,30 @@ async function fetchSampleRecords(sourceConfig: Record<string, unknown>, limit: 
 
 async function fetchRecordsForProcessing(
   sourceConfig: Record<string, unknown>,
-  lastProcessedId?: string
+  lastProcessedId?: string,
+  orgId?: string
 ): Promise<any[]> {
-  const connectionId = sourceConfig.connection_id as string;
+  // Get HubSpot portal from org's connection
+  if (!supabase || !orgId) {
+    throw new Error('Database or orgId not available');
+  }
+
+  const { data: connection } = await supabase
+    .from('hubspot_connections')
+    .select('portal_id')
+    .eq('org_id', orgId)
+    .single();
+
+  if (!connection) {
+    throw new Error('HubSpot connection not found');
+  }
+
+  const portalId = connection.portal_id;
   const sourceType = sourceConfig.source_type as string;
 
   // Get HubSpot access token
   const { getAccessToken } = await import('../hubspot/get-access-token');
-  const accessToken = await getAccessToken(connectionId);
+  const accessToken = await getAccessToken(portalId);
 
   const properties = [
     'name',
@@ -825,17 +843,33 @@ async function fetchRecordsForProcessing(
 async function writeToDestination(
   outputConfig: Record<string, unknown>,
   companyId: string,
-  properties: Record<string, unknown>
+  properties: Record<string, unknown>,
+  orgId: string
 ): Promise<void> {
-  const connectionId = outputConfig.connection_id as string;
+  // Get HubSpot portal from org's connection
+  if (!supabase) {
+    throw new Error('Database not available');
+  }
+
+  const { data: connection } = await supabase
+    .from('hubspot_connections')
+    .select('portal_id')
+    .eq('org_id', orgId)
+    .single();
+
+  if (!connection) {
+    throw new Error('HubSpot connection not found for write');
+  }
+
+  const portalId = connection.portal_id;
 
   // Get HubSpot access token
   const { getAccessToken } = await import('../hubspot/get-access-token');
-  const accessToken = await getAccessToken(connectionId);
+  const accessToken = await getAccessToken(portalId);
 
   // Get HubSpot client
   const { HubSpotClient } = await import('../hubspot/client');
-  const client = new HubSpotClient(accessToken, connectionId);
+  const client = new HubSpotClient(accessToken, portalId);
 
   // Convert properties to string values (HubSpot API requirement)
   const cleanedProperties: Record<string, string | number | null> = {};
