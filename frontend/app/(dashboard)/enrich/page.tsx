@@ -184,6 +184,24 @@ export default function EnrichPage() {
   const [benchmarkSampleSize, setBenchmarkSampleSize] = useState<number>(0);
   const [benchmarkTotalMissing, setBenchmarkTotalMissing] = useState<number>(0);
 
+  // Live run state
+  const [arrangementId, setArrangementId] = useState<string | null>(null);
+  const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'complete' | 'failed'>('idle');
+  const [runProgress, setRunProgress] = useState({
+    records_processed: 0,
+    records_total: 0,
+    fields_filled: 0,
+    harmonies_applied: 0,
+    fields_skipped: 0,
+  });
+  const [liveFeed, setLiveFeed] = useState<Array<{
+    company_name: string;
+    field_label: string;
+    before: string;
+    after: string;
+    harmony_applied: boolean;
+  }>>([]);
+
   // Fetch gap analysis on mount using streaming
   useEffect(() => {
     const es = new EventSource('/api/enrich/gaps/stream');
@@ -247,6 +265,57 @@ export default function EnrichPage() {
 
     return () => es.close();
   }, []);
+
+  // Poll arrangement run progress when running
+  useEffect(() => {
+    if (!arrangementId || runStatus !== 'running') return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/arrangements/${arrangementId}/runs`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const latestRun = data.runs?.[0];
+
+        if (!latestRun) return;
+
+        // Update progress
+        setRunProgress({
+          records_processed: latestRun.records_processed || 0,
+          records_total: latestRun.records_total || runProgress.records_total,
+          fields_filled: latestRun.fields_filled || 0,
+          harmonies_applied: latestRun.harmonies_applied || 0,
+          fields_skipped: latestRun.fields_skipped || 0,
+        });
+
+        // Update live feed with new progress records
+        if (latestRun.progress && Array.isArray(latestRun.progress)) {
+          const newRecords = latestRun.progress.slice(-20).map((p: any) => ({
+            company_name: p.company_name || 'Unknown',
+            field_label: p.field_label || p.field_key,
+            before: p.before_value || '(empty)',
+            after: p.after_value || '(not found)',
+            harmony_applied: p.harmony_applied || false,
+          }));
+          setLiveFeed(newRecords);
+        }
+
+        // Check if complete
+        if (latestRun.status === 'complete') {
+          setRunStatus('complete');
+          clearInterval(pollInterval);
+        } else if (latestRun.status === 'failed') {
+          setRunStatus('failed');
+          clearInterval(pollInterval);
+        }
+      } catch (error) {
+        console.error('Failed to poll run progress:', error);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [arrangementId, runStatus, runProgress.records_total]);
 
   // Fallback non-streaming fetch
   async function fetchGapsNonStreaming() {
@@ -689,28 +758,32 @@ export default function EnrichPage() {
       }
 
       const data = await response.json();
-      const arrangementId = data.arrangement?.id || data.arrangement_id;
+      const newArrangementId = data.arrangement?.id || data.arrangement_id;
 
-      if (!arrangementId) {
+      if (!newArrangementId) {
         throw new Error('No arrangement ID returned');
       }
 
-      // Get total companies count for the toast message
+      // Get total companies count
       const totalCompanies = companyScope === 'segment'
         ? (previewCount || 0)
         : (gapAnalysis?.total_companies || 0);
 
-      // Show success toast with link to view progress (stays on /enrich)
-      addToast(
-        'success',
-        `Enrichment started for ${totalCompanies.toLocaleString()} companies. Refyne is working in the background.`,
-        {
-          text: 'View progress →',
-          href: `/arrangements/${arrangementId}`,
-        }
-      );
+      // Transition to running state (stay on /enrich, show inline run view)
+      setArrangementId(newArrangementId);
+      setRunStatus('running');
+      setRunProgress({
+        records_processed: 0,
+        records_total: totalCompanies,
+        fields_filled: 0,
+        harmonies_applied: 0,
+        fields_skipped: 0,
+      });
+      setLiveFeed([]);
 
-      // Stay on /enrich page (do not redirect)
+      // Clear preview/benchmark to show run view
+      setShowingPreview(false);
+      setBenchmarkResults(null);
     } catch (error) {
       console.error('Failed to create enrichment:', error);
       alert(`Failed to create enrichment: ${error instanceof Error ? error.message : 'Unknown error'}`);
