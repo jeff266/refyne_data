@@ -4,6 +4,10 @@ import { getOrgContext, requireOperatorOrAbove, authError } from '@/lib/auth/cle
 import { checkProspectingCredits, deductCredit } from '@/lib/auth/check-credits';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
+import { HubSpotClient } from '@/lib/hubspot/client';
+import { checkDedupGate } from '@/lib/hubspot/dedup-gate';
+import type { RawRecord } from '@/lib/mcp/types';
 
 /**
  * POST /api/enrich/push
@@ -86,15 +90,39 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check for duplicates
-    // TODO: Integrate with checkDedupGate from lib/hubspot/dedup-gate.ts
-    // For now, simulate duplicate check based on domain
+    // Get HubSpot client for dedup check
+    const accessToken = await getAccessToken(ctx.orgId);
+    const { data: connection } = await supabase
+      .from('hubspot_connections')
+      .select('portal_id')
+      .eq('org_id', ctx.orgId)
+      .eq('connection_status', 'active')
+      .single();
+
+    if (!connection) {
+      return NextResponse.json(
+        { error: 'HubSpot not connected' },
+        { status: 400 }
+      );
+    }
+
+    const hubspot = new HubSpotClient(accessToken, connection.portal_id);
+
+    // Check for duplicates using dedup gate
+    const rawRecord: RawRecord = {
+      _id: record.id || `prospect_${Date.now()}`,
+      _label: record.name,
+      ...record,
+    };
+
+    const dedupResult = await checkDedupGate(rawRecord, hubspot, ctx.orgId);
+
     const duplicateCheck = {
-      isDuplicate: false, // Placeholder - implement actual dedup logic
-      existingRecordId: null,
-      matchedOn: null,
-      confidence: null,
-      signals: null,
+      isDuplicate: dedupResult.action !== 'insert',
+      existingRecordId: dedupResult.targetHubSpotId,
+      matchedOn: dedupResult.matchedRecord ? 'domain' : null,
+      confidence: dedupResult.similarityScore ? Math.round(dedupResult.similarityScore * 100) : null,
+      signals: dedupResult.fieldComparison,
     };
 
     // Handle duplicate based on policy
@@ -155,18 +183,43 @@ export async function POST(request: Request) {
       // policy === 'allow': fall through to push
     }
 
-    // Push to HubSpot (reuse existing push logic)
-    // For now, we'll just simulate success
-    // TODO: Integrate with actual HubSpot push logic from existing codebase
+    // Push to HubSpot
+    const propertiesToPush: Record<string, string | number | null> = {};
+
+    // Map record fields to HubSpot properties
+    for (const [key, value] of Object.entries(record)) {
+      if (key !== 'id' && value !== null && value !== undefined) {
+        propertiesToPush[key] = String(value);
+      }
+    }
+
+    const { results, errors } = await hubspot.batchCreateCompanies([{
+      properties: propertiesToPush,
+    }]);
+
+    if (errors.length > 0) {
+      captureWithOrgContext(
+        new Error(`HubSpot push failed: ${errors[0].error}`),
+        ctx.orgId,
+        { route: '/api/enrich/push', errors }
+      );
+      return NextResponse.json(
+        { error: 'Failed to push to HubSpot', details: errors[0].error },
+        { status: 500 }
+      );
+    }
+
+    const createdCompany = results[0];
 
     // Deduct credit
     await deductCredit(ctx.orgId, ctx.userId, 'prospect_push', {
-      recordId: record.id || null,
+      recordId: createdCompany.id,
       domain: record.domain || null,
     });
 
     return NextResponse.json({
       message: 'Record pushed successfully',
+      hubspotId: createdCompany.id,
       warning: duplicateCheck.isDuplicate ? 'Duplicate detected but allowed by policy' : null,
     });
   } catch (error) {

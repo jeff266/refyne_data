@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
+import { HubSpotClient } from '@/lib/hubspot/client';
 
 /**
  * POST /api/quarantine/[id]/approve
@@ -66,12 +68,56 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to approve record' }, { status: 500 });
     }
 
-    // TODO: Push record to HubSpot
-    // This would integrate with the existing HubSpot push logic
+    // Push record to HubSpot
+    const accessToken = await getAccessToken(ctx.orgId);
+    const { data: connection } = await supabase
+      .from('hubspot_connections')
+      .select('portal_id')
+      .eq('org_id', ctx.orgId)
+      .eq('connection_status', 'active')
+      .single();
+
+    if (!connection) {
+      return NextResponse.json(
+        { error: 'HubSpot not connected' },
+        { status: 400 }
+      );
+    }
+
+    const hubspot = new HubSpotClient(accessToken, connection.portal_id);
+
+    // Map record_data to HubSpot properties
+    const recordData = record.record_data as Record<string, unknown>;
+    const properties: Record<string, string | number | null> = {};
+
+    for (const [key, value] of Object.entries(recordData)) {
+      if (key !== 'id' && value !== null && value !== undefined) {
+        properties[key] = String(value);
+      }
+    }
+
+    const { results, errors } = await hubspot.batchCreateCompanies([{
+      properties,
+    }]);
+
+    if (errors.length > 0) {
+      captureWithOrgContext(
+        new Error(`HubSpot push failed: ${errors[0].error}`),
+        ctx.orgId,
+        { route: '/api/quarantine/[id]/approve', quarantineId: id, errors }
+      );
+      return NextResponse.json(
+        { error: 'Failed to push to HubSpot', details: errors[0].error },
+        { status: 500 }
+      );
+    }
+
+    const createdCompany = results[0];
 
     return NextResponse.json({
       message: 'Record approved and pushed to HubSpot',
       recordId: id,
+      hubspotId: createdCompany.id,
     });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/quarantine/[id]/approve' });
