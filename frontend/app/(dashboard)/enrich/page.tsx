@@ -769,6 +769,20 @@ export default function EnrichPage() {
         ? (previewCount || 0)
         : (gapAnalysis?.total_companies || 0);
 
+      // Start the arrangement run (critical: this enqueues the job to the worker)
+      const runResponse = await fetch(`/api/arrangements/${newArrangementId}/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!runResponse.ok) {
+        const runError = await runResponse.json();
+        throw new Error(runError.error || 'Failed to start enrichment run');
+      }
+
+      const runData = await runResponse.json();
+      console.log('[Enrichment] Run started:', runData);
+
       // Transition to running state (stay on /enrich, show inline run view)
       setArrangementId(newArrangementId);
       setRunStatus('running');
