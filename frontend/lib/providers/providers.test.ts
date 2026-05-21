@@ -218,7 +218,7 @@ describe('Provider Registry', () => {
 describe('Provider Interface Compliance', () => {
   const adapters: ProviderAdapter[] = [
     new SerperAdapter(),
-    new ApolloAdapter(),
+    new ApolloAdapter('test-apollo-key'),
     new ZoomInfoAdapter(),
     new ClayAdapter(),
     new GraphiqAdapter(),
@@ -314,7 +314,7 @@ describe('SerperAdapter', () => {
 // ─────────────────────────────────────────────────────────────
 
 describe('ApolloAdapter', () => {
-  const adapter = new ApolloAdapter();
+  const adapter = new ApolloAdapter('test-apollo-key');
 
   it('should have correct id and name', () => {
     expect(adapter.id).toBe('apollo');
@@ -756,7 +756,7 @@ describe('Response Shape Validation', () => {
     const adapters = [
       { adapter: new SerperAdapter(), mockData: { places: [{ title: 'Test' }] } },
       {
-        adapter: new ApolloAdapter(),
+        adapter: new ApolloAdapter('test-apollo-key'),
         mockData: { organization: { name: 'Test', primary_domain: 'test.com' } },
       },
       { adapter: new ClayAdapter(), mockData: null }, // Uses mock brief
@@ -789,7 +789,7 @@ describe('Response Shape Validation', () => {
   });
 
   it('should return valid contact response shape', async () => {
-    const adapter = new ApolloAdapter();
+    const adapter = new ApolloAdapter('test-apollo-key');
 
     mockFetch.mockResolvedValueOnce(
       createMockResponse({
@@ -810,7 +810,7 @@ describe('Response Shape Validation', () => {
 
 describe('Error Handling', () => {
   it('should throw ProviderError with proper details', async () => {
-    const adapter = new ApolloAdapter();
+    const adapter = new ApolloAdapter('test-apollo-key');
 
     mockFetch.mockResolvedValueOnce(createMockResponse({}, false, 401));
 
@@ -827,7 +827,7 @@ describe('Error Handling', () => {
   });
 
   it('should throw on missing required params', async () => {
-    const adapter = new ApolloAdapter();
+    const adapter = new ApolloAdapter('test-apollo-key');
 
     await expect(adapter.enrichCompany({})).rejects.toThrow(
       'Must provide either domain or name'
@@ -835,8 +835,7 @@ describe('Error Handling', () => {
   });
 
   it('should throw config error on missing API key', async () => {
-    delete process.env.APOLLO_API_KEY;
-    const adapter = new ApolloAdapter();
+    const adapter = new ApolloAdapter(); // No API key passed
 
     try {
       await adapter.enrichCompany({ domain: 'test.com' });
