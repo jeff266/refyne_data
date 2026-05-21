@@ -10,6 +10,8 @@ import {
   ProspectCompany,
   ProviderSearchResponse,
 } from '../types';
+import { supabase } from '@/lib/db/supabase';
+import { decryptKey } from '@/lib/crypto/providerKeys';
 
 const APOLLO_BASE_URL = 'https://api.apollo.io/v1';
 
@@ -55,12 +57,30 @@ function postFilterResults(
 }
 
 /**
- * Get Apollo API key from environment.
+ * Get Apollo API key from provider_connections table or environment fallback.
  */
-function getApiKey(): string {
+async function getApiKey(orgId: string): Promise<string> {
+  // Try to get from database first
+  if (supabase) {
+    try {
+      const { data: connection } = await supabase
+        .from('provider_connections')
+        .select('api_key_enc, status')
+        .match({ org_id: orgId, provider: 'apollo', status: 'active' })
+        .single();
+
+      if (connection && connection.api_key_enc) {
+        return decryptKey(connection.api_key_enc);
+      }
+    } catch (error) {
+      console.warn('[Apollo] Failed to fetch key from database:', error);
+    }
+  }
+
+  // Fallback to environment variable
   const key = process.env.APOLLO_API_KEY;
   if (!key) {
-    throw new Error('APOLLO_API_KEY not configured');
+    throw new Error('Apollo is not connected. Please connect Apollo in Settings → Connections.');
   }
   return key;
 }
@@ -101,10 +121,26 @@ function buildApolloEmployeeRanges(min?: number, max?: number): string[] | undef
  * Uses organization_locations array and employee ranges for reliable filtering.
  */
 export async function searchCompaniesApollo(
-  query: ProspectSearchQuery
+  query: ProspectSearchQuery,
+  orgId?: string
 ): Promise<ProviderSearchResponse> {
   const startTime = Date.now();
-  const apiKey = getApiKey();
+
+  let apiKey: string;
+  try {
+    apiKey = orgId ? await getApiKey(orgId) : process.env.APOLLO_API_KEY || '';
+    if (!apiKey) {
+      throw new Error('Apollo API key not configured');
+    }
+  } catch (error) {
+    return {
+      provider: 'apollo',
+      companies: [],
+      total_results: 0,
+      query_time_ms: Date.now() - startTime,
+      error: error instanceof Error ? error.message : 'Failed to get API key',
+    };
+  }
 
   try {
     // Build Apollo search payload (Variation C)

@@ -22,17 +22,6 @@ import {
 const APOLLO_BASE_URL = 'https://api.apollo.io/v1';
 
 /**
- * Get Apollo API key from environment.
- */
-function getApiKey(): string {
-  const key = process.env.APOLLO_API_KEY;
-  if (!key) {
-    throw new ProviderError('apollo', 'config_error', 'APOLLO_API_KEY not configured');
-  }
-  return key;
-}
-
-/**
  * Apollo Provider Adapter
  *
  * Provides company enrichment and contact search capabilities.
@@ -40,12 +29,31 @@ function getApiKey(): string {
 export class ApolloAdapter implements ProviderAdapter {
   id = 'apollo';
   name = 'Apollo';
+  private apiKey?: string;
+
+  constructor(apiKey?: string) {
+    this.apiKey = apiKey;
+  }
+
+  /**
+   * Get Apollo API key from constructor or environment.
+   */
+  private getApiKey(): string {
+    if (this.apiKey) {
+      return this.apiKey;
+    }
+    const key = process.env.APOLLO_API_KEY;
+    if (!key) {
+      throw new ProviderError('apollo', 'config_error', 'APOLLO_API_KEY not configured');
+    }
+    return key;
+  }
 
   /**
    * Enrich a company using Apollo's organization enrichment API.
    */
   async enrichCompany(query: CompanyQuery): Promise<ProviderResponse | null> {
-    const apiKey = getApiKey();
+    const apiKey = this.getApiKey();
 
     if (!query.domain && !query.name) {
       throw new ProviderError('apollo', 'api_error', 'Must provide either domain or name');
@@ -108,7 +116,7 @@ export class ApolloAdapter implements ProviderAdapter {
    * Search for contacts at a company using Apollo's people search.
    */
   async searchContacts(query: ContactQuery): Promise<ContactResponse[]> {
-    const apiKey = getApiKey();
+    const apiKey = this.getApiKey();
 
     const payload: Record<string, unknown> = {
       api_key: apiKey,

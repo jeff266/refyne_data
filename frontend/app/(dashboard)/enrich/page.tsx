@@ -917,33 +917,66 @@ export default function EnrichPage() {
                   overflowY: 'auto',
                 }}>
                   {loadingHarmonies ? (
-                    <div style={{ fontSize: 11, color: C.text3 }}>Loading...</div>
-                  ) : harmonyPreviews.length === 0 ? (
-                    <div style={{ fontSize: 11, color: C.text3 }}>
-                      No harmonies configured.
+                    <div style={{ padding: 8, textAlign: 'center', color: C.text3, fontSize: 11 }}>
+                      Loading harmonies...
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {harmonyPreviews.map((preview) => {
-                        const harmony = preview.harmony;
-                        if (!harmony || !harmony.will_apply) return null;
+                  ) : (() => {
+                    const activeHarmonies = harmonyPreviews.filter(p => p.harmony && p.harmony.will_apply);
 
-                        return (
-                          <div key={preview.field_key} style={{ fontSize: 11 }}>
-                            <a
-                              href={`/harmonies/${harmony.id}`}
-                              style={{ color: '#2E6BA8', textDecoration: 'none', fontWeight: 500 }}
-                            >
-                              {harmony.name}
-                            </a>
-                            <div style={{ color: C.text3, fontSize: 10, marginTop: 2 }}>
-                              → {preview.field_label}
-                            </div>
+                    if (activeHarmonies.length === 0) {
+                      return (
+                        <div style={{ padding: 8 }}>
+                          <div style={{ fontSize: 11, color: C.text2, marginBottom: 8 }}>
+                            No harmonies configured for selected fields.
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          <div style={{ fontSize: 10, color: C.text3, marginBottom: 12 }}>
+                            Industry normalization would improve data quality.
+                          </div>
+                          <a
+                            href="/harmonies"
+                            style={{
+                              display: 'inline-block',
+                              padding: '6px 10px',
+                              background: 'transparent',
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 4,
+                              color: C.indigo,
+                              fontSize: 11,
+                              textDecoration: 'none',
+                            }}
+                          >
+                            Browse harmony library →
+                          </a>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {activeHarmonies.map((preview) => {
+                          const harmony = preview.harmony!;
+                          return (
+                            <div key={preview.field_key} style={{ fontSize: 11 }}>
+                              <a
+                                href={`/harmonies/${harmony.id}`}
+                                style={{ color: '#2E6BA8', textDecoration: 'none', fontWeight: 500 }}
+                              >
+                                {harmony.name}
+                              </a>
+                              <div style={{ color: C.text3, fontSize: 10, marginTop: 2 }}>
+                                → {preview.field_label}
+                              </div>
+                              {harmony.example_input && harmony.example_output && (
+                                <div style={{ color: C.text3, fontSize: 10, marginTop: 2 }}>
+                                  Example: "{harmony.example_input}" → "{harmony.example_output}"
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -1060,65 +1093,17 @@ export default function EnrichPage() {
                 Preview results
               </div>
 
-              {previewResults.summary.fields_would_fill === 0 ? (
-                // Empty state
-                <div>
-                  <div style={{ fontSize: 13, color: C.text2, marginBottom: 16 }}>
-                    {previewResults.records_processed} records · 0 fields would be filled
-                  </div>
+              {/* Summary stats */}
+              <div style={{ fontSize: 14, color: C.text2, marginBottom: 20 }}>
+                {previewResults.records_processed} records · {previewResults.summary.fields_would_fill} fields would be filled
+                {previewResults.summary.harmonies_applied > 0 && (
+                  <span> · {previewResults.summary.harmonies_applied} normalized by harmony</span>
+                )}
+                {' · '}
+                {Math.round(previewResults.duration_seconds)}s
+              </div>
 
-                  <div style={{
-                    background: C.bg,
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 6,
-                    padding: 20,
-                    marginBottom: 20
-                  }}>
-                    <div style={{ fontSize: 13, color: C.text, marginBottom: 12 }}>
-                      Apollo did not return data for these {previewResults.records_processed} companies.
-                      This can happen when companies have no domain in HubSpot or are not in Apollo's database.
-                    </div>
-
-                    <div style={{ fontSize: 12, color: C.text3, lineHeight: 1.6 }}>
-                      <div>Companies without domains: <strong>{previewResults.summary.no_domain}</strong></div>
-                      <div>Companies not found in Apollo: <strong>{Math.floor(previewResults.summary.fields_not_found / selectedFields.length)}</strong></div>
-                      <div>Companies with fields already complete: <strong>{previewResults.summary.already_complete}</strong></div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <PrimaryBtn onClick={runPreview}>
-                      Try a different sample →
-                    </PrimaryBtn>
-                    <button
-                      onClick={startOver}
-                      style={{
-                        padding: '10px 16px',
-                        background: 'transparent',
-                        border: `1px solid ${C.border}`,
-                        borderRadius: 6,
-                        color: C.text2,
-                        fontSize: 13,
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Start over
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                // Normal preview results
-                <div>
-                  <div style={{ fontSize: 14, color: C.text2, marginBottom: 20 }}>
-                    {previewResults.records_processed} records · {previewResults.summary.fields_would_fill} fields would be filled
-                    {previewResults.summary.harmonies_applied > 0 && (
-                      <span> · {previewResults.summary.harmonies_applied} normalized by harmony</span>
-                    )}
-                    {' · '}
-                    {Math.round(previewResults.duration_seconds)}s
-                  </div>
-
+              {/* Always show table */}
               <div style={{ maxHeight: 500, overflowY: 'auto', marginBottom: 20, border: `1px solid ${C.border}`, borderRadius: 4 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead style={{ position: 'sticky', top: 0, background: C.surface, zIndex: 1 }}>
@@ -1130,94 +1115,112 @@ export default function EnrichPage() {
                         Field
                       </th>
                       <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                        Before → After
+                        Current Value
+                      </th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                        Status
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {previewResults.results.flatMap((company) =>
-                      company.fields
-                        .filter(f => f.after && f.after !== f.before)
-                        .map((field, idx) => (
+                    {previewResults.results.flatMap(company =>
+                      company.fields.map(field => {
+                        // Determine status and styling
+                        let status = '';
+                        let statusColor: string = C.text3;
+
+                        if (field.would_write) {
+                          if (field.harmony_applied) {
+                            status = 'Normalized ✦';
+                            statusColor = '#6366F1'; // indigo
+                          } else {
+                            status = 'Filled';
+                            statusColor = '#22C55E'; // green
+                          }
+                        } else if (field.before && field.before.trim() !== '') {
+                          status = 'Already set';
+                          statusColor = C.text3;
+                        } else if (!field.after) {
+                          // Check if company has domain
+                          const companyHasDomain = company.fields.some(f => f.field_key === 'domain' && f.before);
+                          if (!companyHasDomain && previewResults.summary.no_domain > 0) {
+                            status = 'No domain';
+                            statusColor = '#F59E0B'; // amber
+                          } else {
+                            status = 'Not found in Apollo';
+                            statusColor = '#F59E0B'; // amber
+                          }
+                        } else {
+                          status = 'Skipped';
+                          statusColor = C.text3;
+                        }
+
+                        return (
                           <tr key={`${company.hubspot_company_id}-${field.field_key}`} style={{ borderBottom: `1px solid ${C.border}` }}>
-                            <td style={{ padding: '8px 12px', color: C.text, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {idx === 0 ? company.company_name : ''}
+                            <td style={{ padding: '8px 12px', color: C.text }}>{company.company_name}</td>
+                            <td style={{ padding: '8px 12px', color: C.text2 }}>{field.field_label}</td>
+                            <td style={{ padding: '8px 12px', color: C.text3 }}>
+                              {field.before || <span style={{ fontStyle: 'italic', color: C.text3 }}>(empty)</span>}
                             </td>
-                            <td style={{ padding: '8px 12px', color: C.text2 }}>
-                              {field.field_label}
-                            </td>
-                            <td style={{ padding: '8px 12px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ color: C.text3, fontStyle: 'italic' }}>
-                                  {field.before || 'empty'}
-                                </span>
-                                <span style={{ color: C.text3 }}>→</span>
-                                <span style={{ color: field.would_write ? C.green : C.text2 }}>
-                                  {field.after || '(not found)'}
-                                </span>
-                                {field.harmony_applied && (
-                                  <span style={{ fontSize: 16, color: C.amber, marginLeft: 4 }} title={`Normalized by ${field.harmony_name}`}>
-                                    ✦
-                                  </span>
-                                )}
-                              </div>
+                            <td style={{ padding: '8px 12px', color: statusColor, fontWeight: 500 }}>
+                              {status}
                             </td>
                           </tr>
-                        ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
               </div>
 
-              {previewResults.summary.harmonies_applied > 0 && (
-                <div style={{ fontSize: 11, color: C.text3, marginBottom: 20 }}>
-                  ✦ Normalized by harmony
+              {/* Warning if all failed */}
+              {previewResults.summary.fields_would_fill === 0 && (
+                <div style={{
+                  background: C.amberDim,
+                  border: `1px solid ${C.amberBrd}`,
+                  borderRadius: 6,
+                  padding: 16,
+                  marginBottom: 20,
+                  fontSize: 13,
+                  color: C.text
+                }}>
+                  <strong>Apollo returned no data</strong> for these {previewResults.records_processed} companies.
+                  {previewResults.summary.no_domain > 0 && (
+                    <div style={{ marginTop: 8, color: C.text2 }}>
+                      {previewResults.summary.no_domain} companies have no domain in HubSpot and cannot be enriched.
+                    </div>
+                  )}
                 </div>
               )}
 
-              <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: 16 }}>
-                <div style={{ fontSize: 13, color: C.text, marginBottom: 12, fontWeight: 500 }}>
-                  Ready to apply these changes?
-                </div>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  <PrimaryBtn onClick={applyPreviewResults} disabled={running}>
-                    {running ? 'Applying...' : `Apply to these ${previewResults.records_processed} records`}
-                  </PrimaryBtn>
-                  <button
-                    onClick={runFullEnrichment}
-                    disabled={running}
-                    style={{
-                      padding: '8px 16px',
-                      background: C.surface,
-                      border: `1px solid ${C.border}`,
-                      color: C.text,
-                      cursor: running ? 'not-allowed' : 'pointer',
-                      fontSize: 13,
-                      fontWeight: 500,
-                      borderRadius: 4,
-                    }}
-                  >
-                    Run on all {(companyScope === 'segment' ? (previewCount || 0) : gapAnalysis?.total_companies || 0).toLocaleString()} companies →
-                  </button>
-                  <button
-                    onClick={startOver}
-                    disabled={running}
-                    style={{
-                      padding: '8px 16px',
-                      background: 'transparent',
-                      border: 'none',
-                      color: C.text3,
-                      cursor: running ? 'not-allowed' : 'pointer',
-                      fontSize: 13,
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    Start over
-                  </button>
-                </div>
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 12 }}>
+                {previewResults.summary.fields_would_fill > 0 && (
+                  <>
+                    <PrimaryBtn onClick={applyPreviewResults}>
+                      Apply to these {previewResults.records_processed} records
+                    </PrimaryBtn>
+                    <PrimaryBtn onClick={runFullEnrichment}>
+                      Run on all {(companyScope === 'segment' ? (previewCount || 0) : gapAnalysis?.total_companies || 0).toLocaleString()} companies →
+                    </PrimaryBtn>
+                  </>
+                )}
+                <button
+                  onClick={startOver}
+                  style={{
+                    padding: '10px 16px',
+                    background: 'transparent',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    color: C.text2,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {previewResults.summary.fields_would_fill > 0 ? 'Start over' : 'Try different sample →'}
+                </button>
               </div>
-                </div>
-              )}
             </div>
           ) : (
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>

@@ -106,7 +106,7 @@ export async function searchProspects(
   const providerQueries: Promise<ProviderSearchResponse>[] = [];
 
   if (enabledProviders.includes('apollo')) {
-    providerQueries.push(searchCompaniesApollo(query));
+    providerQueries.push(searchCompaniesApollo(query, orgId));
   }
 
   if (enabledProviders.includes('zoominfo')) {

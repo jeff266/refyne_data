@@ -13,6 +13,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { HubSpotClient } from '@/lib/hubspot/client';
 import { ApolloAdapter } from '@/lib/providers/apollo';
+import { decryptKey } from '@/lib/crypto/providerKeys';
 import { Redis } from '@upstash/redis';
 import { randomUUID } from 'crypto';
 
@@ -163,6 +164,34 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Get Apollo API key from provider_connections
+    const { data: apolloConnection } = await supabase
+      .from('provider_connections')
+      .select('api_key_enc, status')
+      .match({ org_id: ctx.orgId, provider: 'apollo', status: 'active' })
+      .single();
+
+    if (!apolloConnection || !apolloConnection.api_key_enc) {
+      return NextResponse.json({
+        error: 'Apollo is not connected. Please connect Apollo in Settings → Connections.',
+        preview_id: randomUUID(),
+        status: 'completed',
+        records_processed: 0,
+        duration_seconds: (Date.now() - startTime) / 1000,
+        results: [],
+        summary: {
+          fields_would_fill: 0,
+          fields_skipped: 0,
+          fields_not_found: 0,
+          harmonies_applied: 0,
+          no_domain: 0,
+          already_complete: 0,
+        }
+      }, { status: 400 });
+    }
+
+    const apolloKey = decryptKey(apolloConnection.api_key_enc);
+
     // Load active harmonies for the fields
     const harmonies = await loadHarmonies(ctx.orgId, connection.portal_id, body.fields);
 
@@ -175,7 +204,7 @@ export async function POST(req: NextRequest) {
     let noDomain = 0;
     let alreadyComplete = 0;
 
-    const apollo = new ApolloAdapter();
+    const apollo = new ApolloAdapter(apolloKey);
 
     for (const company of companies) {
       const companyDomain = company.properties.domain || '';
