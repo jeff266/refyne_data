@@ -1,40 +1,82 @@
 /**
- * Prospect Page
+ * Prospect Page - Complete Rebuild
  *
- * Company discovery and ICP scoring interface.
- * Four-stage flow: Search → Score → Review → Push
+ * Company discovery and ICP scoring interface with:
+ * - Dark-styled chip inputs for industries, locations, keywords
+ * - Range slider for employee size
+ * - Saved searches functionality
+ * - ICP scoring with visual bars
+ * - Company detail slide-over
+ * - Multi-select with Push to HubSpot
  */
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { C } from '@/lib/design-tokens';
-import { ProspectSearchQuery, ProspectSearchResult, ICPConfig } from '@/lib/prospect/types';
+import { ProspectSearchQuery, ProspectSearchResult } from '@/lib/prospect/types';
+
+const darkInputStyle = {
+  background: 'rgba(255,255,255,0.05)',
+  border: '0.5px solid rgba(255,255,255,0.1)',
+  color: '#F9F8F5',
+  fontFamily: 'Jost, system-ui',
+  fontSize: '13px',
+  padding: '6px 10px',
+  borderRadius: 0,
+  outline: 'none',
+};
 
 export default function ProspectPage() {
   const [searchQuery, setSearchQuery] = useState<ProspectSearchQuery>({
     limit: 25,
     providers: ['apollo'],
+    employeeMin: 10,
+    employeeMax: 500,
   });
-  const [icpConfig, setIcpConfig] = useState<ICPConfig | undefined>(undefined);
   const [results, setResults] = useState<ProspectSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(
-    new Set()
-  );
+  const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(new Set());
+  const [savedSearches, setSavedSearches] = useState<any[]>([]);
+  const [excludeInHubSpot, setExcludeInHubSpot] = useState(true);
+  const [detailCompany, setDetailCompany] = useState<ProspectSearchResult | null>(null);
 
-  // Provider stats
-  const [providerStats, setProviderStats] = useState<Record<string, any>>({});
+  // Fetch saved searches on mount
+  useEffect(() => {
+    fetchSavedSearches();
+  }, []);
 
-  /**
-   * Execute search.
-   */
+  async function fetchSavedSearches() {
+    try {
+      const response = await fetch('/api/prospect/saved-searches');
+      if (response.ok) {
+        const data = await response.json();
+        setSavedSearches(data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved searches:', err);
+    }
+  }
+
   async function handleSearch() {
     setLoading(true);
     setError(null);
 
     try {
+      // Build ICP config from search query
+      const icpConfig = {
+        target_industries: searchQuery.industries,
+        target_employee_min: searchQuery.employeeMin,
+        target_employee_max: searchQuery.employeeMax,
+        target_locations: searchQuery.location
+          ? {
+              countries: searchQuery.location.country ? [searchQuery.location.country] : undefined,
+              states: searchQuery.location.state ? [searchQuery.location.state] : undefined,
+            }
+          : undefined,
+      };
+
       const response = await fetch('/api/prospect/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,12 +88,18 @@ export default function ProspectPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Search failed');
+        throw new Error(errorData.message || errorData.error || 'Search failed');
       }
 
       const data = await response.json();
-      setResults(data.data.results || []);
-      setProviderStats(data.data.provider_stats || {});
+      let allResults = data.data.results || [];
+
+      // Filter out companies in HubSpot if checkbox is checked
+      if (excludeInHubSpot) {
+        allResults = allResults.filter((r: ProspectSearchResult) => !r.in_crm);
+      }
+
+      setResults(allResults);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
@@ -59,9 +107,52 @@ export default function ProspectPage() {
     }
   }
 
-  /**
-   * Toggle company selection.
-   */
+  async function handleSaveSearch() {
+    const name = prompt('Name this search:');
+    if (!name) return;
+
+    try {
+      const response = await fetch('/api/prospect/saved-searches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          filters: searchQuery,
+          scope: 'personal',
+        }),
+      });
+
+      if (response.ok) {
+        await fetchSavedSearches();
+        alert('Search saved successfully');
+      }
+    } catch (err) {
+      console.error('Failed to save search:', err);
+      alert('Failed to save search');
+    }
+  }
+
+  async function handleLoadSearch(search: any) {
+    setSearchQuery(search.filters);
+    await handleSearch();
+  }
+
+  async function handleDeleteSearch(id: string) {
+    if (!confirm('Delete this saved search?')) return;
+
+    try {
+      const response = await fetch(`/api/prospect/saved-searches/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        await fetchSavedSearches();
+      }
+    } catch (err) {
+      console.error('Failed to delete search:', err);
+    }
+  }
+
   function toggleCompany(domain: string) {
     const newSelected = new Set(selectedCompanies);
     if (newSelected.has(domain)) {
@@ -72,25 +163,16 @@ export default function ProspectPage() {
     setSelectedCompanies(newSelected);
   }
 
-  /**
-   * Select all visible companies.
-   */
   function selectAll() {
     const newSelected = new Set(selectedCompanies);
     results.forEach((r) => newSelected.add(r.domain));
     setSelectedCompanies(newSelected);
   }
 
-  /**
-   * Deselect all companies.
-   */
   function deselectAll() {
     setSelectedCompanies(new Set());
   }
 
-  /**
-   * Push selected companies to HubSpot.
-   */
   async function handlePush() {
     const selected = results.filter((r) => selectedCompanies.has(r.domain));
 
@@ -99,16 +181,16 @@ export default function ProspectPage() {
       return;
     }
 
-    const confirmed = confirm(
-      `Push ${selected.length} companies to HubSpot?\n\n` +
-        'Harmonies will be applied before writing.'
+    alert(
+      `Push functionality: Would push ${selected.length} companies to HubSpot.\n\n` +
+        'Implementation pending in /api/prospect/push endpoint.'
     );
-
-    if (!confirmed) return;
-
-    // TODO: Implement push logic
-    alert('Push functionality coming soon');
   }
+
+  const canSearch =
+    (searchQuery.industries && searchQuery.industries.length > 0) ||
+    (searchQuery.keywords && searchQuery.keywords.length > 0) ||
+    searchQuery.location?.country;
 
   return (
     <div style={{ padding: 24 }}>
@@ -122,7 +204,7 @@ export default function ProspectPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 4 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 4, color: C.text }}>
             Prospect
           </h1>
           <p style={{ color: C.text2, fontSize: 14 }}>
@@ -131,19 +213,184 @@ export default function ProspectPage() {
         </div>
       </div>
 
-      {/* Search Filters */}
-      <SearchFilters
-        query={searchQuery}
-        onChange={setSearchQuery}
-        onSearch={handleSearch}
-        loading={loading}
-      />
+      {/* Saved Searches Bar */}
+      {savedSearches.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>SAVED SEARCHES</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {savedSearches.map((search) => (
+              <SavedSearchChip
+                key={search.id}
+                search={search}
+                onLoad={() => handleLoadSearch(search)}
+                onDelete={() => handleDeleteSearch(search.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ICP Filter Bar */}
+      <div
+        style={{
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderRadius: 8,
+          padding: 16,
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {/* Industries */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 12,
+                fontWeight: 600,
+                marginBottom: 6,
+                color: C.text2,
+              }}
+            >
+              INDUSTRIES
+            </label>
+            <ChipInput
+              values={searchQuery.industries || []}
+              onChange={(industries) => setSearchQuery({ ...searchQuery, industries })}
+              placeholder="Healthcare, Technology, etc."
+            />
+          </div>
+
+          {/* Location */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 12,
+                fontWeight: 600,
+                marginBottom: 6,
+                color: C.text2,
+              }}
+            >
+              LOCATION
+            </label>
+            <input
+              type="text"
+              placeholder="United States, California, etc."
+              value={searchQuery.location?.country || ''}
+              onChange={(e) =>
+                setSearchQuery({
+                  ...searchQuery,
+                  location: { country: e.target.value },
+                })
+              }
+              style={{ ...darkInputStyle, width: '100%' }}
+            />
+          </div>
+
+          {/* Keywords */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 12,
+                fontWeight: 600,
+                marginBottom: 6,
+                color: C.text2,
+              }}
+            >
+              KEYWORDS
+            </label>
+            <ChipInput
+              values={searchQuery.keywords || []}
+              onChange={(keywords) => setSearchQuery({ ...searchQuery, keywords })}
+              placeholder="SaaS, B2B, etc."
+            />
+          </div>
+
+          {/* Employee Size */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 12,
+                fontWeight: 600,
+                marginBottom: 6,
+                color: C.text2,
+              }}
+            >
+              EMPLOYEE SIZE
+            </label>
+            <RangeSlider
+              min={searchQuery.employeeMin || 10}
+              max={searchQuery.employeeMax || 500}
+              onChange={(min, max) =>
+                setSearchQuery({
+                  ...searchQuery,
+                  employeeMin: min,
+                  employeeMax: max,
+                })
+              }
+            />
+          </div>
+        </div>
+
+        {/* Exclude in HubSpot Checkbox */}
+        <div style={{ marginTop: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={excludeInHubSpot}
+              onChange={(e) => setExcludeInHubSpot(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            <span style={{ fontSize: 13, color: C.text2 }}>Exclude companies already in HubSpot</span>
+          </label>
+        </div>
+
+        {/* Search Buttons */}
+        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+          <button
+            onClick={handleSearch}
+            disabled={loading || !canSearch}
+            style={{
+              padding: '10px 24px',
+              fontSize: 14,
+              fontWeight: 500,
+              border: 'none',
+              borderRadius: 6,
+              background: loading || !canSearch ? C.text3 : C.indigo,
+              color: 'white',
+              cursor: loading || !canSearch ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {loading ? 'Searching...' : 'Search'}
+          </button>
+
+          <button
+            onClick={handleSaveSearch}
+            disabled={!canSearch}
+            style={{
+              padding: '10px 24px',
+              fontSize: 14,
+              fontWeight: 500,
+              border: `1px solid ${C.border}`,
+              borderRadius: 6,
+              background: C.surface,
+              color: C.text,
+              cursor: !canSearch ? 'not-allowed' : 'pointer',
+            }}
+          >
+            Save Search
+          </button>
+        </div>
+      </div>
 
       {/* Error */}
       {error && (
         <div
           style={{
-            marginTop: 16,
+            marginBottom: 16,
             padding: 12,
             background: C.redDim,
             border: `1px solid ${C.redBrd}`,
@@ -158,7 +405,7 @@ export default function ProspectPage() {
 
       {/* Results */}
       {results.length > 0 && (
-        <div style={{ marginTop: 24 }}>
+        <div>
           {/* Results header */}
           <div
             style={{
@@ -170,8 +417,7 @@ export default function ProspectPage() {
           >
             <div style={{ fontSize: 14, color: C.text2 }}>
               {results.length} companies found
-              {selectedCompanies.size > 0 &&
-                ` • ${selectedCompanies.size} selected`}
+              {selectedCompanies.size > 0 && ` • ${selectedCompanies.size} selected`}
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
@@ -211,11 +457,9 @@ export default function ProspectPage() {
                   fontSize: 13,
                   border: 'none',
                   borderRadius: 6,
-                  background:
-                    selectedCompanies.size > 0 ? C.indigo : C.text3,
+                  background: selectedCompanies.size > 0 ? C.indigo : C.text3,
                   color: 'white',
-                  cursor:
-                    selectedCompanies.size > 0 ? 'pointer' : 'not-allowed',
+                  cursor: selectedCompanies.size > 0 ? 'pointer' : 'not-allowed',
                 }}
               >
                 Push to HubSpot ({selectedCompanies.size})
@@ -228,245 +472,223 @@ export default function ProspectPage() {
             results={results}
             selectedCompanies={selectedCompanies}
             onToggle={toggleCompany}
+            onShowDetail={setDetailCompany}
           />
         </div>
       )}
 
-      {/* Provider stats */}
-      {Object.keys(providerStats).length > 0 && (
-        <div style={{ marginTop: 16, fontSize: 12, color: C.text3 }}>
-          Provider stats:{' '}
-          {Object.entries(providerStats).map(([provider, stats]: [string, any]) => (
-            <span key={provider} style={{ marginLeft: 12 }}>
-              {provider}: {stats.count} results ({stats.query_time_ms}ms)
-              {stats.error && ` - Error: ${stats.error}`}
-            </span>
-          ))}
-        </div>
+      {/* Company Detail Slide-Over */}
+      {detailCompany && (
+        <CompanyDetailSlideOver
+          company={detailCompany}
+          onClose={() => setDetailCompany(null)}
+        />
       )}
     </div>
   );
 }
 
 /**
- * Search filter panel.
+ * Chip input component for multi-select
  */
-function SearchFilters({
-  query,
+function ChipInput({
+  values,
   onChange,
-  onSearch,
-  loading,
+  placeholder,
 }: {
-  query: ProspectSearchQuery;
-  onChange: (q: ProspectSearchQuery) => void;
-  onSearch: () => void;
-  loading: boolean;
+  values: string[];
+  onChange: (values: string[]) => void;
+  placeholder: string;
+}) {
+  const [input, setInput] = useState('');
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const value = input.trim();
+      if (value && !values.includes(value)) {
+        onChange([...values, value]);
+      }
+      setInput('');
+    } else if (e.key === 'Backspace' && !input && values.length > 0) {
+      onChange(values.slice(0, -1));
+    }
+  }
+
+  function removeChip(value: string) {
+    onChange(values.filter((v) => v !== value));
+  }
+
+  return (
+    <div
+      style={{
+        ...darkInputStyle,
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 6,
+        padding: '6px',
+        minHeight: '34px',
+      }}
+    >
+      {values.map((value) => (
+        <div
+          key={value}
+          style={{
+            background: C.indigoDim,
+            border: `1px solid ${C.indigoBrd}`,
+            color: C.indigoLt,
+            padding: '2px 8px',
+            borderRadius: 4,
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          {value}
+          <button
+            onClick={() => removeChip(value)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: C.indigoLt,
+              cursor: 'pointer',
+              padding: 0,
+              fontSize: 14,
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={values.length === 0 ? placeholder : ''}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          outline: 'none',
+          color: C.text,
+          fontSize: 13,
+          flex: 1,
+          minWidth: '120px',
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Range slider component
+ */
+function RangeSlider({
+  min,
+  max,
+  onChange,
+}: {
+  min: number;
+  max: number;
+  onChange: (min: number, max: number) => void;
+}) {
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input
+          type="number"
+          value={min}
+          onChange={(e) => onChange(Number(e.target.value), max)}
+          style={{
+            ...darkInputStyle,
+            width: '100px',
+          }}
+        />
+        <span style={{ color: C.text3 }}>to</span>
+        <input
+          type="number"
+          value={max}
+          onChange={(e) => onChange(min, Number(e.target.value))}
+          style={{
+            ...darkInputStyle,
+            width: '100px',
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Saved search chip
+ */
+function SavedSearchChip({
+  search,
+  onLoad,
+  onDelete,
+}: {
+  search: any;
+  onLoad: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div
       style={{
-        border: `1px solid ${C.border}`,
-        borderRadius: 8,
-        padding: 16,
         background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: 6,
+        padding: '6px 10px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        fontSize: 13,
       }}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        {/* Industries */}
-        <div>
-          <label
-            style={{
-              display: 'block',
-              fontSize: 13,
-              fontWeight: 500,
-              marginBottom: 6,
-            }}
-          >
-            Industries
-          </label>
-          <input
-            type="text"
-            placeholder="e.g., Technology, Healthcare"
-            value={query.industries?.join(', ') || ''}
-            onChange={(e) =>
-              onChange({
-                ...query,
-                industries: e.target.value
-                  .split(',')
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              })
-            }
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: `1px solid ${C.border}`,
-              borderRadius: 6,
-              fontSize: 14,
-              background: C.bg,
-              color: C.text,
-            }}
-          />
-        </div>
-
-        {/* Keywords */}
-        <div>
-          <label
-            style={{
-              display: 'block',
-              fontSize: 13,
-              fontWeight: 500,
-              marginBottom: 6,
-            }}
-          >
-            Keywords
-          </label>
-          <input
-            type="text"
-            placeholder="e.g., SaaS, B2B"
-            value={query.keywords?.join(', ') || ''}
-            onChange={(e) =>
-              onChange({
-                ...query,
-                keywords: e.target.value
-                  .split(',')
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              })
-            }
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: `1px solid ${C.border}`,
-              borderRadius: 6,
-              fontSize: 14,
-              background: C.bg,
-              color: C.text,
-            }}
-          />
-        </div>
-
-        {/* Employee range */}
-        <div>
-          <label
-            style={{
-              display: 'block',
-              fontSize: 13,
-              fontWeight: 500,
-              marginBottom: 6,
-            }}
-          >
-            Employee Count
-          </label>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input
-              type="number"
-              placeholder="Min"
-              value={query.employeeMin || ''}
-              onChange={(e) =>
-                onChange({
-                  ...query,
-                  employeeMin: e.target.value ? Number(e.target.value) : undefined,
-                })
-              }
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                border: `1px solid ${C.border}`,
-                borderRadius: 6,
-                fontSize: 14,
-              }}
-            />
-            <span style={{ color: C.text3 }}>to</span>
-            <input
-              type="number"
-              placeholder="Max"
-              value={query.employeeMax || ''}
-              onChange={(e) =>
-                onChange({
-                  ...query,
-                  employeeMax: e.target.value ? Number(e.target.value) : undefined,
-                })
-              }
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                border: `1px solid ${C.border}`,
-                borderRadius: 6,
-                fontSize: 14,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Location */}
-        <div>
-          <label
-            style={{
-              display: 'block',
-              fontSize: 13,
-              fontWeight: 500,
-              marginBottom: 6,
-            }}
-          >
-            Location
-          </label>
-          <input
-            type="text"
-            placeholder="City, State, or Country"
-            value={query.location?.city || query.location?.state || query.location?.country || ''}
-            onChange={(e) =>
-              onChange({
-                ...query,
-                location: { country: e.target.value },
-              })
-            }
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: `1px solid ${C.border}`,
-              borderRadius: 6,
-              fontSize: 14,
-              background: C.bg,
-              color: C.text,
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Search button */}
       <button
-        onClick={onSearch}
-        disabled={loading}
+        onClick={onLoad}
         style={{
-          marginTop: 16,
-          padding: '10px 24px',
-          fontSize: 14,
-          fontWeight: 500,
+          background: 'none',
           border: 'none',
-          borderRadius: 6,
-          background: loading ? C.text3 : C.indigo,
-          color: 'white',
-          cursor: loading ? 'not-allowed' : 'pointer',
+          color: C.text,
+          cursor: 'pointer',
+          padding: 0,
+          fontSize: 13,
         }}
       >
-        {loading ? 'Searching...' : 'Search'}
+        {search.name}
+      </button>
+      <button
+        onClick={onDelete}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: C.text3,
+          cursor: 'pointer',
+          padding: 0,
+          fontSize: 14,
+        }}
+      >
+        ×
       </button>
     </div>
   );
 }
 
 /**
- * Results table.
+ * Results table
  */
 function ResultsTable({
   results,
   selectedCompanies,
   onToggle,
+  onShowDetail,
 }: {
   results: ProspectSearchResult[];
   selectedCompanies: Set<string>;
   onToggle: (domain: string) => void;
+  onShowDetail: (company: ProspectSearchResult) => void;
 }) {
   return (
     <div
@@ -495,9 +717,6 @@ function ResultsTable({
             <th style={{ padding: 12, textAlign: 'left', fontSize: 13, fontWeight: 600 }}>
               ICP Score
             </th>
-            <th style={{ padding: 12, textAlign: 'left', fontSize: 13, fontWeight: 600 }}>
-              CRM Status
-            </th>
           </tr>
         </thead>
         <tbody>
@@ -507,9 +726,14 @@ function ResultsTable({
               style={{
                 borderBottom: `1px solid ${C.border}`,
                 background: selectedCompanies.has(company.domain) ? C.indigoDim : C.surface,
+                cursor: 'pointer',
               }}
+              onClick={() => onShowDetail(company)}
             >
-              <td style={{ padding: 12 }}>
+              <td
+                style={{ padding: 12 }}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <input
                   type="checkbox"
                   checked={selectedCompanies.has(company.domain)}
@@ -518,63 +742,20 @@ function ResultsTable({
                 />
               </td>
               <td style={{ padding: 12 }}>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>{company.name}</div>
+                <div style={{ fontWeight: 500, fontSize: 14, color: C.text }}>{company.name}</div>
                 <div style={{ color: C.text3, fontSize: 12 }}>{company.domain}</div>
               </td>
               <td style={{ padding: 12, fontSize: 13, color: C.text2 }}>
                 {company.industry || '—'}
               </td>
               <td style={{ padding: 12, fontSize: 13, color: C.text2 }}>
-                {company.employee_count ? `${company.employee_count} employees` : '—'}
+                {company.employee_count ? `${company.employee_count}` : '—'}
               </td>
               <td style={{ padding: 12, fontSize: 13, color: C.text2 }}>
                 {[company.city, company.state, company.country].filter(Boolean).join(', ') || '—'}
               </td>
-              <td style={{ padding: 12, fontSize: 13, color: C.text2 }}>
-                {company.icp_score !== undefined ? (
-                  <span
-                    style={{
-                      padding: '2px 8px',
-                      borderRadius: 4,
-                      background:
-                        company.icp_score >= 80
-                          ? C.greenDim
-                          : company.icp_score >= 60
-                          ? C.amberDim
-                          : C.redDim,
-                      color:
-                        company.icp_score >= 80
-                          ? C.green
-                          : company.icp_score >= 60
-                          ? C.amber
-                          : C.red,
-                    }}
-                  >
-                    {company.icp_score}
-                  </span>
-                ) : (
-                  '—'
-                )}
-              </td>
-              <td style={{ padding: 12, fontSize: 13 }}>
-                {company.in_crm ? (
-                  <a
-                    href={company.hubspot_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      color: C.indigo,
-                      textDecoration: 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
-                  >
-                    In HubSpot ↗
-                  </a>
-                ) : (
-                  <span style={{ color: C.text3 }}>Not in CRM</span>
-                )}
+              <td style={{ padding: 12 }}>
+                <ICPScoreBar score={company.icp_score || 0} />
               </td>
             </tr>
           ))}
@@ -582,4 +763,198 @@ function ResultsTable({
       </table>
     </div>
   );
+}
+
+/**
+ * ICP Score Bar
+ */
+function ICPScoreBar({ score }: { score: number }) {
+  const color = score >= 80 ? C.green : score >= 60 ? C.amber : C.red;
+  const bgColor = score >= 80 ? C.greenDim : score >= 60 ? C.amberDim : C.redDim;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div
+        style={{
+          flex: 1,
+          height: 8,
+          background: bgColor,
+          borderRadius: 4,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${score}%`,
+            height: '100%',
+            background: color,
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 13, color, fontWeight: 600, minWidth: 35 }}>{score}</span>
+    </div>
+  );
+}
+
+/**
+ * Company Detail Slide-Over
+ */
+function CompanyDetailSlideOver({
+  company,
+  onClose,
+}: {
+  company: ProspectSearchResult;
+  onClose: () => void;
+}) {
+  const breakdown = calculateICPBreakdown(company);
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: '500px',
+        background: C.surface,
+        borderLeft: `1px solid ${C.border}`,
+        zIndex: 1000,
+        overflowY: 'auto',
+        padding: 24,
+      }}
+    >
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4, color: C.text }}>
+              {company.name}
+            </h2>
+            <p style={{ color: C.text3, fontSize: 13 }}>{company.domain}</p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: C.text3,
+              cursor: 'pointer',
+              fontSize: 24,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      {/* ICP Score Section */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>ICP SCORE</div>
+        <div style={{ fontSize: 32, fontWeight: 600, color: C.text, marginBottom: 16 }}>
+          {company.icp_score || 0}
+        </div>
+        <ICPScoreBar score={company.icp_score || 0} />
+      </div>
+
+      {/* Score Breakdown */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 12, color: C.text3, marginBottom: 12 }}>SCORE BREAKDOWN</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {breakdown.map((item) => (
+            <div key={item.label}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginBottom: 4,
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ color: C.text2 }}>{item.label}</span>
+                <span style={{ color: C.text, fontWeight: 600 }}>{item.score}</span>
+              </div>
+              <div
+                style={{
+                  height: 6,
+                  background: C.hover,
+                  borderRadius: 3,
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    width: `${(item.score / item.max) * 100}%`,
+                    height: '100%',
+                    background: C.indigo,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Company Details */}
+      <div>
+        <div style={{ fontSize: 12, color: C.text3, marginBottom: 12 }}>DETAILS</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <DetailRow label="Industry" value={company.industry || '—'} />
+          <DetailRow label="Employees" value={company.employee_count?.toString() || '—'} />
+          <DetailRow
+            label="Location"
+            value={[company.city, company.state, company.country].filter(Boolean).join(', ') || '—'}
+          />
+          <DetailRow label="Website" value={company.website || '—'} />
+          <DetailRow label="LinkedIn" value={company.linkedin_url || '—'} />
+          {company.description && (
+            <div>
+              <div style={{ fontSize: 13, color: C.text3, marginBottom: 4 }}>Description</div>
+              <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.5 }}>
+                {company.description}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: C.text3, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 13, color: C.text }}>{value}</div>
+    </div>
+  );
+}
+
+/**
+ * Calculate ICP score breakdown for a company
+ */
+function calculateICPBreakdown(company: ProspectSearchResult) {
+  const breakdown = [
+    { label: 'Industry Match', score: 0, max: 35 },
+    { label: 'Size Range', score: 0, max: 25 },
+    { label: 'Location Match', score: 0, max: 20 },
+    { label: 'Keywords', score: 0, max: 15 },
+    { label: 'Quality Signals', score: 0, max: 10 },
+  ];
+
+  // Use actual breakdown if available
+  if (company.icp_breakdown) {
+    breakdown[0].score = company.icp_breakdown.industry_match || 0;
+    breakdown[1].score = company.icp_breakdown.size_match || 0;
+    breakdown[2].score = company.icp_breakdown.location_match || 0;
+    breakdown[3].score = company.icp_breakdown.technology_match || 0;
+  }
+
+  // Calculate quality signals
+  let qualityScore = 0;
+  if (company.linkedin_url) qualityScore += 3;
+  if (company.website) qualityScore += 4;
+  if (company.description) qualityScore += 3;
+  breakdown[4].score = qualityScore;
+
+  return breakdown;
 }

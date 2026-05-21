@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { searchProspects } from '@/lib/prospect/search';
 import { ProspectSearchQuery, ICPConfig } from '@/lib/prospect/types';
+import { getApolloKey } from '@/lib/providers/apollo-key';
 
 export async function POST(req: NextRequest) {
   let ctx;
@@ -20,7 +21,6 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-
     const body = await req.json();
     const query: ProspectSearchQuery = body.query || {};
     const icpConfig: ICPConfig | undefined = body.icp_config;
@@ -37,6 +37,17 @@ export async function POST(req: NextRequest) {
         { error: 'At least one search filter is required' },
         { status: 400 }
       );
+    }
+
+    // Check Apollo connection if Apollo is in providers
+    if (query.providers?.includes('apollo')) {
+      const apolloKey = await getApolloKey(ctx.orgId);
+      if (!apolloKey) {
+        return NextResponse.json(
+          { error: 'Apollo is not connected. Please connect Apollo in Settings → Connections.' },
+          { status: 400 }
+        );
+      }
     }
 
     // Perform search

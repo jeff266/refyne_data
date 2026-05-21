@@ -8,10 +8,11 @@ import { ProspectCompany, ICPConfig } from './types';
 
 /**
  * Default scoring weights if not specified.
+ * Point-based system: Industry (35), Size (25), Location (20), Technology (15), Quality (10)
  */
 const DEFAULT_WEIGHTS = {
   industry: 0.35,
-  size: 0.30,
+  size: 0.25,
   location: 0.20,
   technology: 0.15,
 };
@@ -178,7 +179,7 @@ function scoreTechnology(
  *
  * @param company - Company to score
  * @param config - ICP configuration
- * @returns Score (0-100) and breakdown by category
+ * @returns Score (0-100) and breakdown by category (raw points, not percentages)
  */
 export function scoreCompanyICP(
   company: ProspectCompany,
@@ -194,26 +195,28 @@ export function scoreCompanyICP(
 } {
   const weights = config.weights || DEFAULT_WEIGHTS;
 
-  // Calculate component scores
+  // Calculate component scores (0-100 scale)
   const industryScore = scoreIndustry(company, config);
   const sizeScore = scoreSize(company, config);
   const locationScore = scoreLocation(company, config);
   const technologyScore = scoreTechnology(company, config);
 
-  // Calculate weighted total
-  const totalScore =
-    industryScore * weights.industry +
-    sizeScore * weights.size +
-    locationScore * weights.location +
-    technologyScore * weights.technology;
+  // Convert to point values based on weights
+  const industryPoints = (industryScore / 100) * 35;
+  const sizePoints = (sizeScore / 100) * 25;
+  const locationPoints = (locationScore / 100) * 20;
+  const technologyPoints = (technologyScore / 100) * 15;
+
+  // Calculate total score (out of 100, with 10 points reserved for quality signals)
+  const totalScore = industryPoints + sizePoints + locationPoints + technologyPoints;
 
   return {
     score: Math.round(totalScore),
     breakdown: {
-      industry_match: Math.round(industryScore),
-      size_match: Math.round(sizeScore),
-      location_match: Math.round(locationScore),
-      technology_match: Math.round(technologyScore),
+      industry_match: Math.round(industryPoints),
+      size_match: Math.round(sizePoints),
+      location_match: Math.round(locationPoints),
+      technology_match: Math.round(technologyPoints),
     },
   };
 }

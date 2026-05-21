@@ -13,7 +13,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { HubSpotClient } from '@/lib/hubspot/client';
 import { ApolloAdapter } from '@/lib/providers/apollo';
-import { decryptKey } from '@/lib/crypto/providerKeys';
+import { getApolloKey } from '@/lib/providers/apollo-key';
 import { Redis } from '@upstash/redis';
 import { randomUUID } from 'crypto';
 
@@ -164,14 +164,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Get Apollo API key from provider_connections
-    const { data: apolloConnection } = await supabase
-      .from('provider_connections')
-      .select('api_key_enc, status')
-      .match({ org_id: ctx.orgId, provider: 'apollo', status: 'active' })
-      .single();
+    // Get Apollo API key using helper
+    const apolloKey = await getApolloKey(ctx.orgId);
 
-    if (!apolloConnection || !apolloConnection.api_key_enc) {
+    if (!apolloKey) {
       return NextResponse.json({
         error: 'Apollo is not connected. Please connect Apollo in Settings → Connections.',
         preview_id: randomUUID(),
@@ -189,8 +185,6 @@ export async function POST(req: NextRequest) {
         }
       }, { status: 400 });
     }
-
-    const apolloKey = decryptKey(apolloConnection.api_key_enc);
 
     // Load active harmonies for the fields
     const harmonies = await loadHarmonies(ctx.orgId, connection.portal_id, body.fields);

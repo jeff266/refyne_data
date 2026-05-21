@@ -10,8 +10,7 @@ import {
   ProspectCompany,
   ProviderSearchResponse,
 } from '../types';
-import { supabase } from '@/lib/db/supabase';
-import { decryptKey } from '@/lib/crypto/providerKeys';
+import { getApolloKey } from '@/lib/providers/apollo-key';
 
 const APOLLO_BASE_URL = 'https://api.apollo.io/v1';
 
@@ -57,28 +56,10 @@ function postFilterResults(
 }
 
 /**
- * Get Apollo API key from provider_connections table or environment fallback.
+ * Get Apollo API key from provider_connections table.
  */
 async function getApiKey(orgId: string): Promise<string> {
-  // Try to get from database first
-  if (supabase) {
-    try {
-      const { data: connection } = await supabase
-        .from('provider_connections')
-        .select('api_key_enc, status')
-        .match({ org_id: orgId, provider: 'apollo', status: 'active' })
-        .single();
-
-      if (connection && connection.api_key_enc) {
-        return decryptKey(connection.api_key_enc);
-      }
-    } catch (error) {
-      console.warn('[Apollo] Failed to fetch key from database:', error);
-    }
-  }
-
-  // Fallback to environment variable
-  const key = process.env.APOLLO_API_KEY;
+  const key = await getApolloKey(orgId);
   if (!key) {
     throw new Error('Apollo is not connected. Please connect Apollo in Settings → Connections.');
   }
@@ -128,10 +109,10 @@ export async function searchCompaniesApollo(
 
   let apiKey: string;
   try {
-    apiKey = orgId ? await getApiKey(orgId) : process.env.APOLLO_API_KEY || '';
-    if (!apiKey) {
-      throw new Error('Apollo API key not configured');
+    if (!orgId) {
+      throw new Error('Organization ID required for Apollo search');
     }
+    apiKey = await getApiKey(orgId);
   } catch (error) {
     return {
       provider: 'apollo',

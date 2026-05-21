@@ -468,12 +468,31 @@ export default function EnrichPage() {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate preview');
+      const data = await response.json();
+
+      // Debug logging
+      console.log('[Preview] Response data:', {
+        records_processed: data.records_processed,
+        results_count: data.results?.length || 0,
+        summary: data.summary,
+        has_error: !!data.error
+      });
+
+      // Check for error in response (even if status is 200)
+      if (data.error) {
+        alert(data.error);
+        // Still show results if available
+        if (data.results) {
+          setPreviewResults(data);
+          setShowingPreview(true);
+        }
+        return;
       }
 
-      const data: PreviewResults = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate preview');
+      }
+
       setPreviewResults(data);
       setShowingPreview(true);
     } catch (error) {
@@ -1104,26 +1123,27 @@ export default function EnrichPage() {
               </div>
 
               {/* Always show table */}
-              <div style={{ maxHeight: 500, overflowY: 'auto', marginBottom: 20, border: `1px solid ${C.border}`, borderRadius: 4 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead style={{ position: 'sticky', top: 0, background: C.surface, zIndex: 1 }}>
-                    <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                        Company
-                      </th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                        Field
-                      </th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                        Current Value
-                      </th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewResults.results.flatMap(company =>
+              {previewResults.results && previewResults.results.length > 0 ? (
+                <div style={{ maxHeight: 500, overflowY: 'auto', marginBottom: 20, border: `1px solid ${C.border}`, borderRadius: 4 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead style={{ position: 'sticky', top: 0, background: C.surface, zIndex: 1 }}>
+                      <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                          Company
+                        </th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                          Field
+                        </th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                          Current Value
+                        </th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewResults.results.flatMap(company =>
                       company.fields.map(field => {
                         // Determine status and styling
                         let status = '';
@@ -1172,6 +1192,21 @@ export default function EnrichPage() {
                   </tbody>
                 </table>
               </div>
+              ) : (
+                <div style={{
+                  padding: 40,
+                  textAlign: 'center',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 4,
+                  marginBottom: 20,
+                  color: C.text3
+                }}>
+                  <div style={{ marginBottom: 8, fontSize: 13 }}>No company data returned</div>
+                  <div style={{ fontSize: 11 }}>
+                    The preview API returned no results. This may indicate an issue with the data source or Apollo connection.
+                  </div>
+                </div>
+              )}
 
               {/* Warning if all failed */}
               {previewResults.summary.fields_would_fill === 0 && (
