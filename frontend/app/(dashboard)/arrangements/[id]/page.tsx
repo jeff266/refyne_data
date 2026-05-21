@@ -3,8 +3,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check, Loader2, Sparkles, PlayCircle, Zap } from 'lucide-react';
-import { C, Button, Select } from '@/lib/refyne';
-import { toast } from 'sonner';
+import { C, F } from '@/lib/design-tokens';
+import { addToast } from '@/components/ui/toast';
 
 // Types
 interface Arrangement {
@@ -89,7 +89,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
       await fetchRunStatus();
     } catch (error) {
       console.error('Error fetching arrangement:', error);
-      toast.error('Failed to load arrangement details');
+      addToast('error', 'Failed to load arrangement details');
     } finally {
       setIsLoading(false);
     }
@@ -228,12 +228,12 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
       setTestResults([]);
       setElapsedSeconds(0);
 
-      toast.success('Full enrichment started');
+      addToast('success', 'Full enrichment started');
       startPolling();
       startElapsedTimer();
     } catch (error) {
       console.error('Error starting full enrichment:', error);
-      toast.error('Failed to start full enrichment');
+      addToast('error', 'Failed to start full enrichment');
     }
   };
 
@@ -257,10 +257,10 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
   // Helper functions
   const getStatusColor = (status: string): string => {
     switch (status) {
-      case 'running': return C.indigo[500];
-      case 'completed': return C.green[500];
-      case 'failed': return C.red[500];
-      default: return C.gray[400];
+      case 'running': return C.indigo;
+      case 'completed': return C.green;
+      case 'failed': return C.red;
+      default: return C.text3;
     }
   };
 
@@ -332,7 +332,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
   if (isLoading) {
     return (
       <div style={{ padding: '40px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: C.gray[400] }} />
+        <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: C.text3 }} />
       </div>
     );
   }
@@ -340,7 +340,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
   if (!arrangement) {
     return (
       <div style={{ padding: '40px' }}>
-        <p style={{ color: C.text.secondary }}>Arrangement not found</p>
+        <p style={{ color: C.text2 }}>Arrangement not found</p>
       </div>
     );
   }
@@ -348,25 +348,25 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       {/* Header */}
-      <div style={{ padding: '16px 0 12px', borderBottom: `0.5px solid ${C.border.tertiary}`, marginBottom: '20px' }}>
+      <div style={{ padding: '16px 0 12px', borderBottom: `0.5px solid ${C.border}`, marginBottom: '20px' }}>
         <div
           onClick={() => router.push('/arrangements')}
           style={{
             fontSize: '12px',
-            color: C.text.secondary,
+            color: C.text2,
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
             marginBottom: '10px',
             cursor: 'pointer'
           }}
-          onMouseEnter={(e) => e.currentTarget.style.color = C.text.primary}
-          onMouseLeave={(e) => e.currentTarget.style.color = C.text.secondary}
+          onMouseEnter={(e) => e.currentTarget.style.color = C.text}
+          onMouseLeave={(e) => e.currentTarget.style.color = C.text2}
         >
           <ArrowLeft size={12} /> Back to arrangements
         </div>
-        <div style={{ fontSize: '18px', fontWeight: '500', color: C.text.primary }}>{arrangement.name}</div>
-        <div style={{ fontSize: '13px', color: C.text.secondary, marginTop: '3px' }}>
+        <div style={{ fontSize: '18px', fontWeight: '500', color: C.text }}>{arrangement.name}</div>
+        <div style={{ fontSize: '13px', color: C.text2, marginTop: '3px' }}>
           {getProviderName(arrangement.provider)} · {arrangement.write_policy} ·
           {currentRun?.is_test && ` Test run: ${currentRun.test_record_count} records · `}
           {currentRun?.started_at && ` Started ${new Date(currentRun.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`}
@@ -374,15 +374,15 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: `0.5px solid ${C.border.tertiary}`, marginBottom: '16px' }}>
+      <div style={{ display: 'flex', gap: 0, borderBottom: `0.5px solid ${C.border}`, marginBottom: '16px' }}>
         <div
           onClick={() => setActiveTab('live')}
           style={{
             padding: '8px 14px',
             fontSize: '13px',
             cursor: 'pointer',
-            color: activeTab === 'live' ? C.text.primary : C.text.secondary,
-            borderBottom: `2px solid ${activeTab === 'live' ? C.indigo[500] : 'transparent'}`,
+            color: activeTab === 'live' ? C.text : C.text2,
+            borderBottom: `2px solid ${activeTab === 'live' ? C.indigo : 'transparent'}`,
             marginBottom: '-1px'
           }}
         >
@@ -394,8 +394,8 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
             padding: '8px 14px',
             fontSize: '13px',
             cursor: 'pointer',
-            color: activeTab === 'history' ? C.text.primary : C.text.secondary,
-            borderBottom: `2px solid ${activeTab === 'history' ? C.indigo[500] : 'transparent'}`,
+            color: activeTab === 'history' ? C.text : C.text2,
+            borderBottom: `2px solid ${activeTab === 'history' ? C.indigo : 'transparent'}`,
             marginBottom: '-1px'
           }}
         >
@@ -407,8 +407,8 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
             padding: '8px 14px',
             fontSize: '13px',
             cursor: 'pointer',
-            color: activeTab === 'config' ? C.text.primary : C.text.secondary,
-            borderBottom: `2px solid ${activeTab === 'config' ? C.indigo[500] : 'transparent'}`,
+            color: activeTab === 'config' ? C.text : C.text2,
+            borderBottom: `2px solid ${activeTab === 'config' ? C.indigo : 'transparent'}`,
             marginBottom: '-1px'
           }}
         >
@@ -426,10 +426,10 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
           {currentRun && (
             <div style={{
               padding: '14px 16px',
-              background: C.surface.secondary,
-              border: `0.5px solid ${C.border.tertiary}`,
+              background: C.surface,
+              border: `0.5px solid ${C.border}`,
               borderLeft: `3px solid ${getStatusColor(currentRun.status)}`,
-              borderRadius: C.radius.md,
+              borderRadius: 4,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between'
@@ -444,18 +444,18 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                   animation: currentRun.status === 'running' ? 'pulse 1.2s ease-in-out infinite' : 'none'
                 }} />
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: '500', color: C.text.primary }}>
+                  <div style={{ fontSize: '13px', fontWeight: '500', color: C.text }}>
                     {currentRun.status === 'running' && 'Processing records...'}
                     {currentRun.status === 'completed' && (currentRun.is_test ? 'Test run complete' : 'Enrichment complete')}
                     {currentRun.status === 'failed' && 'Run failed'}
                   </div>
-                  <div style={{ fontSize: '12px', color: C.text.secondary, marginTop: '2px' }}>
+                  <div style={{ fontSize: '12px', color: C.text2, marginTop: '2px' }}>
                     {currentRun.status === 'running' && `Querying ${getProviderName(arrangement.provider)}${harmonies.length > 0 ? ` · Applying ${harmonies[0].name}` : ''}`}
                     {currentRun.status === 'completed' && `${currentRun.total_records} records processed · Ready to review results`}
                   </div>
                 </div>
               </div>
-              <div style={{ fontSize: '12px', color: C.text.tertiary }}>
+              <div style={{ fontSize: '12px', color: C.text3 }}>
                 {formatDuration(elapsedSeconds)}
               </div>
             </div>
@@ -463,17 +463,17 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
 
           {/* Progress bar */}
           {currentRun && (
-            <div style={{ background: C.surface.secondary, border: `0.5px solid ${C.border.tertiary}`, borderRadius: C.radius.md, padding: '14px 16px' }}>
+            <div style={{ background: C.surface, border: `0.5px solid ${C.border}`, borderRadius: 4, padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <span style={{ fontSize: '13px', color: C.text.secondary }}>Records processed</span>
-                <span style={{ fontSize: '13px', fontWeight: '500', color: C.text.primary }}>
+                <span style={{ fontSize: '13px', color: C.text2 }}>Records processed</span>
+                <span style={{ fontSize: '13px', fontWeight: '500', color: C.text }}>
                   {currentRun.records_processed} of {currentRun.total_records}
                 </span>
               </div>
-              <div style={{ height: '4px', background: C.border.tertiary, borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{ height: '4px', background: C.border, borderRadius: '2px', overflow: 'hidden' }}>
                 <div style={{
                   height: '100%',
-                  background: currentRun.status === 'completed' ? C.green[500] : C.indigo[500],
+                  background: currentRun.status === 'completed' ? C.green : C.indigo,
                   borderRadius: '2px',
                   transition: 'width 0.4s ease',
                   width: `${(currentRun.records_processed / currentRun.total_records) * 100}%`
@@ -488,28 +488,28 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
               {fieldCounts.map((fc, idx) => {
                 const fieldName = fc.field.split('.').pop()?.replace(/_/g, ' ') || fc.field;
                 return (
-                  <div key={idx} style={{ background: C.surface.secondary, border: `0.5px solid ${C.border.tertiary}`, borderRadius: C.radius.md, padding: '10px 12px' }}>
-                    <div style={{ fontSize: '11px', color: C.text.tertiary, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                  <div key={idx} style={{ background: C.surface, border: `0.5px solid ${C.border}`, borderRadius: 4, padding: '10px 12px' }}>
+                    <div style={{ fontSize: '11px', color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
                       {fieldName} filled
                     </div>
-                    <div style={{ fontSize: '20px', fontWeight: '500', color: C.green[500] }}>
+                    <div style={{ fontSize: '20px', fontWeight: '500', color: C.green }}>
                       {fc.filled}
                     </div>
-                    <div style={{ fontSize: '11px', color: C.text.tertiary, marginTop: '2px' }}>
+                    <div style={{ fontSize: '11px', color: C.text3, marginTop: '2px' }}>
                       of {completedRecords} processed
                     </div>
                   </div>
                 );
               })}
               {totalNormalized > 0 && (
-                <div style={{ background: C.surface.secondary, border: `0.5px solid ${C.border.tertiary}`, borderRadius: C.radius.md, padding: '10px 12px' }}>
-                  <div style={{ fontSize: '11px', color: C.text.tertiary, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                <div style={{ background: C.surface, border: `0.5px solid ${C.border}`, borderRadius: 4, padding: '10px 12px' }}>
+                  <div style={{ fontSize: '11px', color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
                     Normalized
                   </div>
-                  <div style={{ fontSize: '20px', fontWeight: '500', color: C.indigo[500] }}>
+                  <div style={{ fontSize: '20px', fontWeight: '500', color: C.indigo }}>
                     {totalNormalized}
                   </div>
-                  <div style={{ fontSize: '11px', color: C.text.tertiary, marginTop: '2px' }}>
+                  <div style={{ fontSize: '11px', color: C.text3, marginTop: '2px' }}>
                     by harmony
                   </div>
                 </div>
@@ -520,7 +520,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
           {/* Live record feed */}
           {progressRecords.length > 0 && (
             <div>
-              <div style={{ fontSize: '11px', color: C.text.tertiary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
                 Record feed
               </div>
               <div ref={feedListRef} style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '320px', overflowY: 'auto' }}>
@@ -537,24 +537,24 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                         alignItems: 'center',
                         gap: '10px',
                         padding: '8px 10px',
-                        background: isProcessing ? 'rgba(55,138,221,0.05)' : C.surface.secondary,
-                        border: `0.5px solid ${isProcessing ? 'rgba(55,138,221,0.4)' : isComplete ? 'rgba(46,204,138,0.3)' : C.border.tertiary}`,
-                        borderRadius: C.radius.md,
+                        background: isProcessing ? 'rgba(55,138,221,0.05)' : C.surface,
+                        border: `0.5px solid ${isProcessing ? 'rgba(55,138,221,0.4)' : isComplete ? 'rgba(46,204,138,0.3)' : C.border}`,
+                        borderRadius: 4,
                         opacity: isPending ? 0.4 : 1
                       }}
                     >
                       <div style={{
                         width: '28px',
                         height: '28px',
-                        borderRadius: C.radius.md,
-                        background: C.surface.primary,
-                        border: `0.5px solid ${C.border.tertiary}`,
+                        borderRadius: 4,
+                        background: C.surface,
+                        border: `0.5px solid ${C.border}`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: '10px',
                         fontWeight: '600',
-                        color: isPending ? C.text.tertiary : C.text.secondary,
+                        color: isPending ? C.text3 : C.text2,
                         flexShrink: 0
                       }}>
                         {getInitials(record.company_name)}
@@ -563,7 +563,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                         <div style={{
                           fontSize: '12px',
                           fontWeight: '500',
-                          color: isPending ? C.text.secondary : C.text.primary,
+                          color: isPending ? C.text2 : C.text,
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis'
@@ -572,7 +572,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                         </div>
                         <div style={{ display: 'flex', gap: '4px', marginTop: '3px', flexWrap: 'wrap' }}>
                           {isPending ? (
-                            <span style={{ fontSize: '11px', color: C.text.tertiary }}>Waiting...</span>
+                            <span style={{ fontSize: '11px', color: C.text3 }}>Waiting...</span>
                           ) : (
                             Object.keys(record.fields_filled).map((fieldKey) => {
                               const fieldData = record.fields_filled[fieldKey];
@@ -585,10 +585,10 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                                     style={{
                                       fontSize: '10px',
                                       padding: '1px 6px',
-                                      borderRadius: C.radius.md,
-                                      background: C.surface.primary,
-                                      color: C.text.tertiary,
-                                      border: `0.5px solid ${C.border.tertiary}`
+                                      borderRadius: 4,
+                                      background: C.surface,
+                                      color: C.text3,
+                                      border: `0.5px solid ${C.border}`
                                     }}
                                   >
                                     {fieldName} — {fieldData.skip_reason || 'skipped'}
@@ -603,9 +603,9 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                                     style={{
                                       fontSize: '10px',
                                       padding: '1px 6px',
-                                      borderRadius: C.radius.md,
+                                      borderRadius: 4,
                                       background: 'rgba(55,138,221,0.08)',
-                                      color: C.indigo[500],
+                                      color: C.indigo,
                                       border: `0.5px solid rgba(55,138,221,0.2)`,
                                       animation: 'chipPulse 1s ease-in-out infinite'
                                     }}
@@ -622,9 +622,9 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                                     style={{
                                       fontSize: '10px',
                                       padding: '1px 6px',
-                                      borderRadius: C.radius.md,
+                                      borderRadius: 4,
                                       background: 'rgba(55,138,221,0.12)',
-                                      color: C.indigo[500],
+                                      color: C.indigo,
                                       border: `0.5px solid rgba(55,138,221,0.25)`
                                     }}
                                   >
@@ -639,9 +639,9 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                                   style={{
                                     fontSize: '10px',
                                     padding: '1px 6px',
-                                    borderRadius: C.radius.md,
+                                    borderRadius: 4,
                                     background: 'rgba(46,204,138,0.12)',
-                                    color: C.green[500],
+                                    color: C.green,
                                     border: `0.5px solid rgba(46,204,138,0.25)`
                                   }}
                                 >
@@ -653,8 +653,8 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                         </div>
                       </div>
                       <div style={{ flexShrink: 0 }}>
-                        {isProcessing && <Loader2 size={14} style={{ color: C.indigo[500], animation: 'spin 1s linear infinite' }} />}
-                        {isComplete && <Check size={14} style={{ color: C.green[500] }} />}
+                        {isProcessing && <Loader2 size={14} style={{ color: C.indigo, animation: 'spin 1s linear infinite' }} />}
+                        {isComplete && <Check size={14} style={{ color: C.green }} />}
                       </div>
                     </div>
                   );
@@ -668,18 +668,18 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
             <div
               ref={testCompleteRef}
               style={{
-                background: C.surface.secondary,
+                background: C.surface,
                 border: `0.5px solid rgba(46,204,138,0.3)`,
-                borderRadius: C.radius.md,
+                borderRadius: 4,
                 padding: '16px',
                 marginTop: '4px'
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                <Sparkles size={18} style={{ color: C.green[500] }} />
+                <Sparkles size={18} style={{ color: C.green }} />
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: '500', color: C.text.primary }}>Test run complete</div>
-                  <div style={{ fontSize: '12px', color: C.text.secondary, marginTop: '1px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '500', color: C.text }}>Test run complete</div>
+                  <div style={{ fontSize: '12px', color: C.text2, marginTop: '1px' }}>
                     {currentRun.total_records} records · {testResults.filter(r => r.after_value && !r.skipped).length} fields filled ·
                     {testResults.filter(r => r.normalized).length} normalized · {formatDuration(elapsedSeconds)}
                   </div>
@@ -689,10 +689,10 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '14px' }}>
                 <thead>
                   <tr>
-                    <th style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', color: C.text.tertiary, padding: '4px 8px', borderBottom: `0.5px solid ${C.border.tertiary}`, textAlign: 'left' }}>Company</th>
-                    <th style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', color: C.text.tertiary, padding: '4px 8px', borderBottom: `0.5px solid ${C.border.tertiary}`, textAlign: 'left' }}>Field</th>
-                    <th style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', color: C.text.tertiary, padding: '4px 8px', borderBottom: `0.5px solid ${C.border.tertiary}`, textAlign: 'left' }}>Before</th>
-                    <th style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', color: C.text.tertiary, padding: '4px 8px', borderBottom: `0.5px solid ${C.border.tertiary}`, textAlign: 'left' }}>After</th>
+                    <th style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', color: C.text3, padding: '4px 8px', borderBottom: `0.5px solid ${C.border}`, textAlign: 'left' }}>Company</th>
+                    <th style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', color: C.text3, padding: '4px 8px', borderBottom: `0.5px solid ${C.border}`, textAlign: 'left' }}>Field</th>
+                    <th style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', color: C.text3, padding: '4px 8px', borderBottom: `0.5px solid ${C.border}`, textAlign: 'left' }}>Before</th>
+                    <th style={{ fontSize: '10px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em', color: C.text3, padding: '4px 8px', borderBottom: `0.5px solid ${C.border}`, textAlign: 'left' }}>After</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -700,26 +700,26 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                     const fieldName = result.field_name.split('.').pop()?.replace(/_/g, ' ') || result.field_name;
                     return (
                       <tr key={idx}>
-                        <td style={{ padding: '7px 8px', borderBottom: idx === testResults.slice(0, 10).length - 1 ? 'none' : `0.5px solid ${C.border.tertiary}`, verticalAlign: 'top' }}>
-                          <div style={{ fontWeight: '500', color: C.text.primary, fontSize: '12px' }}>{result.company_name}</div>
+                        <td style={{ padding: '7px 8px', borderBottom: idx === testResults.slice(0, 10).length - 1 ? 'none' : `0.5px solid ${C.border}`, verticalAlign: 'top' }}>
+                          <div style={{ fontWeight: '500', color: C.text, fontSize: '12px' }}>{result.company_name}</div>
                           {result.company_domain && (
-                            <div style={{ fontSize: '11px', color: C.text.tertiary }}>{result.company_domain}</div>
+                            <div style={{ fontSize: '11px', color: C.text3 }}>{result.company_domain}</div>
                           )}
                         </td>
-                        <td style={{ color: C.text.secondary, padding: '7px 8px', borderBottom: idx === testResults.slice(0, 10).length - 1 ? 'none' : `0.5px solid ${C.border.tertiary}`, verticalAlign: 'top' }}>{fieldName}</td>
-                        <td style={{ color: C.text.tertiary, fontStyle: 'italic', padding: '7px 8px', borderBottom: idx === testResults.slice(0, 10).length - 1 ? 'none' : `0.5px solid ${C.border.tertiary}`, verticalAlign: 'top' }}>
+                        <td style={{ color: C.text2, padding: '7px 8px', borderBottom: idx === testResults.slice(0, 10).length - 1 ? 'none' : `0.5px solid ${C.border}`, verticalAlign: 'top' }}>{fieldName}</td>
+                        <td style={{ color: C.text3, fontStyle: 'italic', padding: '7px 8px', borderBottom: idx === testResults.slice(0, 10).length - 1 ? 'none' : `0.5px solid ${C.border}`, verticalAlign: 'top' }}>
                           {result.before_value || 'empty'}
                         </td>
                         <td style={{
-                          color: result.skipped ? C.text.tertiary : (result.normalized ? C.indigo[500] : C.green[500]),
+                          color: result.skipped ? C.text3 : (result.normalized ? C.indigo : C.green),
                           fontWeight: result.skipped ? 'normal' : '500',
                           fontStyle: result.skipped ? 'italic' : 'normal',
                           padding: '7px 8px',
-                          borderBottom: idx === testResults.slice(0, 10).length - 1 ? 'none' : `0.5px solid ${C.border.tertiary}`,
+                          borderBottom: idx === testResults.slice(0, 10).length - 1 ? 'none' : `0.5px solid ${C.border}`,
                           verticalAlign: 'top'
                         }}>
                           {result.skipped ? (result.skip_reason || 'not found') : result.after_value}
-                          {result.normalized && <span style={{ fontSize: '10px', color: C.indigo[500], marginLeft: '3px' }}>✦</span>}
+                          {result.normalized && <span style={{ fontSize: '10px', color: C.indigo, marginLeft: '3px' }}>✦</span>}
                         </td>
                       </tr>
                     );
@@ -728,7 +728,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
               </table>
 
               {testResults.some(r => r.normalized) && (
-                <div style={{ fontSize: '11px', color: C.text.tertiary, marginBottom: '12px' }}>
+                <div style={{ fontSize: '11px', color: C.text3, marginBottom: '12px' }}>
                   ✦ Normalized by {harmonies.length > 0 ? harmonies[0].name : 'harmony'}
                 </div>
               )}
@@ -736,15 +736,15 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
               <div style={{
                 background: 'rgba(46,204,138,0.08)',
                 border: `0.5px solid rgba(46,204,138,0.25)`,
-                borderRadius: C.radius.md,
+                borderRadius: 4,
                 padding: '12px 14px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between'
               }}>
                 <div>
-                  <div style={{ fontSize: '12px', color: C.text.secondary }}>Results look good? Run the full enrichment.</div>
-                  <div style={{ fontSize: '13px', fontWeight: '500', color: C.green[500] }}>
+                  <div style={{ fontSize: '12px', color: C.text2 }}>Results look good? Run the full enrichment.</div>
+                  <div style={{ fontSize: '13px', fontWeight: '500', color: C.green }}>
                     {(currentRun.total_records || 0)} remaining companies
                   </div>
                 </div>
@@ -755,10 +755,10 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                     padding: '8px 14px',
                     fontSize: '12px',
                     fontWeight: '500',
-                    background: C.green[500],
+                    background: C.green,
                     color: '#0a1f14',
                     border: 'none',
-                    borderRadius: C.radius.md,
+                    borderRadius: 4,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -766,7 +766,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                     fontFamily: 'inherit'
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.background = '#38d99a'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = C.green[500]}
+                  onMouseLeave={(e) => e.currentTarget.style.background = C.green}
                 >
                   Run full enrichment <span style={{ fontSize: '14px' }}>↗</span>
                 </button>
@@ -780,41 +780,41 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
           {/* Run summary */}
-          <div style={{ background: C.surface.secondary, border: `0.5px solid ${C.border.tertiary}`, borderRadius: C.radius.md, padding: '14px' }}>
-            <div style={{ fontSize: '11px', color: C.text.tertiary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
+          <div style={{ background: C.surface, border: `0.5px solid ${C.border}`, borderRadius: 4, padding: '14px' }}>
+            <div style={{ fontSize: '11px', color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
               Run summary
             </div>
             {currentRun && (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border.tertiary}` }}>
-                  <span style={{ fontSize: '12px', color: C.text.secondary }}>Status</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border}` }}>
+                  <span style={{ fontSize: '12px', color: C.text2 }}>Status</span>
                   <span style={{ fontSize: '12px', color: getStatusColor(currentRun.status) }}>
                     ● {currentRun.status.charAt(0).toUpperCase() + currentRun.status.slice(1)}
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border.tertiary}` }}>
-                  <span style={{ fontSize: '12px', color: C.text.secondary }}>Records</span>
-                  <span style={{ fontSize: '12px', color: C.text.primary }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border}` }}>
+                  <span style={{ fontSize: '12px', color: C.text2 }}>Records</span>
+                  <span style={{ fontSize: '12px', color: C.text }}>
                     {currentRun.total_records} {currentRun.is_test ? '(test)' : ''}
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border.tertiary}` }}>
-                  <span style={{ fontSize: '12px', color: C.text.secondary }}>Source</span>
-                  <span style={{ fontSize: '12px', color: C.text.primary, textAlign: 'right', maxWidth: '160px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border}` }}>
+                  <span style={{ fontSize: '12px', color: C.text2 }}>Source</span>
+                  <span style={{ fontSize: '12px', color: C.text, textAlign: 'right', maxWidth: '160px' }}>
                     {arrangement.source_query}
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border.tertiary}` }}>
-                  <span style={{ fontSize: '12px', color: C.text.secondary }}>Provider</span>
-                  <span style={{ fontSize: '12px', color: C.text.primary }}>{getProviderName(arrangement.provider)}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border}` }}>
+                  <span style={{ fontSize: '12px', color: C.text2 }}>Provider</span>
+                  <span style={{ fontSize: '12px', color: C.text }}>{getProviderName(arrangement.provider)}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border.tertiary}` }}>
-                  <span style={{ fontSize: '12px', color: C.text.secondary }}>Write policy</span>
-                  <span style={{ fontSize: '12px', color: C.text.primary }}>{arrangement.write_policy}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border}` }}>
+                  <span style={{ fontSize: '12px', color: C.text2 }}>Write policy</span>
+                  <span style={{ fontSize: '12px', color: C.text }}>{arrangement.write_policy}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: 'none' }}>
-                  <span style={{ fontSize: '12px', color: C.text.secondary }}>Started</span>
-                  <span style={{ fontSize: '12px', color: C.text.primary }}>
+                  <span style={{ fontSize: '12px', color: C.text2 }}>Started</span>
+                  <span style={{ fontSize: '12px', color: C.text }}>
                     {new Date(currentRun.started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} today
                   </span>
                 </div>
@@ -824,8 +824,8 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
 
           {/* Harmonies active */}
           {harmonies.length > 0 && (
-            <div style={{ background: C.surface.secondary, border: `0.5px solid ${C.border.tertiary}`, borderRadius: C.radius.md, padding: '14px' }}>
-              <div style={{ fontSize: '11px', color: C.text.tertiary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
+            <div style={{ background: C.surface, border: `0.5px solid ${C.border}`, borderRadius: 4, padding: '14px' }}>
+              <div style={{ fontSize: '11px', color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
                 Harmonies active
               </div>
               {harmonies.map((harmony) => (
@@ -838,19 +838,19 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                     padding: '6px 8px',
                     background: 'rgba(55,138,221,0.08)',
                     border: `0.5px solid rgba(55,138,221,0.2)`,
-                    borderRadius: C.radius.md,
+                    borderRadius: 4,
                     marginBottom: '6px'
                   }}
                 >
-                  <span style={{ fontSize: '12px', color: C.indigo[500] }}>✦</span>
+                  <span style={{ fontSize: '12px', color: C.indigo }}>✦</span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '12px', color: C.text.primary }}>{harmony.name}</div>
-                    <div style={{ fontSize: '11px', color: C.text.tertiary }}>{harmony.field}</div>
+                    <div style={{ fontSize: '12px', color: C.text }}>{harmony.name}</div>
+                    <div style={{ fontSize: '11px', color: C.text3 }}>{harmony.field}</div>
                   </div>
                 </div>
               ))}
               {harmonies[0] && (
-                <div style={{ fontSize: '11px', color: C.text.tertiary, marginTop: '6px' }}>
+                <div style={{ fontSize: '11px', color: C.text3, marginTop: '6px' }}>
                   {harmonies[0].description}
                 </div>
               )}
@@ -858,8 +858,8 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
           )}
 
           {/* Fields being filled */}
-          <div style={{ background: C.surface.secondary, border: `0.5px solid ${C.border.tertiary}`, borderRadius: C.radius.md, padding: '14px' }}>
-            <div style={{ fontSize: '11px', color: C.text.tertiary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
+          <div style={{ background: C.surface, border: `0.5px solid ${C.border}`, borderRadius: 4, padding: '14px' }}>
+            <div style={{ fontSize: '11px', color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
               Fields being filled
             </div>
             {fieldCounts.map((fc, idx) => {
@@ -872,11 +872,11 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                     justifyContent: 'space-between',
                     alignItems: 'flex-start',
                     padding: '5px 0',
-                    borderBottom: idx === fieldCounts.length - 1 ? 'none' : `0.5px solid ${C.border.tertiary}`
+                    borderBottom: idx === fieldCounts.length - 1 ? 'none' : `0.5px solid ${C.border}`
                   }}
                 >
-                  <span style={{ fontSize: '12px', color: C.text.secondary }}>{fieldName}</span>
-                  <span style={{ fontSize: '12px', color: C.green[500] }}>
+                  <span style={{ fontSize: '12px', color: C.text2 }}>{fieldName}</span>
+                  <span style={{ fontSize: '12px', color: C.green }}>
                     {fc.filled > 0 ? `${fc.filled} filled so far` : 'Pending'}
                   </span>
                 </div>
