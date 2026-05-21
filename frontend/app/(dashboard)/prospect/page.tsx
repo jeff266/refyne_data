@@ -69,10 +69,9 @@ export default function ProspectPage() {
         target_industries: searchQuery.industries,
         target_employee_min: searchQuery.employeeMin,
         target_employee_max: searchQuery.employeeMax,
-        target_locations: searchQuery.location
+        target_locations: searchQuery.locations
           ? {
-              countries: searchQuery.location.country ? [searchQuery.location.country] : undefined,
-              states: searchQuery.location.state ? [searchQuery.location.state] : undefined,
+              countries: searchQuery.locations,
             }
           : undefined,
       };
@@ -190,7 +189,7 @@ export default function ProspectPage() {
   const canSearch =
     (searchQuery.industries && searchQuery.industries.length > 0) ||
     (searchQuery.keywords && searchQuery.keywords.length > 0) ||
-    searchQuery.location?.country;
+    (searchQuery.locations && searchQuery.locations.length > 0);
 
   return (
     <div style={{ padding: 24 }}>
@@ -257,7 +256,7 @@ export default function ProspectPage() {
             <ChipInput
               values={searchQuery.industries || []}
               onChange={(industries) => setSearchQuery({ ...searchQuery, industries })}
-              placeholder="Healthcare, Technology, etc."
+              placeholder="Type industry, press Enter to add"
             />
           </div>
 
@@ -274,17 +273,10 @@ export default function ProspectPage() {
             >
               LOCATION
             </label>
-            <input
-              type="text"
-              placeholder="United States, California, etc."
-              value={searchQuery.location?.country || ''}
-              onChange={(e) =>
-                setSearchQuery({
-                  ...searchQuery,
-                  location: { country: e.target.value },
-                })
-              }
-              style={{ ...darkInputStyle, width: '100%' }}
+            <ChipInput
+              values={searchQuery.locations || []}
+              onChange={(locations) => setSearchQuery({ ...searchQuery, locations })}
+              placeholder="Type location, press Enter to add"
             />
           </div>
 
@@ -304,7 +296,7 @@ export default function ProspectPage() {
             <ChipInput
               values={searchQuery.keywords || []}
               onChange={(keywords) => setSearchQuery({ ...searchQuery, keywords })}
-              placeholder="SaaS, B2B, etc."
+              placeholder="Type keyword, press Enter to add"
             />
           </div>
 

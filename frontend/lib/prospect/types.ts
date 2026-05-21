@@ -17,12 +17,14 @@ export interface ProspectSearchQuery {
   /** Revenue range (in USD) */
   revenueMin?: number;
   revenueMax?: number;
-  /** Location filters */
+  /** Location filters (deprecated - use locations array) */
   location?: {
     city?: string;
     state?: string;
     country?: string;
   };
+  /** Locations as chip array */
+  locations?: string[];
   /** Keywords to search for */
   keywords?: string[];
   /** Technologies used (if provider supports) */

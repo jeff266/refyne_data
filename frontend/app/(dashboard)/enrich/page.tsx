@@ -102,6 +102,21 @@ interface Owner {
   email: string | null;
 }
 
+interface ProgressState {
+  tested: number;
+  matched: number;
+  total: number;
+}
+
+interface BenchmarkRecommendation {
+  best_provider: string;
+  top_industries: Array<{ industry: string; count: number }>;
+  combined_waterfall_coverage: number;
+  apollo_coverage?: number;
+  refyne_coverage?: number;
+  message: string;
+}
+
 export default function EnrichPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -147,6 +162,13 @@ export default function EnrichPage() {
   const [previewResults, setPreviewResults] = useState<PreviewResults | null>(null);
   const [showingPreview, setShowingPreview] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Benchmark state
+  const [benchmarking, setBenchmarking] = useState(false);
+  const [benchmarkResults, setBenchmarkResults] = useState<BenchmarkRecommendation | null>(null);
+  const [benchmarkProgress, setBenchmarkProgress] = useState<Record<string, ProgressState>>({});
+  const [benchmarkSampleSize, setBenchmarkSampleSize] = useState<number>(0);
+  const [benchmarkTotalMissing, setBenchmarkTotalMissing] = useState<number>(0);
 
   // Fetch gap analysis on mount using streaming
   useEffect(() => {
@@ -653,6 +675,104 @@ export default function EnrichPage() {
     }
   }
 
+  // Run benchmark
+  async function runBenchmark() {
+    if (selectedFields.length === 0) {
+      alert('Please select at least one field to benchmark');
+      return;
+    }
+
+    setBenchmarking(true);
+    setBenchmarkProgress({});
+    setBenchmarkResults(null);
+    setBenchmarkSampleSize(0);
+    setBenchmarkTotalMissing(0);
+
+    const fields = selectedFields.join(',');
+    const es = new EventSource(`/api/enrich/benchmark/stream?fields=${fields}`);
+
+    es.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === 'sample_ready') {
+        // Show sample size and distribution
+        setBenchmarkSampleSize(msg.sample_size);
+        setBenchmarkTotalMissing(msg.total_companies);
+        console.log('Testing', msg.sample_size, 'companies from', msg.total_companies, 'missing');
+      }
+
+      if (msg.type === 'provider_start') {
+        setBenchmarkProgress(prev => ({
+          ...prev,
+          [msg.provider]: { tested: 0, matched: 0, total: 0 }
+        }));
+      }
+
+      if (msg.type === 'progress') {
+        setBenchmarkProgress(prev => ({
+          ...prev,
+          [msg.provider]: {
+            tested: msg.tested,
+            matched: msg.matched,
+            total: msg.total
+          }
+        }));
+      }
+
+      if (msg.type === 'provider_complete') {
+        // Provider finished
+      }
+
+      if (msg.type === 'provider_skip') {
+        // Provider skipped
+        setBenchmarkProgress(prev => {
+          const newProgress = { ...prev };
+          delete newProgress[msg.provider];
+          return newProgress;
+        });
+      }
+
+      if (msg.type === 'complete') {
+        setBenchmarkResults(msg.recommendation);
+        setBenchmarking(false);
+        es.close();
+      }
+
+      if (msg.type === 'error') {
+        console.error('Benchmark error:', msg.error);
+        alert(`Benchmark failed: ${msg.error}`);
+        setBenchmarking(false);
+        es.close();
+      }
+    };
+
+    es.onerror = () => {
+      console.error('EventSource connection error');
+      alert('Benchmark connection failed');
+      setBenchmarking(false);
+      es.close();
+    };
+  }
+
+  // Configure enrichment from benchmark results
+  function applyBenchmarkConfig() {
+    if (!benchmarkResults) return;
+
+    // Set providers based on recommendation
+    if (benchmarkResults.best_provider === 'refyne') {
+      setSelectedProviders(['refyne', 'apollo']);
+    } else {
+      setSelectedProviders(['apollo', 'refyne']);
+    }
+
+    // Close benchmark modal
+    setBenchmarkResults(null);
+    setBenchmarking(false);
+
+    // Scroll to provider section
+    addToast('success', 'Waterfall configured based on benchmark results');
+  }
+
   if (loading) {
     // If we have gap analysis data, show animated loading state
     if (showAnimatedLoading && gapAnalysis) {
@@ -1002,8 +1122,26 @@ export default function EnrichPage() {
 
             {/* Provider selection */}
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 8 }}>
-                Provider
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: C.text }}>
+                  Provider
+                </div>
+                <button
+                  onClick={runBenchmark}
+                  disabled={benchmarking || selectedFields.length === 0}
+                  style={{
+                    padding: '4px 8px',
+                    background: 'transparent',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 4,
+                    color: benchmarking || selectedFields.length === 0 ? C.text3 : C.indigo,
+                    fontSize: 10,
+                    cursor: benchmarking || selectedFields.length === 0 ? 'not-allowed' : 'pointer',
+                    fontWeight: 500,
+                  }}
+                >
+                  {benchmarking ? 'Benchmarking...' : 'Benchmark'}
+                </button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {PROVIDER_REGISTRY.filter(p => connectedProviders.includes(p.key)).map(provider => (
