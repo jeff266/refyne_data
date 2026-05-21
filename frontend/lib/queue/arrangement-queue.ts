@@ -737,9 +737,13 @@ async function getProviderAdapter(provider: string, orgId: string): Promise<Prov
   switch (provider) {
     case 'apollo':
       return new ApolloAdapter(apiKey);
+    case 'graphiq':
+    case 'refyne':
+      const { GraphiqAdapter } = await import('../providers/graphiq');
+      return new GraphiqAdapter(apiKey);
     case 'zoominfo':
       return new ZoomInfoAdapter(apiKey);
-    // Future providers: graphiq, cognism, etc. will be added here
+    // Future providers: cognism, etc. will be added here
     default:
       throw new Error(`Unknown provider: ${provider}`);
   }

@@ -304,7 +304,7 @@ export default function EnrichPage() {
           clearInterval(pollInterval);
 
           // Auto-refresh gap analysis
-          loadGapAnalysis();
+          fetchGapsNonStreaming();
         } else if (latestRun.status === 'failed') {
           setRunStatus('failed');
           clearInterval(pollInterval);
@@ -1783,7 +1783,7 @@ export default function EnrichPage() {
                     setArrangementId(null);
                     setRunProgress({ records_processed: 0, records_total: 0, fields_filled: {}, fields_skipped: 0, latest_results: [] });
                     // Trigger gap analysis refresh
-                    loadGapAnalysis();
+                    fetchGapsNonStreaming();
                   }}
                   style={{
                     padding: '8px 14px',
