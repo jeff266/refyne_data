@@ -627,19 +627,44 @@ export default function EnrichPage() {
         }
       }
 
-      // Build field_configs in v2 format
-      const field_configs = selectedFields.map((field_key) => ({
-        field_key,
-        field_type: field_key === 'employee_count' || field_key === 'annualrevenue' ? 'numeric' : 'categorical',
-        aggregation_strategy: 'waterfall',
-        apply_harmony: field_key === 'industry',
-        harmony_id: null,
-        steps: selectedProviders.map((provider, index) => ({
-          order: index + 1,
-          provider,
-          policy: writePolicy === 'fill_empty' ? 'overwrite_if_blank_or_ours' : 'always_overwrite',
-        })),
-      }));
+      // Map HubSpot property names to canonical field keys
+      const HUBSPOT_TO_CANONICAL: Record<string, string> = {
+        'industry': 'industry',
+        'numberofemployees': 'employee_count',
+        'linkedin_company_page': 'linkedin_url',
+        'phone': 'phone',
+        'domain': 'domain',
+        'annualrevenue': 'revenue',
+      };
+
+      // Map canonical keys to field types
+      const FIELD_TYPE_MAP: Record<string, 'numeric' | 'categorical' | 'text' | 'url'> = {
+        'industry': 'categorical',
+        'employee_count': 'numeric',
+        'linkedin_url': 'url',
+        'phone': 'text',
+        'domain': 'url',
+        'revenue': 'numeric',
+      };
+
+      // Build field_configs in v2 format with canonical keys
+      const field_configs = selectedFields.map((hubspotKey) => {
+        const canonicalKey = HUBSPOT_TO_CANONICAL[hubspotKey] || hubspotKey;
+        const fieldType = FIELD_TYPE_MAP[canonicalKey] || 'categorical';
+
+        return {
+          field_key: canonicalKey,
+          field_type: fieldType,
+          aggregation_strategy: 'waterfall',
+          apply_harmony: canonicalKey === 'industry',
+          harmony_id: null,
+          steps: selectedProviders.map((provider, index) => ({
+            order: index + 1,
+            provider,
+            policy: writePolicy === 'overwrite' ? 'overwrite' : 'fill_empty',
+          })),
+        };
+      });
 
       // Build arrangement payload (no test mode)
       const arrangementPayload: any = {
@@ -670,18 +695,22 @@ export default function EnrichPage() {
         throw new Error('No arrangement ID returned');
       }
 
-      // Show success toast with link to view details
+      // Get total companies count for the toast message
+      const totalCompanies = companyScope === 'segment'
+        ? (previewCount || 0)
+        : (gapAnalysis?.total_companies || 0);
+
+      // Show success toast with link to view progress (stays on /enrich)
       addToast(
         'success',
-        'Enrichment started. Refyne is processing your records.',
+        `Enrichment started for ${totalCompanies.toLocaleString()} companies. Refyne is working in the background.`,
         {
-          text: 'View details',
+          text: 'View progress →',
           href: `/arrangements/${arrangementId}`,
         }
       );
 
-      // Redirect to arrangements list with highlight
-      router.push(`/arrangements?highlight=${arrangementId}`);
+      // Stay on /enrich page (do not redirect)
     } catch (error) {
       console.error('Failed to create enrichment:', error);
       alert(`Failed to create enrichment: ${error instanceof Error ? error.message : 'Unknown error'}`);
