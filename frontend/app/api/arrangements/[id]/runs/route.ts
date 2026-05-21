@@ -52,6 +52,22 @@ export async function GET(req: NextRequest, context: RouteContext) {
     // For each run, aggregate progress stats
     const runsWithStats = await Promise.all(
       (runs || []).map(async (run) => {
+        // Safety check for supabase (already checked above but TS needs reassurance)
+        if (!supabase) {
+          return {
+            id: run.id,
+            status: run.status,
+            records_total: run.total_records || 0,
+            records_processed: 0,
+            records_failed: 0,
+            fields_filled: {},
+            fields_normalized: 0,
+            started_at: run.created_at,
+            completed_at: run.completed_at,
+            error: run.error_message,
+          };
+        }
+
         // Get progress records for this run
         const { data: progressRecords, error: progressError } = await supabase
           .from('arrangement_run_progress')

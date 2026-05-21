@@ -90,7 +90,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
       let companyName = record.company_name || record.record_id;
 
       // If no company name, try to look it up
-      if (!record.company_name && record.hubspot_company_id) {
+      if (!record.company_name && record.hubspot_company_id && supabase) {
         const { data: company } = await supabase
           .from('company_dedup_index')
           .select('name')
