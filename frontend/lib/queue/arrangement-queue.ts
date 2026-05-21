@@ -832,28 +832,44 @@ async function fetchRecordsForProcessing(
   }
 
   // Default: fetch all companies with cursor pagination
-  const searchBody = {
-    filterGroups: [],
-    properties,
-    limit: 100,
-    after: lastProcessedId ?? undefined,
-  };
+  const allRecords: any[] = [];
+  let after: string | undefined = lastProcessedId;
 
-  const res = await fetch('https://api.hubapi.com/crm/v3/objects/companies/search', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(searchBody),
-  });
+  // Loop through all pages
+  while (true) {
+    const searchBody = {
+      filterGroups: [],
+      properties,
+      limit: 100,
+      after,
+    };
 
-  if (!res.ok) {
-    throw new Error(`Failed to fetch companies: ${res.statusText}`);
+    const res = await fetch('https://api.hubapi.com/crm/v3/objects/companies/search', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(searchBody),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch companies: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    const results = data.results ?? [];
+
+    if (results.length === 0) break;
+
+    allRecords.push(...results);
+
+    // Check if there are more pages
+    if (!data.paging?.next?.after) break;
+    after = data.paging.next.after;
   }
 
-  const data = await res.json();
-  return data.results ?? [];
+  return allRecords;
 }
 
 async function writeToDestination(

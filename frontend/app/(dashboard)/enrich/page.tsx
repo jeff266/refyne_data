@@ -186,6 +186,7 @@ export default function EnrichPage() {
 
   // Live run state
   const [arrangementId, setArrangementId] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'complete' | 'failed'>('idle');
   const [runProgress, setRunProgress] = useState<{
     records_processed: number;
@@ -276,7 +277,7 @@ export default function EnrichPage() {
 
   // Poll arrangement run progress when running
   useEffect(() => {
-    if (!arrangementId || runStatus !== 'running') return;
+    if (!arrangementId || !runId || runStatus !== 'running') return;
 
     const pollInterval = setInterval(async () => {
       try {
@@ -288,6 +289,39 @@ export default function EnrichPage() {
 
         if (!latestRun) return;
 
+        // Fetch progress records for live feed
+        let latestResults: any[] = [];
+        try {
+          const progressRes = await fetch(`/api/arrangements/${arrangementId}/runs/${runId}/progress`);
+          if (progressRes.ok) {
+            const progressData = await progressRes.json();
+            const records = progressData.records || [];
+
+            // Transform progress records into latest_results format
+            // Take the most recent 20 completed records and extract field updates
+            const completedRecords = records
+              .filter((r: any) => r.status === 'completed')
+              .slice(0, 20);
+
+            latestResults = [];
+            completedRecords.forEach((record: any) => {
+              Object.entries(record.fields_filled || {}).forEach(([fieldKey, fieldData]: [string, any]) => {
+                if (fieldData.after && !fieldData.skipped) {
+                  const fieldLabel = ENRICHABLE_FIELDS.find(f => f.key === fieldKey)?.label || fieldKey;
+                  latestResults.push({
+                    company_name: record.company_name,
+                    field_key: fieldKey,
+                    field_label: fieldLabel,
+                    value: fieldData.after,
+                  });
+                }
+              });
+            });
+          }
+        } catch (progressError) {
+          console.error('Failed to fetch progress records:', progressError);
+        }
+
         // Update progress
         setRunProgress({
           records_processed: latestRun.records_processed || 0,
@@ -295,7 +329,7 @@ export default function EnrichPage() {
           fields_filled: latestRun.fields_filled || {},
           fields_skipped: latestRun.fields_skipped || 0,
           started_at: latestRun.started_at,
-          latest_results: [], // TODO: Fetch from progress records if needed
+          latest_results: latestResults,
         });
 
         // Check if complete
@@ -315,7 +349,7 @@ export default function EnrichPage() {
     }, 3000); // Poll every 3 seconds
 
     return () => clearInterval(pollInterval);
-  }, [arrangementId, runStatus, runProgress.records_total]);
+  }, [arrangementId, runId, runStatus, runProgress.records_total]);
 
   // Fallback non-streaming fetch
   async function fetchGapsNonStreaming() {
@@ -773,6 +807,7 @@ export default function EnrichPage() {
       const runResponse = await fetch(`/api/arrangements/${newArrangementId}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ totalRecords: totalCompanies }),
       });
 
       if (!runResponse.ok) {
@@ -785,6 +820,7 @@ export default function EnrichPage() {
 
       // Transition to running state (stay on /enrich, show inline run view)
       setArrangementId(newArrangementId);
+      setRunId(runData.runId);
       setRunStatus('running');
       setRunProgress({
         records_processed: 0,
@@ -1761,6 +1797,7 @@ export default function EnrichPage() {
                   onClick={() => {
                     setRunStatus('idle');
                     setArrangementId(null);
+                    setRunId(null);
                     setRunProgress({ records_processed: 0, records_total: 0, fields_filled: {}, fields_skipped: 0, latest_results: [] });
                   }}
                   style={{
@@ -1780,6 +1817,7 @@ export default function EnrichPage() {
                   onClick={() => {
                     setRunStatus('idle');
                     setArrangementId(null);
+                    setRunId(null);
                     setRunProgress({ records_processed: 0, records_total: 0, fields_filled: {}, fields_skipped: 0, latest_results: [] });
                     // Trigger gap analysis refresh
                     fetchGapsNonStreaming();

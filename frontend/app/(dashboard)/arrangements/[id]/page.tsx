@@ -450,8 +450,8 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                     {currentRun.status === 'failed' && 'Run failed'}
                   </div>
                   <div style={{ fontSize: '12px', color: C.text2, marginTop: '2px' }}>
-                    {currentRun.status === 'running' && `Querying ${getProviderName(arrangement.provider)}${harmonies.length > 0 ? ` · Applying ${harmonies[0].name}` : ''}`}
-                    {currentRun.status === 'completed' && `${currentRun.total_records} records processed · Ready to review results`}
+                    {currentRun.status === 'running' && `Querying ${getProviderName(arrangement.provider)}${harmonies.length > 0 && harmonies[0] ? ` · Applying ${harmonies[0].name}` : ''}`}
+                    {currentRun.status === 'completed' && `${currentRun.total_records || 0} records processed · Ready to review results`}
                   </div>
                 </div>
               </div>
@@ -467,7 +467,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <span style={{ fontSize: '13px', color: C.text2 }}>Records processed</span>
                 <span style={{ fontSize: '13px', fontWeight: '500', color: C.text }}>
-                  {currentRun.records_processed} of {currentRun.total_records}
+                  {currentRun.records_processed || 0} of {currentRun.total_records || 0}
                 </span>
               </div>
               <div style={{ height: '4px', background: C.border, borderRadius: '2px', overflow: 'hidden' }}>
@@ -476,7 +476,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                   background: currentRun.status === 'completed' ? C.green : C.indigo,
                   borderRadius: '2px',
                   transition: 'width 0.4s ease',
-                  width: `${(currentRun.records_processed / currentRun.total_records) * 100}%`
+                  width: `${(currentRun.total_records || 0) > 0 ? ((currentRun.records_processed || 0) / (currentRun.total_records || 1)) * 100 : 0}%`
                 }} />
               </div>
             </div>
@@ -680,7 +680,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                 <div>
                   <div style={{ fontSize: '14px', fontWeight: '500', color: C.text }}>Test run complete</div>
                   <div style={{ fontSize: '12px', color: C.text2, marginTop: '1px' }}>
-                    {currentRun.total_records} records · {testResults.filter(r => r.after_value && !r.skipped).length} fields filled ·
+                    {currentRun.total_records || 0} records · {testResults.filter(r => r.after_value && !r.skipped).length} fields filled ·
                     {testResults.filter(r => r.normalized).length} normalized · {formatDuration(elapsedSeconds)}
                   </div>
                 </div>
@@ -729,7 +729,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
 
               {testResults.some(r => r.normalized) && (
                 <div style={{ fontSize: '11px', color: C.text3, marginBottom: '12px' }}>
-                  ✦ Normalized by {harmonies.length > 0 ? harmonies[0].name : 'harmony'}
+                  ✦ Normalized by {harmonies.length > 0 && harmonies[0] ? harmonies[0].name : 'harmony'}
                 </div>
               )}
 
@@ -795,7 +795,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border}` }}>
                   <span style={{ fontSize: '12px', color: C.text2 }}>Records</span>
                   <span style={{ fontSize: '12px', color: C.text }}>
-                    {currentRun.total_records} {currentRun.is_test ? '(test)' : ''}
+                    {currentRun.total_records || 0} {currentRun.is_test ? '(test)' : ''}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: `0.5px solid ${C.border}` }}>

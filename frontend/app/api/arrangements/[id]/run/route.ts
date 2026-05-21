@@ -46,9 +46,9 @@ export async function POST(
       );
     }
 
-    // For MVP, use demo companies count as total
-    // In production, this would query the actual source
-    const totalRecords = 10;
+    // Get total records from request body
+    const body = await request.json();
+    const totalRecords = body.totalRecords || 0;
 
     // Estimate cost
     const estimate = estimateRunCost(arrangement.enrichment_steps, totalRecords);
