@@ -1,12 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 
 export interface Toast {
   id: string;
   type: 'success' | 'error';
   message: string;
+  link?: {
+    text: string;
+    href: string;
+  };
 }
 
 interface ToastContextValue {
@@ -23,15 +28,19 @@ function notifyListeners() {
   toastListeners.forEach(listener => listener([...toasts]));
 }
 
-export function addToast(type: 'success' | 'error', message: string) {
+export function addToast(
+  type: 'success' | 'error',
+  message: string,
+  link?: { text: string; href: string }
+) {
   const id = Math.random().toString(36).substring(7);
-  toasts = [...toasts, { id, type, message }];
+  toasts = [...toasts, { id, type, message, link }];
   notifyListeners();
 
-  // Auto remove after 4 seconds
+  // Auto remove after 5 seconds (slightly longer if there's a link)
   setTimeout(() => {
     removeToast(id);
-  }, 4000);
+  }, link ? 5000 : 4000);
 }
 
 export function removeToast(id: string) {
@@ -76,7 +85,18 @@ export function ToastContainer() {
           ) : (
             <AlertCircle className="w-5 h-5 text-red-600" />
           )}
-          <span className="text-sm font-medium">{toast.message}</span>
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium">{toast.message}</span>
+            {toast.link && (
+              <Link
+                href={toast.link.href}
+                className="text-xs font-semibold underline hover:no-underline"
+                onClick={() => removeToast(toast.id)}
+              >
+                {toast.link.text} →
+              </Link>
+            )}
+          </div>
           <button
             onClick={() => removeToast(toast.id)}
             className="ml-2 p-1 hover:bg-black/5 rounded"

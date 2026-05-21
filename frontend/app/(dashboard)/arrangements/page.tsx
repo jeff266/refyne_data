@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { Workflow, Plus, Play, Edit, Clock, Trash2 } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
@@ -49,12 +49,15 @@ function formatTimeAgo(dateString: string): string {
 
 export default function ArrangementsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { orgRole } = useAuth();
   const [arrangements, setArrangements] = useState<Arrangement[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [arrangementToDelete, setArrangementToDelete] = useState<Arrangement | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const highlightRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const isViewer = orgRole === 'org:viewer';
   const canCreate = !isViewer;
@@ -62,6 +65,29 @@ export default function ArrangementsPage() {
   useEffect(() => {
     fetchArrangements();
   }, []);
+
+  // Handle highlight from query param
+  useEffect(() => {
+    const highlight = searchParams.get('highlight');
+    if (highlight && arrangements.length > 0) {
+      setHighlightedId(highlight);
+
+      // Scroll to highlighted arrangement
+      setTimeout(() => {
+        const ref = highlightRefs.current[highlight];
+        if (ref) {
+          ref.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+
+      // Remove highlight after 3 seconds
+      setTimeout(() => {
+        setHighlightedId(null);
+        // Clean up query param
+        router.replace('/arrangements', { scroll: false });
+      }, 3000);
+    }
+  }, [searchParams, arrangements, router]);
 
   const fetchArrangements = async () => {
     setLoading(true);
@@ -266,15 +292,21 @@ export default function ArrangementsPage() {
             .join(' → ');
 
           const totalFields = new Set(steps.flatMap((step) => step.fields)).size;
+          const isHighlighted = highlightedId === arr.id;
 
           return (
             <div
               key={arr.id}
+              ref={(el) => {
+                highlightRefs.current[arr.id] = el;
+              }}
               style={{
                 background: C.surface,
-                border: `1px solid ${C.border}`,
+                border: `1px solid ${isHighlighted ? C.green : C.border}`,
                 borderRadius: 8,
                 padding: 20,
+                boxShadow: isHighlighted ? `0 0 0 3px ${C.greenDim}` : undefined,
+                transition: 'all 0.3s ease',
               }}
             >
               {/* Header */}
