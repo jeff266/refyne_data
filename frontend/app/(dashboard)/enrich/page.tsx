@@ -621,13 +621,14 @@ export default function EnrichPage() {
       }
 
       // Build field_configs in v2 format
-      const field_configs = selectedFields.map((field_key, index) => ({
+      const field_configs = selectedFields.map((field_key) => ({
         field_key,
-        field_type: 'text',
+        field_type: field_key === 'employee_count' || field_key === 'annualrevenue' ? 'numeric' : 'categorical',
         aggregation_strategy: 'waterfall',
-        apply_harmony: true,
-        steps: selectedProviders.map((provider, providerIndex) => ({
-          order: providerIndex + 1,
+        apply_harmony: field_key === 'industry',
+        harmony_id: null,
+        steps: selectedProviders.map((provider, index) => ({
+          order: index + 1,
           provider,
           policy: writePolicy === 'fill_empty' ? 'overwrite_if_blank_or_ours' : 'always_overwrite',
         })),
