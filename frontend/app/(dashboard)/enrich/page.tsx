@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn, CustomDropdown } from '@/components/refyne';
 import type { CustomDropdownOption } from '@/components/refyne';
+import { EnrichLoadingState } from '@/components/enrich/EnrichLoadingState';
+import { addToast } from '@/components/ui/toast';
 
 interface FieldGap {
   field: string;
@@ -69,6 +71,7 @@ interface Owner {
 export default function EnrichPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [showAnimatedLoading, setShowAnimatedLoading] = useState(false);
   const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -110,10 +113,11 @@ export default function EnrichPage() {
         if (res.ok) {
           const data = await res.json();
           setGapAnalysis(data);
+          // Trigger animated loading state
+          setShowAnimatedLoading(true);
         }
       } catch (error) {
         console.error('Failed to fetch gap analysis:', error);
-      } finally {
         setLoading(false);
       }
     }
@@ -375,7 +379,18 @@ export default function EnrichPage() {
         throw new Error('No arrangement ID returned');
       }
 
-      router.push(`/arrangements/${arrangementId}`);
+      // Show success toast with link to view details
+      addToast(
+        'success',
+        'Enrichment started. Refyne is processing your records.',
+        {
+          text: 'View details',
+          href: `/arrangements/${arrangementId}`,
+        }
+      );
+
+      // Redirect to arrangements list with highlight
+      router.push(`/arrangements?highlight=${arrangementId}`);
     } catch (error) {
       console.error('Failed to create enrichment:', error);
       alert(`Failed to create enrichment: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -394,6 +409,18 @@ export default function EnrichPage() {
   }
 
   if (loading) {
+    // If we have gap analysis data, show animated loading state
+    if (showAnimatedLoading && gapAnalysis) {
+      return (
+        <EnrichLoadingState
+          onComplete={() => setLoading(false)}
+          finalCount={gapAnalysis.total_companies}
+          finalFieldGaps={gapAnalysis.field_gaps}
+        />
+      );
+    }
+
+    // Otherwise show simple loading state
     return (
       <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto', fontFamily: F.sans }}>
         <div style={{ padding: 40, textAlign: 'center', color: C.text3 }}>
