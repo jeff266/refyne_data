@@ -74,10 +74,12 @@ export class ApolloAdapter implements ProviderAdapter {
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Apollo] API error ${response.status}:`, errorText);
       throw new ProviderError(
         'apollo',
         'api_error',
-        `API request failed: ${response.statusText}`,
+        `API request failed: ${response.statusText} - ${errorText}`,
         response.status
       );
     }
