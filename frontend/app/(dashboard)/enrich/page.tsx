@@ -18,6 +18,7 @@ interface GapAnalysis {
   total_companies: number;
   field_gaps: FieldGap[];
   scanned_at: string;
+  from_cache?: boolean;
 }
 
 interface HarmonyPreview {
@@ -62,6 +63,8 @@ interface PreviewResults {
     fields_skipped: number;
     fields_not_found: number;
     harmonies_applied: number;
+    no_domain: number;
+    already_complete: number;
   };
 }
 
@@ -105,6 +108,10 @@ export default function EnrichPage() {
   const [showAnimatedLoading, setShowAnimatedLoading] = useState(false);
   const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
   const [running, setRunning] = useState(false);
+  const [loadingState, setLoadingState] = useState<'initial' | 'streaming' | 'complete'>('initial');
+  const [fromCache, setFromCache] = useState(false);
+  const [scannedCount, setScannedCount] = useState(0);
+  const [lastScannedAt, setLastScannedAt] = useState<string | null>(null);
 
   // Configuration state
   const [companyScope, setCompanyScope] = useState<'all' | 'list' | 'segment' | 'csv'>('all');
@@ -141,23 +148,88 @@ export default function EnrichPage() {
   const [showingPreview, setShowingPreview] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  // Fetch gap analysis on mount
+  // Fetch gap analysis on mount using streaming
   useEffect(() => {
-    async function fetchGaps() {
-      try {
-        const res = await fetch('/api/enrich/gaps');
-        if (res.ok) {
-          const data = await res.json();
-          setGapAnalysis(data);
-          // Trigger animated loading state
-          setShowAnimatedLoading(true);
+    const es = new EventSource('/api/enrich/gaps/stream');
+
+    es.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === 'complete' && msg.from_cache) {
+        // Instant load from cache - skip animation entirely
+        setGapAnalysis(msg.data);
+        setLastScannedAt(msg.data.scanned_at);
+        setFromCache(true);
+        setLoadingState('complete');
+        setShowAnimatedLoading(true); // Still trigger to show data
+        setLoading(false);
+        es.close();
+        return;
+      }
+
+      if (msg.type === 'progress') {
+        // Update counts live as pages come in
+        setScannedCount(msg.processed);
+
+        if (msg.processed > 0 && msg.fields.length > 0) {
+          // Show gap analysis panel immediately with partial data
+          setGapAnalysis({
+            total_companies: msg.processed,
+            field_gaps: msg.fields,
+            scanned_at: new Date().toISOString(),
+          });
+
+          if (loadingState === 'initial') {
+            setLoadingState('streaming');
+            setShowAnimatedLoading(true);
+            setLoading(false);
+          }
         }
-      } catch (error) {
-        console.error('Failed to fetch gap analysis:', error);
+      }
+
+      if (msg.type === 'complete' && !msg.from_cache) {
+        setGapAnalysis(msg.data);
+        setLastScannedAt(msg.data.scanned_at);
+        setLoadingState('complete');
+        setFromCache(false);
+        es.close();
+      }
+
+      if (msg.type === 'error') {
+        console.error('Gap stream error:', msg.error);
+        setLoading(false);
+        es.close();
+      }
+    };
+
+    es.onerror = () => {
+      console.error('EventSource connection error');
+      es.close();
+      // Fallback to regular fetch
+      fetchGapsNonStreaming();
+    };
+
+    return () => es.close();
+  }, []);
+
+  // Fallback non-streaming fetch
+  async function fetchGapsNonStreaming() {
+    try {
+      const res = await fetch('/api/enrich/gaps');
+      if (res.ok) {
+        const data = await res.json();
+        setGapAnalysis(data);
+        setShowAnimatedLoading(true);
         setLoading(false);
       }
+    } catch (error) {
+      console.error('Failed to fetch gap analysis:', error);
+      setLoading(false);
     }
+  }
 
+  // Fetch other data on mount
+  useEffect(() => {
     async function fetchConnections() {
       try {
         const res = await fetch('/api/providers/connections');
@@ -223,7 +295,6 @@ export default function EnrichPage() {
       }
     }
 
-    fetchGaps();
     fetchConnections();
     fetchHubSpotLists();
     fetchLifecycleStages();
@@ -295,6 +366,28 @@ export default function EnrichPage() {
 
     return () => clearTimeout(timeoutId);
   }, [companyScope, lifecycleStage, ownerId, selectedIndustries, selectedFields]);
+
+  // Helper function to format time ago
+  function formatTimeAgo(isoDate: string): string {
+    const mins = Math.floor((Date.now() - new Date(isoDate).getTime()) / 60000);
+    if (mins < 60) return `${mins} minutes ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} hours ago`;
+    return `${Math.floor(hours / 24)} days ago`;
+  }
+
+  // Refresh gap analysis
+  async function refreshGapAnalysis() {
+    // Clear cache and restart stream
+    setLoading(true);
+    setShowAnimatedLoading(false);
+    setLoadingState('initial');
+    setFromCache(false);
+    setScannedCount(0);
+
+    // For now, reload to restart the EventSource connection
+    window.location.reload();
+  }
 
   // Handle CSV file upload
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -967,14 +1060,64 @@ export default function EnrichPage() {
                 Preview results
               </div>
 
-              <div style={{ fontSize: 14, color: C.text2, marginBottom: 20 }}>
-                {previewResults.records_processed} records · {previewResults.summary.fields_would_fill} fields would be filled
-                {previewResults.summary.harmonies_applied > 0 && (
-                  <span> · {previewResults.summary.harmonies_applied} normalized by harmony</span>
-                )}
-                {' · '}
-                {Math.round(previewResults.duration_seconds)}s
-              </div>
+              {previewResults.summary.fields_would_fill === 0 ? (
+                // Empty state
+                <div>
+                  <div style={{ fontSize: 13, color: C.text2, marginBottom: 16 }}>
+                    {previewResults.records_processed} records · 0 fields would be filled
+                  </div>
+
+                  <div style={{
+                    background: C.bg,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    padding: 20,
+                    marginBottom: 20
+                  }}>
+                    <div style={{ fontSize: 13, color: C.text, marginBottom: 12 }}>
+                      Apollo did not return data for these {previewResults.records_processed} companies.
+                      This can happen when companies have no domain in HubSpot or are not in Apollo's database.
+                    </div>
+
+                    <div style={{ fontSize: 12, color: C.text3, lineHeight: 1.6 }}>
+                      <div>Companies without domains: <strong>{previewResults.summary.no_domain}</strong></div>
+                      <div>Companies not found in Apollo: <strong>{Math.floor(previewResults.summary.fields_not_found / selectedFields.length)}</strong></div>
+                      <div>Companies with fields already complete: <strong>{previewResults.summary.already_complete}</strong></div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <PrimaryBtn onClick={runPreview}>
+                      Try a different sample →
+                    </PrimaryBtn>
+                    <button
+                      onClick={startOver}
+                      style={{
+                        padding: '10px 16px',
+                        background: 'transparent',
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 6,
+                        color: C.text2,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Start over
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // Normal preview results
+                <div>
+                  <div style={{ fontSize: 14, color: C.text2, marginBottom: 20 }}>
+                    {previewResults.records_processed} records · {previewResults.summary.fields_would_fill} fields would be filled
+                    {previewResults.summary.harmonies_applied > 0 && (
+                      <span> · {previewResults.summary.harmonies_applied} normalized by harmony</span>
+                    )}
+                    {' · '}
+                    {Math.round(previewResults.duration_seconds)}s
+                  </div>
 
               <div style={{ maxHeight: 500, overflowY: 'auto', marginBottom: 20, border: `1px solid ${C.border}`, borderRadius: 4 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -1073,11 +1216,43 @@ export default function EnrichPage() {
                   </button>
                 </div>
               </div>
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
-                Data gaps in your HubSpot
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Data gaps in your HubSpot
+                  {loadingState === 'streaming' && (
+                    <span style={{ marginLeft: 12, fontSize: 11, color: C.amber, fontWeight: 400 }}>
+                      Scanning... {scannedCount.toLocaleString()} companies
+                    </span>
+                  )}
+                  {fromCache && lastScannedAt && (
+                    <span style={{ marginLeft: 12, fontSize: 11, color: C.text3, fontWeight: 400 }}>
+                      Last scanned {new Date(lastScannedAt).toLocaleTimeString()}
+                    </span>
+                  )}
+                </div>
+                {loadingState === 'complete' && (
+                  <button
+                    onClick={refreshGapAnalysis}
+                    style={{
+                      padding: '4px 12px',
+                      background: 'transparent',
+                      border: `1px solid ${C.border}`,
+                      color: C.text3,
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      borderRadius: 4,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = C.text; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = C.text3; }}
+                  >
+                    Refresh
+                  </button>
+                )}
               </div>
 
               <div style={{ fontSize: 20, fontWeight: 600, color: C.text, marginBottom: 20 }}>
