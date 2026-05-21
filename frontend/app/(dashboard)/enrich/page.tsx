@@ -34,6 +34,37 @@ interface HarmonyPreview {
   } | null;
 }
 
+interface PreviewFieldResult {
+  field_key: string;
+  field_label: string;
+  before: string | null;
+  after: string | null;
+  would_write: boolean;
+  harmony_applied: boolean;
+  harmony_name: string | null;
+  provider: string | null;
+}
+
+interface PreviewCompanyResult {
+  hubspot_company_id: string;
+  company_name: string;
+  fields: PreviewFieldResult[];
+}
+
+interface PreviewResults {
+  preview_id: string;
+  status: 'completed';
+  records_processed: number;
+  duration_seconds: number;
+  results: PreviewCompanyResult[];
+  summary: {
+    fields_would_fill: number;
+    fields_skipped: number;
+    fields_not_found: number;
+    harmonies_applied: number;
+  };
+}
+
 interface HubSpotList {
   listId: string;
   name: string;
@@ -104,6 +135,11 @@ export default function EnrichPage() {
   const [testMode, setTestMode] = useState(false);
   const [testRecordLimit, setTestRecordLimit] = useState(10);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  // Preview state
+  const [previewResults, setPreviewResults] = useState<PreviewResults | null>(null);
+  const [showingPreview, setShowingPreview] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Fetch gap analysis on mount
   useEffect(() => {
@@ -275,7 +311,7 @@ export default function EnrichPage() {
     }
   }
 
-  // Run enrichment
+  // Run enrichment or preview
   async function handleRunEnrichment() {
     if (selectedFields.length === 0) {
       alert('Please select at least one field to enrich');
@@ -286,14 +322,118 @@ export default function EnrichPage() {
       return;
     }
 
-    // Show confirmation modal for large runs without test mode
+    // Test mode triggers preview instead of full run
+    if (testMode) {
+      await runPreview();
+      return;
+    }
+
+    // Show confirmation modal for large runs
     const estimatedCount = companyScope === 'segment' ? (previewCount || 0) : gapAnalysis?.total_companies || 0;
-    if (!testMode && estimatedCount > 100) {
+    if (estimatedCount > 100) {
       setShowConfirmModal(true);
       return;
     }
 
     await executeEnrichment();
+  }
+
+  // Run preview on sample records
+  async function runPreview() {
+    setPreviewLoading(true);
+    setShowingPreview(false);
+    setPreviewResults(null);
+
+    try {
+      // Build source config
+      let source: any = { type: companyScope };
+
+      if (companyScope === 'list') {
+        source.list_id = selectedList;
+      } else if (companyScope === 'segment') {
+        const filters: any = { missing_fields: selectedFields };
+        if (lifecycleStage) filters.lifecyclestage = lifecycleStage;
+        if (ownerId) filters.hubspot_owner_id = ownerId;
+        if (selectedIndustries.length > 0) filters.industry = selectedIndustries;
+        source.filters = filters;
+      } else if (companyScope === 'csv') {
+        source.domains = csvText.split('\n').filter(d => d.trim());
+      } else {
+        source.type = 'all';
+        source.filters = { missing_fields: selectedFields };
+      }
+
+      const response = await fetch('/api/enrich/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fields: selectedFields,
+          providers: selectedProviders,
+          write_policy: writePolicy,
+          record_limit: testRecordLimit,
+          source,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate preview');
+      }
+
+      const data: PreviewResults = await response.json();
+      setPreviewResults(data);
+      setShowingPreview(true);
+    } catch (error) {
+      console.error('Preview error:', error);
+      alert(`Failed to generate preview: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  // Apply preview results to HubSpot
+  async function applyPreviewResults() {
+    if (!previewResults) return;
+
+    setRunning(true);
+    try {
+      const response = await fetch('/api/enrich/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preview_id: previewResults.preview_id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to apply changes');
+      }
+
+      const data = await response.json();
+      addToast('success', `Applied changes to ${data.applied} companies.`);
+
+      // Reset to gap analysis view
+      setShowingPreview(false);
+      setPreviewResults(null);
+      setTestMode(false);
+    } catch (error) {
+      console.error('Apply error:', error);
+      alert(`Failed to apply changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  // Run full enrichment on all matching companies
+  async function runFullEnrichment() {
+    await executeEnrichment();
+  }
+
+  // Start over from preview
+  function startOver() {
+    setShowingPreview(false);
+    setPreviewResults(null);
   }
 
   async function executeEnrichment() {
@@ -343,11 +483,9 @@ export default function EnrichPage() {
         })),
       }));
 
-      // Add test mode flags if enabled
+      // Build arrangement payload (no test mode)
       const arrangementPayload: any = {
-        name: testMode
-          ? `Test enrichment - ${new Date().toLocaleDateString()}`
-          : `Enrich missing fields - ${new Date().toLocaleDateString()}`,
+        name: `Enrich missing fields - ${new Date().toLocaleDateString()}`,
         description: `Fill gaps in ${selectedFields.join(', ')} using ${selectedProviders.join(', ')}`,
         source_type,
         source_config,
@@ -355,11 +493,6 @@ export default function EnrichPage() {
         output_destination: 'hubspot',
         output_config: { object_type: 'companies' },
       };
-
-      if (testMode) {
-        arrangementPayload.test_mode = true;
-        arrangementPayload.record_limit = testRecordLimit;
-      }
 
       const response = await fetch('/api/arrangements', {
         method: 'POST',
@@ -805,91 +938,217 @@ export default function EnrichPage() {
             </div>
 
             {/* Run button */}
-            <PrimaryBtn onClick={handleRunEnrichment} disabled={running}>
+            <PrimaryBtn onClick={handleRunEnrichment} disabled={running || previewLoading}>
               {running
                 ? 'Creating...'
+                : previewLoading
+                ? 'Loading preview...'
                 : testMode
-                ? `Test (${testRecordLimit}) →`
-                : 'Run enrichment →'}
+                ? `Preview ${testRecordLimit} records`
+                : `Enrich all ${(companyScope === 'segment' ? (previewCount || 0) : gapAnalysis?.total_companies || 0).toLocaleString()} companies →`}
             </PrimaryBtn>
           </div>
         </div>
 
-        {/* Right panel - Gap Analysis */}
+        {/* Right panel - Gap Analysis or Preview Results */}
         <div style={{ flex: 1 }}>
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
-              Data gaps in your HubSpot
+          {previewLoading ? (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
+                Generating preview
+              </div>
+              <div style={{ padding: 40, textAlign: 'center', color: C.text3 }}>
+                <p>Loading preview results...</p>
+              </div>
             </div>
+          ) : showingPreview && previewResults ? (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
+                Preview results
+              </div>
 
-            <div style={{ fontSize: 20, fontWeight: 600, color: C.text, marginBottom: 20 }}>
-              {gapAnalysis.total_companies.toLocaleString()} companies scanned
-            </div>
+              <div style={{ fontSize: 14, color: C.text2, marginBottom: 20 }}>
+                {previewResults.records_processed} records · {previewResults.summary.fields_would_fill} fields would be filled
+                {previewResults.summary.harmonies_applied > 0 && (
+                  <span> · {previewResults.summary.harmonies_applied} normalized by harmony</span>
+                )}
+                {' · '}
+                {Math.round(previewResults.duration_seconds)}s
+              </div>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <th style={{ padding: '8px 0', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Field
-                  </th>
-                  <th style={{ padding: '8px 0', textAlign: 'right', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Missing
-                  </th>
-                  <th style={{ padding: '8px 0', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: 16 }}>
-                    Coverage
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {gapAnalysis.field_gaps.map((gap) => {
-                  const isSelected = selectedFields.includes(gap.field);
-                  return (
-                    <tr
-                      key={gap.field}
-                      onClick={() => handleFieldClick(gap.field)}
-                      style={{
-                        borderBottom: `1px solid ${C.border}`,
-                        cursor: 'pointer',
-                        background: isSelected ? C.hover : 'transparent',
-                      }}
-                    >
-                      <td style={{ padding: '12px 8px', fontSize: 14, color: C.text }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            style={{ cursor: 'pointer' }}
-                          />
-                          {ENRICHABLE_FIELDS.find(f => f.key === gap.field)?.label || gap.field}
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px 8px', textAlign: 'right', fontSize: 14, fontFamily: F.mono, color: C.text2 }}>
-                        {gap.missing.toLocaleString()}
-                      </td>
-                      <td style={{ padding: '12px 8px', paddingLeft: 16 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ flex: 1, height: 6, background: C.hover, borderRadius: 3, overflow: 'hidden' }}>
-                            <div
-                              style={{
-                                height: '100%',
-                                width: `${gap.coverage}%`,
-                                background: gap.coverage >= 80 ? C.green : gap.coverage >= 50 ? C.amber : C.red,
-                                borderRadius: 3,
-                              }}
-                            />
-                          </div>
-                          <span style={{ fontSize: 12, fontFamily: F.mono, color: C.text3, minWidth: 40 }}>
-                            {gap.coverage}%
-                          </span>
-                        </div>
-                      </td>
+              <div style={{ maxHeight: 500, overflowY: 'auto', marginBottom: 20, border: `1px solid ${C.border}`, borderRadius: 4 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: C.surface, zIndex: 1 }}>
+                    <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                        Company
+                      </th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                        Field
+                      </th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                        Before → After
+                      </th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {previewResults.results.flatMap((company) =>
+                      company.fields
+                        .filter(f => f.after && f.after !== f.before)
+                        .map((field, idx) => (
+                          <tr key={`${company.hubspot_company_id}-${field.field_key}`} style={{ borderBottom: `1px solid ${C.border}` }}>
+                            <td style={{ padding: '8px 12px', color: C.text, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {idx === 0 ? company.company_name : ''}
+                            </td>
+                            <td style={{ padding: '8px 12px', color: C.text2 }}>
+                              {field.field_label}
+                            </td>
+                            <td style={{ padding: '8px 12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: C.text3, fontStyle: 'italic' }}>
+                                  {field.before || 'empty'}
+                                </span>
+                                <span style={{ color: C.text3 }}>→</span>
+                                <span style={{ color: field.would_write ? C.green : C.text2 }}>
+                                  {field.after || '(not found)'}
+                                </span>
+                                {field.harmony_applied && (
+                                  <span style={{ fontSize: 16, color: C.amber, marginLeft: 4 }} title={`Normalized by ${field.harmony_name}`}>
+                                    ✦
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {previewResults.summary.harmonies_applied > 0 && (
+                <div style={{ fontSize: 11, color: C.text3, marginBottom: 20 }}>
+                  ✦ Normalized by harmony
+                </div>
+              )}
+
+              <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: 16 }}>
+                <div style={{ fontSize: 13, color: C.text, marginBottom: 12, fontWeight: 500 }}>
+                  Ready to apply these changes?
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <PrimaryBtn onClick={applyPreviewResults} disabled={running}>
+                    {running ? 'Applying...' : `Apply to these ${previewResults.records_processed} records`}
+                  </PrimaryBtn>
+                  <button
+                    onClick={runFullEnrichment}
+                    disabled={running}
+                    style={{
+                      padding: '8px 16px',
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      color: C.text,
+                      cursor: running ? 'not-allowed' : 'pointer',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      borderRadius: 4,
+                    }}
+                  >
+                    Run on all {(companyScope === 'segment' ? (previewCount || 0) : gapAnalysis?.total_companies || 0).toLocaleString()} companies →
+                  </button>
+                  <button
+                    onClick={startOver}
+                    disabled={running}
+                    style={{
+                      padding: '8px 16px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: C.text3,
+                      cursor: running ? 'not-allowed' : 'pointer',
+                      fontSize: 13,
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Start over
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
+                Data gaps in your HubSpot
+              </div>
+
+              <div style={{ fontSize: 20, fontWeight: 600, color: C.text, marginBottom: 20 }}>
+                {gapAnalysis.total_companies.toLocaleString()} companies scanned
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <th style={{ padding: '8px 0', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Field
+                    </th>
+                    <th style={{ padding: '8px 0', textAlign: 'right', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Missing
+                    </th>
+                    <th style={{ padding: '8px 0', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', paddingLeft: 16 }}>
+                      Coverage
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gapAnalysis.field_gaps.map((gap) => {
+                    const isSelected = selectedFields.includes(gap.field);
+                    return (
+                      <tr
+                        key={gap.field}
+                        onClick={() => handleFieldClick(gap.field)}
+                        style={{
+                          borderBottom: `1px solid ${C.border}`,
+                          cursor: 'pointer',
+                          background: isSelected ? C.hover : 'transparent',
+                        }}
+                      >
+                        <td style={{ padding: '12px 8px', fontSize: 14, color: C.text }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            {ENRICHABLE_FIELDS.find(f => f.key === gap.field)?.label || gap.field}
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 8px', textAlign: 'right', fontSize: 14, fontFamily: F.mono, color: C.text2 }}>
+                          {gap.missing.toLocaleString()}
+                        </td>
+                        <td style={{ padding: '12px 8px', paddingLeft: 16 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ flex: 1, height: 6, background: C.hover, borderRadius: 3, overflow: 'hidden' }}>
+                              <div
+                                style={{
+                                  height: '100%',
+                                  width: `${gap.coverage}%`,
+                                  background: gap.coverage >= 80 ? C.green : gap.coverage >= 50 ? C.amber : C.red,
+                                  borderRadius: 3,
+                                }}
+                              />
+                            </div>
+                            <span style={{ fontSize: 12, fontFamily: F.mono, color: C.text3, minWidth: 40 }}>
+                              {gap.coverage}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
