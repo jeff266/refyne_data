@@ -412,7 +412,7 @@ async function processRehearsalJob(
               recordCredits += 1; // Nominal credit for demo
             } else {
               // Live mode: make real API calls
-              const provider = getProviderAdapter(step.provider);
+              const provider = await getProviderAdapter(step.provider, orgId);
               const result = await provider.enrichCompany({ domain: company.domain });
 
               if (result) {
@@ -582,7 +582,7 @@ async function processLiveRunJob(
           // LEGACY PATH: Use enrichment_steps
           for (const step of config.enrichment_steps!.sort((a, b) => a.order - b.order)) {
             try {
-              const provider = getProviderAdapter(step.provider);
+              const provider = await getProviderAdapter(step.provider, orgId);
               const result = await provider.enrichCompany({ domain: record.domain });
 
               if (result) {
@@ -725,10 +725,16 @@ async function processLiveRunJob(
 // Helper Functions
 // ─────────────────────────────────────────────────────────────
 
-function getProviderAdapter(provider: string): ProviderAdapter {
+async function getProviderAdapter(provider: string, orgId: string): Promise<ProviderAdapter> {
   switch (provider) {
-    case 'apollo':
-      return new ApolloAdapter();
+    case 'apollo': {
+      const { getApolloKey } = await import('../providers/apollo-key');
+      const apiKey = await getApolloKey(orgId);
+      if (!apiKey) {
+        throw new Error(`Apollo API key not configured for org ${orgId}`);
+      }
+      return new ApolloAdapter(apiKey);
+    }
     case 'zoominfo':
       return new ZoomInfoAdapter();
     default:
@@ -968,7 +974,7 @@ async function processFieldConfig(
     if (aggregation_strategy === 'waterfall') {
       // For waterfall, query providers in order until we get a value
       for (const step of steps.sort((a, b) => a.order - b.order)) {
-        const providerValue = await queryProvider(step.provider, record, field_key, mode);
+        const providerValue = await queryProvider(step.provider, record, field_key, mode, orgId);
 
         if (providerValue !== null && providerValue !== undefined && providerValue !== '') {
           providerValues.push({
@@ -1041,7 +1047,7 @@ async function processFieldConfig(
       // For other strategies (max, min, average, cluster_average), query all providers
       for (const step of steps) {
         try {
-          const providerValue = await queryProvider(step.provider, record, field_key, mode);
+          const providerValue = await queryProvider(step.provider, record, field_key, mode, orgId);
 
           if (providerValue !== null && providerValue !== undefined && providerValue !== '') {
             providerValues.push({
@@ -1142,7 +1148,8 @@ async function queryProvider(
   provider: string,
   record: any,
   fieldKey: string,
-  mode: 'demo' | 'live'
+  mode: 'demo' | 'live',
+  orgId: string
 ): Promise<any> {
   if (mode === 'demo') {
     // Demo mode: use synthetic data
@@ -1151,7 +1158,7 @@ async function queryProvider(
   }
 
   // Live mode: make real API call
-  const providerAdapter = getProviderAdapter(provider);
+  const providerAdapter = await getProviderAdapter(provider, orgId);
   const result = await providerAdapter.enrichCompany({ domain: record.domain });
 
   if (result) {
