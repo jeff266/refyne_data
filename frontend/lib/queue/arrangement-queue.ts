@@ -791,7 +791,7 @@ async function fetchRecordsForProcessing(
 
   // Get HubSpot access token
   const { getAccessToken } = await import('../hubspot/get-access-token');
-  const accessToken = await getAccessToken(portalId);
+  const accessToken = await getAccessToken(orgId);
 
   const properties = [
     'name',
@@ -876,7 +876,7 @@ async function writeToDestination(
 
   // Get HubSpot access token
   const { getAccessToken } = await import('../hubspot/get-access-token');
-  const accessToken = await getAccessToken(portalId);
+  const accessToken = await getAccessToken(orgId);
 
   // Get HubSpot client
   const { HubSpotClient } = await import('../hubspot/client');
