@@ -49,15 +49,25 @@ function formatLocation(org: Record<string, unknown>): string {
  * Transform GraphIQ organization result to normalized format.
  */
 function transformOrganization(org: Record<string, unknown>): Record<string, unknown> {
+  // Extract industry from industries array
+  const industries = org.industries as Array<{ title?: string; short_title?: string }> | undefined;
+  const industry = industries?.[0]?.title || industries?.[0]?.short_title || '';
+
+  // Extract phone from phone_numbers array
+  const phoneNumbers = org.phone_numbers as string[] | undefined;
+  const phone = phoneNumbers?.[0] || '';
+
   return {
     name: org.name || '',
-    domain: org.website || org.domain || '',
+    domain: org.website_url || org.website || '',
     description: org.description || '',
     capabilities: org.capabilities || [],
-    industry: org.industry || '',
+    industry,
     location: formatLocation(org),
-    employee_count: org.employee_count || org.employees,
+    employee_count: org.num_employees || null,
     revenue: org.revenue || '',
+    linkedin_url: org.linkedin_url || '',
+    phone,
   };
 }
 
@@ -192,6 +202,12 @@ export class GraphiqAdapter implements ProviderAdapter {
   private async searchByDomain(domain: string): Promise<Record<string, unknown>[]> {
     const apiKey = getApiKey();
 
+    // Clean domain: remove protocol and www prefix
+    const cleanedDomain = domain
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .trim();
+
     const response = await fetch(`${GRAPHIQ_BASE_URL}/organizations/search`, {
       method: 'POST',
       headers: {
@@ -200,7 +216,7 @@ export class GraphiqAdapter implements ProviderAdapter {
       },
       body: JSON.stringify({
         organization: {
-          website_url: domain,
+          website_url: cleanedDomain,
         },
         limit: 1,
       }),

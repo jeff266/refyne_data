@@ -277,6 +277,16 @@ async function benchmarkGraphIQ(
 /**
  * Enrich a domain using GraphIQ (Refyne Data)
  */
+/**
+ * Clean domain for GraphIQ API (remove protocol and www)
+ */
+function cleanDomain(domain: string): string {
+  return domain
+    .replace(/^https?:\/\//, '')  // Remove protocol
+    .replace(/^www\./, '')         // Remove www
+    .trim();
+}
+
 async function enrichWithGraphIQ(
   domain: string,
   fields: string[]
@@ -287,6 +297,9 @@ async function enrichWithGraphIQ(
     return null;
   }
 
+  // Clean domain: remove https://, http://, www.
+  const cleanedDomain = cleanDomain(domain);
+
   try {
     const response = await fetch('https://app.graphiq.ai/api/v2/organizations/search', {
       method: 'POST',
@@ -296,14 +309,14 @@ async function enrichWithGraphIQ(
       },
       body: JSON.stringify({
         organization: {
-          website_url: domain,
+          website_url: cleanedDomain,
         },
         limit: 1,
       }),
     });
 
     if (!response.ok) {
-      console.error('[GraphIQ] API error for', domain, '- Status:', response.status);
+      console.error('[GraphIQ] API error for', cleanedDomain, '- Status:', response.status);
       const errorText = await response.text();
       console.error('[GraphIQ] Error response:', errorText.substring(0, 200));
       return null;
@@ -318,17 +331,17 @@ async function enrichWithGraphIQ(
 
     const org = entities[0];
 
-    // Map GraphIQ fields to HubSpot fields
+    // Map GraphIQ fields to HubSpot fields (use correct field names)
     return {
-      industry: org.industry || null,
-      numberofemployees: org.employee_count || org.employees || null,
-      linkedin_company_page: org.linkedin_url || null,
-      phone: org.phone || null,
+      industry: org.industries?.[0]?.title || org.industries?.[0]?.short_title || null,
+      numberofemployees: org.num_employees || null,
+      linkedin_company_page: org.linkedin_url ? `https://${org.linkedin_url}` : null,
+      phone: org.phone_numbers?.[0] || null,
       annualrevenue: org.revenue || null,
-      domain: org.website || org.domain || null,
+      domain: org.website_url || org.website || null,
     };
   } catch (error) {
-    console.error('[GraphIQ] Exception for', domain, ':', error instanceof Error ? error.message : error);
+    console.error('[GraphIQ] Exception for', cleanedDomain, ':', error instanceof Error ? error.message : error);
     return null;
   }
 }

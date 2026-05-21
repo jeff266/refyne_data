@@ -3,7 +3,7 @@
  *
  * Company discovery and ICP scoring interface with:
  * - Dark-styled chip inputs for industries, locations, keywords
- * - Range slider for employee size
+ * - Dual-handle range slider for employee size
  * - Saved searches functionality
  * - ICP scoring with visual bars
  * - Company detail slide-over
@@ -27,471 +27,9 @@ const darkInputStyle = {
   outline: 'none',
 };
 
-export default function ProspectPage() {
-  const [searchQuery, setSearchQuery] = useState<ProspectSearchQuery>({
-    limit: 25,
-    providers: ['apollo'],
-    employeeMin: 10,
-    employeeMax: 500,
-  });
-  const [results, setResults] = useState<ProspectSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(new Set());
-  const [savedSearches, setSavedSearches] = useState<any[]>([]);
-  const [excludeInHubSpot, setExcludeInHubSpot] = useState(true);
-  const [detailCompany, setDetailCompany] = useState<ProspectSearchResult | null>(null);
-
-  // Fetch saved searches on mount
-  useEffect(() => {
-    fetchSavedSearches();
-  }, []);
-
-  async function fetchSavedSearches() {
-    try {
-      const response = await fetch('/api/prospect/saved-searches');
-      if (response.ok) {
-        const data = await response.json();
-        setSavedSearches(data.data || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch saved searches:', err);
-    }
-  }
-
-  async function handleSearch() {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Build ICP config from search query
-      const icpConfig = {
-        target_industries: searchQuery.industries,
-        target_employee_min: searchQuery.employeeMin,
-        target_employee_max: searchQuery.employeeMax,
-        target_locations: searchQuery.locations
-          ? {
-              countries: searchQuery.locations,
-            }
-          : undefined,
-      };
-
-      const response = await fetch('/api/prospect/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: searchQuery,
-          icp_config: icpConfig,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || errorData.error || 'Search failed');
-      }
-
-      const data = await response.json();
-      let allResults = data.data.results || [];
-
-      // Filter out companies in HubSpot if checkbox is checked
-      if (excludeInHubSpot) {
-        allResults = allResults.filter((r: ProspectSearchResult) => !r.in_crm);
-      }
-
-      setResults(allResults);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSaveSearch() {
-    const name = prompt('Name this search:');
-    if (!name) return;
-
-    try {
-      const response = await fetch('/api/prospect/saved-searches', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          filters: searchQuery,
-          scope: 'personal',
-        }),
-      });
-
-      if (response.ok) {
-        await fetchSavedSearches();
-        alert('Search saved successfully');
-      }
-    } catch (err) {
-      console.error('Failed to save search:', err);
-      alert('Failed to save search');
-    }
-  }
-
-  async function handleLoadSearch(search: any) {
-    setSearchQuery(search.filters);
-    await handleSearch();
-  }
-
-  async function handleDeleteSearch(id: string) {
-    if (!confirm('Delete this saved search?')) return;
-
-    try {
-      const response = await fetch(`/api/prospect/saved-searches/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        await fetchSavedSearches();
-      }
-    } catch (err) {
-      console.error('Failed to delete search:', err);
-    }
-  }
-
-  function toggleCompany(domain: string) {
-    const newSelected = new Set(selectedCompanies);
-    if (newSelected.has(domain)) {
-      newSelected.delete(domain);
-    } else {
-      newSelected.add(domain);
-    }
-    setSelectedCompanies(newSelected);
-  }
-
-  function selectAll() {
-    const newSelected = new Set(selectedCompanies);
-    results.forEach((r) => newSelected.add(r.domain));
-    setSelectedCompanies(newSelected);
-  }
-
-  function deselectAll() {
-    setSelectedCompanies(new Set());
-  }
-
-  async function handlePush() {
-    const selected = results.filter((r) => selectedCompanies.has(r.domain));
-
-    if (selected.length === 0) {
-      alert('No companies selected');
-      return;
-    }
-
-    alert(
-      `Push functionality: Would push ${selected.length} companies to HubSpot.\n\n` +
-        'Implementation pending in /api/prospect/push endpoint.'
-    );
-  }
-
-  const canSearch =
-    (searchQuery.industries && searchQuery.industries.length > 0) ||
-    (searchQuery.keywords && searchQuery.keywords.length > 0) ||
-    (searchQuery.locations && searchQuery.locations.length > 0);
-
-  return (
-    <div style={{ padding: 24 }}>
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 24,
-        }}
-      >
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 4, color: C.text }}>
-            Prospect
-          </h1>
-          <p style={{ color: C.text2, fontSize: 14 }}>
-            Discover and score companies from enrichment providers
-          </p>
-        </div>
-      </div>
-
-      {/* Saved Searches Bar */}
-      {savedSearches.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, marginBottom: 10, letterSpacing: '0.5px' }}>
-            SAVED SEARCHES
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {savedSearches.map((search) => (
-              <SavedSearchChip
-                key={search.id}
-                search={search}
-                onLoad={() => handleLoadSearch(search)}
-                onDelete={() => handleDeleteSearch(search.id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ICP Filter Bar */}
-      <div
-        style={{
-          background: '#162944',
-          border: `1px solid ${C.border}`,
-          borderRadius: 0,
-          padding: 20,
-          marginBottom: 16,
-        }}
-      >
-        {/* Row 1: Industries (full width) */}
-        <div style={{ marginBottom: 16 }}>
-          <label
-            style={{
-              display: 'block',
-              fontSize: 11,
-              fontWeight: 600,
-              marginBottom: 8,
-              color: C.text3,
-              letterSpacing: '0.5px',
-            }}
-          >
-            INDUSTRIES
-          </label>
-          <ChipInput
-            values={searchQuery.industries || []}
-            onChange={(industries) => setSearchQuery({ ...searchQuery, industries })}
-            placeholder="Type industry, press Enter to add"
-          />
-        </div>
-
-        {/* Row 2: Employee Size | Location */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 16 }}>
-          {/* Employee Size */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 11,
-                fontWeight: 600,
-                marginBottom: 8,
-                color: C.text3,
-                letterSpacing: '0.5px',
-              }}
-            >
-              EMPLOYEE SIZE
-            </label>
-            <DualHandleRangeSlider
-              min={searchQuery.employeeMin || 10}
-              max={searchQuery.employeeMax || 500}
-              onChange={(min, max) =>
-                setSearchQuery({
-                  ...searchQuery,
-                  employeeMin: min,
-                  employeeMax: max,
-                })
-              }
-            />
-          </div>
-
-          {/* Location */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 11,
-                fontWeight: 600,
-                marginBottom: 8,
-                color: C.text3,
-                letterSpacing: '0.5px',
-              }}
-            >
-              LOCATION
-            </label>
-            <ChipInput
-              values={searchQuery.locations || []}
-              onChange={(locations) => setSearchQuery({ ...searchQuery, locations })}
-              placeholder="Type location, press Enter to add"
-            />
-          </div>
-        </div>
-
-        {/* Row 3: Keywords (full width) */}
-        <div style={{ marginBottom: 16 }}>
-          <label
-            style={{
-              display: 'block',
-              fontSize: 11,
-              fontWeight: 600,
-              marginBottom: 8,
-              color: C.text3,
-              letterSpacing: '0.5px',
-            }}
-          >
-            KEYWORDS
-          </label>
-          <ChipInput
-            values={searchQuery.keywords || []}
-            onChange={(keywords) => setSearchQuery({ ...searchQuery, keywords })}
-            placeholder="Type keyword, press Enter to add"
-          />
-        </div>
-
-        {/* Row 4: More filters | Provider pills | Exclude checkbox | Search button */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* More filters button - placeholder */}
-            <button
-              style={{
-                background: 'transparent',
-                border: `1px solid ${C.border}`,
-                borderRadius: 0,
-                padding: '6px 12px',
-                fontSize: 12,
-                color: C.text2,
-                cursor: 'pointer',
-              }}
-            >
-              ▶ More filters
-            </button>
-
-            {/* Provider pills */}
-            <ProviderPills />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Exclude in HubSpot checkbox */}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={excludeInHubSpot}
-                onChange={(e) => setExcludeInHubSpot(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: 12, color: C.text3, whiteSpace: 'nowrap' }}>
-                Exclude in HubSpot
-              </span>
-            </label>
-
-            {/* Search button */}
-            <button
-              onClick={handleSearch}
-              disabled={loading || !canSearch}
-              style={{
-                padding: '8px 20px',
-                fontSize: 13,
-                fontWeight: 600,
-                border: 'none',
-                borderRadius: 0,
-                background: loading || !canSearch ? C.text3 : C.indigo,
-                color: 'white',
-                cursor: loading || !canSearch ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {loading ? 'Searching...' : 'Search'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div
-          style={{
-            marginBottom: 16,
-            padding: 12,
-            background: C.redDim,
-            border: `1px solid ${C.redBrd}`,
-            borderRadius: 8,
-            color: C.red,
-            fontSize: 14,
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      {/* Results */}
-      {results.length > 0 && (
-        <div>
-          {/* Results header */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 16,
-            }}
-          >
-            <div style={{ fontSize: 14, color: C.text2 }}>
-              {results.length} companies found
-              {selectedCompanies.size > 0 && ` • ${selectedCompanies.size} selected`}
-            </div>
-
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={selectAll}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: 13,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 6,
-                  background: C.surface,
-                  color: C.text,
-                  cursor: 'pointer',
-                }}
-              >
-                Select All
-              </button>
-              <button
-                onClick={deselectAll}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: 13,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 6,
-                  background: C.surface,
-                  color: C.text,
-                  cursor: 'pointer',
-                }}
-              >
-                Deselect All
-              </button>
-              <button
-                onClick={handlePush}
-                disabled={selectedCompanies.size === 0}
-                style={{
-                  padding: '6px 16px',
-                  fontSize: 13,
-                  border: 'none',
-                  borderRadius: 6,
-                  background: selectedCompanies.size > 0 ? C.indigo : C.text3,
-                  color: 'white',
-                  cursor: selectedCompanies.size > 0 ? 'pointer' : 'not-allowed',
-                }}
-              >
-                Push to HubSpot ({selectedCompanies.size})
-              </button>
-            </div>
-          </div>
-
-          {/* Results table */}
-          <ResultsTable
-            results={results}
-            selectedCompanies={selectedCompanies}
-            onToggle={toggleCompany}
-            onShowDetail={setDetailCompany}
-          />
-        </div>
-      )}
-
-      {/* Company Detail Slide-Over */}
-      {detailCompany && (
-        <CompanyDetailSlideOver
-          company={detailCompany}
-          onClose={() => setDetailCompany(null)}
-        />
-      )}
-    </div>
-  );
-}
+// ============================================================================
+// Helper Components (defined before main component for TypeScript)
+// ============================================================================
 
 /**
  * Chip input component for multi-select
@@ -855,6 +393,37 @@ function SavedSearchChip({
 }
 
 /**
+ * ICP Score Bar
+ */
+function ICPScoreBar({ score }: { score: number }) {
+  const color = score >= 80 ? C.green : score >= 60 ? C.amber : C.red;
+  const bgColor = score >= 80 ? C.greenDim : score >= 60 ? C.amberDim : C.redDim;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div
+        style={{
+          flex: 1,
+          height: 8,
+          background: bgColor,
+          borderRadius: 4,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${score}%`,
+            height: '100%',
+            background: color,
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 13, color, fontWeight: 600, minWidth: 35 }}>{score}</span>
+    </div>
+  );
+}
+
+/**
  * Results table
  */
 function ResultsTable({
@@ -944,34 +513,45 @@ function ResultsTable({
 }
 
 /**
- * ICP Score Bar
+ * Detail row helper
  */
-function ICPScoreBar({ score }: { score: number }) {
-  const color = score >= 80 ? C.green : score >= 60 ? C.amber : C.red;
-  const bgColor = score >= 80 ? C.greenDim : score >= 60 ? C.amberDim : C.redDim;
-
+function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div
-        style={{
-          flex: 1,
-          height: 8,
-          background: bgColor,
-          borderRadius: 4,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            width: `${score}%`,
-            height: '100%',
-            background: color,
-          }}
-        />
-      </div>
-      <span style={{ fontSize: 13, color, fontWeight: 600, minWidth: 35 }}>{score}</span>
+    <div>
+      <div style={{ fontSize: 12, color: C.text3, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 13, color: C.text }}>{value}</div>
     </div>
   );
+}
+
+/**
+ * Calculate ICP score breakdown for a company
+ */
+function calculateICPBreakdown(company: ProspectSearchResult) {
+  const breakdown = [
+    { label: 'Industry Match', score: 0, max: 35 },
+    { label: 'Size Range', score: 0, max: 25 },
+    { label: 'Location Match', score: 0, max: 20 },
+    { label: 'Keywords', score: 0, max: 15 },
+    { label: 'Quality Signals', score: 0, max: 10 },
+  ];
+
+  // Use actual breakdown if available
+  if (company.icp_breakdown) {
+    breakdown[0].score = company.icp_breakdown.industry_match || 0;
+    breakdown[1].score = company.icp_breakdown.size_match || 0;
+    breakdown[2].score = company.icp_breakdown.location_match || 0;
+    breakdown[3].score = company.icp_breakdown.technology_match || 0;
+  }
+
+  // Calculate quality signals
+  let qualityScore = 0;
+  if (company.linkedin_url) qualityScore += 3;
+  if (company.website) qualityScore += 4;
+  if (company.description) qualityScore += 3;
+  breakdown[4].score = qualityScore;
+
+  return breakdown;
 }
 
 /**
@@ -1098,41 +678,447 @@ function CompanyDetailSlideOver({
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div style={{ fontSize: 12, color: C.text3, marginBottom: 2 }}>{label}</div>
-      <div style={{ fontSize: 13, color: C.text }}>{value}</div>
-    </div>
-  );
-}
+// ============================================================================
+// Main Component
+// ============================================================================
 
-/**
- * Calculate ICP score breakdown for a company
- */
-function calculateICPBreakdown(company: ProspectSearchResult) {
-  const breakdown = [
-    { label: 'Industry Match', score: 0, max: 35 },
-    { label: 'Size Range', score: 0, max: 25 },
-    { label: 'Location Match', score: 0, max: 20 },
-    { label: 'Keywords', score: 0, max: 15 },
-    { label: 'Quality Signals', score: 0, max: 10 },
-  ];
+export default function ProspectPage() {
+  const [searchQuery, setSearchQuery] = useState<ProspectSearchQuery>({
+    limit: 25,
+    providers: ['apollo'],
+    employeeMin: 10,
+    employeeMax: 500,
+  });
+  const [results, setResults] = useState<ProspectSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(new Set());
+  const [savedSearches, setSavedSearches] = useState<any[]>([]);
+  const [excludeInHubSpot, setExcludeInHubSpot] = useState(true);
+  const [detailCompany, setDetailCompany] = useState<ProspectSearchResult | null>(null);
 
-  // Use actual breakdown if available
-  if (company.icp_breakdown) {
-    breakdown[0].score = company.icp_breakdown.industry_match || 0;
-    breakdown[1].score = company.icp_breakdown.size_match || 0;
-    breakdown[2].score = company.icp_breakdown.location_match || 0;
-    breakdown[3].score = company.icp_breakdown.technology_match || 0;
+  // Fetch saved searches on mount
+  useEffect(() => {
+    fetchSavedSearches();
+  }, []);
+
+  async function fetchSavedSearches() {
+    try {
+      const response = await fetch('/api/prospect/saved-searches');
+      if (response.ok) {
+        const data = await response.json();
+        setSavedSearches(data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved searches:', err);
+    }
   }
 
-  // Calculate quality signals
-  let qualityScore = 0;
-  if (company.linkedin_url) qualityScore += 3;
-  if (company.website) qualityScore += 4;
-  if (company.description) qualityScore += 3;
-  breakdown[4].score = qualityScore;
+  async function handleSearch() {
+    setLoading(true);
+    setError(null);
 
-  return breakdown;
+    try {
+      // Build ICP config from search query
+      const icpConfig = {
+        target_industries: searchQuery.industries,
+        target_employee_min: searchQuery.employeeMin,
+        target_employee_max: searchQuery.employeeMax,
+        target_locations: searchQuery.locations
+          ? {
+              countries: searchQuery.locations,
+            }
+          : undefined,
+      };
+
+      const response = await fetch('/api/prospect/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: searchQuery,
+          icp_config: icpConfig,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || errorData.error || 'Search failed');
+      }
+
+      const data = await response.json();
+      let allResults = data.data.results || [];
+
+      // Filter out companies in HubSpot if checkbox is checked
+      if (excludeInHubSpot) {
+        allResults = allResults.filter((r: ProspectSearchResult) => !r.in_crm);
+      }
+
+      setResults(allResults);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Search failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleLoadSearch(search: any) {
+    setSearchQuery(search.filters);
+    await handleSearch();
+  }
+
+  async function handleDeleteSearch(id: string) {
+    if (!confirm('Delete this saved search?')) return;
+
+    try {
+      const response = await fetch(`/api/prospect/saved-searches/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        await fetchSavedSearches();
+      }
+    } catch (err) {
+      console.error('Failed to delete search:', err);
+    }
+  }
+
+  function toggleCompany(domain: string) {
+    const newSelected = new Set(selectedCompanies);
+    if (newSelected.has(domain)) {
+      newSelected.delete(domain);
+    } else {
+      newSelected.add(domain);
+    }
+    setSelectedCompanies(newSelected);
+  }
+
+  function selectAll() {
+    const newSelected = new Set(selectedCompanies);
+    results.forEach((r) => newSelected.add(r.domain));
+    setSelectedCompanies(newSelected);
+  }
+
+  function deselectAll() {
+    setSelectedCompanies(new Set());
+  }
+
+  async function handlePush() {
+    const selected = results.filter((r) => selectedCompanies.has(r.domain));
+
+    if (selected.length === 0) {
+      alert('No companies selected');
+      return;
+    }
+
+    alert(
+      `Push functionality: Would push ${selected.length} companies to HubSpot.\n\n` +
+        'Implementation pending in /api/prospect/push endpoint.'
+    );
+  }
+
+  const canSearch =
+    (searchQuery.industries && searchQuery.industries.length > 0) ||
+    (searchQuery.keywords && searchQuery.keywords.length > 0) ||
+    (searchQuery.locations && searchQuery.locations.length > 0);
+
+  return (
+    <div style={{ padding: 24 }}>
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 24,
+        }}
+      >
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 4, color: C.text }}>
+            Prospect
+          </h1>
+          <p style={{ color: C.text2, fontSize: 14 }}>
+            Discover and score companies from enrichment providers
+          </p>
+        </div>
+      </div>
+
+      {/* Saved Searches Bar */}
+      {savedSearches.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, marginBottom: 10, letterSpacing: '0.5px' }}>
+            SAVED SEARCHES
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {savedSearches.map((search) => (
+              <SavedSearchChip
+                key={search.id}
+                search={search}
+                onLoad={() => handleLoadSearch(search)}
+                onDelete={() => handleDeleteSearch(search.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ICP Filter Bar */}
+      <div
+        style={{
+          background: '#162944',
+          border: `1px solid ${C.border}`,
+          borderRadius: 0,
+          padding: 20,
+          marginBottom: 16,
+        }}
+      >
+        {/* Row 1: Industries (full width) */}
+        <div style={{ marginBottom: 16 }}>
+          <label
+            style={{
+              display: 'block',
+              fontSize: 11,
+              fontWeight: 600,
+              marginBottom: 8,
+              color: C.text3,
+              letterSpacing: '0.5px',
+            }}
+          >
+            INDUSTRIES
+          </label>
+          <ChipInput
+            values={searchQuery.industries || []}
+            onChange={(industries) => setSearchQuery({ ...searchQuery, industries })}
+            placeholder="Type industry, press Enter to add"
+          />
+        </div>
+
+        {/* Row 2: Employee Size | Location */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 16 }}>
+          {/* Employee Size */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 11,
+                fontWeight: 600,
+                marginBottom: 8,
+                color: C.text3,
+                letterSpacing: '0.5px',
+              }}
+            >
+              EMPLOYEE SIZE
+            </label>
+            <DualHandleRangeSlider
+              min={searchQuery.employeeMin || 10}
+              max={searchQuery.employeeMax || 500}
+              onChange={(min, max) =>
+                setSearchQuery({
+                  ...searchQuery,
+                  employeeMin: min,
+                  employeeMax: max,
+                })
+              }
+            />
+          </div>
+
+          {/* Location */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 11,
+                fontWeight: 600,
+                marginBottom: 8,
+                color: C.text3,
+                letterSpacing: '0.5px',
+              }}
+            >
+              LOCATION
+            </label>
+            <ChipInput
+              values={searchQuery.locations || []}
+              onChange={(locations) => setSearchQuery({ ...searchQuery, locations })}
+              placeholder="Type location, press Enter to add"
+            />
+          </div>
+        </div>
+
+        {/* Row 3: Keywords (full width) */}
+        <div style={{ marginBottom: 16 }}>
+          <label
+            style={{
+              display: 'block',
+              fontSize: 11,
+              fontWeight: 600,
+              marginBottom: 8,
+              color: C.text3,
+              letterSpacing: '0.5px',
+            }}
+          >
+            KEYWORDS
+          </label>
+          <ChipInput
+            values={searchQuery.keywords || []}
+            onChange={(keywords) => setSearchQuery({ ...searchQuery, keywords })}
+            placeholder="Type keyword, press Enter to add"
+          />
+        </div>
+
+        {/* Row 4: More filters | Provider pills | Exclude checkbox | Search button */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* More filters button - placeholder */}
+            <button
+              style={{
+                background: 'transparent',
+                border: `1px solid ${C.border}`,
+                borderRadius: 0,
+                padding: '6px 12px',
+                fontSize: 12,
+                color: C.text2,
+                cursor: 'pointer',
+              }}
+            >
+              ▶ More filters
+            </button>
+
+            {/* Provider pills */}
+            <ProviderPills />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Exclude in HubSpot checkbox */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={excludeInHubSpot}
+                onChange={(e) => setExcludeInHubSpot(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: 12, color: C.text3, whiteSpace: 'nowrap' }}>
+                Exclude in HubSpot
+              </span>
+            </label>
+
+            {/* Search button */}
+            <button
+              onClick={handleSearch}
+              disabled={loading || !canSearch}
+              style={{
+                padding: '8px 20px',
+                fontSize: 13,
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: 0,
+                background: loading || !canSearch ? C.text3 : C.indigo,
+                color: 'white',
+                cursor: loading || !canSearch ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {loading ? 'Searching...' : 'Search'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            background: C.redDim,
+            border: `1px solid ${C.redBrd}`,
+            borderRadius: 8,
+            color: C.red,
+            fontSize: 14,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* Results */}
+      {results.length > 0 && (
+        <div>
+          {/* Results header */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 16,
+            }}
+          >
+            <div style={{ fontSize: 14, color: C.text2 }}>
+              {results.length} companies found
+              {selectedCompanies.size > 0 && ` • ${selectedCompanies.size} selected`}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={selectAll}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 13,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 6,
+                  background: C.surface,
+                  color: C.text,
+                  cursor: 'pointer',
+                }}
+              >
+                Select All
+              </button>
+              <button
+                onClick={deselectAll}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 13,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 6,
+                  background: C.surface,
+                  color: C.text,
+                  cursor: 'pointer',
+                }}
+              >
+                Deselect All
+              </button>
+              <button
+                onClick={handlePush}
+                disabled={selectedCompanies.size === 0}
+                style={{
+                  padding: '6px 16px',
+                  fontSize: 13,
+                  border: 'none',
+                  borderRadius: 6,
+                  background: selectedCompanies.size > 0 ? C.indigo : C.text3,
+                  color: 'white',
+                  cursor: selectedCompanies.size > 0 ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Push to HubSpot ({selectedCompanies.size})
+              </button>
+            </div>
+          </div>
+
+          {/* Results table */}
+          <ResultsTable
+            results={results}
+            selectedCompanies={selectedCompanies}
+            onToggle={toggleCompany}
+            onShowDetail={setDetailCompany}
+          />
+        </div>
+      )}
+
+      {/* Company Detail Slide-Over */}
+      {detailCompany && (
+        <CompanyDetailSlideOver
+          company={detailCompany}
+          onClose={() => setDetailCompany(null)}
+        />
+      )}
+    </div>
+  );
 }
