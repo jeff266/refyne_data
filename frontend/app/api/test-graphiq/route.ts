@@ -8,10 +8,17 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   const apiKey = process.env.GRAPHIQ_API_KEY;
 
+  // Debug: Show all env var KEYS (not values) that start with GRAPH
+  const graphiqRelatedKeys = Object.keys(process.env).filter(k =>
+    k.includes('GRAPH') || k.includes('graphiq')
+  );
+
   if (!apiKey) {
     return NextResponse.json({
       error: 'GRAPHIQ_API_KEY not configured',
       has_key: false,
+      all_env_keys_with_graph: graphiqRelatedKeys,
+      total_env_vars: Object.keys(process.env).length,
     }, { status: 500 });
   }
 
