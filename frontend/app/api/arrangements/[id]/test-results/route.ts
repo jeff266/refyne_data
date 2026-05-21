@@ -72,66 +72,62 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const endTime = run.completed_at ? new Date(run.completed_at).getTime() : Date.now();
     const durationSeconds = Math.round((endTime - startTime) / 1000);
 
-    // Format results for display
-    const results = (progressRecords || []).map((record: any) => {
-      const fields: any[] = [];
+    // Field labels mapping
+    const fieldLabels: Record<string, string> = {
+      industry: 'Industry',
+      numberofemployees: 'Employee count',
+      linkedin_company_page: 'LinkedIn URL',
+      phone: 'Phone',
+      domain: 'Domain',
+      annualrevenue: 'Revenue',
+    };
+
+    // Format results for display - flatten to one row per field change
+    const results: any[] = [];
+
+    for (const record of progressRecords || []) {
+      // Get company name
+      let companyName = record.company_name || record.record_id;
+
+      // If no company name, try to look it up
+      if (!record.company_name && record.hubspot_company_id) {
+        const { data: company } = await supabase
+          .from('company_dedup_index')
+          .select('name')
+          .eq('hubspot_company_id', record.hubspot_company_id)
+          .single();
+
+        if (company?.name) {
+          companyName = company.name;
+        }
+      }
+
       const fieldDetail = record.result?.field_detail || {};
       const enrichmentResults = record.enrichment_results || {};
 
-      // Extract field changes
+      // Create one result row per field
       Object.keys(fieldDetail).forEach((fieldKey) => {
         const detail = fieldDetail[fieldKey];
-        const before = detail.before || record[fieldKey] || null;
+        const before = detail.before || null;
         const after = enrichmentResults[fieldKey] || detail.after || null;
 
-        // Determine field label
-        const fieldLabels: Record<string, string> = {
-          industry: 'Industry',
-          numberofemployees: 'Employee count',
-          linkedin_company_page: 'LinkedIn URL',
-          phone: 'Phone',
-          domain: 'Domain',
-          annualrevenue: 'Revenue',
-        };
-
-        fields.push({
+        results.push({
+          company_name: companyName,
           field_key: fieldKey,
           field_label: fieldLabels[fieldKey] || fieldKey,
           before: before,
           after: after,
-          harmony_applied: detail.metadata?.harmony?.matched || false,
-          harmony_name: detail.metadata?.harmony?.harmonyId ? 'Harmony applied' : null,
-          original_provider_value: detail.raw || null,
+          harmony_applied: detail.metadata?.harmony?.matched || detail.harmony_applied || false,
+          harmony_name: detail.metadata?.harmony?.name || (detail.harmony_applied ? 'Harmony applied' : null),
+          skipped: detail.skipped || false,
+          skip_reason: detail.skip_reason || detail.metadata?.skip_reason || null,
         });
       });
-
-      return {
-        company_name: record.record_id, // TODO: fetch actual company name
-        hubspot_id: record.record_id,
-        fields,
-      };
-    });
-
-    // Count fields filled and harmonies applied
-    let fieldsFilled = 0;
-    let harmoniesApplied = 0;
-
-    results.forEach((result: any) => {
-      result.fields.forEach((field: any) => {
-        if (field.after && !field.before) {
-          fieldsFilled++;
-        }
-        if (field.harmony_applied) {
-          harmoniesApplied++;
-        }
-      });
-    });
+    }
 
     return NextResponse.json({
       records_processed: run.processed_records || 0,
       duration_seconds: durationSeconds,
-      fields_filled: fieldsFilled,
-      harmonies_applied: harmoniesApplied,
       results,
     });
   } catch (error) {
