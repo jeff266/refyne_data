@@ -22,6 +22,21 @@ interface GapAnalysis {
   from_cache?: boolean;
 }
 
+interface EnrichmentRunHistory {
+  id: string;
+  arrangement_id: string;
+  arrangement_name: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  provider: string;
+  fields: string[];
+  records_processed: number;
+  records_total: number;
+  fields_filled: number;
+  started_at: string;
+  completed_at: string | null;
+  error_message: string | null;
+}
+
 interface HarmonyPreview {
   field_key: string;
   field_label: string;
@@ -213,6 +228,10 @@ export default function EnrichPage() {
     harmony_applied: boolean;
   }>>([]);
 
+  // Enrichment history state
+  const [enrichmentHistory, setEnrichmentHistory] = useState<EnrichmentRunHistory[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   // Fetch gap analysis on mount using streaming
   useEffect(() => {
     const es = new EventSource('/api/enrich/gaps/stream');
@@ -382,8 +401,9 @@ export default function EnrichPage() {
           localStorage.removeItem('refyne_active_run');
           enrichRunContext.clearRunState();
 
-          // Auto-refresh gap analysis
+          // Auto-refresh gap analysis and history
           fetchGapsNonStreaming();
+          fetchEnrichmentHistory();
         } else if (latestRun.status === 'failed') {
           setRunStatus('failed');
           clearInterval(pollInterval);
@@ -413,6 +433,22 @@ export default function EnrichPage() {
     } catch (error) {
       console.error('Failed to fetch gap analysis:', error);
       setLoading(false);
+    }
+  }
+
+  // Fetch enrichment history
+  async function fetchEnrichmentHistory() {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch('/api/enrich/history');
+      if (res.ok) {
+        const data = await res.json();
+        setEnrichmentHistory(data.runs || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch enrichment history:', error);
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
@@ -488,6 +524,7 @@ export default function EnrichPage() {
     fetchLifecycleStages();
     fetchOwners();
     fetchIndustries();
+    fetchEnrichmentHistory();
   }, []);
 
   // Fetch harmony preview when selected fields change
@@ -819,8 +856,14 @@ export default function EnrichPage() {
       });
 
       // Build arrangement payload (no test mode)
+      // Generate readable name: "Apollo enrichment · Industry, Employee count · May 20"
+      const provider = selectedProviders[0] === 'apollo' ? 'Apollo' : selectedProviders[0] === 'graphiq' || selectedProviders[0] === 'refyne' ? 'GraphIQ' : 'ZoomInfo';
+      const fieldLabels = selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label || f);
+      const date = new Date().toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const arrangementName = `${provider} enrichment · ${fieldLabels.join(', ')} · ${date}`;
+
       const arrangementPayload: any = {
-        name: `Enrich missing fields - ${new Date().toLocaleDateString()}`,
+        name: arrangementName,
         description: `Fill gaps in ${selectedFields.join(', ')} using ${selectedProviders.join(', ')}`,
         source_type,
         source_config,
@@ -2202,6 +2245,121 @@ export default function EnrichPage() {
           )}
         </div>
       </div>
+
+      {/* Enrichment History */}
+      {!loading && enrichmentHistory.length > 0 && (
+        <div style={{ marginTop: 24, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Recent Runs
+            </div>
+            <a
+              href="/arrangements"
+              style={{
+                fontSize: 12,
+                color: C.indigo,
+                textDecoration: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              View all →
+            </a>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                    Date
+                  </th>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                    Provider
+                  </th>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                    Fields
+                  </th>
+                  <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 10, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                    Records
+                  </th>
+                  <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 10, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                    Filled
+                  </th>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {enrichmentHistory.map((run) => {
+                  const statusColor = run.status === 'completed' ? C.green : run.status === 'failed' ? C.red : C.indigo;
+                  const statusIcon = run.status === 'completed' ? '✓' : run.status === 'failed' ? '✗' : '⟲';
+                  const statusText = run.status === 'completed' ? 'Complete' : run.status === 'failed' ? 'Failed' : 'Running';
+
+                  // Format field names
+                  const displayFields = run.fields.slice(0, 3).map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label || f);
+                  const fieldText = displayFields.join(', ') + (run.fields.length > 3 ? `, +${run.fields.length - 3} more` : '');
+
+                  // Format date
+                  const date = new Date(run.started_at);
+                  const now = new Date();
+                  const diffMs = now.getTime() - date.getTime();
+                  const diffHours = diffMs / (1000 * 60 * 60);
+                  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+                  let dateText = '';
+                  if (diffHours < 1) {
+                    dateText = 'Just now';
+                  } else if (diffHours < 24) {
+                    dateText = `Today ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+                  } else if (diffDays < 2) {
+                    dateText = 'Yesterday';
+                  } else if (diffDays < 7) {
+                    dateText = `${Math.floor(diffDays)} days ago`;
+                  } else {
+                    dateText = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                  }
+
+                  return (
+                    <tr
+                      key={run.id}
+                      onClick={() => router.push(`/arrangements/${run.arrangement_id}`)}
+                      style={{
+                        borderBottom: `1px solid ${C.border}`,
+                        cursor: 'pointer',
+                        transition: 'background 0.1s',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = C.hover}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={{ padding: '10px 12px', fontSize: 12, color: C.text2 }}>
+                        {dateText}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 12, color: C.text2 }}>
+                        {run.provider}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 12, color: C.text }}>
+                        {fieldText}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 12, color: C.text2, textAlign: 'right', fontFamily: F.mono }}>
+                        {run.records_processed.toLocaleString()}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 12, color: C.text2, textAlign: 'right', fontFamily: F.mono }}>
+                        {run.fields_filled.toLocaleString()}
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 12 }}>
+                        <span style={{ color: statusColor }}>
+                          {statusIcon} {statusText}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation modal */}
       {showConfirmModal && (
