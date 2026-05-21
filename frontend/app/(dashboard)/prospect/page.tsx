@@ -17,12 +17,12 @@ import { C } from '@/lib/design-tokens';
 import { ProspectSearchQuery, ProspectSearchResult } from '@/lib/prospect/types';
 
 const darkInputStyle = {
-  background: 'rgba(255,255,255,0.05)',
-  border: '0.5px solid rgba(255,255,255,0.1)',
+  background: 'transparent',
+  border: 'none',
   color: '#F9F8F5',
   fontFamily: 'Jost, system-ui',
   fontSize: '13px',
-  padding: '6px 10px',
+  padding: '8px 0',
   borderRadius: 0,
   outline: 'none',
 };
@@ -232,88 +232,51 @@ export default function ProspectPage() {
       {/* ICP Filter Bar */}
       <div
         style={{
-          background: C.surface,
+          background: '#162944',
           border: `1px solid ${C.border}`,
-          borderRadius: 8,
-          padding: 16,
+          borderRadius: 0,
+          padding: 20,
           marginBottom: 16,
         }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          {/* Industries */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 600,
-                marginBottom: 6,
-                color: C.text2,
-              }}
-            >
-              INDUSTRIES
-            </label>
-            <ChipInput
-              values={searchQuery.industries || []}
-              onChange={(industries) => setSearchQuery({ ...searchQuery, industries })}
-              placeholder="Type industry, press Enter to add"
-            />
-          </div>
+        {/* Row 1: Industries (full width) */}
+        <div style={{ marginBottom: 16 }}>
+          <label
+            style={{
+              display: 'block',
+              fontSize: 11,
+              fontWeight: 600,
+              marginBottom: 8,
+              color: C.text3,
+              letterSpacing: '0.5px',
+            }}
+          >
+            INDUSTRIES
+          </label>
+          <ChipInput
+            values={searchQuery.industries || []}
+            onChange={(industries) => setSearchQuery({ ...searchQuery, industries })}
+            placeholder="Type industry, press Enter to add"
+          />
+        </div>
 
-          {/* Location */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 600,
-                marginBottom: 6,
-                color: C.text2,
-              }}
-            >
-              LOCATION
-            </label>
-            <ChipInput
-              values={searchQuery.locations || []}
-              onChange={(locations) => setSearchQuery({ ...searchQuery, locations })}
-              placeholder="Type location, press Enter to add"
-            />
-          </div>
-
-          {/* Keywords */}
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 600,
-                marginBottom: 6,
-                color: C.text2,
-              }}
-            >
-              KEYWORDS
-            </label>
-            <ChipInput
-              values={searchQuery.keywords || []}
-              onChange={(keywords) => setSearchQuery({ ...searchQuery, keywords })}
-              placeholder="Type keyword, press Enter to add"
-            />
-          </div>
-
+        {/* Row 2: Employee Size | Location */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 16 }}>
           {/* Employee Size */}
           <div>
             <label
               style={{
                 display: 'block',
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: 600,
-                marginBottom: 6,
-                color: C.text2,
+                marginBottom: 8,
+                color: C.text3,
+                letterSpacing: '0.5px',
               }}
             >
               EMPLOYEE SIZE
             </label>
-            <RangeSlider
+            <DualHandleRangeSlider
               min={searchQuery.employeeMin || 10}
               max={searchQuery.employeeMax || 500}
               onChange={(min, max) =>
@@ -325,56 +288,104 @@ export default function ProspectPage() {
               }
             />
           </div>
-        </div>
 
-        {/* Exclude in HubSpot Checkbox */}
-        <div style={{ marginTop: 16 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={excludeInHubSpot}
-              onChange={(e) => setExcludeInHubSpot(e.target.checked)}
-              style={{ cursor: 'pointer' }}
+          {/* Location */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: 11,
+                fontWeight: 600,
+                marginBottom: 8,
+                color: C.text3,
+                letterSpacing: '0.5px',
+              }}
+            >
+              LOCATION
+            </label>
+            <ChipInput
+              values={searchQuery.locations || []}
+              onChange={(locations) => setSearchQuery({ ...searchQuery, locations })}
+              placeholder="Type location, press Enter to add"
             />
-            <span style={{ fontSize: 13, color: C.text2 }}>Exclude companies already in HubSpot</span>
-          </label>
+          </div>
         </div>
 
-        {/* Search Buttons */}
-        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-          <button
-            onClick={handleSearch}
-            disabled={loading || !canSearch}
+        {/* Row 3: Keywords (full width) */}
+        <div style={{ marginBottom: 16 }}>
+          <label
             style={{
-              padding: '10px 24px',
-              fontSize: 14,
-              fontWeight: 500,
-              border: 'none',
-              borderRadius: 6,
-              background: loading || !canSearch ? C.text3 : C.indigo,
-              color: 'white',
-              cursor: loading || !canSearch ? 'not-allowed' : 'pointer',
+              display: 'block',
+              fontSize: 11,
+              fontWeight: 600,
+              marginBottom: 8,
+              color: C.text3,
+              letterSpacing: '0.5px',
             }}
           >
-            {loading ? 'Searching...' : 'Search'}
-          </button>
+            KEYWORDS
+          </label>
+          <ChipInput
+            values={searchQuery.keywords || []}
+            onChange={(keywords) => setSearchQuery({ ...searchQuery, keywords })}
+            placeholder="Type keyword, press Enter to add"
+          />
+        </div>
 
-          <button
-            onClick={handleSaveSearch}
-            disabled={!canSearch}
-            style={{
-              padding: '10px 24px',
-              fontSize: 14,
-              fontWeight: 500,
-              border: `1px solid ${C.border}`,
-              borderRadius: 6,
-              background: C.surface,
-              color: C.text,
-              cursor: !canSearch ? 'not-allowed' : 'pointer',
-            }}
-          >
-            Save Search
-          </button>
+        {/* Row 4: More filters | Provider pills | Exclude checkbox | Search button */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* More filters button - placeholder */}
+            <button
+              style={{
+                background: 'transparent',
+                border: `1px solid ${C.border}`,
+                borderRadius: 0,
+                padding: '6px 12px',
+                fontSize: 12,
+                color: C.text2,
+                cursor: 'pointer',
+              }}
+            >
+              ▶ More filters
+            </button>
+
+            {/* Provider pills */}
+            <ProviderPills />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Exclude in HubSpot checkbox */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={excludeInHubSpot}
+                onChange={(e) => setExcludeInHubSpot(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: 12, color: C.text3, whiteSpace: 'nowrap' }}>
+                Exclude in HubSpot
+              </span>
+            </label>
+
+            {/* Search button */}
+            <button
+              onClick={handleSearch}
+              disabled={loading || !canSearch}
+              style={{
+                padding: '8px 20px',
+                fontSize: 13,
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: 0,
+                background: loading || !canSearch ? C.text3 : C.indigo,
+                color: 'white',
+                cursor: loading || !canSearch ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {loading ? 'Searching...' : 'Search'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -482,6 +493,7 @@ export default function ProspectPage() {
 
 /**
  * Chip input component for multi-select
+ * Container is transparent with no border - only chips have borders
  */
 function ChipInput({
   values,
@@ -514,27 +526,28 @@ function ChipInput({
   return (
     <div
       style={{
-        ...darkInputStyle,
+        background: 'transparent',
+        border: 'none',
         display: 'flex',
         flexWrap: 'wrap',
         gap: 6,
-        padding: '6px',
-        minHeight: '34px',
+        padding: '8px 0',
+        minHeight: '36px',
       }}
     >
       {values.map((value) => (
         <div
           key={value}
           style={{
-            background: C.indigoDim,
-            border: `1px solid ${C.indigoBrd}`,
+            background: 'rgba(46,107,168,0.15)',
+            border: '0.5px solid rgba(46,107,168,0.3)',
             color: C.indigoLt,
-            padding: '2px 8px',
-            borderRadius: 4,
+            padding: '4px 10px',
+            borderRadius: 0,
             fontSize: 12,
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
+            gap: 6,
           }}
         >
           {value}
@@ -546,7 +559,7 @@ function ChipInput({
               color: C.indigoLt,
               cursor: 'pointer',
               padding: 0,
-              fontSize: 14,
+              fontSize: 16,
               lineHeight: 1,
             }}
           >
@@ -568,6 +581,7 @@ function ChipInput({
           fontSize: 13,
           flex: 1,
           minWidth: '120px',
+          fontFamily: 'Jost, system-ui',
         }}
       />
     </div>

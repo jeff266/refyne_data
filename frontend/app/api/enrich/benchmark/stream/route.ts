@@ -211,6 +211,19 @@ async function benchmarkGraphIQ(
   let matched = 0;
   const fieldMatches: Record<string, number> = {};
 
+  // Check API key at start
+  const hasApiKey = !!process.env.GRAPHIQ_API_KEY;
+  console.log('[Benchmark GraphIQ] Starting:', {
+    companies: companies.length,
+    fields,
+    has_api_key: hasApiKey,
+    first_domain: companies[0]?.properties.domain
+  });
+
+  if (!hasApiKey) {
+    console.error('[Benchmark GraphIQ] CRITICAL: GRAPHIQ_API_KEY environment variable not set');
+  }
+
   for (let i = 0; i < companies.length; i += BATCH_SIZE) {
     const batch = companies.slice(i, i + BATCH_SIZE);
     const results = await Promise.all(
@@ -269,7 +282,10 @@ async function enrichWithGraphIQ(
   fields: string[]
 ): Promise<Record<string, unknown> | null> {
   const apiKey = process.env.GRAPHIQ_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.log('[GraphIQ] API key not configured in environment');
+    return null;
+  }
 
   try {
     const response = await fetch('https://app.graphiq.ai/api/v2/organizations/search', {
@@ -286,11 +302,19 @@ async function enrichWithGraphIQ(
       }),
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error('[GraphIQ] API error for', domain, '- Status:', response.status);
+      const errorText = await response.text();
+      console.error('[GraphIQ] Error response:', errorText.substring(0, 200));
+      return null;
+    }
 
     const data = await response.json();
     const entities = data.entities || [];
-    if (entities.length === 0) return null;
+    if (entities.length === 0) {
+      // This is normal - not every domain will have data
+      return null;
+    }
 
     const org = entities[0];
 
@@ -303,7 +327,8 @@ async function enrichWithGraphIQ(
       annualrevenue: org.revenue || null,
       domain: org.website || org.domain || null,
     };
-  } catch {
+  } catch (error) {
+    console.error('[GraphIQ] Exception for', domain, ':', error instanceof Error ? error.message : error);
     return null;
   }
 }
