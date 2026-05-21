@@ -17,16 +17,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider
-      signUpFallbackRedirectUrl="/onboarding"
-      signInFallbackRedirectUrl="/dashboard"
-    >
-      <html lang="en">
-        <body>
+    <html lang="en">
+      <body>
+        <ClerkProvider
+          signUpFallbackRedirectUrl="/onboarding"
+          signInFallbackRedirectUrl="/dashboard"
+        >
           <CleanUrl />
           {children}
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }
