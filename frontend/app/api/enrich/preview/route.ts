@@ -322,17 +322,31 @@ export async function POST(req: NextRequest) {
     };
 
     // Debug logging
+    const responseSize = JSON.stringify(response).length;
     console.log('[Preview API] Built response:', {
       results_count: results.length,
       first_company: results[0]?.company_name,
-      first_company_fields: results[0]?.fields?.length
+      first_company_fields: results[0]?.fields?.length,
+      response_size_kb: Math.round(responseSize / 1024),
+      response_has_results: !!response.results,
+      response_results_length: response.results?.length
     });
 
     // Cache results in Redis for 30 minutes
     const cacheKey = `${ctx.orgId}:enrich:preview:${previewId}`;
     await redis.setex(cacheKey, 1800, JSON.stringify(response));
 
-    console.log('[Preview API] Returning response with', results.length, 'companies');
+    console.log('[Preview API] Returning response with', results.length, 'companies, size:', Math.round(responseSize / 1024), 'KB');
+
+    // Verify response structure before returning
+    if (!response.results || !Array.isArray(response.results)) {
+      console.error('[Preview API] CRITICAL: response.results is not an array!', {
+        results_exists: !!response.results,
+        results_type: typeof response.results,
+        results_is_array: Array.isArray(response.results)
+      });
+    }
+
     return NextResponse.json(response);
   } catch (error) {
     console.error('[Preview] Error:', error);

@@ -496,9 +496,18 @@ export default function EnrichPage() {
       console.log('[Preview] Response data:', {
         records_processed: data.records_processed,
         results_count: data.results?.length || 0,
+        results_exists: !!data.results,
+        results_type: typeof data.results,
         summary: data.summary,
-        has_error: !!data.error
+        has_error: !!data.error,
+        all_keys: Object.keys(data)
       });
+
+      // If results array is missing but we have records_processed, something went wrong
+      if (data.records_processed > 0 && (!data.results || data.results.length === 0)) {
+        console.error('[Preview] Results array missing despite records_processed =', data.records_processed);
+        console.error('[Preview] Full response:', JSON.stringify(data, null, 2));
+      }
 
       // Check for error in response (even if status is 200)
       if (data.error) {
