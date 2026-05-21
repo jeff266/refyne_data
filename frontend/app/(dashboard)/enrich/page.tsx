@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
-import { PrimaryBtn } from '@/components/refyne';
+import { PrimaryBtn, CustomDropdown } from '@/components/refyne';
+import type { CustomDropdownOption } from '@/components/refyne';
 
 interface FieldGap {
   field: string;
@@ -482,26 +483,15 @@ export default function EnrichPage() {
                           }}
                         />
                       ) : (
-                        <select
+                        <CustomDropdown
                           value={selectedList}
-                          onChange={(e) => setSelectedList(e.target.value)}
-                          style={{
-                            width: '100%',
-                            padding: '6px 8px',
-                            background: C.bg,
-                            border: `1px solid ${C.border}`,
-                            color: C.text,
-                            fontSize: 12,
-                            borderRadius: 4,
-                          }}
-                        >
-                          <option value="">Select a list...</option>
-                          {hubspotLists.map(list => (
-                            <option key={list.listId} value={list.listId}>
-                              {list.name}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={setSelectedList}
+                          options={hubspotLists.map(list => ({
+                            value: list.listId,
+                            label: list.name,
+                          }))}
+                          placeholder="Select a list..."
+                        />
                       )}
                     </div>
                   )}
@@ -519,47 +509,26 @@ export default function EnrichPage() {
                   </label>
                   {companyScope === 'segment' && (
                     <div style={{ marginLeft: 22, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <select
+                      <CustomDropdown
                         value={lifecycleStage}
-                        onChange={(e) => setLifecycleStage(e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '6px 8px',
-                          background: C.bg,
-                          border: `1px solid ${C.border}`,
-                          color: C.text,
-                          fontSize: 11,
-                          borderRadius: 4,
-                        }}
-                      >
-                        <option value="">Lifecycle...</option>
-                        {lifecycleStages.map(stage => (
-                          <option key={stage.value} value={stage.value}>
-                            {stage.label} {stage.count > 0 ? `(${stage.count})` : ''}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={setLifecycleStage}
+                        options={lifecycleStages.map(stage => ({
+                          value: stage.value,
+                          label: stage.label,
+                          count: stage.count > 0 ? stage.count : undefined,
+                        }))}
+                        placeholder="Lifecycle..."
+                      />
 
-                      <select
+                      <CustomDropdown
                         value={ownerId}
-                        onChange={(e) => setOwnerId(e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '6px 8px',
-                          background: C.bg,
-                          border: `1px solid ${C.border}`,
-                          color: C.text,
-                          fontSize: 11,
-                          borderRadius: 4,
-                        }}
-                      >
-                        <option value="">Owner...</option>
-                        {owners.map(owner => (
-                          <option key={owner.id} value={owner.id}>
-                            {owner.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={setOwnerId}
+                        options={owners.map(owner => ({
+                          value: owner.id,
+                          label: owner.name,
+                        }))}
+                        placeholder="Owner..."
+                      />
 
                       <select
                         multiple

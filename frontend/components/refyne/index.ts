@@ -16,6 +16,8 @@ export { TopBar } from './TopBar';
 export { Skeleton } from './Skeleton';
 export { HowItWorksStrip } from './HowItWorksStrip';
 export { OnboardingChecklist } from './OnboardingChecklist';
+export { CustomDropdown } from './CustomDropdown';
+export type { CustomDropdownOption } from './CustomDropdown';
 export {
   StatCardsSkeleton,
   HarmonyBarsSkeleton,
