@@ -765,14 +765,25 @@ async function fetchRecordsForProcessing(
     throw new Error('Database or orgId not available');
   }
 
-  const { data: connection } = await supabase
+  // Debug: Log environment and query details
+  console.log('[fetchRecords] Environment check:', {
+    hasSupabaseUrl: !!process.env.SUPABASE_URL,
+    hasNextPublicUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    orgId,
+  });
+
+  const { data: connection, error } = await supabase
     .from('hubspot_connections')
     .select('portal_id')
     .eq('org_id', orgId)
     .single();
 
+  console.log('[fetchRecords] Query result:', { connection, error });
+
   if (!connection) {
-    throw new Error('HubSpot connection not found');
+    throw new Error(`HubSpot connection not found for org_id: ${orgId}`);
   }
 
   const portalId = connection.portal_id;
