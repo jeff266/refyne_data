@@ -16,9 +16,11 @@ import {
   HelpCircle,
   User,
   ChevronDown,
+  Loader2,
 } from 'lucide-react';
 import { C, F, NAV } from '@/lib/design-tokens';
 import { RefyneLogo } from './RefyneLogo';
+import { useEnrichRun } from '@/context/EnrichRunContext';
 
 const ICONS: Record<string, React.ElementType> = {
   LayoutDashboard,
@@ -34,6 +36,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const currentPage = pathname.split('/')[1] || 'dashboard';
   const [showHelpMenu, setShowHelpMenu] = useState(false);
+  const enrichRunContext = useEnrichRun();
 
   return (
     <div
@@ -116,33 +119,59 @@ export function Sidebar() {
           const active = currentPage === item.id;
           const Icon = ICONS[item.icon];
           const href = `/${item.id}`;
+          const isEnrich = item.id === 'enrich';
 
           return (
-            <Link
-              key={item.id}
-              href={href}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 8px',
-                borderRadius: 7,
-                background: active ? 'rgba(99,102,241,0.12)' : 'transparent',
-                color: active ? C.indigoLt : C.text2,
-                fontSize: 13,
-                fontWeight: active ? 500 : 400,
-                textAlign: 'left',
-                marginBottom: 1,
-                border: `1px solid ${active ? C.indigoBrd : 'transparent'}`,
-                transition: 'all 0.1s',
-                letterSpacing: '-0.01em',
-                textDecoration: 'none',
-              }}
-            >
-              {Icon && <Icon size={14} color={active ? C.indigoLt : C.text3} />}
-              {item.label}
-            </Link>
+            <div key={item.id}>
+              <Link
+                href={href}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 8px',
+                  borderRadius: 7,
+                  background: active ? 'rgba(99,102,241,0.12)' : 'transparent',
+                  color: active ? C.indigoLt : C.text2,
+                  fontSize: 13,
+                  fontWeight: active ? 500 : 400,
+                  textAlign: 'left',
+                  marginBottom: 1,
+                  border: `1px solid ${active ? C.indigoBrd : 'transparent'}`,
+                  transition: 'all 0.1s',
+                  letterSpacing: '-0.01em',
+                  textDecoration: 'none',
+                }}
+              >
+                {Icon && <Icon size={14} color={active ? C.indigoLt : C.text3} />}
+                {item.label}
+              </Link>
+
+              {/* Show running indicator below Enrich when active */}
+              {isEnrich && enrichRunContext.isRunning && (
+                <Link
+                  href="/enrich"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 8px 4px 30px',
+                    fontSize: 11,
+                    color: C.indigo,
+                    textDecoration: 'none',
+                    borderRadius: 4,
+                    marginTop: 2,
+                    marginBottom: 4,
+                  }}
+                >
+                  <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} />
+                  <span>
+                    Running · {enrichRunContext.processed.toLocaleString()}/{enrichRunContext.total.toLocaleString()}
+                  </span>
+                </Link>
+              )}
+            </div>
           );
         })}
       </nav>
@@ -288,6 +317,14 @@ export function Sidebar() {
           )}
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </div>
   );
 }

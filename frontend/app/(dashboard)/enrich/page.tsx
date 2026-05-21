@@ -7,6 +7,7 @@ import { PrimaryBtn, CustomDropdown } from '@/components/refyne';
 import type { CustomDropdownOption } from '@/components/refyne';
 import { EnrichLoadingState } from '@/components/enrich/EnrichLoadingState';
 import { addToast } from '@/components/ui/toast';
+import { useEnrichRun } from '@/context/EnrichRunContext';
 
 interface FieldGap {
   field: string;
@@ -133,6 +134,7 @@ interface BenchmarkRecommendation {
 
 export default function EnrichPage() {
   const router = useRouter();
+  const enrichRunContext = useEnrichRun();
   const [loading, setLoading] = useState(true);
   const [showAnimatedLoading, setShowAnimatedLoading] = useState(false);
   const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
@@ -275,6 +277,40 @@ export default function EnrichPage() {
     return () => es.close();
   }, []);
 
+  // Check localStorage for active run on mount and resume
+  useEffect(() => {
+    const stored = localStorage.getItem('refyne_active_run');
+    if (stored) {
+      try {
+        const activeRun = JSON.parse(stored);
+
+        // Resume run state
+        setArrangementId(activeRun.arrangementId);
+        setRunId(activeRun.runId);
+        setRunStatus('running');
+        setRunProgress({
+          records_processed: 0,
+          records_total: activeRun.totalRecords || 0,
+          fields_filled: {},
+          fields_skipped: 0,
+          latest_results: [],
+        });
+
+        // Update context
+        enrichRunContext.setRunState({
+          isRunning: true,
+          arrangementId: activeRun.arrangementId,
+          runId: activeRun.runId,
+          total: activeRun.totalRecords || 0,
+          processed: 0,
+        });
+      } catch (error) {
+        console.error('Failed to restore active run from localStorage:', error);
+        localStorage.removeItem('refyne_active_run');
+      }
+    }
+  }, []);
+
   // Poll arrangement run progress when running
   useEffect(() => {
     if (!arrangementId || !runId || runStatus !== 'running') return;
@@ -332,16 +368,29 @@ export default function EnrichPage() {
           latest_results: latestResults,
         });
 
+        // Update context for sidebar indicator
+        enrichRunContext.setRunState({
+          processed: latestRun.records_processed || 0,
+        });
+
         // Check if complete
         if (latestRun.status === 'completed') {
           setRunStatus('complete');
           clearInterval(pollInterval);
+
+          // Clear localStorage and context
+          localStorage.removeItem('refyne_active_run');
+          enrichRunContext.clearRunState();
 
           // Auto-refresh gap analysis
           fetchGapsNonStreaming();
         } else if (latestRun.status === 'failed') {
           setRunStatus('failed');
           clearInterval(pollInterval);
+
+          // Clear localStorage and context
+          localStorage.removeItem('refyne_active_run');
+          enrichRunContext.clearRunState();
         }
       } catch (error) {
         console.error('Failed to poll run progress:', error);
@@ -828,6 +877,24 @@ export default function EnrichPage() {
         fields_filled: {},
         fields_skipped: 0,
         latest_results: [],
+      });
+
+      // Persist to localStorage for navigation persistence
+      localStorage.setItem('refyne_active_run', JSON.stringify({
+        arrangementId: newArrangementId,
+        runId: runData.runId,
+        startedAt: Date.now(),
+        fields: selectedFields,
+        totalRecords: totalCompanies,
+      }));
+
+      // Update context for sidebar indicator
+      enrichRunContext.setRunState({
+        isRunning: true,
+        arrangementId: newArrangementId,
+        runId: runData.runId,
+        total: totalCompanies,
+        processed: 0,
       });
 
       // Clear preview/benchmark to show run view
@@ -1396,15 +1463,24 @@ export default function EnrichPage() {
             </div>
 
             {/* Run button */}
-            <PrimaryBtn onClick={handleRunEnrichment} disabled={running || previewLoading}>
+            <PrimaryBtn onClick={handleRunEnrichment} disabled={running || previewLoading || runStatus === 'running'}>
               {running
                 ? 'Creating...'
                 : previewLoading
                 ? 'Loading preview...'
+                : runStatus === 'running'
+                ? 'Enrichment in progress'
                 : testMode
                 ? `Preview ${testRecordLimit} records`
                 : `Enrich all ${(companyScope === 'segment' ? (previewCount || 0) : gapAnalysis?.total_companies || 0).toLocaleString()} companies →`}
             </PrimaryBtn>
+
+            {/* Show message when run is active */}
+            {runStatus === 'running' && (
+              <div style={{ marginTop: 8, fontSize: 11, color: C.text3, fontStyle: 'italic' }}>
+                A run is already processing. Starting another run will queue behind the current one.
+              </div>
+            )}
           </div>
         </div>
 
