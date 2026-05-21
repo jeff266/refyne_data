@@ -726,23 +726,26 @@ async function processLiveRunJob(
 // ─────────────────────────────────────────────────────────────
 
 async function getProviderAdapter(provider: string, orgId: string): Promise<ProviderAdapter> {
-  // Generic provider key lookup
-  const { getProviderKey } = await import('../providers/provider-key');
-  const apiKey = await getProviderKey(orgId, provider);
-
-  if (!apiKey) {
-    throw new Error(`${provider} API key not configured for org ${orgId}`);
-  }
-
   switch (provider) {
-    case 'apollo':
+    case 'apollo': {
+      // Apollo: fetch API key from provider_connections
+      const { getProviderKey } = await import('../providers/provider-key');
+      const apiKey = await getProviderKey(orgId, provider);
+      if (!apiKey) {
+        throw new Error(`Apollo API key not configured for org ${orgId}`);
+      }
       return new ApolloAdapter(apiKey);
+    }
     case 'graphiq':
-    case 'refyne':
+    case 'refyne': {
+      // GraphIQ: embedded provider, uses GRAPHIQ_API_KEY env var
       const { GraphiqAdapter } = await import('../providers/graphiq');
-      return new GraphiqAdapter(apiKey);
-    case 'zoominfo':
-      return new ZoomInfoAdapter(apiKey);
+      return new GraphiqAdapter();
+    }
+    case 'zoominfo': {
+      // ZoomInfo: uses env var like GraphIQ
+      return new ZoomInfoAdapter();
+    }
     // Future providers: cognism, etc. will be added here
     default:
       throw new Error(`Unknown provider: ${provider}`);

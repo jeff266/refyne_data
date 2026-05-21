@@ -789,11 +789,10 @@ export default function EnrichPage() {
       setRunProgress({
         records_processed: 0,
         records_total: totalCompanies,
-        fields_filled: 0,
-        harmonies_applied: 0,
+        fields_filled: {},
         fields_skipped: 0,
+        latest_results: [],
       });
-      setLiveFeed([]);
 
       // Clear preview/benchmark to show run view
       setShowingPreview(false);
@@ -1642,7 +1641,7 @@ export default function EnrichPage() {
 
               {/* Provider and config summary */}
               <div style={{ fontSize: 12, color: C.text2, marginBottom: 20 }}>
-                {selectedProvider === 'apollo' ? 'Apollo' : selectedProvider} · {selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label).join(', ')} · {policy === 'always_overwrite' ? 'Overwrite all' : policy === 'fill_empty' ? 'Fill empty' : 'Never overwrite'}
+                {selectedProviders.map(p => p === 'apollo' ? 'Apollo' : p === 'graphiq' || p === 'refyne' ? 'GraphIQ' : p).join(' → ')} · {selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label).join(', ')} · {writePolicy === 'overwrite' ? 'Overwrite all' : 'Fill empty'}
               </div>
 
               {/* Progress bar */}
