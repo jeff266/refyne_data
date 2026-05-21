@@ -55,6 +55,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const { searchParams } = new URL(req.url);
+    const checkCacheOnly = searchParams.get('check_cache') === 'true';
+
     // Check cache with portal_id included
     const cacheKey = `${ctx.orgId}:${connection.portal_id}:enrich:gaps`;
     const { data: cached } = await supabase
@@ -63,8 +66,27 @@ export async function GET(req: NextRequest) {
       .eq('key', cacheKey)
       .single();
 
-    if (cached && new Date(cached.expires_at) > new Date()) {
-      return NextResponse.json(cached.value);
+    const isCached = cached && new Date(cached.expires_at) > new Date();
+
+    // If only checking cache, return immediately
+    if (checkCacheOnly) {
+      if (isCached) {
+        return NextResponse.json({
+          ...cached.value,
+          from_cache: true,
+          cached_at: cached.expires_at,
+        });
+      } else {
+        return NextResponse.json({ from_cache: false });
+      }
+    }
+
+    // If cached and not check-only, return cached data
+    if (isCached) {
+      return NextResponse.json({
+        ...cached.value,
+        from_cache: true,
+      });
     }
 
     // Fetch ALL companies from HubSpot with pagination

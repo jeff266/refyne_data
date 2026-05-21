@@ -67,6 +67,8 @@ interface PreviewResponse {
     fields_skipped: number;
     fields_not_found: number;
     harmonies_applied: number;
+    no_domain: number;
+    already_complete: number;
   };
 }
 
@@ -155,6 +157,8 @@ export async function POST(req: NextRequest) {
           fields_skipped: 0,
           fields_not_found: 0,
           harmonies_applied: 0,
+          no_domain: 0,
+          already_complete: 0,
         },
       });
     }
@@ -168,11 +172,28 @@ export async function POST(req: NextRequest) {
     let fieldsSkipped = 0;
     let fieldsNotFound = 0;
     let harmoniesApplied = 0;
+    let noDomain = 0;
+    let alreadyComplete = 0;
 
     const apollo = new ApolloAdapter();
 
     for (const company of companies) {
       const companyDomain = company.properties.domain || '';
+
+      // Track if company has no domain
+      if (!companyDomain) {
+        noDomain++;
+      }
+
+      // Track if all selected fields are already complete
+      const allFieldsComplete = body.fields.every(f => {
+        const val = company.properties[f];
+        return val && val.trim() !== '';
+      });
+      if (allFieldsComplete) {
+        alreadyComplete++;
+      }
+
       const companyResult: PreviewCompanyResult = {
         hubspot_company_id: company.id,
         company_name: company.properties.name || companyDomain || company.id,
@@ -272,6 +293,8 @@ export async function POST(req: NextRequest) {
         fields_skipped: fieldsSkipped,
         fields_not_found: fieldsNotFound,
         harmonies_applied: harmoniesApplied,
+        no_domain: noDomain,
+        already_complete: alreadyComplete,
       },
     };
 
@@ -318,6 +341,7 @@ async function fetchCompaniesForPreview(
       filterGroups,
       properties,
       limit: Math.min(limit, 100),
+      sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }]
     };
 
     const response = await hubspot.request<{
@@ -357,6 +381,7 @@ async function fetchCompaniesForPreview(
       filterGroups,
       properties,
       limit: Math.min(limit, 100),
+      sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }]
     };
 
     const response = await hubspot.request<{
@@ -384,50 +409,57 @@ async function fetchCompaniesForPreview(
 
 /**
  * Build HubSpot Search API filter groups
+ *
+ * Missing fields use OR logic by creating separate filter groups.
+ * Each filter group is OR'd together, so this finds companies missing ANY of the fields.
  */
 function buildSearchFilters(filters: any): any[] {
   const filterGroups: any[] = [];
-  const filterList: any[] = [];
 
-  // Missing fields filter (OR logic)
+  // Create separate filter group for each missing field (OR logic)
   if (filters.missing_fields && filters.missing_fields.length > 0) {
     for (const field of filters.missing_fields) {
-      filterList.push({
-        propertyName: field,
-        operator: 'NOT_HAS_PROPERTY',
+      filterGroups.push({
+        filters: [{
+          propertyName: field,
+          operator: 'NOT_HAS_PROPERTY'
+        }]
       });
     }
   }
 
-  // Lifecycle stage filter
+  // Add other filters to all groups (AND with missing field check)
+  const additionalFilters: any[] = [];
+
   if (filters.lifecyclestage) {
-    filterList.push({
+    additionalFilters.push({
       propertyName: 'lifecyclestage',
       operator: 'EQ',
       value: filters.lifecyclestage,
     });
   }
 
-  // Owner filter
   if (filters.hubspot_owner_id) {
-    filterList.push({
+    additionalFilters.push({
       propertyName: 'hubspot_owner_id',
       operator: 'EQ',
       value: filters.hubspot_owner_id,
     });
   }
 
-  // Industry filter (IN logic)
   if (filters.industry && filters.industry.length > 0) {
-    filterList.push({
+    additionalFilters.push({
       propertyName: 'industry',
       operator: 'IN',
       values: filters.industry,
     });
   }
 
-  if (filterList.length > 0) {
-    filterGroups.push({ filters: filterList });
+  // Add additional filters to each filter group
+  if (additionalFilters.length > 0 && filterGroups.length > 0) {
+    filterGroups.forEach(group => {
+      group.filters.push(...additionalFilters);
+    });
   }
 
   return filterGroups;

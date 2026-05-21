@@ -1231,7 +1231,7 @@ export default function EnrichPage() {
                   )}
                   {fromCache && lastScannedAt && (
                     <span style={{ marginLeft: 12, fontSize: 11, color: C.text3, fontWeight: 400 }}>
-                      Last scanned {new Date(lastScannedAt).toLocaleTimeString()}
+                      Last scanned {formatTimeAgo(lastScannedAt)}
                     </span>
                   )}
                 </div>
