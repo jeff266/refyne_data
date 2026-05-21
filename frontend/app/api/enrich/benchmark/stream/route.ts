@@ -13,6 +13,7 @@ import { getStratifiedSample } from '@/lib/benchmark/stratified-sampling';
 import { getBenchmarkSampleSize, getConfidenceDescription } from '@/lib/benchmark/sampling';
 import { ApolloAdapter } from '@/lib/providers/apollo';
 import { getApolloKey } from '@/lib/providers/apollo-key';
+import { getGraphiqKey } from '@/lib/providers/graphiq-key';
 import { supabase } from '@/lib/db/supabase';
 import type { HubSpotCompany } from '@/lib/hubspot/types';
 
@@ -105,7 +106,7 @@ export async function GET(req: NextRequest) {
 
         // Benchmark Refyne Data (GraphIQ)
         send({ type: 'provider_start', provider: 'refyne' });
-        const refyneResults = await benchmarkGraphIQ(sample, fields, send);
+        const refyneResults = await benchmarkGraphIQ(sample, fields, send, ctx.orgId);
         send({ type: 'provider_complete', provider: 'refyne', results: refyneResults });
 
         // Calculate recommendations
@@ -204,7 +205,8 @@ async function benchmarkApollo(
 async function benchmarkGraphIQ(
   companies: HubSpotCompany[],
   fields: string[],
-  send: (data: object) => void
+  send: (data: object) => void,
+  orgId: string
 ): Promise<ProviderBenchmarkResult> {
   const BATCH_SIZE = 10;
   const DELAY_MS = 200;
@@ -231,7 +233,7 @@ async function benchmarkGraphIQ(
         const domain = company.properties.domain;
         if (!domain) return null;
         try {
-          return await enrichWithGraphIQ(domain, fields);
+          return await enrichWithGraphIQ(domain, fields, orgId);
         } catch {
           return null;
         }
@@ -289,11 +291,12 @@ function cleanDomain(domain: string): string {
 
 async function enrichWithGraphIQ(
   domain: string,
-  fields: string[]
+  fields: string[],
+  orgId: string
 ): Promise<Record<string, unknown> | null> {
-  const apiKey = process.env.GRAPHIQ_API_KEY;
+  const apiKey = await getGraphiqKey(orgId);
   if (!apiKey) {
-    console.log('[GraphIQ] API key not configured in environment');
+    console.log('[GraphIQ] API key not configured');
     return null;
   }
 

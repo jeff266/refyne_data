@@ -36,17 +36,13 @@ export class ApolloAdapter implements ProviderAdapter {
   }
 
   /**
-   * Get Apollo API key from constructor or environment.
+   * Get Apollo API key from constructor (must be passed from provider_connections).
    */
   private getApiKey(): string {
-    if (this.apiKey) {
-      return this.apiKey;
+    if (!this.apiKey) {
+      throw new ProviderError('apollo', 'config_error', 'Apollo API key not provided. Must be retrieved from provider_connections table.');
     }
-    const key = process.env.APOLLO_API_KEY;
-    if (!key) {
-      throw new ProviderError('apollo', 'config_error', 'APOLLO_API_KEY not configured');
-    }
-    return key;
+    return this.apiKey;
   }
 
   /**
