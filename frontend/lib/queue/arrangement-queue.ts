@@ -616,7 +616,22 @@ async function processLiveRunJob(
         }
 
         // Write enriched data to output destination
-        await writeToDestination(config.output_config, enrichedData);
+        // Build update payload with only the fields that were written
+        const propertiesToWrite: Record<string, unknown> = {};
+        for (const fieldKey of Object.keys(fieldDetail)) {
+          if (fieldDetail[fieldKey].written) {
+            const hubspotPropertyName = mapCanonicalToHubSpot(fieldKey);
+            propertiesToWrite[hubspotPropertyName] = enrichedData[fieldKey];
+          }
+        }
+
+        if (Object.keys(propertiesToWrite).length > 0) {
+          await writeToDestination(
+            config.output_config,
+            record.id,
+            propertiesToWrite
+          );
+        }
 
         successfulCount++;
         creditsUsed += recordCredits;
@@ -742,13 +757,119 @@ async function fetchRecordsForProcessing(
   sourceConfig: Record<string, unknown>,
   lastProcessedId?: string
 ): Promise<any[]> {
-  // Stub: would implement cursor-based pagination
-  return [];
+  const connectionId = sourceConfig.connection_id as string;
+  const sourceType = sourceConfig.source_type as string;
+
+  // Get HubSpot access token
+  const { getAccessToken } = await import('../hubspot/get-access-token');
+  const accessToken = await getAccessToken(connectionId);
+
+  const properties = [
+    'name',
+    'domain',
+    'industry',
+    'numberofemployees',
+    'annualrevenue',
+    'phone',
+    'linkedin_company_page',
+    'founded_year',
+    'city',
+    'country',
+  ];
+
+  // Handle list-based source
+  if (sourceType === 'hubspot_list' && sourceConfig.list_id) {
+    const listId = sourceConfig.list_id as string;
+    const vidOffset = lastProcessedId ? `&vidOffset=${lastProcessedId}` : '';
+
+    const res = await fetch(
+      `https://api.hubapi.com/contacts/v1/lists/${listId}/contacts/all?count=100${vidOffset}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch from list ${listId}: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    return data.contacts ?? [];
+  }
+
+  // Default: fetch all companies with cursor pagination
+  const searchBody = {
+    filterGroups: [],
+    properties,
+    limit: 100,
+    after: lastProcessedId ?? undefined,
+  };
+
+  const res = await fetch('https://api.hubapi.com/crm/v3/objects/companies/search', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(searchBody),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch companies: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  return data.results ?? [];
 }
 
-async function writeToDestination(outputConfig: Record<string, unknown>, data: Record<string, unknown>): Promise<void> {
-  // Stub: would write to HubSpot via batch writer
-  return;
+async function writeToDestination(
+  outputConfig: Record<string, unknown>,
+  companyId: string,
+  properties: Record<string, unknown>
+): Promise<void> {
+  const connectionId = outputConfig.connection_id as string;
+
+  // Get HubSpot access token
+  const { getAccessToken } = await import('../hubspot/get-access-token');
+  const accessToken = await getAccessToken(connectionId);
+
+  // Get HubSpot client
+  const { HubSpotClient } = await import('../hubspot/client');
+  const client = new HubSpotClient(accessToken, connectionId);
+
+  // Convert properties to string values (HubSpot API requirement)
+  const cleanedProperties: Record<string, string | number | null> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (value === null || value === undefined) {
+      cleanedProperties[key] = null;
+    } else if (typeof value === 'string' || typeof value === 'number') {
+      cleanedProperties[key] = value;
+    } else {
+      cleanedProperties[key] = String(value);
+    }
+  }
+
+  // Update the company in HubSpot
+  await client.updateCompany(companyId, cleanedProperties);
+}
+
+/**
+ * Map canonical field names to HubSpot property names.
+ */
+function mapCanonicalToHubSpot(canonicalField: string): string {
+  const mapping: Record<string, string> = {
+    'industry': 'industry',
+    'employee_count': 'numberofemployees',
+    'linkedin_url': 'linkedin_company_page',
+    'phone': 'phone',
+    'domain': 'domain',
+    'revenue': 'annualrevenue',
+    'founded_year': 'founded_year',
+    'city': 'city',
+    'country': 'country',
+  };
+
+  return mapping[canonicalField] || canonicalField;
 }
 
 async function saveCheckpoint(
