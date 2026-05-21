@@ -448,7 +448,7 @@ function generateRecommendation(
   const apolloIds = new Set(apollo?.matched_company_ids || []);
   const refyneIds = new Set(refyne.matched_company_ids);
 
-  const bothMatched = [...apolloIds].filter(id => refyneIds.has(id)).length;
+  const bothMatched = Array.from(apolloIds).filter(id => refyneIds.has(id)).length;
   const apolloOnly = apolloIds.size - bothMatched;
   const refyneOnly = refyneIds.size - bothMatched;
   const neither = sampleSize - (apolloOnly + refyneOnly + bothMatched);
