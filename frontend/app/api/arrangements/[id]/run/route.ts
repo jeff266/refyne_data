@@ -114,6 +114,14 @@ export async function POST(
       );
     }
 
+    // Store job_id for cancellation support
+    if (result.jobId) {
+      await supabase
+        .from('arrangement_runs')
+        .update({ job_id: result.jobId })
+        .eq('id', run.id);
+    }
+
     return NextResponse.json({
       success: true,
       runId: run.id,

@@ -616,7 +616,20 @@ async function enrichSingleRecord(
 
         // Build HubSpot properties to write
         const hubspotPropertyName = mapCanonicalToHubSpot(fieldConfig.field_key);
-        propertiesToWrite[hubspotPropertyName] = result.value;
+        const transformedValue = transformValueForHubSpot(hubspotPropertyName, result.value);
+
+        // Only write if value is not null after transformation
+        if (transformedValue !== null) {
+          propertiesToWrite[hubspotPropertyName] = transformedValue;
+        } else if (result.value !== null) {
+          // Value was filtered out by transformation
+          fieldsSkipped++;
+          fieldDetail[fieldConfig.field_key] = {
+            skipped: true,
+            reason: 'Value does not match HubSpot enum options',
+          };
+          continue;
+        }
       } else if (result.skipped) {
         fieldsSkipped++;
         fieldDetail[fieldConfig.field_key] = {
@@ -1237,6 +1250,86 @@ function mapCanonicalToHubSpot(canonicalField: string): string {
   };
 
   return mapping[canonicalField] || canonicalField;
+}
+
+/**
+ * Map employee count number to HubSpot enum range.
+ * Only applies if property is configured as enumeration.
+ */
+function mapEmployeeCountToEnum(
+  count: number | null | undefined,
+  validValues?: string[]
+): string | number | null {
+  if (count === null || count === undefined) return null;
+
+  // If no valid values provided, return raw number
+  if (!validValues || validValues.length === 0) return count;
+
+  // Common HubSpot employee count ranges
+  const ranges = [
+    { max: 1, value: '1' },
+    { max: 10, value: '1-10' },
+    { max: 50, value: '11-50' },
+    { max: 200, value: '51-200' },
+    { max: 500, value: '201-500' },
+    { max: 1000, value: '501-1000' },
+    { max: 5000, value: '1001-5000' },
+    { max: 10000, value: '5001-10000' },
+    { max: Infinity, value: '10001+' },
+  ];
+
+  // Find first range that fits and is in valid values
+  for (const range of ranges) {
+    if (count <= range.max && validValues.includes(range.value)) {
+      return range.value;
+    }
+  }
+
+  // If no match, return largest valid value
+  return validValues[validValues.length - 1] || count;
+}
+
+/**
+ * Transform value for HubSpot property write.
+ * Handles enum validation, number ranges, and format conversions.
+ */
+function transformValueForHubSpot(
+  hubspotPropertyName: string,
+  value: any,
+  validValues?: string[]
+): any {
+  if (value === null || value === undefined) return null;
+
+  // Employee count: map numbers to enum ranges if valid values exist
+  if (hubspotPropertyName === 'numberofemployees' && typeof value === 'number') {
+    return mapEmployeeCountToEnum(value, validValues);
+  }
+
+  // Industry: ensure uppercase enum format
+  if (hubspotPropertyName === 'industry' && typeof value === 'string') {
+    const upperValue = value.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+
+    // If valid values provided, check if uppercase version exists
+    if (validValues && validValues.length > 0) {
+      if (validValues.includes(upperValue)) {
+        return upperValue;
+      }
+
+      // Try to find a close match
+      const match = validValues.find(v => v.toUpperCase().includes(upperValue) || upperValue.includes(v.toUpperCase()));
+      if (match) {
+        return match;
+      }
+
+      // No match found, skip writing this value
+      console.warn(`[Transform] Industry value "${value}" not found in valid HubSpot options`);
+      return null;
+    }
+
+    return upperValue;
+  }
+
+  return value;
 }
 
 async function saveCheckpoint(
