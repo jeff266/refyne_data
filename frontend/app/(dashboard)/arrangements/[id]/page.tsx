@@ -21,7 +21,7 @@ interface Arrangement {
 interface ArrangementRun {
   id: string;
   arrangement_id: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'queued' | 'paused';
   is_test: boolean;
   test_record_count?: number;
   total_records: number;
@@ -239,6 +239,38 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
     }
   };
 
+  // Handle cancel run
+  const handleCancelRun = async () => {
+    if (!currentRun) return;
+
+    const confirmed = window.confirm(
+      'Cancel this enrichment run?\n\nRecords processed so far will be saved. This cannot be undone.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/arrangements/${params.id}/runs/${currentRun.id}/cancel`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) throw new Error('Failed to cancel run');
+
+      addToast('success', 'Run cancelled');
+
+      // Update current run status
+      setCurrentRun({ ...currentRun, status: 'cancelled' });
+      stopPolling();
+      stopElapsedTimer();
+
+      // Refresh run status
+      await fetchRunStatus();
+    } catch (error) {
+      console.error('Error cancelling run:', error);
+      addToast('error', 'Failed to cancel run');
+    }
+  };
+
   // Fetch historical runs
   const fetchHistoricalRuns = async () => {
     try {
@@ -262,7 +294,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
   }, [params.id]);
 
   useEffect(() => {
-    if (currentRun?.status === 'completed' || currentRun?.status === 'failed') {
+    if (currentRun?.status === 'completed' || currentRun?.status === 'failed' || currentRun?.status === 'cancelled') {
       stopPolling();
       stopElapsedTimer();
     }
@@ -280,6 +312,9 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
       case 'running': return C.indigo;
       case 'completed': return C.green;
       case 'failed': return C.red;
+      case 'cancelled': return C.yellow;
+      case 'queued': return C.text3;
+      case 'paused': return C.yellow;
       default: return C.text3;
     }
   };
@@ -476,7 +511,11 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                   {historicalRuns.map((run) => {
                     const date = new Date(run.started_at);
                     const statusColor = getStatusColor(run.status);
-                    const statusText = run.status === 'completed' ? 'Complete' : run.status === 'failed' ? 'Failed' : 'Running';
+                    const statusText = run.status === 'completed' ? 'Complete' :
+                                      run.status === 'failed' ? 'Failed' :
+                                      run.status === 'cancelled' ? 'Cancelled' :
+                                      run.status === 'running' ? 'Running' :
+                                      run.status.charAt(0).toUpperCase() + run.status.slice(1);
 
                     let duration = 0;
                     if (run.started_at && run.completed_at) {
@@ -554,15 +593,46 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
                     {currentRun.status === 'running' && 'Processing records...'}
                     {currentRun.status === 'completed' && (currentRun.is_test ? 'Test run complete' : 'Enrichment complete')}
                     {currentRun.status === 'failed' && 'Run failed'}
+                    {currentRun.status === 'cancelled' && 'Run cancelled'}
                   </div>
                   <div style={{ fontSize: '12px', color: C.text2, marginTop: '2px' }}>
                     {currentRun.status === 'running' && `Querying ${getProviderName(arrangement.provider)}${harmonies.length > 0 && harmonies[0] ? ` · Applying ${harmonies[0].name}` : ''}`}
                     {currentRun.status === 'completed' && `${currentRun.total_records || 0} records processed · Ready to review results`}
+                    {currentRun.status === 'cancelled' && `${currentRun.records_processed || 0} records processed before cancellation`}
                   </div>
                 </div>
               </div>
-              <div style={{ fontSize: '12px', color: C.text3 }}>
-                {formatDuration(elapsedSeconds)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ fontSize: '12px', color: C.text3 }}>
+                  {formatDuration(elapsedSeconds)}
+                </div>
+                {currentRun.status === 'running' && (
+                  <button
+                    onClick={handleCancelRun}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '11px',
+                      fontWeight: '500',
+                      background: 'transparent',
+                      color: C.red,
+                      border: `0.5px solid ${C.red}`,
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      transition: 'all 0.15s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = C.red;
+                      e.currentTarget.style.color = '#ffffff';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = C.red;
+                    }}
+                  >
+                    Cancel run
+                  </button>
+                )}
               </div>
             </div>
           )}
