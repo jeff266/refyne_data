@@ -18,6 +18,9 @@ import {
   ChevronDown,
   Loader2,
   Clock,
+  Users,
+  Shield,
+  Workflow,
 } from 'lucide-react';
 import { C, F, NAV } from '@/lib/design-tokens';
 import { RefyneLogo } from './RefyneLogo';
@@ -32,6 +35,9 @@ const ICONS: Record<string, React.ElementType> = {
   Sparkles,
   ArrowRightLeft,
   Plug2,
+  Users,
+  Shield,
+  Workflow,
 };
 
 export function Sidebar() {
