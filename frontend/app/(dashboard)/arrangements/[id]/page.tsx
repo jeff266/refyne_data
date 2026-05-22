@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowLeft, Check, Loader2, Sparkles, PlayCircle, Zap } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { addToast } from '@/components/ui/toast';
@@ -66,6 +67,7 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
   const [progressRecords, setProgressRecords] = useState<ProgressRecord[]>([]);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [harmonies, setHarmonies] = useState<HarmonyPreview[]>([]);
+  const [historicalRuns, setHistoricalRuns] = useState<ArrangementRun[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('live');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -237,6 +239,18 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
     }
   };
 
+  // Fetch historical runs
+  const fetchHistoricalRuns = async () => {
+    try {
+      const response = await fetch(`/api/arrangements/${params.id}/runs?limit=20`);
+      if (!response.ok) throw new Error('Failed to fetch runs');
+      const data = await response.json();
+      setHistoricalRuns(data.runs || []);
+    } catch (error) {
+      console.error('Error fetching historical runs:', error);
+    }
+  };
+
   // Effects
   useEffect(() => {
     fetchArrangement();
@@ -253,6 +267,12 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
       stopElapsedTimer();
     }
   }, [currentRun?.status]);
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchHistoricalRuns();
+    }
+  }, [activeTab, params.id]);
 
   // Helper functions
   const getStatusColor = (status: string): string => {
@@ -419,8 +439,94 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
       {/* Layout */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px' }}>
 
-        {/* LEFT: Live feed */}
+        {/* LEFT PANEL */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* History tab content */}
+          {activeTab === 'history' && (
+            <div style={{ background: C.surface, border: `0.5px solid ${C.border}`, borderRadius: 4 }}>
+              <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${C.border}` }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Run history
+                </div>
+              </div>
+              {historicalRuns.length === 0 ? (
+                <div style={{ padding: '32px', textAlign: 'center', color: C.text3 }}>
+                  No runs yet
+                </div>
+              ) : (
+                <div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.5fr 1fr 1fr 1fr 120px',
+                    padding: '8px 16px',
+                    borderBottom: `0.5px solid ${C.border}`,
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    color: C.text3,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    <div>Date</div>
+                    <div>Status</div>
+                    <div>Records</div>
+                    <div>Filled</div>
+                    <div></div>
+                  </div>
+                  {historicalRuns.map((run) => {
+                    const date = new Date(run.started_at);
+                    const statusColor = getStatusColor(run.status);
+                    const statusText = run.status === 'completed' ? 'Complete' : run.status === 'failed' ? 'Failed' : 'Running';
+
+                    let duration = 0;
+                    if (run.started_at && run.completed_at) {
+                      duration = Math.round((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000);
+                    }
+
+                    return (
+                      <div
+                        key={run.id}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1.5fr 1fr 1fr 1fr 120px',
+                          padding: '10px 16px',
+                          borderBottom: `0.5px solid ${C.border}`,
+                          fontSize: '12px',
+                          color: C.text2,
+                          transition: 'background 0.1s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = C.hover}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <div style={{ color: C.text }}>
+                          {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                        </div>
+                        <div style={{ color: statusColor }}>{statusText}</div>
+                        <div>{run.records_processed.toLocaleString()}</div>
+                        <div>{Object.values((run as any).fields_filled || {}).reduce((sum: number, val: any) => sum + (val || 0), 0)}</div>
+                        <div>
+                          <Link
+                            href={`/history/${run.id}`}
+                            style={{
+                              fontSize: '11px',
+                              color: C.indigo,
+                              textDecoration: 'none'
+                            }}
+                          >
+                            View run details →
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Live feed (only show when not on history tab) */}
+          {activeTab !== 'history' && (
+            <>
 
           {/* Status banner */}
           {currentRun && (
@@ -774,11 +880,16 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
             </div>
           )}
 
+          </>
+          )}
+
         </div>
 
         {/* RIGHT: Summary panel */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
+          {activeTab !== 'history' && (
+          <>
           {/* Run summary */}
           <div style={{ background: C.surface, border: `0.5px solid ${C.border}`, borderRadius: 4, padding: '14px' }}>
             <div style={{ fontSize: '11px', color: C.text3, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
@@ -883,6 +994,9 @@ export default function ArrangementDetailPage({ params }: { params: { id: string
               );
             })}
           </div>
+
+          </>
+          )}
 
         </div>
 
