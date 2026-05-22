@@ -17,6 +17,7 @@ import {
   User,
   ChevronDown,
   Loader2,
+  Clock,
 } from 'lucide-react';
 import { C, F, NAV } from '@/lib/design-tokens';
 import { RefyneLogo } from './RefyneLogo';
@@ -25,6 +26,7 @@ import { useEnrichRun } from '@/context/EnrichRunContext';
 const ICONS: Record<string, React.ElementType> = {
   LayoutDashboard,
   Search,
+  Clock,
   ArrowUpDown,
   GitMerge,
   Sparkles,
