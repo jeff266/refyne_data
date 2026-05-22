@@ -1031,6 +1031,14 @@ async function fetchRecordsForProcessing(
     });
 
     if (!res.ok) {
+      // Handle rate limiting
+      if (res.status === 429) {
+        const retryAfter = res.headers.get('Retry-After');
+        const waitMs = retryAfter ? parseInt(retryAfter) * 1000 : 2000;
+        console.log(`[HubSpot] Rate limited, waiting ${waitMs}ms`);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        continue; // Retry this page
+      }
       throw new Error(`Failed to fetch companies: ${res.statusText}`);
     }
 
@@ -1044,6 +1052,9 @@ async function fetchRecordsForProcessing(
     // Check if there are more pages
     if (!data.paging?.next?.after) break;
     after = data.paging.next.after;
+
+    // Rate limit: wait 100ms between pages to avoid 429
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
   return allRecords;
