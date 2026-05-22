@@ -371,7 +371,7 @@ At connect time:
 |--------|-------------|---------|
 | digest-worker | 2 | Nightly compliance scans, email digest |
 | company-dedup-worker | 1 | Dedup cluster scanning |
-| arrangement-worker | 3 | Enrichment pipeline execution |
+| arrangement-worker | 10 | Enrichment pipeline execution |
 | webhook-worker | (varies) | HubSpot webhook processing |
 
 ### Arrangement Worker Flow
@@ -444,13 +444,13 @@ This was the root cause of the May 21 worker failure.
 | Prospect search | Partial | Apollo key fixed, results in browser unconfirmed |
 | Arrangements detail | Partial | Crash fixed, content never verified |
 | Inline live feed | Partial | Progress bar works, row-by-row feed not populating |
+| Worker parallel processing | Complete | Benchmark with 2,816 records needed, target <20 min |
 
 ### Not Started
 
 | Feature | Priority |
 |---------|----------|
 | Serper+Haiku provider | P0 - core coverage for domain-less companies |
-| Worker parallel processing | P0 - 83 min per 2816 records, target 20 min |
 | Normalize queue (BullMQ) | P1 - currently synchronous stub |
 | Railway worker migration | P1 - auto-scaling for multi-client |
 | Salesforce connector | P2 |
@@ -460,16 +460,15 @@ This was the root cause of the May 21 worker failure.
 
 ## Pending Work — Priority Order
 
-1. Verify Normalize end-to-end (apply to HubSpot, rollback)
-2. Verify Prospect search returns results in browser
-3. Fix inline live feed rows (progress bar works, rows do not populate)
-4. Serper+Haiku provider for domain-less company enrichment
-5. Worker parallel processing optimization (target 150+ rec/min)
+1. Benchmark worker parallel processing with 2,816 records (target <20 min)
+2. Verify Normalize end-to-end (apply to HubSpot, rollback)
+3. Verify Prospect search returns results in browser
+4. Fix inline live feed rows (progress bar works, rows do not populate)
+5. Serper+Haiku provider for domain-less company enrichment
 6. Normalize BullMQ queue implementation
 7. Railway worker migration for auto-scaling
-8. History page and run detail (/history, /history/[run_id])
-9. GitHub Harmonies repo (open-source default library)
-10. Salesforce connector
+8. GitHub Harmonies repo (open-source default library)
+9. Salesforce connector
 
 ---
 

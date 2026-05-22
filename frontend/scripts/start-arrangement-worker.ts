@@ -47,7 +47,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('✅ Arrangement worker started with concurrency=3\n');
+  console.log('✅ Arrangement worker started with concurrency=10\n');
 
   // Graceful shutdown
   const shutdown = async () => {

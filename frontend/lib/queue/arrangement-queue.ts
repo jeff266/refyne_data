@@ -33,7 +33,22 @@ const QUEUE_NAME = 'arrangements';
 /**
  * Worker concurrency - how many arrangement jobs to process in parallel.
  */
-const WORKER_CONCURRENCY = 3;
+const WORKER_CONCURRENCY = 10;
+
+/**
+ * Provider batch size - how many records to enrich in parallel per batch.
+ */
+const PROVIDER_BATCH_SIZE = 10;
+
+/**
+ * Progress batch size - how many progress records to insert at once.
+ */
+const PROGRESS_BATCH_SIZE = 10;
+
+/**
+ * Checkpoint frequency - save checkpoint every N records.
+ */
+const CHECKPOINT_FREQUENCY = 500;
 
 /**
  * Retry settings with exponential backoff.
@@ -45,6 +60,62 @@ const RETRY_SETTINGS = {
     delay: 2000, // 2s, 4s, 8s
   },
 };
+
+// ─────────────────────────────────────────────────────────────
+// Rate Limiting - Token Bucket Implementation
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Token bucket rate limiter for provider API calls.
+ * Per org + provider key to ensure different clients don't throttle each other.
+ */
+class TokenBucket {
+  private tokens: number;
+  private lastRefill: number;
+  private readonly maxTokens: number;
+  private readonly refillRate: number; // tokens per ms
+
+  constructor(requestsPerMinute: number) {
+    this.maxTokens = requestsPerMinute;
+    this.tokens = requestsPerMinute;
+    this.lastRefill = Date.now();
+    this.refillRate = requestsPerMinute / 60000;
+  }
+
+  async acquire(): Promise<void> {
+    this.refill();
+    if (this.tokens < 1) {
+      const waitMs = Math.ceil((1 - this.tokens) / this.refillRate);
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+      this.refill();
+    }
+    this.tokens -= 1;
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const elapsed = now - this.lastRefill;
+    this.tokens = Math.min(
+      this.maxTokens,
+      this.tokens + elapsed * this.refillRate
+    );
+    this.lastRefill = now;
+  }
+}
+
+/**
+ * Per org + provider rate limiter registry.
+ * Keyed on orgId + ':' + provider to isolate rate limits.
+ */
+const rateLimiters = new Map<string, TokenBucket>();
+
+function getRateLimiter(orgId: string, provider: string): TokenBucket {
+  const key = `${orgId}:${provider}`;
+  if (!rateLimiters.has(key)) {
+    rateLimiters.set(key, new TokenBucket(50)); // 50 req/min for Apollo
+  }
+  return rateLimiters.get(key)!;
+}
 
 // ─────────────────────────────────────────────────────────────
 // Job Types
@@ -480,6 +551,136 @@ async function processRehearsalJob(
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Parallel Processing Helpers
+// ─────────────────────────────────────────────────────────────
+
+interface EnrichedRecord {
+  record: any;
+  companyId: string;
+  propertiesToWrite: Record<string, unknown>;
+  fieldsAttempted: number;
+  fieldsWritten: number;
+  fieldsSkipped: number;
+  fieldDetail: Record<string, any>;
+  creditsUsed: number;
+}
+
+interface FailedRecord {
+  record: any;
+  companyId: string;
+  error: string;
+}
+
+/**
+ * Enrich a single record by processing all configured fields.
+ */
+async function enrichSingleRecord(
+  record: any,
+  fieldConfigs: FieldConfig[],
+  orgId: string
+): Promise<EnrichedRecord> {
+  const enrichedData: Record<string, unknown> = { ...record };
+  let recordCredits = 0;
+  const fieldDetail: Record<string, any> = {};
+  let fieldsAttempted = 0;
+  let fieldsWritten = 0;
+  let fieldsSkipped = 0;
+  const propertiesToWrite: Record<string, unknown> = {};
+
+  for (const fieldConfig of fieldConfigs) {
+    fieldsAttempted++;
+
+    try {
+      const result = await processFieldConfig(
+        fieldConfig,
+        record,
+        orgId,
+        record.properties?.[fieldConfig.field_key] || record[fieldConfig.field_key],
+        'live'
+      );
+
+      if (result.written) {
+        enrichedData[fieldConfig.field_key] = result.value;
+        fieldsWritten++;
+        recordCredits += fieldConfig.steps.length;
+
+        fieldDetail[fieldConfig.field_key] = {
+          provider: result.provider,
+          strategy: result.strategy,
+          raw: result.raw,
+          normalized: result.normalized,
+          written: true,
+          metadata: result.metadata,
+        };
+
+        // Build HubSpot properties to write
+        const hubspotPropertyName = mapCanonicalToHubSpot(fieldConfig.field_key);
+        propertiesToWrite[hubspotPropertyName] = result.value;
+      } else if (result.skipped) {
+        fieldsSkipped++;
+        fieldDetail[fieldConfig.field_key] = {
+          skipped: true,
+          reason: result.skipReason,
+        };
+      }
+    } catch (fieldError) {
+      console.error(`[Enrich] Field ${fieldConfig.field_key} failed:`, fieldError);
+      fieldsSkipped++;
+      fieldDetail[fieldConfig.field_key] = {
+        skipped: true,
+        reason: `Error: ${fieldError instanceof Error ? fieldError.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
+
+  return {
+    record,
+    companyId,
+    propertiesToWrite,
+    fieldsAttempted,
+    fieldsWritten,
+    fieldsSkipped,
+    fieldDetail,
+    creditsUsed: recordCredits,
+  };
+}
+
+/**
+ * Process a batch of records in parallel using Promise.allSettled.
+ * Returns successful and failed results separately.
+ */
+async function processBatch(
+  records: any[],
+  fieldConfigs: FieldConfig[],
+  orgId: string
+): Promise<{ successful: EnrichedRecord[]; failed: FailedRecord[] }> {
+  const results = await Promise.allSettled(
+    records.map(record => enrichSingleRecord(record, fieldConfigs, orgId))
+  );
+
+  const successful: EnrichedRecord[] = [];
+  const failed: FailedRecord[] = [];
+
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      successful.push(result.value);
+    } else {
+      const record = records[index];
+      const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
+      failed.push({
+        record,
+        companyId,
+        error: result.reason?.message ?? 'Unknown error',
+      });
+    }
+  });
+
+  return { successful, failed };
+}
+
 /**
  * Process a live run job with checkpointing.
  */
@@ -512,162 +713,123 @@ async function processLiveRunJob(
       orgId
     );
 
-    for (const record of records) {
-      try {
-        // Check if run is paused
-        const { data: run } = await supabase
-          .from('arrangement_runs')
-          .select('status')
-          .eq('id', runId)
-          .single();
+    console.log(`[Arrangement ${config.id}] Processing ${records.length} records in batches of ${PROVIDER_BATCH_SIZE}`);
 
-        if (run?.status === 'paused') {
-          // Save checkpoint and exit
-          await saveCheckpoint(runId, record.id, processedCount, creditsUsed);
-          break;
+    // Get HubSpot client for batch writes
+    const { getAccessToken } = await import('../hubspot/get-access-token');
+    const { HubSpotClient } = await import('../hubspot/client');
+    const accessToken = await getAccessToken(orgId);
+    const { data: connection } = await supabase
+      .from('hubspot_connections')
+      .select('portal_id')
+      .eq('org_id', orgId)
+      .single();
+
+    if (!connection) {
+      throw new Error('HubSpot connection not found');
+    }
+
+    const hubspotClient = new HubSpotClient(accessToken, connection.portal_id);
+
+    // Process records in batches
+    const progressBuffer: any[] = [];
+    let lastProcessedId: string | undefined;
+
+    for (let i = 0; i < records.length; i += PROVIDER_BATCH_SIZE) {
+      // Check if run is paused
+      const { data: run } = await supabase
+        .from('arrangement_runs')
+        .select('status')
+        .eq('id', runId)
+        .single();
+
+      if (run?.status === 'paused') {
+        console.log(`[Arrangement ${config.id}] Run paused, saving checkpoint`);
+        if (lastProcessedId) {
+          await saveCheckpoint(runId, lastProcessedId, processedCount, creditsUsed);
         }
+        break;
+      }
 
-        // Process record
-        const enrichedData: Record<string, unknown> = { ...record };
-        let recordCredits = 0;
-        const fieldDetail: Record<string, any> = {};
-        let fieldsAttempted = 0;
-        let fieldsWritten = 0;
-        let fieldsSkipped = 0;
+      const batch = records.slice(i, i + PROVIDER_BATCH_SIZE);
+      const batchNumber = Math.floor(i / PROVIDER_BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(records.length / PROVIDER_BATCH_SIZE);
 
-        if (usingFieldConfigs) {
-          // NEW PATH: Use field_configs
-          for (const fieldConfig of config.field_configs!) {
-            fieldsAttempted++;
+      console.log(`[Arrangement ${config.id}] Processing batch ${batchNumber}/${totalBatches} (${batch.length} records)`);
 
-            try {
-              const result = await processFieldConfig(
-                fieldConfig,
-                record,
-                orgId,
-                record[fieldConfig.field_key],
-                'live'
-              );
+      // Process batch in parallel
+      const { successful, failed } = await processBatch(
+        batch,
+        config.field_configs || [],
+        orgId
+      );
 
-              if (result.written) {
-                enrichedData[fieldConfig.field_key] = result.value;
-                fieldsWritten++;
-                recordCredits += fieldConfig.steps.length; // Rough estimate
+      // Batch HubSpot write for successful records
+      if (successful.length > 0) {
+        const hubspotUpdates = successful
+          .filter(r => Object.keys(r.propertiesToWrite).length > 0)
+          .map(r => ({
+            id: r.companyId,
+            properties: r.propertiesToWrite as Record<string, string | number | null>,
+          }));
 
-                fieldDetail[fieldConfig.field_key] = {
-                  provider: result.provider,
-                  strategy: result.strategy,
-                  raw: result.raw,
-                  normalized: result.normalized,
-                  written: true,
-                  metadata: result.metadata,
-                };
-              } else if (result.skipped) {
-                fieldsSkipped++;
-                fieldDetail[fieldConfig.field_key] = {
-                  skipped: true,
-                  reason: result.skipReason,
-                };
-              }
-            } catch (fieldError) {
-              console.error(`[Live Run] Field ${fieldConfig.field_key} failed:`, fieldError);
-              fieldsSkipped++;
-              fieldDetail[fieldConfig.field_key] = {
-                skipped: true,
-                reason: `Error: ${fieldError instanceof Error ? fieldError.message : 'Unknown error'}`,
-              };
-            }
+        if (hubspotUpdates.length > 0) {
+          const { results, errors } = await hubspotClient.batchUpdateCompanies(hubspotUpdates);
+
+          if (errors.length > 0) {
+            console.error(`[Arrangement ${config.id}] HubSpot batch write: ${errors.length} errors`);
           }
-        } else {
-          // LEGACY PATH: Use enrichment_steps
-          for (const step of config.enrichment_steps!.sort((a, b) => a.order - b.order)) {
-            try {
-              const provider = await getProviderAdapter(step.provider, orgId);
-              const result = await provider.enrichCompany({ domain: record.domain });
 
-              if (result) {
-                for (const field of step.fields) {
-                  enrichedData[field] = result.normalized?.[field] ?? result.raw[field];
-                }
-                recordCredits += step.fields.length;
-              }
-
-            } catch (providerError) {
-              // Handle provider failures
-              if (isAuthError(providerError)) {
-                // Pause run on 401
-                await supabase
-                  .from('arrangement_runs')
-                  .update({
-                    status: 'paused',
-                    error_message: 'Provider authentication failed',
-                  })
-                  .eq('id', runId);
-
-                throw new Error('Provider auth failed - run paused');
-              }
-
-              if (isRateLimitError(providerError)) {
-                // Backoff on 429
-                await new Promise(resolve => setTimeout(resolve, 5000));
-                // Retry this step (could be more sophisticated)
-              }
-            }
-          }
+          console.log(`[Arrangement ${config.id}] Wrote ${results.length} records to HubSpot`);
         }
+      }
 
-        // Write enriched data to output destination
-        // Build update payload with only the fields that were written
-        const propertiesToWrite: Record<string, unknown> = {};
-        for (const fieldKey of Object.keys(fieldDetail)) {
-          if (fieldDetail[fieldKey].written) {
-            const hubspotPropertyName = mapCanonicalToHubSpot(fieldKey);
-            propertiesToWrite[hubspotPropertyName] = enrichedData[fieldKey];
-          }
-        }
-
-        if (Object.keys(propertiesToWrite).length > 0) {
-          await writeToDestination(
-            config.output_config,
-            record.id,
-            propertiesToWrite,
-            orgId
-          );
-        }
-
+      // Add successful records to progress buffer
+      for (const enrichedRecord of successful) {
         successfulCount++;
-        creditsUsed += recordCredits;
+        creditsUsed += enrichedRecord.creditsUsed;
+        lastProcessedId = enrichedRecord.companyId;
 
-        // Track progress in database with detailed field tracking
-        await supabase.from('arrangement_run_progress').insert({
+        progressBuffer.push({
           run_id: runId,
           org_id: orgId,
-          record_id: record.id,
+          record_id: enrichedRecord.companyId,
           status: 'completed',
-          enrichment_results: enrichedData,
-          credits_used: recordCredits,
+          enrichment_results: enrichedRecord.record,
+          credits_used: enrichedRecord.creditsUsed,
           completed_at: new Date().toISOString(),
-          result: usingFieldConfigs ? {
-            fields_attempted: fieldsAttempted,
-            fields_written: fieldsWritten,
-            fields_skipped: fieldsSkipped,
-            field_detail: fieldDetail,
-          } : undefined,
-        });
-
-      } catch (error) {
-        failedCount++;
-
-        await supabase.from('arrangement_run_progress').insert({
-          run_id: runId,
-          org_id: orgId,
-          record_id: record.id,
-          status: 'failed',
-          error_message: error instanceof Error ? error.message : 'Unknown error',
+          result: {
+            fields_attempted: enrichedRecord.fieldsAttempted,
+            fields_written: enrichedRecord.fieldsWritten,
+            fields_skipped: enrichedRecord.fieldsSkipped,
+            field_detail: enrichedRecord.fieldDetail,
+          },
         });
       }
 
-      processedCount++;
+      // Add failed records to progress buffer
+      for (const failedRecord of failed) {
+        failedCount++;
+        lastProcessedId = failedRecord.companyId;
+
+        progressBuffer.push({
+          run_id: runId,
+          org_id: orgId,
+          record_id: failedRecord.companyId,
+          status: 'failed',
+          error_message: failedRecord.error,
+          completed_at: new Date().toISOString(),
+        });
+      }
+
+      processedCount += batch.length;
+
+      // Batch insert progress records every PROGRESS_BATCH_SIZE
+      if (progressBuffer.length >= PROGRESS_BATCH_SIZE) {
+        await supabase.from('arrangement_run_progress').insert(progressBuffer);
+        console.log(`[Arrangement ${config.id}] Inserted ${progressBuffer.length} progress records`);
+        progressBuffer.length = 0;
+      }
 
       // Update run progress every 10 records
       if (processedCount % 10 === 0) {
@@ -681,6 +843,21 @@ async function processLiveRunJob(
           })
           .eq('id', runId);
       }
+
+      // Save checkpoint every CHECKPOINT_FREQUENCY records
+      if (processedCount % CHECKPOINT_FREQUENCY === 0 && lastProcessedId) {
+        await saveCheckpoint(runId, lastProcessedId, processedCount, creditsUsed);
+        console.log(`[Arrangement ${config.id}] Checkpoint saved at ${processedCount} records`);
+      }
+
+      console.log(`[Arrangement ${config.id}] Batch ${batchNumber}: ${successful.length} successful, ${failed.length} failed`);
+    }
+
+    // Flush remaining progress records
+    if (progressBuffer.length > 0) {
+      await supabase.from('arrangement_run_progress').insert(progressBuffer);
+      console.log(`[Arrangement ${config.id}] Flushed ${progressBuffer.length} remaining progress records`);
+      progressBuffer.length = 0;
     }
 
     // Final update
@@ -1172,7 +1349,11 @@ async function queryProvider(
     return demoResult[fieldKey];
   }
 
-  // Live mode: make real API call
+  // Live mode: acquire rate limit token before making API call
+  const limiter = getRateLimiter(orgId, provider);
+  await limiter.acquire();
+
+  // Make real API call
   const providerAdapter = await getProviderAdapter(provider, orgId);
 
   // HubSpot records have properties nested: record.properties.domain
