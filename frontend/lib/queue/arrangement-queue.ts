@@ -948,6 +948,122 @@ async function fetchSampleRecords(sourceConfig: Record<string, unknown>, limit: 
   return DEMO_COMPANIES.slice(0, limit);
 }
 
+/**
+ * Helper: Fetch with retry logic and Retry-After header support
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  const { calculateRetryDelay } = await import('../hubspot/rate-limiter');
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, options);
+
+    if (response.status === 429) {
+      if (attempt === maxRetries) {
+        throw new Error('HubSpot rate limit: max retries exceeded');
+      }
+      const retryAfter = response.headers.get('Retry-After');
+      const waitMs = retryAfter
+        ? parseInt(retryAfter) * 1000
+        : calculateRetryDelay(attempt);
+      console.log(`[HubSpot] 429 rate limit. Waiting ${waitMs}ms. Attempt ${attempt + 1}/${maxRetries}`);
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+      continue;
+    }
+
+    return response;
+  }
+  throw new Error('fetchWithRetry: exhausted retries');
+}
+
+/**
+ * Fetch companies via Export API (for large portals with crm.export scope)
+ */
+async function fetchViaExportApi(
+  orgId: string,
+  portalId: string,
+  accessToken: string,
+  properties: string[]
+): Promise<any[]> {
+  const { HubSpotClient } = await import('../hubspot/client');
+  const hubspotClient = new HubSpotClient(accessToken, portalId);
+
+  console.log(`[Export API] Fetching companies via Export API for portal ${portalId}`);
+
+  const companies = await hubspotClient.exportCompanies(properties);
+
+  if (!companies) {
+    console.warn(`[Export API] Export returned null, falling back to empty array`);
+    return [];
+  }
+
+  console.log(`[Export API] Export complete. Retrieved ${companies.length} companies`);
+  return companies;
+}
+
+/**
+ * Fetch companies via pagination (for small portals or when export scope missing)
+ */
+async function fetchViaPagination(
+  accessToken: string,
+  properties: string[],
+  lastProcessedId?: string
+): Promise<any[]> {
+  const allRecords: any[] = [];
+  let after: string | undefined = lastProcessedId;
+  let pageCount = 0;
+
+  console.log(`[Pagination] Fetching companies via pagination`);
+
+  while (true) {
+    const searchBody = {
+      filterGroups: [],
+      properties,
+      limit: 100,
+      after,
+    };
+
+    const response = await fetchWithRetry(
+      'https://api.hubapi.com/crm/v3/objects/companies/search',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(searchBody),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch companies: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const results = data.results ?? [];
+
+    if (results.length === 0) break;
+
+    allRecords.push(...results);
+    pageCount++;
+
+    console.log(`[Pagination] Page ${pageCount}: fetched ${results.length} companies (total: ${allRecords.length})`);
+
+    // Check if there are more pages
+    if (!data.paging?.next?.after) break;
+    after = data.paging.next.after;
+
+    // Wait 500ms between pages to avoid rate limit
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  console.log(`[Pagination] Complete. Retrieved ${allRecords.length} companies across ${pageCount} pages`);
+  return allRecords;
+}
+
 async function fetchRecordsForProcessing(
   sourceConfig: Record<string, unknown>,
   lastProcessedId?: string,
@@ -960,7 +1076,7 @@ async function fetchRecordsForProcessing(
 
   const { data: connection, error } = await supabase
     .from('hubspot_connections')
-    .select('portal_id')
+    .select('portal_id, scopes')
     .eq('org_id', orgId)
     .single();
 
@@ -993,71 +1109,65 @@ async function fetchRecordsForProcessing(
     const listId = sourceConfig.list_id as string;
     const vidOffset = lastProcessedId ? `&vidOffset=${lastProcessedId}` : '';
 
-    const res = await fetch(
+    const response = await fetchWithRetry(
       `https://api.hubapi.com/contacts/v1/lists/${listId}/contacts/all?count=100${vidOffset}`,
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       }
     );
 
-    if (!res.ok) {
-      throw new Error(`Failed to fetch from list ${listId}: ${res.statusText}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch from list ${listId}: ${response.statusText}`);
     }
 
-    const data = await res.json();
+    const data = await response.json();
     return data.contacts ?? [];
   }
 
-  // Default: fetch all companies with cursor pagination
-  const allRecords: any[] = [];
-  let after: string | undefined = lastProcessedId;
+  // For 'all_companies': decide between Export API and Pagination
+  const EXPORT_THRESHOLD = 500;
 
-  // Loop through all pages
-  while (true) {
-    const searchBody = {
-      filterGroups: [],
-      properties,
-      limit: 100,
-      after,
-    };
+  // Check if crm.export scope is available
+  const scopes = connection.scopes as string[] | null;
+  const hasExportScope = scopes?.includes('crm.export') ?? false;
 
-    const res = await fetch('https://api.hubapi.com/crm/v3/objects/companies/search', {
+  // First, get total company count to decide strategy
+  const countResponse = await fetchWithRetry(
+    'https://api.hubapi.com/crm/v3/objects/companies/search',
+    {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(searchBody),
-    });
-
-    if (!res.ok) {
-      // Handle rate limiting
-      if (res.status === 429) {
-        const retryAfter = res.headers.get('Retry-After');
-        const waitMs = retryAfter ? parseInt(retryAfter) * 1000 : 2000;
-        console.log(`[HubSpot] Rate limited, waiting ${waitMs}ms`);
-        await new Promise(resolve => setTimeout(resolve, waitMs));
-        continue; // Retry this page
-      }
-      throw new Error(`Failed to fetch companies: ${res.statusText}`);
+      body: JSON.stringify({
+        filterGroups: [],
+        properties: ['hs_object_id'],
+        limit: 1,
+      }),
     }
+  );
 
-    const data = await res.json();
-    const results = data.results ?? [];
-
-    if (results.length === 0) break;
-
-    allRecords.push(...results);
-
-    // Check if there are more pages
-    if (!data.paging?.next?.after) break;
-    after = data.paging.next.after;
-
-    // Rate limit: wait 100ms between pages to avoid 429
-    await new Promise(resolve => setTimeout(resolve, 100));
+  if (!countResponse.ok) {
+    throw new Error(`Failed to fetch company count: ${countResponse.statusText}`);
   }
 
-  return allRecords;
+  const countData = await countResponse.json();
+  const totalCompanies = countData.total ?? 0;
+
+  // Determine fetch strategy
+  const useExportApi = totalCompanies > EXPORT_THRESHOLD && hasExportScope;
+
+  console.log(
+    `[Fetch Strategy] ${useExportApi ? 'Export API' : 'Pagination'} ` +
+    `(${totalCompanies} companies, export scope: ${hasExportScope})`
+  );
+
+  if (useExportApi) {
+    return await fetchViaExportApi(orgId, portalId, accessToken, properties);
+  } else {
+    return await fetchViaPagination(accessToken, properties, lastProcessedId);
+  }
 }
 
 async function writeToDestination(
