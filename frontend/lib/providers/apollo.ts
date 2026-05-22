@@ -22,6 +22,20 @@ import {
 const APOLLO_BASE_URL = 'https://api.apollo.io/v1';
 
 /**
+ * Clean domain to format Apollo expects.
+ * Removes protocol, www, paths, and whitespace.
+ */
+function cleanDomain(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return raw
+    .replace(/^https?:\/\//, '')  // remove protocol
+    .replace(/\/.*$/, '')          // remove path
+    .replace(/^www\./, '')         // remove www
+    .toLowerCase()
+    .trim();
+}
+
+/**
  * Apollo Provider Adapter
  *
  * Provides company enrichment and contact search capabilities.
@@ -51,16 +65,20 @@ export class ApolloAdapter implements ProviderAdapter {
   async enrichCompany(query: CompanyQuery): Promise<ProviderResponse | null> {
     const apiKey = this.getApiKey();
 
-    if (!query.domain && !query.name) {
-      throw new ProviderError('apollo', 'api_error', 'Must provide either domain or name');
+    // Clean domain before sending to Apollo
+    const cleanedDomain = cleanDomain(query.domain);
+
+    if (!cleanedDomain && !query.name) {
+      console.log(`[Apollo] Skipping record: no valid domain after cleaning`);
+      return null;
     }
 
     const payload: Record<string, string> = {
       api_key: apiKey,
     };
 
-    if (query.domain) {
-      payload.domain = query.domain;
+    if (cleanedDomain) {
+      payload.domain = cleanedDomain;
     } else if (query.name) {
       payload.organization_name = query.name;
     }

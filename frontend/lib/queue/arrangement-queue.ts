@@ -777,7 +777,10 @@ async function processLiveRunJob(
           const { results, errors } = await hubspotClient.batchUpdateCompanies(hubspotUpdates);
 
           if (errors.length > 0) {
-            console.error(`[Arrangement ${config.id}] HubSpot batch write: ${errors.length} errors`);
+            console.error(
+              `[Arrangement ${config.id}] HubSpot batch write errors (${errors.length} total):`,
+              JSON.stringify(errors.slice(0, 3), null, 2)
+            );
           }
 
           console.log(`[Arrangement ${config.id}] Wrote ${results.length} records to HubSpot`);
