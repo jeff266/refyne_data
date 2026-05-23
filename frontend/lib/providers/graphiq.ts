@@ -49,9 +49,16 @@ function formatLocation(org: Record<string, unknown>): string {
  * Transform GraphIQ organization result to normalized format.
  */
 function transformOrganization(org: Record<string, unknown>): Record<string, unknown> {
-  // Extract industry from industries array
+  // Extract NAICS code and name (primary industry classification)
+  const naicsCode = Array.isArray(org.naics_code) ? org.naics_code[0] : org.naics_code;
+  const naicsName = Array.isArray(org.naics_name) ? org.naics_name[0] : org.naics_name;
+
+  // Extract category-level industries (fallback if no NAICS)
   const industries = org.industries as Array<{ title?: string; short_title?: string }> | undefined;
-  const industry = industries?.[0]?.title || industries?.[0]?.short_title || '';
+  const industryCategory = industries?.[0]?.title || industries?.[0]?.short_title || '';
+
+  // Prefer NAICS name, fallback to category
+  const industry = naicsName || industryCategory;
 
   // Extract phone from phone_numbers array
   const phoneNumbers = org.phone_numbers as string[] | undefined;
@@ -63,6 +70,9 @@ function transformOrganization(org: Record<string, unknown>): Record<string, unk
     description: org.description || '',
     capabilities: org.capabilities || [],
     industry,
+    naics_code: naicsCode || null,
+    naics_name: naicsName || null,
+    industry_category: industryCategory || null,
     location: formatLocation(org),
     employee_count: org.num_employees || null,
     revenue: org.revenue || '',

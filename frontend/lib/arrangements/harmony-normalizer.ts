@@ -11,6 +11,13 @@ export interface HarmonyNormalizationOptions {
   orgId: string;
   harmonyId: string;
   rawValue: any;
+  /**
+   * Additional metadata for crosswalk lookups (e.g., NAICS code, provider name)
+   */
+  metadata?: {
+    naics_code?: string | null;
+    provider?: string;
+  };
 }
 
 export interface HarmonyNormalizationResult {
@@ -60,15 +67,41 @@ export async function normalizeWithHarmony(
     }
 
     // Step 2: Call lookup RPC
-    // The RPC returns { matched: boolean, output: any }
-    const { data: lookupResult, error: lookupError } = await supabase.rpc(
-      'lookup_harmony_value',
-      {
+    // For crosswalk-based harmonies, use the crosswalk RPC
+    // For standard harmonies, use the harmony value lookup RPC
+    let lookupResult: any;
+    let lookupError: any;
+
+    if (harmony.approach === 'crosswalk') {
+      // Industry crosswalk lookup
+      const result = await supabase.rpc('lookup_industry_crosswalk', {
+        p_input_value: String(rawValue),
+        p_naics_code: options.metadata?.naics_code || null,
+        p_provider: options.metadata?.provider || null,
+      });
+
+      lookupError = result.error;
+      // Crosswalk RPC returns array, convert to standard format
+      if (result.data && result.data.length > 0) {
+        const row = result.data[0];
+        lookupResult = {
+          matched: row.matched,
+          output: row.output,
+        };
+      } else {
+        lookupResult = { matched: false, output: null };
+      }
+    } else {
+      // Standard harmony lookup
+      const result = await supabase.rpc('lookup_harmony_value', {
         p_harmony_id: harmonyId,
         p_input_value: String(rawValue),
         p_org_id: orgId,
-      }
-    );
+      });
+
+      lookupError = result.error;
+      lookupResult = result.data;
+    }
 
     if (lookupError) {
       console.error(`[Harmony Normalizer] RPC lookup failed for ${harmonyId}:`, lookupError);

@@ -1326,6 +1326,12 @@ function mapEmployeeCountToEnum(
  * Transform value for HubSpot property write.
  * Handles enum validation, number ranges, and format conversions.
  */
+/**
+ * Transform provider values for HubSpot enum fields.
+ *
+ * NOTE: Industry mapping is handled by the crosswalk harmony system, not here.
+ * This function only handles non-harmony transformations like employee count ranges.
+ */
 function transformValueForHubSpot(
   hubspotPropertyName: string,
   value: any,
@@ -1338,30 +1344,8 @@ function transformValueForHubSpot(
     return mapEmployeeCountToEnum(value, validValues);
   }
 
-  // Industry: ensure uppercase enum format
-  if (hubspotPropertyName === 'industry' && typeof value === 'string') {
-    const upperValue = value.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
-
-    // If valid values provided, check if uppercase version exists
-    if (validValues && validValues.length > 0) {
-      if (validValues.includes(upperValue)) {
-        return upperValue;
-      }
-
-      // Try to find a close match
-      const match = validValues.find(v => v.toUpperCase().includes(upperValue) || upperValue.includes(v.toUpperCase()));
-      if (match) {
-        return match;
-      }
-
-      // No match found, skip writing this value
-      console.warn(`[Transform] Industry value "${value}" not found in valid HubSpot options`);
-      return null;
-    }
-
-    return upperValue;
-  }
-
+  // Industry mapping is handled by crosswalk harmony system
+  // All other fields pass through as-is
   return value;
 }
 
@@ -1449,6 +1433,9 @@ async function processFieldConfig(
                 orgId,
                 harmonyId: harmony_id,
                 rawValue: result.value,
+                metadata: {
+                  provider: step.provider,
+                },
               });
 
               const finalValue = harmonyResult.matched ? harmonyResult.normalized : result.value;
@@ -1530,6 +1517,9 @@ async function processFieldConfig(
             orgId,
             harmonyId: harmony_id,
             rawValue: aggregationResult.value,
+            metadata: {
+              provider: providerValues[0]?.provider || 'unknown',
+            },
           });
 
           const finalValue = harmonyResult.matched ? harmonyResult.normalized : aggregationResult.value;
