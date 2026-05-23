@@ -844,12 +844,14 @@ async function processLiveRunJob(
     const hubspotClient = new HubSpotClient(accessToken, connection.portal_id);
 
     // Determine if we should use streaming Export API
-    const sourceType = config.source_config.source_type as string;
+    const sourceType = config.source_config.source_type as string | undefined;
     const EXPORT_THRESHOLD = 500;
     let useStreamingExport = false;
 
-    // Only use streaming for all_companies source type
-    if (sourceType === 'all_companies') {
+    // Use streaming for all_companies source type (or when source_type is missing, which defaults to all_companies)
+    const isAllCompanies = !sourceType || sourceType === 'all_companies';
+
+    if (isAllCompanies) {
       const scopes = connection.scopes as string[] | null;
       const hasExportScope = scopes?.includes('crm.export') ?? false;
 
