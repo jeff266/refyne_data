@@ -1917,9 +1917,9 @@ export default function EnrichPage() {
                 >
                   Cancel run
                 </button>
-                {arrangementId && (
+                {runId && (
                   <a
-                    href={`/arrangements/${arrangementId}`}
+                    href={`/history/${runId}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -2057,9 +2057,9 @@ export default function EnrichPage() {
                 >
                   Enrich more fields
                 </button>
-                {arrangementId && (
+                {runId && (
                   <a
-                    href={`/arrangements/${arrangementId}`}
+                    href={`/history/${runId}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -2130,9 +2130,9 @@ export default function EnrichPage() {
                 >
                   Run again
                 </button>
-                {arrangementId && (
+                {runId && (
                   <a
-                    href={`/arrangements/${arrangementId}`}
+                    href={`/history/${runId}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
