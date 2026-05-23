@@ -5,6 +5,12 @@
  * Used for smart routing and domain-skip logic.
  */
 
+import {
+  hasDomain,
+  hasName,
+  hasLocation,
+} from '../enrichment/domain-routing';
+
 export interface ProviderCapabilities {
   requiresDomain: boolean;
   requiresName: boolean;
@@ -113,48 +119,12 @@ export function canProviderEnrichRecord(
   const caps = PROVIDER_CAPABILITIES[provider];
   if (!caps) return false;
 
-  // Import domain/name checking functions
-  const hasDomain = checkHasDomain(company);
-  const hasName = checkHasName(company);
-  const hasLocation = checkHasLocation(company);
-
-  if (caps.requiresDomain && !hasDomain) return false;
-  if (caps.requiresName && !hasName) return false;
-  if (caps.requiresLocation && !hasLocation) return false;
+  // Use proper validation from domain-routing.ts (includes regex validation)
+  if (caps.requiresDomain && !hasDomain(company)) return false;
+  if (caps.requiresName && !hasName(company)) return false;
+  if (caps.requiresLocation && !hasLocation(company)) return false;
 
   return true;
-}
-
-/**
- * Check if company has a valid domain
- * Note: Full implementation in lib/enrichment/domain-routing.ts
- */
-function checkHasDomain(company: HubSpotCompany): boolean {
-  const raw = company.properties?.domain ?? company.properties?.website;
-  return !!(raw && raw.trim().length > 0);
-}
-
-/**
- * Check if company has a name
- */
-function checkHasName(company: HubSpotCompany): boolean {
-  const name = company.properties?.name;
-  return !!(name && name.trim().length > 0);
-}
-
-/**
- * Check if company has location information
- */
-function checkHasLocation(company: HubSpotCompany): boolean {
-  const city = company.properties?.city;
-  const state = company.properties?.state;
-  const country = company.properties?.country;
-
-  return !!(
-    (city && city.trim().length > 0) ||
-    (state && state.trim().length > 0) ||
-    (country && country.trim().length > 0)
-  );
 }
 
 /**
