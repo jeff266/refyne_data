@@ -205,7 +205,7 @@ export default function EnrichPage() {
   // Live run state
   const [arrangementId, setArrangementId] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
-  const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'complete' | 'failed'>('idle');
+  const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'complete' | 'failed' | 'cancelled'>('idle');
   const [runProgress, setRunProgress] = useState<{
     records_processed: number;
     records_total: number;
@@ -949,6 +949,44 @@ export default function EnrichPage() {
       alert(`Failed to create enrichment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setRunning(false);
+    }
+  }
+
+  // Handle cancel run
+  async function handleCancelRun() {
+    if (!arrangementId || !runId) {
+      addToast('error', 'No active run to cancel');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Cancel this enrichment run?\n\nRecords processed so far will be saved.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/arrangements/${arrangementId}/runs/${runId}/cancel`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to cancel run');
+      }
+
+      addToast('success', 'Run cancelled');
+
+      // Clear localStorage
+      localStorage.removeItem('refyne_active_run');
+
+      // Update state to show cancelled
+      setRunStatus('cancelled');
+
+      // Clear enrichRunContext
+      enrichRunContext.setRunState({ isRunning: false, arrangementId: null, runId: null, total: 0, processed: 0 });
+    } catch (error) {
+      console.error('Error cancelling run:', error);
+      addToast('error', 'Failed to cancel run');
     }
   }
 
@@ -1832,6 +1870,64 @@ export default function EnrichPage() {
                 Fields filled: {Object.values(runProgress.fields_filled || {}).reduce((a, b) => a + b, 0)} · Skipped: {runProgress.fields_skipped || 0}
               </div>
 
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+                <button
+                  onClick={handleCancelRun}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    background: 'transparent',
+                    color: C.red,
+                    border: `1px solid ${C.red}`,
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = C.red;
+                    e.currentTarget.style.color = '#ffffff';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = C.red;
+                  }}
+                >
+                  Cancel run
+                </button>
+                {arrangementId && (
+                  <a
+                    href={`/arrangements/${arrangementId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      background: 'transparent',
+                      color: C.indigo,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 4,
+                      textDecoration: 'none',
+                      display: 'inline-block',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = C.indigo;
+                      e.currentTarget.style.background = 'rgba(55,138,221,0.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = C.border;
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    View full details →
+                  </a>
+                )}
+              </div>
+
               {/* Live feed header */}
               <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', marginBottom: 12 }}>
                 Latest Enrichments
@@ -1864,20 +1960,6 @@ export default function EnrichPage() {
               ) : (
                 <div style={{ padding: 20, textAlign: 'center', color: C.text3, fontSize: 11 }}>
                   Processing records...
-                </div>
-              )}
-
-              {/* View details link */}
-              {arrangementId && (
-                <div style={{ marginTop: 16 }}>
-                  <a
-                    href={`/arrangements/${arrangementId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ fontSize: 12, color: C.indigo, textDecoration: 'none' }}
-                  >
-                    View full details →
-                  </a>
                 </div>
               )}
             </div>
@@ -1973,6 +2055,79 @@ export default function EnrichPage() {
                     }}
                   >
                     View all results →
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Cancelled State */}
+          {runStatus === 'cancelled' && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: C.yellow }}>Run cancelled</div>
+
+              {/* Summary */}
+              <div style={{ fontSize: 13, color: C.text2, marginBottom: 20 }}>
+                {runProgress.records_processed.toLocaleString()} companies processed before cancellation
+              </div>
+
+              {/* Field breakdown */}
+              {Object.keys(runProgress.fields_filled || {}).length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', marginBottom: 12 }}>
+                    Fields filled before cancellation
+                  </div>
+                  {Object.entries(runProgress.fields_filled || {}).map(([fieldKey, count]) => {
+                    const fieldLabel = ENRICHABLE_FIELDS.find(f => f.key === fieldKey)?.label || fieldKey;
+                    return (
+                      <div key={fieldKey} style={{ fontSize: 12, color: C.text2, marginBottom: 8 }}>
+                        <strong>{fieldLabel}</strong>: {(count as number).toLocaleString()} filled
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => {
+                    setRunStatus('idle');
+                    setArrangementId(null);
+                    setRunId(null);
+                    setRunProgress({ records_processed: 0, records_total: 0, fields_filled: {}, fields_skipped: 0, latest_results: [] });
+                  }}
+                  style={{
+                    padding: '8px 14px',
+                    background: C.indigo,
+                    border: 'none',
+                    borderRadius: 6,
+                    color: 'white',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Run again
+                </button>
+                {arrangementId && (
+                  <a
+                    href={`/arrangements/${arrangementId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      padding: '8px 14px',
+                      background: 'transparent',
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 6,
+                      color: C.text2,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      textDecoration: 'none',
+                      display: 'inline-block',
+                    }}
+                  >
+                    View results so far →
                   </a>
                 )}
               </div>
