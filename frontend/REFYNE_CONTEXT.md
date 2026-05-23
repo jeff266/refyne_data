@@ -112,6 +112,8 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 
 15. **Policy values are fill_empty or overwrite only.** No other values. Worker rejects any other string.
 
+16. **NAICS is the canonical intermediate for industry classification.** All providers normalize TO NAICS first, then NAICS maps to the org's CRM field via the industry_crosswalk table. Never transform industry values with string manipulation.
+
 ### Infrastructure Locked
 
 1. **Vercel for frontend:** Next.js deployment on Vercel edge network.
@@ -170,6 +172,8 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 | 034 | `prospect_saved_searches` | org_id, name, filters | Saved prospect searches |
 | 035 | `notifications` | org_id, user_id, type, message, read | User notifications |
 | 036 | `dedup_merge_history` | org_id, master_id, retired_id, snapshots | Audit log for merges |
+| 037 | `industry_crosswalk` | naics_code, naics_label, apollo_label, hubspot_value, linkedin_value | NAICS-based industry mapping to CRM enums |
+| 037 | `lookup_industry_crosswalk` | RPC function | Multi-strategy lookup (NAICS code → NAICS label → provider label), returns matched/output/naics_code |
 
 ### RLS Pattern
 
@@ -435,6 +439,7 @@ This was the root cause of the May 21 worker failure.
 | Harmony engine | Complete | Fuzzy matching, phonetic, reference data |
 | Compliance dashboard | Complete | Scores, trends, breakdown |
 | Always-on monitoring | Complete | Nightly scan, email digest |
+| Industry crosswalk | Complete | NAICS-based mapping, 173 mappings covering all 148 HubSpot industry enums |
 
 ### Built but Not End-to-End Verified
 
