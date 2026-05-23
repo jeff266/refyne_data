@@ -124,7 +124,7 @@ const rateLimiters = new Map<string, TokenBucket>();
  * GraphIQ: 100 req/min (higher tier)
  * Default: 30 req/min (conservative for unknown providers)
  */
-const APOLLO_RATE_LIMIT = 45;
+const APOLLO_RATE_LIMIT = 100; // Detected burst limit 110 on portal 49169539, using 100 for headroom
 const GRAPHIQ_RATE_LIMIT = 100;
 const DEFAULT_RATE_LIMIT = 30;
 
@@ -856,8 +856,10 @@ async function processLiveRunJob(
     const progressBuffer: any[] = [];
     let lastProcessedId: string | undefined;
     const CHUNK_SIZE = 50; // Process in chunks for checkpointing
+    const totalRecords = records.length;
+    let chunkNumber = 0;
 
-    for (let i = 0; i < records.length; i += CHUNK_SIZE) {
+    while (records.length > 0) {
       // Check if run is paused
       const { data: run } = await supabase
         .from('arrangement_runs')
@@ -873,9 +875,10 @@ async function processLiveRunJob(
         break;
       }
 
-      const chunk = records.slice(i, i + CHUNK_SIZE);
-      const chunkNumber = Math.floor(i / CHUNK_SIZE) + 1;
-      const totalChunks = Math.ceil(records.length / CHUNK_SIZE);
+      // Use splice to remove chunk from array for garbage collection
+      const chunk = records.splice(0, CHUNK_SIZE);
+      chunkNumber++;
+      const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
 
       console.log(`[Arrangement ${config.id}] Processing chunk ${chunkNumber}/${totalChunks} (${chunk.length} records)`);
 
