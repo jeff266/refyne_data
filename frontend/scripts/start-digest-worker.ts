@@ -14,7 +14,20 @@
  *   NEXT_PUBLIC_SUPABASE_URL - Supabase URL (required)
  *   NEXT_PUBLIC_SUPABASE_ANON_KEY - Supabase anon key (required)
  *   SENTRY_DSN - Sentry DSN for error tracking (optional)
+ *   PORT - HTTP health check port (default: 3000)
  */
+
+import http from 'http';
+
+// Start HTTP health check server for Railway
+const PORT = parseInt(process.env.PORT || '3000');
+const healthServer = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('OK');
+});
+healthServer.listen(PORT, () => {
+  console.log(`[Health] HTTP server listening on port ${PORT}`);
+});
 
 import * as Sentry from '@sentry/node';
 
