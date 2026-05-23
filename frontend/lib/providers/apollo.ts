@@ -91,6 +91,15 @@ export class ApolloAdapter implements ProviderAdapter {
       body: JSON.stringify(payload),
     });
 
+    // 422 = domain rejected by Apollo (not in their database or malformed)
+    // This is not an error - it's a clean "no data found" response
+    if (response.status === 422) {
+      console.log(
+        `[Apollo] Domain rejected (422): ${cleanedDomain || query.name}. Skipping.`
+      );
+      return null;
+    }
+
     if (!response.ok) {
       throw new ProviderError(
         'apollo',

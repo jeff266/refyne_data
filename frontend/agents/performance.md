@@ -18,6 +18,54 @@ under 3,000 records.
 
 ## Review areas
 
+### 0. PATTERN CHECK (run before any optimization)
+
+**Critical**: Always diagnose the pattern before adjusting constants.
+
+For any loop that calls an external API:
+
+1. **Draw the timeline of API calls**
+   - Show when each API call starts and completes
+   - Mark idle gaps between calls
+   - Visualize the actual concurrency pattern
+
+2. **Identify idle gaps**
+   - Are there periods where no API calls are in flight?
+   - How long are these gaps?
+   - What percentage of total time is idle?
+
+3. **Diagnose the cause**
+   - If idle gaps exist, ask: is the idle time unavoidable or avoidable?
+   - **Unavoidable**: Rate limit cooldown, provider throttling, deliberate backoff
+   - **Avoidable**: Waiting for batch boundary, sequential processing, artificial delays
+
+4. **Pattern vs constant optimization**
+   - If avoidable: **recommend worker pool pattern** before recommending constant adjustments
+   - Constant adjustments on a burst-and-wait pattern are ceiling improvements
+   - Pattern replacement (sequential → concurrent) is floor removal
+   - **Always replace the pattern first**
+
+**Example timeline that should trigger pattern replacement**:
+
+```
+Sequential batch-of-10 pattern:
+00:00 ████████░░░░░░░░░░░░░░░░░░░░  Batch 1 (10 parallel calls)
+00:15 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Idle (waiting for batch 2)
+00:20 ████████░░░░░░░░░░░░░░░░░░░░  Batch 2 (10 parallel calls)
+00:35 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Idle (waiting for batch 3)
+       ↑ 60% of time is idle
+
+Worker pool pattern (same rate limit):
+00:00 ██████████████████████████  Pool continuously processing
+00:15 ██████████████████████████  (no idle gaps)
+00:30 ██████████████████████████  (no waiting for boundaries)
+       ↑ 0% idle time, 2.5x faster
+```
+
+**Hard rule**: If you see a batch-and-wait timeline, DO NOT recommend reducing batch size. Recommend eliminating the wait by switching to a worker pool that maintains constant concurrency up to the rate limit.
+
+This pattern check would have caught the enrichment speed issue immediately: the batch size wasn't the problem, the idle gaps between batches were.
+
 ### 1. Worker throughput
 
 Current baseline: ~40 records/minute (83 min for 2,816 records)

@@ -46,7 +46,8 @@ const WORKER_CONCURRENCY = 10;
  * Provider batch size - how many records to enrich in parallel per batch.
  * Reduced to 3 to minimize token bucket contention.
  */
-const PROVIDER_BATCH_SIZE = 3;
+const PROVIDER_BATCH_SIZE = 3; // Legacy: no longer used, kept for reference
+const WORKER_POOL_SIZE = 5; // Concurrent in-flight enrichment requests
 
 /**
  * Progress batch size - how many progress records to insert at once.
@@ -705,6 +706,73 @@ async function enrichSingleRecord(
  * Process a batch of records in parallel using Promise.allSettled.
  * Returns successful and failed results separately.
  */
+/**
+ * Process records using a worker pool pattern that maintains constant concurrency.
+ *
+ * Instead of waiting for batches of N to complete, this keeps WORKER_POOL_SIZE
+ * requests in-flight at all times, starting a new one immediately when one completes.
+ * This fully saturates the rate limit without idle time between batches.
+ *
+ * @param records - Records to process
+ * @param fieldConfigs - Field configurations for enrichment
+ * @param orgId - Organization ID
+ * @returns Successful and failed records
+ */
+async function processWithPool(
+  records: any[],
+  fieldConfigs: FieldConfig[],
+  orgId: string
+): Promise<{ successful: EnrichedRecord[]; failed: FailedRecord[] }> {
+  const successful: EnrichedRecord[] = [];
+  const failed: FailedRecord[] = [];
+  const queue = [...records];
+  const inFlight = new Set<Promise<void>>();
+
+  async function processNext(): Promise<void> {
+    const record = queue.shift();
+    if (!record) return;
+
+    const promise = enrichSingleRecord(record, fieldConfigs, orgId)
+      .then(result => {
+        successful.push(result);
+      })
+      .catch(err => {
+        const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
+        failed.push({
+          record,
+          companyId,
+          error: err?.message ?? 'Unknown error',
+        });
+        console.error(`[Worker] Record ${companyId} failed:`, err.message);
+      })
+      .finally(() => {
+        inFlight.delete(promise);
+        // Immediately start next record when this one completes
+        if (queue.length > 0) {
+          const next = processNext();
+          inFlight.add(next);
+        }
+      });
+
+    inFlight.add(promise);
+    return promise;
+  }
+
+  // Start initial pool of workers
+  const initial = Math.min(WORKER_POOL_SIZE, records.length);
+  for (let i = 0; i < initial; i++) {
+    const p = processNext();
+    if (p) inFlight.add(p);
+  }
+
+  // Wait for all to complete
+  while (inFlight.size > 0) {
+    await Promise.race(inFlight);
+  }
+
+  return { successful, failed };
+}
+
 async function processBatch(
   records: any[],
   fieldConfigs: FieldConfig[],
@@ -766,7 +834,7 @@ async function processLiveRunJob(
       orgId
     );
 
-    console.log(`[Arrangement ${config.id}] Processing ${records.length} records in batches of ${PROVIDER_BATCH_SIZE}`);
+    console.log(`[Arrangement ${config.id}] Processing ${records.length} records with worker pool (concurrency: ${WORKER_POOL_SIZE})`);
 
     // Get HubSpot client for batch writes
     const { getAccessToken } = await import('../hubspot/get-access-token');
@@ -784,11 +852,12 @@ async function processLiveRunJob(
 
     const hubspotClient = new HubSpotClient(accessToken, connection.portal_id);
 
-    // Process records in batches
+    // Process records in chunks using worker pool
     const progressBuffer: any[] = [];
     let lastProcessedId: string | undefined;
+    const CHUNK_SIZE = 50; // Process in chunks for checkpointing
 
-    for (let i = 0; i < records.length; i += PROVIDER_BATCH_SIZE) {
+    for (let i = 0; i < records.length; i += CHUNK_SIZE) {
       // Check if run is paused
       const { data: run } = await supabase
         .from('arrangement_runs')
@@ -804,15 +873,15 @@ async function processLiveRunJob(
         break;
       }
 
-      const batch = records.slice(i, i + PROVIDER_BATCH_SIZE);
-      const batchNumber = Math.floor(i / PROVIDER_BATCH_SIZE) + 1;
-      const totalBatches = Math.ceil(records.length / PROVIDER_BATCH_SIZE);
+      const chunk = records.slice(i, i + CHUNK_SIZE);
+      const chunkNumber = Math.floor(i / CHUNK_SIZE) + 1;
+      const totalChunks = Math.ceil(records.length / CHUNK_SIZE);
 
-      console.log(`[Arrangement ${config.id}] Processing batch ${batchNumber}/${totalBatches} (${batch.length} records)`);
+      console.log(`[Arrangement ${config.id}] Processing chunk ${chunkNumber}/${totalChunks} (${chunk.length} records)`);
 
-      // Process batch in parallel
-      const { successful, failed } = await processBatch(
-        batch,
+      // Process chunk with worker pool (maintains WORKER_POOL_SIZE concurrent requests)
+      const { successful, failed } = await processWithPool(
+        chunk,
         config.field_configs || [],
         orgId
       );
@@ -878,7 +947,7 @@ async function processLiveRunJob(
         });
       }
 
-      processedCount += batch.length;
+      processedCount += chunk.length;
 
       // Batch insert progress records every PROGRESS_BATCH_SIZE
       if (progressBuffer.length >= PROGRESS_BATCH_SIZE) {
@@ -906,7 +975,7 @@ async function processLiveRunJob(
         console.log(`[Arrangement ${config.id}] Checkpoint saved at ${processedCount} records`);
       }
 
-      console.log(`[Arrangement ${config.id}] Batch ${batchNumber}: ${successful.length} successful, ${failed.length} failed`);
+      console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
     }
 
     // Flush remaining progress records
@@ -1669,7 +1738,8 @@ async function queryProvider(
   const canEnrich = canProviderEnrichRecord(provider, record);
   if (!canEnrich) {
     console.log(
-      `[Worker] Skipping ${provider} for record ${record.id}: missing required signals`
+      `[Worker] Skipping ${provider} for ${record.id}: ` +
+      `domain='${record.properties?.domain ?? 'null'}'`
     );
     return null;
   }
