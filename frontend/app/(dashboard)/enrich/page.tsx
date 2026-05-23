@@ -297,37 +297,57 @@ export default function EnrichPage() {
     return () => es.close();
   }, []);
 
-  // Check localStorage for active run on mount and resume
+  // Check localStorage for active run on mount and verify it's still running
   useEffect(() => {
     const stored = localStorage.getItem('refyne_active_run');
-    if (stored) {
-      try {
-        const activeRun = JSON.parse(stored);
+    if (!stored) return;
 
-        // Resume run state
-        setArrangementId(activeRun.arrangementId);
-        setRunId(activeRun.runId);
-        setRunStatus('running');
-        setRunProgress({
-          records_processed: 0,
-          records_total: activeRun.totalRecords || 0,
-          fields_filled: {},
-          fields_skipped: 0,
-          latest_results: [],
-        });
+    try {
+      const activeRun = JSON.parse(stored);
 
-        // Update context
-        enrichRunContext.setRunState({
-          isRunning: true,
-          arrangementId: activeRun.arrangementId,
-          runId: activeRun.runId,
-          total: activeRun.totalRecords || 0,
-          processed: 0,
+      // Verify run is actually still running before restoring state
+      fetch(`/api/arrangements/${activeRun.arrangementId}/runs`)
+        .then(r => r.json())
+        .then(data => {
+          const run = data.runs?.find((r: any) => r.id === activeRun.runId);
+
+          if (!run || !['running', 'queued'].includes(run.status)) {
+            // Run is no longer active (completed, failed, or cancelled), clear stale state
+            console.log(`[Enrich] Clearing stale run from localStorage (status: ${run?.status || 'not found'})`);
+            localStorage.removeItem('refyne_active_run');
+            return;
+          }
+
+          // Run is actually running, restore state
+          console.log(`[Enrich] Restoring active run from localStorage (status: ${run.status})`);
+          setArrangementId(activeRun.arrangementId);
+          setRunId(activeRun.runId);
+          setRunStatus('running');
+          setRunProgress({
+            records_processed: run.records_processed || 0,
+            records_total: activeRun.totalRecords || 0,
+            fields_filled: {},
+            fields_skipped: 0,
+            latest_results: [],
+          });
+
+          // Update context
+          enrichRunContext.setRunState({
+            isRunning: true,
+            arrangementId: activeRun.arrangementId,
+            runId: activeRun.runId,
+            total: activeRun.totalRecords || 0,
+            processed: run.records_processed || 0,
+          });
+        })
+        .catch(error => {
+          console.error('Failed to verify run status:', error);
+          // On error, clear localStorage to be safe
+          localStorage.removeItem('refyne_active_run');
         });
-      } catch (error) {
-        console.error('Failed to restore active run from localStorage:', error);
-        localStorage.removeItem('refyne_active_run');
-      }
+    } catch (error) {
+      console.error('Failed to restore active run from localStorage:', error);
+      localStorage.removeItem('refyne_active_run');
     }
   }, []);
 
