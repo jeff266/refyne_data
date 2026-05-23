@@ -23,6 +23,13 @@ import {
   type AggregationResult,
 } from '../arrangements/aggregation-strategies';
 import { normalizeWithHarmony } from '../arrangements/harmony-normalizer';
+import { canProviderEnrichRecord } from '../providers/capabilities';
+import { hasDomain, hasName, getDomain } from '../enrichment/domain-routing';
+import {
+  naicsToHubSpot,
+  lookupIndustryCrosswalk,
+  getCrosswalkEntry,
+} from '../enrichment/industry-crosswalk';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -1574,6 +1581,75 @@ async function processFieldConfig(
 }
 
 /**
+ * Two-stage normalization for industry field.
+ *
+ * Stage 1: Provider value → NAICS code
+ * Stage 2: NAICS code → HubSpot enum (via crosswalk)
+ *
+ * If no HubSpot enum match, returns properties for refyne_* fallback fields.
+ */
+async function normalizeTwoStage(
+  fieldKey: string,
+  rawValue: any,
+  provider: string,
+  orgId: string
+): Promise<Record<string, any>> {
+  if (fieldKey !== 'industry') {
+    // Non-industry fields: return as-is
+    return { [fieldKey]: rawValue };
+  }
+
+  // Stage 1: Extract NAICS code from provider value
+  let naicsCode: string | null = null;
+  let naicsLabel: string | null = null;
+
+  if (provider === 'graphiq') {
+    // GraphIQ returns NAICS directly in normalized fields
+    naicsCode = rawValue?.naics_code || null;
+    naicsLabel = rawValue?.naics_name || rawValue?.industry || null;
+  } else if (provider === 'apollo') {
+    // Apollo returns industry label - look up via crosswalk to get HubSpot value directly
+    const apolloLabel = typeof rawValue === 'string' ? rawValue : rawValue?.industry;
+    if (apolloLabel) {
+      const hubspotValue = await lookupIndustryCrosswalk(apolloLabel, null, 'apollo');
+      if (hubspotValue) {
+        // Found direct mapping - return it
+        console.log(
+          `[Normalize] Industry: ${provider} → ${apolloLabel} → ${hubspotValue}`
+        );
+        return { industry: hubspotValue };
+      }
+      // No direct mapping - store as fallback
+      naicsLabel = apolloLabel;
+    }
+  }
+
+  // Stage 2: Map NAICS to HubSpot enum via crosswalk
+  if (naicsCode) {
+    const hubspotValue = await naicsToHubSpot(naicsCode);
+
+    if (hubspotValue) {
+      // Success: write to standard industry field
+      console.log(
+        `[Normalize] Industry: ${provider} → NAICS ${naicsCode} → ${hubspotValue}`
+      );
+      return { industry: hubspotValue };
+    }
+  }
+
+  // No HubSpot enum match: write to Refyne fallback fields
+  console.log(
+    `[Normalize] No HubSpot enum match for NAICS ${naicsCode}. ` +
+      `Writing to refyne_industry fallback fields.`
+  );
+
+  return {
+    refyne_industry: naicsLabel || rawValue,
+    refyne_industry_naics: naicsCode,
+  };
+}
+
+/**
  * Query a provider for a specific field value.
  */
 async function queryProvider(
@@ -1587,6 +1663,15 @@ async function queryProvider(
     // Demo mode: use synthetic data
     const demoResult = getDemoEnrichmentResult(record, provider, [fieldKey]);
     return demoResult[fieldKey];
+  }
+
+  // Check if provider can enrich this record (domain-skip routing)
+  const canEnrich = canProviderEnrichRecord(provider, record);
+  if (!canEnrich) {
+    console.log(
+      `[Worker] Skipping ${provider} for record ${record.id}: missing required signals`
+    );
+    return null;
   }
 
   // Live mode: acquire rate limit token before making API call

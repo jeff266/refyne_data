@@ -174,6 +174,53 @@ export class ApolloAdapter implements ProviderAdapter {
       })
     );
   }
+
+  /**
+   * Test Apollo connection and detect rate limits.
+   *
+   * Uses GET /v1/users/me endpoint (cheapest, does not consume credits).
+   * Returns rate limit headers for detection and storage.
+   */
+  async testConnection(): Promise<{
+    success: boolean;
+    headers?: Headers;
+    error?: string;
+  }> {
+    const apiKey = this.getApiKey();
+
+    try {
+      const response = await Promise.race([
+        fetch(`${APOLLO_BASE_URL}/users/me`, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+          },
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 10000)
+        ),
+      ]);
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: `HTTP ${response.status}`,
+        };
+      }
+
+      return {
+        success: true,
+        headers: response.headers,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
 }
 
 export default ApolloAdapter;

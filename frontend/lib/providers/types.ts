@@ -120,6 +120,17 @@ export interface ProviderAdapter {
    * Optional - not all providers support contact search.
    */
   searchContacts?(query: ContactQuery): Promise<ContactResponse[]>;
+
+  /**
+   * Test provider connection and return rate limit headers.
+   * Used for rate limit detection when credentials are connected.
+   * Optional - not all providers support connection testing.
+   */
+  testConnection?(): Promise<{
+    success: boolean;
+    headers?: Headers;
+    error?: string;
+  }>;
 }
 
 // ─────────────────────────────────────────────────────────────
