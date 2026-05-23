@@ -40,14 +40,14 @@ const QUEUE_NAME = 'arrangements';
 /**
  * Worker concurrency - how many arrangement jobs to process in parallel.
  */
-const WORKER_CONCURRENCY = 10;
+const WORKER_CONCURRENCY = 3; // Reduced from 10 to limit memory pressure (3 jobs × 50 companies = 150 in RAM)
 
 /**
  * Provider batch size - how many records to enrich in parallel per batch.
  * Reduced to 3 to minimize token bucket contention.
  */
 const PROVIDER_BATCH_SIZE = 3; // Legacy: no longer used, kept for reference
-const WORKER_POOL_SIZE = 5; // Concurrent in-flight enrichment requests
+const WORKER_POOL_SIZE = 3; // Reduced from 5 to limit memory pressure during enrichment
 
 /**
  * Progress batch size - how many progress records to insert at once.
@@ -827,22 +827,13 @@ async function processLiveRunJob(
   }
 
   try {
-    // Fetch records (with pagination/cursor from checkpoint)
-    const records = await fetchRecordsForProcessing(
-      config.source_config,
-      checkpointData?.lastProcessedId,
-      orgId
-    );
-
-    console.log(`[Arrangement ${config.id}] Processing ${records.length} records with worker pool (concurrency: ${WORKER_POOL_SIZE})`);
-
-    // Get HubSpot client for batch writes
+    // Get HubSpot connection and access token
     const { getAccessToken } = await import('../hubspot/get-access-token');
     const { HubSpotClient } = await import('../hubspot/client');
     const accessToken = await getAccessToken(orgId);
     const { data: connection } = await supabase
       .from('hubspot_connections')
-      .select('portal_id')
+      .select('portal_id, scopes')
       .eq('org_id', orgId)
       .single();
 
@@ -852,133 +843,321 @@ async function processLiveRunJob(
 
     const hubspotClient = new HubSpotClient(accessToken, connection.portal_id);
 
-    // Process records in chunks using worker pool
+    // Determine if we should use streaming Export API
+    const sourceType = config.source_config.source_type as string;
+    const EXPORT_THRESHOLD = 500;
+    let useStreamingExport = false;
+
+    // Only use streaming for all_companies source type
+    if (sourceType === 'all_companies') {
+      const scopes = connection.scopes as string[] | null;
+      const hasExportScope = scopes?.includes('crm.export') ?? false;
+
+      if (hasExportScope) {
+        // Get company count to decide
+        const countResponse = await fetchWithRetry(
+          'https://api.hubapi.com/crm/v3/objects/companies/search',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              filterGroups: [],
+              properties: ['hs_object_id'],
+              limit: 1,
+            }),
+          }
+        );
+
+        if (countResponse.ok) {
+          const countData = await countResponse.json();
+          const totalCompanies = countData.total ?? 0;
+          useStreamingExport = totalCompanies > EXPORT_THRESHOLD;
+
+          console.log(
+            `[Arrangement ${config.id}] ${useStreamingExport ? 'Streaming Export API' : 'Pagination'} ` +
+            `(${totalCompanies} companies, export scope: ${hasExportScope})`
+          );
+        }
+      }
+    }
+
+    // Shared processing variables
     const progressBuffer: any[] = [];
     let lastProcessedId: string | undefined;
-    const CHUNK_SIZE = 50; // Process in chunks for checkpointing
-    const totalRecords = records.length;
+    const CHUNK_SIZE = 50;
     let chunkNumber = 0;
 
-    while (records.length > 0) {
-      // Check if run is paused
-      const { data: run } = await supabase
-        .from('arrangement_runs')
-        .select('status')
-        .eq('id', runId)
-        .single();
+    // Path A: Streaming Export API (memory-efficient)
+    if (useStreamingExport) {
+      const properties = [
+        'name',
+        'domain',
+        'industry',
+        'numberofemployees',
+        'annualrevenue',
+        'phone',
+        'linkedin_company_page',
+        'founded_year',
+        'city',
+        'country',
+      ];
 
-      if (run?.status === 'paused') {
-        console.log(`[Arrangement ${config.id}] Run paused, saving checkpoint`);
-        if (lastProcessedId) {
-          await saveCheckpoint(runId, lastProcessedId, processedCount, creditsUsed);
+      console.log(`[Arrangement ${config.id}] Processing via streaming Export API (chunks of ${CHUNK_SIZE})`);
+
+      // Stream and process chunks as they arrive
+      for await (const chunk of streamViaExportApi(orgId, connection.portal_id, accessToken, properties, CHUNK_SIZE)) {
+        // Check if run is paused
+        const { data: run } = await supabase
+          .from('arrangement_runs')
+          .select('status')
+          .eq('id', runId)
+          .single();
+
+        if (run?.status === 'paused') {
+          console.log(`[Arrangement ${config.id}] Run paused, saving checkpoint`);
+          if (lastProcessedId) {
+            await saveCheckpoint(runId, lastProcessedId, processedCount, creditsUsed);
+          }
+          break;
         }
-        break;
+
+        chunkNumber++;
+        console.log(`[Arrangement ${config.id}] Processing stream chunk ${chunkNumber} (${chunk.length} records)`);
+
+        // Process chunk with worker pool (maintains WORKER_POOL_SIZE concurrent requests)
+        const { successful, failed } = await processWithPool(
+          chunk,
+          config.field_configs || [],
+          orgId
+        );
+
+        // Batch HubSpot write for successful records
+        if (successful.length > 0) {
+          const hubspotUpdates = successful
+            .filter(r => Object.keys(r.propertiesToWrite).length > 0)
+            .map(r => ({
+              id: r.companyId,
+              properties: r.propertiesToWrite as Record<string, string | number | null>,
+            }));
+
+          if (hubspotUpdates.length > 0) {
+            const { results, errors } = await hubspotClient.batchUpdateCompanies(hubspotUpdates);
+
+            if (errors.length > 0) {
+              console.error(
+                `[Arrangement ${config.id}] HubSpot batch write errors (${errors.length} total):`,
+                JSON.stringify(errors.slice(0, 3), null, 2)
+              );
+            }
+
+            console.log(`[Arrangement ${config.id}] Wrote ${results.length} records to HubSpot`);
+          }
+        }
+
+        // Add successful records to progress buffer
+        for (const enrichedRecord of successful) {
+          successfulCount++;
+          creditsUsed += enrichedRecord.creditsUsed;
+          lastProcessedId = enrichedRecord.companyId;
+
+          progressBuffer.push({
+            run_id: runId,
+            org_id: orgId,
+            record_id: enrichedRecord.companyId,
+            status: 'completed',
+            enrichment_results: enrichedRecord.record,
+            credits_used: enrichedRecord.creditsUsed,
+            completed_at: new Date().toISOString(),
+            result: {
+              fields_attempted: enrichedRecord.fieldsAttempted,
+              fields_written: enrichedRecord.fieldsWritten,
+              fields_skipped: enrichedRecord.fieldsSkipped,
+              field_detail: enrichedRecord.fieldDetail,
+            },
+          });
+        }
+
+        // Add failed records to progress buffer
+        for (const failedRecord of failed) {
+          failedCount++;
+          lastProcessedId = failedRecord.companyId;
+
+          progressBuffer.push({
+            run_id: runId,
+            org_id: orgId,
+            record_id: failedRecord.companyId,
+            status: 'failed',
+            error_message: failedRecord.error,
+            completed_at: new Date().toISOString(),
+          });
+        }
+
+        processedCount += chunk.length;
+
+        // Batch insert progress records every PROGRESS_BATCH_SIZE
+        if (progressBuffer.length >= PROGRESS_BATCH_SIZE) {
+          await supabase.from('arrangement_run_progress').insert(progressBuffer);
+          console.log(`[Arrangement ${config.id}] Inserted ${progressBuffer.length} progress records`);
+          progressBuffer.length = 0;
+        }
+
+        // Update run progress every 10 records
+        if (processedCount % 10 === 0) {
+          await supabase
+            .from('arrangement_runs')
+            .update({
+              processed_records: processedCount,
+              successful_records: successfulCount,
+              failed_records: failedCount,
+              actual_credits_used: creditsUsed,
+            })
+            .eq('id', runId);
+        }
+
+        // Save checkpoint every CHECKPOINT_FREQUENCY records
+        if (processedCount % CHECKPOINT_FREQUENCY === 0 && lastProcessedId) {
+          await saveCheckpoint(runId, lastProcessedId, processedCount, creditsUsed);
+          console.log(`[Arrangement ${config.id}] Checkpoint saved at ${processedCount} records`);
+        }
+
+        console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
       }
-
-      // Use splice to remove chunk from array for garbage collection
-      const chunk = records.splice(0, CHUNK_SIZE);
-      chunkNumber++;
-      const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
-
-      console.log(`[Arrangement ${config.id}] Processing chunk ${chunkNumber}/${totalChunks} (${chunk.length} records)`);
-
-      // Process chunk with worker pool (maintains WORKER_POOL_SIZE concurrent requests)
-      const { successful, failed } = await processWithPool(
-        chunk,
-        config.field_configs || [],
+    } else {
+      // Path B: Non-streaming (pagination or lists)
+      const records = await fetchRecordsForProcessing(
+        config.source_config,
+        checkpointData?.lastProcessedId,
         orgId
       );
 
-      // Batch HubSpot write for successful records
-      if (successful.length > 0) {
-        const hubspotUpdates = successful
-          .filter(r => Object.keys(r.propertiesToWrite).length > 0)
-          .map(r => ({
-            id: r.companyId,
-            properties: r.propertiesToWrite as Record<string, string | number | null>,
-          }));
+      console.log(`[Arrangement ${config.id}] Processing ${records.length} records with worker pool (concurrency: ${WORKER_POOL_SIZE})`);
 
-        if (hubspotUpdates.length > 0) {
-          const { results, errors } = await hubspotClient.batchUpdateCompanies(hubspotUpdates);
+      const totalRecords = records.length;
 
-          if (errors.length > 0) {
-            console.error(
-              `[Arrangement ${config.id}] HubSpot batch write errors (${errors.length} total):`,
-              JSON.stringify(errors.slice(0, 3), null, 2)
-            );
-          }
-
-          console.log(`[Arrangement ${config.id}] Wrote ${results.length} records to HubSpot`);
-        }
-      }
-
-      // Add successful records to progress buffer
-      for (const enrichedRecord of successful) {
-        successfulCount++;
-        creditsUsed += enrichedRecord.creditsUsed;
-        lastProcessedId = enrichedRecord.companyId;
-
-        progressBuffer.push({
-          run_id: runId,
-          org_id: orgId,
-          record_id: enrichedRecord.companyId,
-          status: 'completed',
-          enrichment_results: enrichedRecord.record,
-          credits_used: enrichedRecord.creditsUsed,
-          completed_at: new Date().toISOString(),
-          result: {
-            fields_attempted: enrichedRecord.fieldsAttempted,
-            fields_written: enrichedRecord.fieldsWritten,
-            fields_skipped: enrichedRecord.fieldsSkipped,
-            field_detail: enrichedRecord.fieldDetail,
-          },
-        });
-      }
-
-      // Add failed records to progress buffer
-      for (const failedRecord of failed) {
-        failedCount++;
-        lastProcessedId = failedRecord.companyId;
-
-        progressBuffer.push({
-          run_id: runId,
-          org_id: orgId,
-          record_id: failedRecord.companyId,
-          status: 'failed',
-          error_message: failedRecord.error,
-          completed_at: new Date().toISOString(),
-        });
-      }
-
-      processedCount += chunk.length;
-
-      // Batch insert progress records every PROGRESS_BATCH_SIZE
-      if (progressBuffer.length >= PROGRESS_BATCH_SIZE) {
-        await supabase.from('arrangement_run_progress').insert(progressBuffer);
-        console.log(`[Arrangement ${config.id}] Inserted ${progressBuffer.length} progress records`);
-        progressBuffer.length = 0;
-      }
-
-      // Update run progress every 10 records
-      if (processedCount % 10 === 0) {
-        await supabase
+      while (records.length > 0) {
+        // Check if run is paused
+        const { data: run } = await supabase
           .from('arrangement_runs')
-          .update({
-            processed_records: processedCount,
-            successful_records: successfulCount,
-            failed_records: failedCount,
-            actual_credits_used: creditsUsed,
-          })
-          .eq('id', runId);
-      }
+          .select('status')
+          .eq('id', runId)
+          .single();
 
-      // Save checkpoint every CHECKPOINT_FREQUENCY records
-      if (processedCount % CHECKPOINT_FREQUENCY === 0 && lastProcessedId) {
-        await saveCheckpoint(runId, lastProcessedId, processedCount, creditsUsed);
-        console.log(`[Arrangement ${config.id}] Checkpoint saved at ${processedCount} records`);
-      }
+        if (run?.status === 'paused') {
+          console.log(`[Arrangement ${config.id}] Run paused, saving checkpoint`);
+          if (lastProcessedId) {
+            await saveCheckpoint(runId, lastProcessedId, processedCount, creditsUsed);
+          }
+          break;
+        }
 
-      console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
+        // Use splice to remove chunk from array for garbage collection
+        const chunk = records.splice(0, CHUNK_SIZE);
+        chunkNumber++;
+        const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
+
+        console.log(`[Arrangement ${config.id}] Processing chunk ${chunkNumber}/${totalChunks} (${chunk.length} records)`);
+
+        // Process chunk with worker pool (maintains WORKER_POOL_SIZE concurrent requests)
+        const { successful, failed } = await processWithPool(
+          chunk,
+          config.field_configs || [],
+          orgId
+        );
+
+        // Batch HubSpot write for successful records
+        if (successful.length > 0) {
+          const hubspotUpdates = successful
+            .filter(r => Object.keys(r.propertiesToWrite).length > 0)
+            .map(r => ({
+              id: r.companyId,
+              properties: r.propertiesToWrite as Record<string, string | number | null>,
+            }));
+
+          if (hubspotUpdates.length > 0) {
+            const { results, errors } = await hubspotClient.batchUpdateCompanies(hubspotUpdates);
+
+            if (errors.length > 0) {
+              console.error(
+                `[Arrangement ${config.id}] HubSpot batch write errors (${errors.length} total):`,
+                JSON.stringify(errors.slice(0, 3), null, 2)
+              );
+            }
+
+            console.log(`[Arrangement ${config.id}] Wrote ${results.length} records to HubSpot`);
+          }
+        }
+
+        // Add successful records to progress buffer
+        for (const enrichedRecord of successful) {
+          successfulCount++;
+          creditsUsed += enrichedRecord.creditsUsed;
+          lastProcessedId = enrichedRecord.companyId;
+
+          progressBuffer.push({
+            run_id: runId,
+            org_id: orgId,
+            record_id: enrichedRecord.companyId,
+            status: 'completed',
+            enrichment_results: enrichedRecord.record,
+            credits_used: enrichedRecord.creditsUsed,
+            completed_at: new Date().toISOString(),
+            result: {
+              fields_attempted: enrichedRecord.fieldsAttempted,
+              fields_written: enrichedRecord.fieldsWritten,
+              fields_skipped: enrichedRecord.fieldsSkipped,
+              field_detail: enrichedRecord.fieldDetail,
+            },
+          });
+        }
+
+        // Add failed records to progress buffer
+        for (const failedRecord of failed) {
+          failedCount++;
+          lastProcessedId = failedRecord.companyId;
+
+          progressBuffer.push({
+            run_id: runId,
+            org_id: orgId,
+            record_id: failedRecord.companyId,
+            status: 'failed',
+            error_message: failedRecord.error,
+            completed_at: new Date().toISOString(),
+          });
+        }
+
+        processedCount += chunk.length;
+
+        // Batch insert progress records every PROGRESS_BATCH_SIZE
+        if (progressBuffer.length >= PROGRESS_BATCH_SIZE) {
+          await supabase.from('arrangement_run_progress').insert(progressBuffer);
+          console.log(`[Arrangement ${config.id}] Inserted ${progressBuffer.length} progress records`);
+          progressBuffer.length = 0;
+        }
+
+        // Update run progress every 10 records
+        if (processedCount % 10 === 0) {
+          await supabase
+            .from('arrangement_runs')
+            .update({
+              processed_records: processedCount,
+              successful_records: successfulCount,
+              failed_records: failedCount,
+              actual_credits_used: creditsUsed,
+            })
+            .eq('id', runId);
+        }
+
+        // Save checkpoint every CHECKPOINT_FREQUENCY records
+        if (processedCount % CHECKPOINT_FREQUENCY === 0 && lastProcessedId) {
+          await saveCheckpoint(runId, lastProcessedId, processedCount, creditsUsed);
+          console.log(`[Arrangement ${config.id}] Checkpoint saved at ${processedCount} records`);
+        }
+
+        console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
+      }
     }
 
     // Flush remaining progress records
@@ -1130,6 +1309,32 @@ async function fetchViaExportApi(
 
   console.log(`[Export API] Export complete. Retrieved ${companies.length} companies`);
   return companies;
+}
+
+/**
+ * Stream companies via Export API in chunks (memory-efficient).
+ * Yields chunks of 50 companies at a time instead of loading all into RAM.
+ */
+async function* streamViaExportApi(
+  orgId: string,
+  portalId: string,
+  accessToken: string,
+  properties: string[],
+  chunkSize = 50
+): AsyncGenerator<any[]> {
+  const { HubSpotClient } = await import('../hubspot/client');
+  const hubspotClient = new HubSpotClient(accessToken, portalId);
+
+  console.log(`[Export API Stream] Streaming companies via Export API for portal ${portalId}`);
+
+  let totalYielded = 0;
+  for await (const chunk of hubspotClient.exportCompaniesStream(properties, chunkSize)) {
+    totalYielded += chunk.length;
+    console.log(`[Export API Stream] Yielded chunk: ${chunk.length} companies (total: ${totalYielded})`);
+    yield chunk;
+  }
+
+  console.log(`[Export API Stream] Complete. Streamed ${totalYielded} companies`);
 }
 
 /**

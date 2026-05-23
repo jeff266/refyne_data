@@ -1047,6 +1047,150 @@ export class HubSpotClient {
     }
   }
 
+  /**
+   * Stream companies from Export API in chunks to minimize memory usage.
+   *
+   * Instead of loading all companies into RAM, yields chunks of CHUNK_SIZE.
+   * Memory usage: O(chunk_size) instead of O(total_companies).
+   *
+   * @param properties - Company properties to export
+   * @param chunkSize - Number of companies per chunk (default: 50)
+   */
+  async *exportCompaniesStream(
+    properties: readonly string[] = EXPORT_COMPANY_PROPERTIES,
+    chunkSize = 50
+  ): AsyncGenerator<HubSpotCompany[]> {
+    try {
+      // 1. Trigger export job
+      console.log(`[Export API Stream] Triggering company export for portal ${this.portalId}`);
+
+      const exportRequest = {
+        exportType: 'VIEW',
+        format: 'CSV',
+        exportName: `company-stream-${Date.now()}`,
+        objectType: 'COMPANY',
+        objectProperties: [...properties],
+        publicAccessEnabled: false,
+      };
+
+      const triggerResponse = await this.request<{
+        id: string;
+        links?: { status?: string };
+      }>('/crm/v3/exports/export/async', {
+        method: 'POST',
+        body: JSON.stringify(exportRequest),
+      });
+
+      const taskId = triggerResponse.id;
+      console.log(`[Export API Stream] Export job created: ${taskId}`);
+
+      // 2. Poll for completion
+      let attempts = 0;
+      let status = 'PENDING';
+      let downloadUrl: string | null = null;
+
+      while (attempts < 60 && status !== 'COMPLETE') {
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        const pollResponse = await this.request<{
+          id: string;
+          status: string;
+          result?: string;
+        }>(`/crm/v3/exports/export/async/tasks/${taskId}/status`);
+
+        status = pollResponse.status;
+        downloadUrl = pollResponse.result || null;
+
+        if (status === 'COMPLETE') break;
+        if (status === 'FAILED' || status === 'CANCELED') {
+          console.error(`[Export API Stream] Export failed: ${status}`);
+          return;
+        }
+
+        if (attempts % 5 === 0) {
+          console.log(`[Export API Stream] Polling attempt ${attempts}: ${status}`);
+        }
+      }
+
+      if (status !== 'COMPLETE' || !downloadUrl) {
+        console.error(`[Export API Stream] Export failed or timed out`);
+        return;
+      }
+
+      // 3. Stream download and parse in chunks
+      console.log(`[Export API Stream] Downloading and streaming file`);
+      const downloadResponse = await fetch(downloadUrl);
+      if (!downloadResponse.ok) {
+        console.error(`[Export API Stream] Download failed: ${downloadResponse.status}`);
+        return;
+      }
+
+      const fileContent = await downloadResponse.text();
+      const lines = fileContent.trim().split('\n');
+
+      if (lines.length < 2) {
+        console.log(`[Export API Stream] Empty export`);
+        return;
+      }
+
+      // Parse header
+      const headers = parseCSVLine(lines[0]);
+      const recordIdIdx = headers.findIndex(h =>
+        h.toLowerCase() === 'record id' || h.toLowerCase() === 'hs_object_id'
+      );
+
+      if (recordIdIdx === -1) {
+        console.error(`[Export API Stream] Missing Record ID column`);
+        return;
+      }
+
+      // Stream data rows in chunks
+      let chunk: HubSpotCompany[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const values = parseCSVLine(line);
+        if (values.length !== headers.length) continue;
+
+        const recordId = values[recordIdIdx];
+        if (!recordId) continue;
+
+        // Build company object
+        const properties: Record<string, string | null> = {};
+        for (let j = 0; j < headers.length; j++) {
+          const key = headers[j].toLowerCase().replace(/\s+/g, '_');
+          properties[key] = values[j] || null;
+        }
+
+        chunk.push({
+          id: recordId,
+          properties,
+          createdAt: properties.createdate || properties.create_date || new Date().toISOString(),
+          updatedAt: properties.lastmodifieddate || properties.last_modified_date || new Date().toISOString(),
+        });
+
+        // Yield chunk when it reaches target size
+        if (chunk.length >= chunkSize) {
+          yield chunk;
+          chunk = []; // Clear for GC
+        }
+      }
+
+      // Yield remaining companies
+      if (chunk.length > 0) {
+        yield chunk;
+      }
+
+      console.log(`[Export API Stream] Stream complete`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`[Export API Stream] Failed: ${msg}`);
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────
   // Company Index for Batch Dedup
   // ─────────────────────────────────────────────────────────────
