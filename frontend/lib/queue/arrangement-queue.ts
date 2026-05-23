@@ -37,8 +37,9 @@ const WORKER_CONCURRENCY = 10;
 
 /**
  * Provider batch size - how many records to enrich in parallel per batch.
+ * Reduced to 3 to minimize token bucket contention.
  */
-const PROVIDER_BATCH_SIZE = 10;
+const PROVIDER_BATCH_SIZE = 3;
 
 /**
  * Progress batch size - how many progress records to insert at once.
@@ -109,10 +110,23 @@ class TokenBucket {
  */
 const rateLimiters = new Map<string, TokenBucket>();
 
+/**
+ * Provider-specific rate limits (requests per minute).
+ * Apollo: 45 req/min (under the 50/min hard limit to leave headroom)
+ * GraphIQ: 100 req/min (higher tier)
+ * Default: 30 req/min (conservative for unknown providers)
+ */
+const APOLLO_RATE_LIMIT = 45;
+const GRAPHIQ_RATE_LIMIT = 100;
+const DEFAULT_RATE_LIMIT = 30;
+
 function getRateLimiter(orgId: string, provider: string): TokenBucket {
   const key = `${orgId}:${provider}`;
   if (!rateLimiters.has(key)) {
-    rateLimiters.set(key, new TokenBucket(50)); // 50 req/min for Apollo
+    const limit = provider === 'apollo' ? APOLLO_RATE_LIMIT
+                : provider === 'graphiq' ? GRAPHIQ_RATE_LIMIT
+                : DEFAULT_RATE_LIMIT;
+    rateLimiters.set(key, new TokenBucket(limit));
   }
   return rateLimiters.get(key)!;
 }
@@ -588,56 +602,75 @@ async function enrichSingleRecord(
   let fieldsSkipped = 0;
   const propertiesToWrite: Record<string, unknown> = {};
 
-  for (const fieldConfig of fieldConfigs) {
-    fieldsAttempted++;
-
-    try {
-      const result = await processFieldConfig(
+  // Process all field configs in parallel using Promise.allSettled
+  const fieldResults = await Promise.allSettled(
+    fieldConfigs.map(fieldConfig =>
+      processFieldConfig(
         fieldConfig,
         record,
         orgId,
         record.properties?.[fieldConfig.field_key] || record[fieldConfig.field_key],
         'live'
-      );
+      )
+    )
+  );
 
-      if (result.written) {
-        enrichedData[fieldConfig.field_key] = result.value;
-        fieldsWritten++;
-        recordCredits += fieldConfig.steps.length;
+  // Process results
+  fieldResults.forEach((promiseResult, index) => {
+    const fieldConfig = fieldConfigs[index];
+    fieldsAttempted++;
 
-        fieldDetail[fieldConfig.field_key] = {
-          provider: result.provider,
-          strategy: result.strategy,
-          raw: result.raw,
-          normalized: result.normalized,
-          written: true,
-          metadata: result.metadata,
-        };
+    if (promiseResult.status === 'fulfilled') {
+      const result = promiseResult.value;
 
-        // Build HubSpot properties to write
-        const hubspotPropertyName = mapCanonicalToHubSpot(fieldConfig.field_key);
-        const transformedValue = transformValueForHubSpot(hubspotPropertyName, result.value);
+      try {
+        if (result.written) {
+          enrichedData[fieldConfig.field_key] = result.value;
+          fieldsWritten++;
+          recordCredits += fieldConfig.steps.length;
 
-        // Only write if value is not null after transformation
-        if (transformedValue !== null) {
-          propertiesToWrite[hubspotPropertyName] = transformedValue;
-        } else if (result.value !== null) {
-          // Value was filtered out by transformation
+          fieldDetail[fieldConfig.field_key] = {
+            provider: result.provider,
+            strategy: result.strategy,
+            raw: result.raw,
+            normalized: result.normalized,
+            written: true,
+            metadata: result.metadata,
+          };
+
+          // Build HubSpot properties to write
+          const hubspotPropertyName = mapCanonicalToHubSpot(fieldConfig.field_key);
+          const transformedValue = transformValueForHubSpot(hubspotPropertyName, result.value);
+
+          // Only write if value is not null after transformation
+          if (transformedValue !== null) {
+            propertiesToWrite[hubspotPropertyName] = transformedValue;
+          } else if (result.value !== null) {
+            // Value was filtered out by transformation
+            fieldsSkipped++;
+            fieldDetail[fieldConfig.field_key] = {
+              skipped: true,
+              reason: 'Value does not match HubSpot enum options',
+            };
+          }
+        } else if (result.skipped) {
           fieldsSkipped++;
           fieldDetail[fieldConfig.field_key] = {
             skipped: true,
-            reason: 'Value does not match HubSpot enum options',
+            reason: result.skipReason,
           };
-          continue;
         }
-      } else if (result.skipped) {
+      } catch (fieldError) {
+        console.error(`[Enrich] Field ${fieldConfig.field_key} failed:`, fieldError);
         fieldsSkipped++;
         fieldDetail[fieldConfig.field_key] = {
           skipped: true,
-          reason: result.skipReason,
+          reason: `Error: ${fieldError instanceof Error ? fieldError.message : 'Unknown error'}`,
         };
       }
-    } catch (fieldError) {
+    } else {
+      // Promise rejected
+      const fieldError = promiseResult.reason;
       console.error(`[Enrich] Field ${fieldConfig.field_key} failed:`, fieldError);
       fieldsSkipped++;
       fieldDetail[fieldConfig.field_key] = {
@@ -645,7 +678,7 @@ async function enrichSingleRecord(
         reason: `Error: ${fieldError instanceof Error ? fieldError.message : 'Unknown error'}`,
       };
     }
-  }
+  });
 
   const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
 

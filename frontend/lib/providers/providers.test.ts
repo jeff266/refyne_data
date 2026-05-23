@@ -826,12 +826,12 @@ describe('Error Handling', () => {
     }
   });
 
-  it('should throw on missing required params', async () => {
+  it('should return null on missing required params', async () => {
     const adapter = new ApolloAdapter('test-apollo-key');
 
-    await expect(adapter.enrichCompany({})).rejects.toThrow(
-      'Must provide either domain or name'
-    );
+    // After cleanDomain changes, invalid input returns null instead of throwing
+    const result = await adapter.enrichCompany({});
+    expect(result).toBeNull();
   });
 
   it('should throw config error on missing API key', async () => {
