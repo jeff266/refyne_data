@@ -383,6 +383,14 @@ export class HubSpotClient {
 
       // Handle rate limiting (429)
       if (response.status === 429) {
+        // Check if this is a daily limit error (not retryable)
+        const messageLower = errorMessage.toLowerCase();
+        if (messageLower.includes('daily') || messageLower.includes('limit:')) {
+          // Daily limit errors are not transient - throw immediately to trigger fallback
+          throw new Error(`Export limit reached (not retryable): ${errorMessage}`);
+        }
+
+        // Transient rate limit - retry with backoff
         if (attempt >= MAX_RETRIES) {
           throw new Error(`Rate limit exceeded after ${MAX_RETRIES} retries: ${errorMessage}`);
         }

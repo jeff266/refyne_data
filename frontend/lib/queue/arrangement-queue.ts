@@ -928,8 +928,9 @@ async function processLiveRunJob(
 
       console.log(`[Arrangement ${config.id}] Processing via streaming Export API (chunks of ${CHUNK_SIZE})`);
 
-      // Stream and process chunks as they arrive
-      for await (const chunk of streamViaExportApi(orgId, connection.portal_id, accessToken, properties, CHUNK_SIZE)) {
+      try {
+        // Stream and process chunks as they arrive
+        for await (const chunk of streamViaExportApi(orgId, connection.portal_id, accessToken, properties, CHUNK_SIZE)) {
         // Check if run is paused
         const { data: run } = await supabase
           .from('arrangement_runs')
@@ -1037,9 +1038,26 @@ async function processLiveRunJob(
         }
 
         console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
+        }
+      } catch (exportError) {
+        const errorMessage = exportError instanceof Error ? exportError.message : 'Unknown error';
+
+        // Check if this is a daily limit error (not retryable)
+        if (errorMessage.includes('Export limit') || errorMessage.includes('daily')) {
+          console.warn(`[Arrangement ${config.id}] Export API daily limit reached, falling back to pagination`);
+          console.warn(`[Arrangement ${config.id}] Export error: ${errorMessage}`);
+
+          // Fall through to pagination path below
+          useStreamingExport = false;
+        } else {
+          // Other Export API errors should fail the run
+          throw exportError;
+        }
       }
-    } else {
-      // Path B: Non-streaming (pagination or lists)
+    }
+
+    // Path B: Non-streaming (pagination or lists) - also used as fallback from Export API
+    if (!useStreamingExport) {
       const records = await fetchRecordsForProcessing(
         config.source_config,
         checkpointData?.lastProcessedId,
