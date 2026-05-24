@@ -983,7 +983,7 @@ async function processLiveRunJob(
             org_id: orgId,
             record_id: enrichedRecord.companyId,
             status: 'completed',
-            enrichment_results: enrichedRecord.record,
+            enrichment_results: null, // Don't store full record - saves memory
             credits_used: enrichedRecord.creditsUsed,
             completed_at: new Date().toISOString(),
             result: {
@@ -1012,11 +1012,11 @@ async function processLiveRunJob(
 
         processedCount += chunk.length;
 
-        // Batch insert progress records every PROGRESS_BATCH_SIZE
-        if (progressBuffer.length >= PROGRESS_BATCH_SIZE) {
+        // CRITICAL: Flush progressBuffer after EVERY CHUNK to prevent memory buildup
+        if (progressBuffer.length > 0) {
           await supabase.from('arrangement_run_progress').insert(progressBuffer);
           console.log(`[Arrangement ${config.id}] Inserted ${progressBuffer.length} progress records`);
-          progressBuffer.length = 0;
+          progressBuffer.length = 0; // Clear array to free memory
         }
 
         // Update run progress every 10 records
@@ -1039,6 +1039,10 @@ async function processLiveRunJob(
         }
 
         console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
+
+        // Clear chunk references to help GC
+        successful.length = 0;
+        failed.length = 0;
         }
       } catch (exportError) {
         const errorMessage = exportError instanceof Error ? exportError.message : 'Unknown error';
@@ -1104,7 +1108,7 @@ async function processLiveRunJob(
                 org_id: orgId,
                 record_id: enrichedRecord.companyId,
                 status: 'completed',
-                enrichment_results: enrichedRecord.record,
+                enrichment_results: null, // Don't store full record - saves memory
                 credits_used: enrichedRecord.creditsUsed,
                 completed_at: new Date().toISOString(),
                 result: {
@@ -1133,11 +1137,13 @@ async function processLiveRunJob(
 
             processedCount += chunk.length;
 
-            // Batch insert progress records
-            if (progressBuffer.length >= PROGRESS_BATCH_SIZE) {
+            // CRITICAL: Flush progressBuffer after EVERY CHUNK to prevent memory buildup
+            // Since we process 50 records per chunk, waiting for PROGRESS_BATCH_SIZE (10)
+            // would accumulate 40-50 full records in memory
+            if (progressBuffer.length > 0) {
               await supabase.from('arrangement_run_progress').insert(progressBuffer);
               console.log(`[Arrangement ${config.id}] Inserted ${progressBuffer.length} progress records`);
-              progressBuffer.length = 0;
+              progressBuffer.length = 0; // Clear array to free memory
             }
 
             // Update run progress
@@ -1160,6 +1166,10 @@ async function processLiveRunJob(
             }
 
             console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
+
+            // Clear chunk references to help GC
+            successful.length = 0;
+            failed.length = 0;
           }
         } else {
           // Other Export API errors should fail the run
@@ -1236,7 +1246,7 @@ async function processLiveRunJob(
             org_id: orgId,
             record_id: enrichedRecord.companyId,
             status: 'completed',
-            enrichment_results: enrichedRecord.record,
+            enrichment_results: null, // Don't store full record - saves memory
             credits_used: enrichedRecord.creditsUsed,
             completed_at: new Date().toISOString(),
             result: {
@@ -1265,11 +1275,11 @@ async function processLiveRunJob(
 
         processedCount += chunk.length;
 
-        // Batch insert progress records every PROGRESS_BATCH_SIZE
-        if (progressBuffer.length >= PROGRESS_BATCH_SIZE) {
+        // CRITICAL: Flush progressBuffer after EVERY CHUNK to prevent memory buildup
+        if (progressBuffer.length > 0) {
           await supabase.from('arrangement_run_progress').insert(progressBuffer);
           console.log(`[Arrangement ${config.id}] Inserted ${progressBuffer.length} progress records`);
-          progressBuffer.length = 0;
+          progressBuffer.length = 0; // Clear array to free memory
         }
 
         // Update run progress every 10 records
@@ -1292,6 +1302,10 @@ async function processLiveRunJob(
         }
 
         console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
+
+        // Clear chunk references to help GC
+        successful.length = 0;
+        failed.length = 0;
       }
     }
 
