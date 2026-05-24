@@ -243,6 +243,8 @@ function normalizeHeaderName(header: string): string {
   const headerMap: Record<string, string> = {
     'company name': 'name',
     'company domain name': 'domain',
+    'website url': 'website',
+    'company additional domains': 'hs_additional_domains',
     'create date': 'createdate',
     'last modified date': 'lastmodifieddate',
     'record id': 'hs_object_id',
