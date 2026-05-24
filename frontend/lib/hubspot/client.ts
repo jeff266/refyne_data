@@ -1198,6 +1198,8 @@ export class HubSpotClient {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error(`[Export API Stream] Failed: ${msg}`);
+      // Re-throw so the error propagates to arrangement-queue fallback logic
+      throw err;
     }
   }
 
