@@ -55,7 +55,7 @@ const WORKER_CONCURRENCY = 5; // Railway has 8GB RAM, streaming keeps memory low
  * Provider batch size - how many records to enrich in parallel per batch.
  */
 const PROVIDER_BATCH_SIZE = 3; // Legacy: no longer used, kept for reference
-const WORKER_POOL_SIZE = 5; // Railway has 8GB RAM, streaming keeps memory low
+const WORKER_POOL_SIZE = 1; // TEMPORARY: reduced for memory debugging
 
 /**
  * Progress batch size - how many progress records to insert at once.
@@ -906,7 +906,7 @@ async function processLiveRunJob(
     // Shared processing variables
     const progressBuffer: any[] = [];
     let lastProcessedId: string | undefined;
-    const CHUNK_SIZE = 50;
+    const CHUNK_SIZE = 10; // TEMPORARY: reduced for memory debugging
     let chunkNumber = 0;
     let exportApiFailed = false; // Track if Export API failed to avoid retry
 
@@ -1075,12 +1075,20 @@ async function processLiveRunJob(
             chunkNumber++;
             console.log(`[Arrangement ${config.id}] Processing pagination chunk ${chunkNumber} (${chunk.length} records)`);
 
+            // MEMORY CHECKPOINT 1: Before enrichment
+            const memBefore = process.memoryUsage();
+            console.log(`[Memory] Before chunk: heap ${Math.round(memBefore.heapUsed/1024/1024)}MB`);
+
             // Process chunk with worker pool
             const { successful, failed } = await processWithPool(
               chunk,
               config.field_configs || [],
               orgId
             );
+
+            // MEMORY CHECKPOINT 2: After enrichment, before store
+            const memAfterEnrich = process.memoryUsage();
+            console.log(`[Memory] After enrich: heap ${Math.round(memAfterEnrich.heapUsed/1024/1024)}MB, delta +${Math.round((memAfterEnrich.heapUsed - memBefore.heapUsed)/1024/1024)}MB`);
 
             // Store enriched records as pending
             if (successful.length > 0) {
@@ -1096,6 +1104,11 @@ async function processLiveRunJob(
                 console.log(`[Arrangement ${config.id}] Stored ${recordsToStore.length} records as pending enrichments`);
               }
             }
+
+            // MEMORY CHECKPOINT 3: After store
+            const memAfterStore = process.memoryUsage();
+            console.log(`[Memory] After store: heap ${Math.round(memAfterStore.heapUsed/1024/1024)}MB, delta +${Math.round((memAfterStore.heapUsed - memAfterEnrich.heapUsed)/1024/1024)}MB`);
+            console.log(`[Memory] Total chunk delta: +${Math.round((memAfterStore.heapUsed - memBefore.heapUsed)/1024/1024)}MB`);
 
             // Add successful records to progress buffer
             for (const enrichedRecord of successful) {
