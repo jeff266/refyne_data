@@ -1048,9 +1048,119 @@ async function processLiveRunJob(
           console.warn(`[Arrangement ${config.id}] Export API daily limit reached, falling back to pagination`);
           console.warn(`[Arrangement ${config.id}] Export error: ${errorMessage}`);
 
-          // Mark Export API as failed to force pagination
-          useStreamingExport = false;
+          // Mark Export API as failed - will use streaming pagination instead
           exportApiFailed = true;
+
+          // Stream pagination in chunks (memory-efficient)
+          for await (const chunk of streamViaPagination(accessToken, properties, CHUNK_SIZE, checkpointData?.lastProcessedId)) {
+            // Check if run is paused
+            const { data: run } = await supabase
+              .from('arrangement_runs')
+              .select('status')
+              .eq('id', runId)
+              .single();
+
+            if (run?.status === 'paused') {
+              console.log(`[Arrangement ${config.id}] Run paused, saving checkpoint`);
+              if (lastProcessedId) {
+                await saveCheckpoint(runId, lastProcessedId, processedCount, creditsUsed);
+              }
+              break;
+            }
+
+            chunkNumber++;
+            console.log(`[Arrangement ${config.id}] Processing pagination chunk ${chunkNumber} (${chunk.length} records)`);
+
+            // Process chunk with worker pool
+            const { successful, failed } = await processWithPool(
+              chunk,
+              config.field_configs || [],
+              orgId
+            );
+
+            // Store enriched records as pending
+            if (successful.length > 0) {
+              const recordsToStore = successful.filter(r => Object.keys(r.propertiesToWrite).length > 0);
+
+              if (recordsToStore.length > 0) {
+                await storePendingEnrichments(
+                  reviewSessionId,
+                  orgId,
+                  connection.portal_id,
+                  recordsToStore
+                );
+                console.log(`[Arrangement ${config.id}] Stored ${recordsToStore.length} records as pending enrichments`);
+              }
+            }
+
+            // Add successful records to progress buffer
+            for (const enrichedRecord of successful) {
+              successfulCount++;
+              creditsUsed += enrichedRecord.creditsUsed;
+              lastProcessedId = enrichedRecord.companyId;
+
+              progressBuffer.push({
+                run_id: runId,
+                org_id: orgId,
+                record_id: enrichedRecord.companyId,
+                status: 'completed',
+                enrichment_results: enrichedRecord.record,
+                credits_used: enrichedRecord.creditsUsed,
+                completed_at: new Date().toISOString(),
+                result: {
+                  fields_attempted: enrichedRecord.fieldsAttempted,
+                  fields_written: enrichedRecord.fieldsWritten,
+                  fields_skipped: enrichedRecord.fieldsSkipped,
+                  field_detail: enrichedRecord.fieldDetail,
+                },
+              });
+            }
+
+            // Add failed records to progress buffer
+            for (const failedRecord of failed) {
+              failedCount++;
+              lastProcessedId = failedRecord.companyId;
+
+              progressBuffer.push({
+                run_id: runId,
+                org_id: orgId,
+                record_id: failedRecord.companyId,
+                status: 'failed',
+                error_message: failedRecord.error,
+                completed_at: new Date().toISOString(),
+              });
+            }
+
+            processedCount += chunk.length;
+
+            // Batch insert progress records
+            if (progressBuffer.length >= PROGRESS_BATCH_SIZE) {
+              await supabase.from('arrangement_run_progress').insert(progressBuffer);
+              console.log(`[Arrangement ${config.id}] Inserted ${progressBuffer.length} progress records`);
+              progressBuffer.length = 0;
+            }
+
+            // Update run progress
+            if (processedCount % 10 === 0) {
+              await supabase
+                .from('arrangement_runs')
+                .update({
+                  processed_records: processedCount,
+                  successful_records: successfulCount,
+                  failed_records: failedCount,
+                  actual_credits_used: creditsUsed,
+                })
+                .eq('id', runId);
+            }
+
+            // Save checkpoint
+            if (processedCount % CHECKPOINT_FREQUENCY === 0 && lastProcessedId) {
+              await saveCheckpoint(runId, lastProcessedId, processedCount, creditsUsed);
+              console.log(`[Arrangement ${config.id}] Checkpoint saved at ${processedCount} records`);
+            }
+
+            console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
+          }
         } else {
           // Other Export API errors should fail the run
           throw exportError;
@@ -1058,29 +1168,13 @@ async function processLiveRunJob(
       }
     }
 
-    // Path B: Non-streaming (pagination or lists) - also used as fallback from Export API
-    if (!useStreamingExport) {
-      // When Export API failed, directly use pagination to avoid retry
-      const records = exportApiFailed
-        ? await fetchViaPagination(accessToken, [
-            'name',
-            'domain',
-            'website',
-            'hs_additional_domains',
-            'industry',
-            'numberofemployees',
-            'annualrevenue',
-            'phone',
-            'linkedin_company_page',
-            'founded_year',
-            'city',
-            'country',
-          ], checkpointData?.lastProcessedId)
-        : await fetchRecordsForProcessing(
-            config.source_config,
-            checkpointData?.lastProcessedId,
-            orgId
-          );
+    // Path B: Non-streaming (pagination or lists) - only for non-fallback paths
+    if (!useStreamingExport && !exportApiFailed) {
+      const records = await fetchRecordsForProcessing(
+        config.source_config,
+        checkpointData?.lastProcessedId,
+        orgId
+      );
 
       console.log(`[Arrangement ${config.id}] Processing ${records.length} records with worker pool (concurrency: ${WORKER_POOL_SIZE})`);
 
@@ -1405,7 +1499,81 @@ async function* streamViaExportApi(
 }
 
 /**
+ * Stream companies via pagination (memory-efficient for large datasets)
+ * Yields chunks as they're fetched instead of loading all into memory
+ */
+async function* streamViaPagination(
+  accessToken: string,
+  properties: string[],
+  chunkSize = 50,
+  lastProcessedId?: string
+): AsyncGenerator<any[]> {
+  let after: string | undefined = lastProcessedId;
+  let pageCount = 0;
+  let buffer: any[] = [];
+  let totalFetched = 0;
+
+  console.log(`[Pagination Stream] Streaming companies via pagination`);
+
+  while (true) {
+    const searchBody = {
+      filterGroups: [],
+      properties,
+      limit: 100,
+      after,
+    };
+
+    const response = await fetchWithRetry(
+      'https://api.hubapi.com/crm/v3/objects/companies/search',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(searchBody),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch companies: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const results = data.results ?? [];
+
+    if (results.length === 0) break;
+
+    buffer.push(...results);
+    totalFetched += results.length;
+    pageCount++;
+
+    console.log(`[Pagination Stream] Page ${pageCount}: fetched ${results.length} companies (total: ${totalFetched})`);
+
+    // Yield chunks when buffer reaches target size
+    while (buffer.length >= chunkSize) {
+      yield buffer.splice(0, chunkSize);
+    }
+
+    // Check if there are more pages
+    if (!data.paging?.next?.after) break;
+    after = data.paging.next.after;
+
+    // Wait 500ms between pages to avoid rate limit
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  // Yield remaining companies
+  while (buffer.length > 0) {
+    yield buffer.splice(0, chunkSize);
+  }
+
+  console.log(`[Pagination Stream] Complete. Streamed ${totalFetched} companies across ${pageCount} pages`);
+}
+
+/**
  * Fetch companies via pagination (for small portals or when export scope missing)
+ * DEPRECATED: Use streamViaPagination for large datasets to avoid memory issues
  */
 async function fetchViaPagination(
   accessToken: string,
