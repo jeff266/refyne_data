@@ -30,6 +30,15 @@ import {
   lookupIndustryCrosswalk,
   getCrosswalkEntry,
 } from '../enrichment/industry-crosswalk';
+import {
+  createReviewSession,
+  storePendingEnrichments,
+  getOrgWriteBehavior,
+  checkIsFirstRun,
+  notifyReviewReady,
+  updateReviewSessionResults,
+} from '../enrichment/pending-store';
+import { generateHarmonyForField } from '../enrichment/harmony-generator';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -842,6 +851,15 @@ async function processLiveRunJob(
 
     const hubspotClient = new HubSpotClient(accessToken, connection.portal_id);
 
+    // Create review session for pending enrichments
+    const reviewSessionId = await createReviewSession(
+      orgId,
+      connection.portal_id,
+      config.id,
+      runId
+    );
+    console.log(`[Arrangement ${config.id}] Created review session ${reviewSessionId}`);
+
     // Determine if we should use streaming Export API
     const sourceType = config.source_config.source_type as string | undefined;
     const EXPORT_THRESHOLD = 500;
@@ -935,26 +953,18 @@ async function processLiveRunJob(
           orgId
         );
 
-        // Batch HubSpot write for successful records
+        // Store enriched records as pending (do not write to HubSpot yet)
         if (successful.length > 0) {
-          const hubspotUpdates = successful
-            .filter(r => Object.keys(r.propertiesToWrite).length > 0)
-            .map(r => ({
-              id: r.companyId,
-              properties: r.propertiesToWrite as Record<string, string | number | null>,
-            }));
+          const recordsToStore = successful.filter(r => Object.keys(r.propertiesToWrite).length > 0);
 
-          if (hubspotUpdates.length > 0) {
-            const { results, errors } = await hubspotClient.batchUpdateCompanies(hubspotUpdates);
-
-            if (errors.length > 0) {
-              console.error(
-                `[Arrangement ${config.id}] HubSpot batch write errors (${errors.length} total):`,
-                JSON.stringify(errors.slice(0, 3), null, 2)
-              );
-            }
-
-            console.log(`[Arrangement ${config.id}] Wrote ${results.length} records to HubSpot`);
+          if (recordsToStore.length > 0) {
+            await storePendingEnrichments(
+              reviewSessionId,
+              orgId,
+              connection.portal_id,
+              recordsToStore
+            );
+            console.log(`[Arrangement ${config.id}] Stored ${recordsToStore.length} records as pending enrichments`);
           }
         }
 
@@ -1068,26 +1078,18 @@ async function processLiveRunJob(
           orgId
         );
 
-        // Batch HubSpot write for successful records
+        // Store enriched records as pending (do not write to HubSpot yet)
         if (successful.length > 0) {
-          const hubspotUpdates = successful
-            .filter(r => Object.keys(r.propertiesToWrite).length > 0)
-            .map(r => ({
-              id: r.companyId,
-              properties: r.propertiesToWrite as Record<string, string | number | null>,
-            }));
+          const recordsToStore = successful.filter(r => Object.keys(r.propertiesToWrite).length > 0);
 
-          if (hubspotUpdates.length > 0) {
-            const { results, errors } = await hubspotClient.batchUpdateCompanies(hubspotUpdates);
-
-            if (errors.length > 0) {
-              console.error(
-                `[Arrangement ${config.id}] HubSpot batch write errors (${errors.length} total):`,
-                JSON.stringify(errors.slice(0, 3), null, 2)
-              );
-            }
-
-            console.log(`[Arrangement ${config.id}] Wrote ${results.length} records to HubSpot`);
+          if (recordsToStore.length > 0) {
+            await storePendingEnrichments(
+              reviewSessionId,
+              orgId,
+              connection.portal_id,
+              recordsToStore
+            );
+            console.log(`[Arrangement ${config.id}] Stored ${recordsToStore.length} records as pending enrichments`);
           }
         }
 
@@ -1168,18 +1170,44 @@ async function processLiveRunJob(
       progressBuffer.length = 0;
     }
 
-    // Final update
-    await supabase
-      .from('arrangement_runs')
-      .update({
-        status: 'completed',
-        processed_records: processedCount,
-        successful_records: successfulCount,
-        failed_records: failedCount,
-        actual_credits_used: creditsUsed,
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', runId);
+    // Check write behavior and decide: auto-write or review
+    const writeMode = await getOrgWriteBehavior(orgId);
+    const fieldKeys = (config.field_configs || []).map(fc => fc.field_key);
+    const isFirstRunForFields = await checkIsFirstRun(orgId, connection.portal_id, fieldKeys);
+
+    console.log(
+      `[Arrangement ${config.id}] Write mode: ${writeMode}, first run: ${isFirstRunForFields}`
+    );
+
+    if (writeMode === 'always_auto_write' || (writeMode === 'review_first_run' && !isFirstRunForFields)) {
+      // Auto-write: generate harmony if needed, then write immediately
+      console.log(`[Arrangement ${config.id}] Auto-writing to HubSpot`);
+
+      // Generate harmonies for all fields (if not already generated)
+      for (const fieldConfig of config.field_configs || []) {
+        await generateHarmonyIfNeeded(reviewSessionId, orgId, connection.portal_id, fieldConfig.field_key);
+      }
+
+      // Write to HubSpot using the approval endpoint (internally)
+      await writeReviewSessionToHubSpot(reviewSessionId, orgId, accessToken, connection.portal_id);
+
+      // Mark as completed
+      await supabase
+        .from('arrangement_runs')
+        .update({
+          status: 'completed',
+          processed_records: processedCount,
+          successful_records: successfulCount,
+          failed_records: failedCount,
+          actual_credits_used: creditsUsed,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', runId);
+    } else {
+      // Review required: notify for review
+      console.log(`[Arrangement ${config.id}] Requiring review before write`);
+      await notifyReviewReady(runId, reviewSessionId);
+    }
 
     // Deduct credits from org balance
     await supabase.rpc('deduct_credits', { org_id: orgId, amount: creditsUsed });
@@ -1972,6 +2000,140 @@ async function queryProvider(
   }
 
   return null;
+}
+
+/**
+ * Generate harmony for a field if not already generated.
+ * Uses NAICS crosswalk + Claude fallback.
+ */
+async function generateHarmonyIfNeeded(
+  reviewSessionId: string,
+  orgId: string,
+  portalId: string,
+  fieldKey: string
+): Promise<void> {
+  if (!supabase) {
+    return;
+  }
+
+  // Get all pending enrichment values for this field
+  const { data: pendingValues } = await supabase
+    .from('pending_enrichment_values')
+    .select('raw_value, hubspot_value')
+    .eq('review_session_id', reviewSessionId)
+    .eq('field_key', fieldKey);
+
+  if (!pendingValues || pendingValues.length === 0) {
+    return;
+  }
+
+  // Get unique enriched values
+  const enrichedValues = Array.from(new Set(pendingValues.map(v => v.raw_value).filter(Boolean)));
+
+  // Get valid HubSpot values from field_mappings
+  const { data: fieldMapping } = await supabase
+    .from('field_mappings')
+    .select('valid_values')
+    .eq('org_id', orgId)
+    .eq('canonical_field', fieldKey)
+    .maybeSingle();
+
+  const hubspotValidValues = fieldMapping?.valid_values || [];
+
+  // Generate harmony
+  await generateHarmonyForField(
+    orgId,
+    portalId,
+    fieldKey,
+    enrichedValues,
+    hubspotValidValues
+  );
+
+  console.log(`[Harmony] Generated harmony for ${fieldKey} with ${enrichedValues.length} values`);
+}
+
+/**
+ * Write all pending enrichments from a review session to HubSpot.
+ * Streams in batches of 100 records.
+ */
+async function writeReviewSessionToHubSpot(
+  reviewSessionId: string,
+  orgId: string,
+  accessToken: string,
+  portalId: string
+): Promise<{ written: number; skipped: number; failed: number }> {
+  if (!supabase) {
+    return { written: 0, skipped: 0, failed: 0 };
+  }
+
+  const { HubSpotClient } = await import('../hubspot/client');
+  const hubspotClient = new HubSpotClient(accessToken, portalId);
+
+  // Get all pending enrichment values for this session
+  const { data: pendingValues, error } = await supabase
+    .from('pending_enrichment_values')
+    .select('*')
+    .eq('review_session_id', reviewSessionId);
+
+  if (error || !pendingValues) {
+    console.error('[WriteSession] Failed to fetch pending values:', error);
+    return { written: 0, skipped: 0, failed: 0 };
+  }
+
+  // Group by company ID
+  const recordsMap = new Map<string, any>();
+  for (const value of pendingValues) {
+    if (!recordsMap.has(value.hubspot_company_id)) {
+      recordsMap.set(value.hubspot_company_id, {
+        id: value.hubspot_company_id,
+        properties: {},
+      });
+    }
+    const record = recordsMap.get(value.hubspot_company_id)!;
+
+    // Skip null values and no-match confidence
+    if (value.hubspot_value && value.confidence !== 'no_match') {
+      record.properties[value.hubspot_property] = value.hubspot_value;
+    }
+  }
+
+  const recordsToWrite = Array.from(recordsMap.values()).filter(
+    r => Object.keys(r.properties).length > 0
+  );
+
+  let written = 0;
+  let failed = 0;
+
+  // Write in batches of 100
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < recordsToWrite.length; i += BATCH_SIZE) {
+    const batch = recordsToWrite.slice(i, i + BATCH_SIZE);
+
+    const { results, errors } = await hubspotClient.batchUpdateCompanies(batch);
+
+    written += results.length;
+    failed += errors.length;
+
+    if (errors.length > 0) {
+      console.error(
+        `[WriteSession] Batch write errors (${errors.length} total):`,
+        JSON.stringify(errors.slice(0, 3), null, 2)
+      );
+    }
+  }
+
+  // Update review session status
+  await supabase
+    .from('enrichment_review_sessions')
+    .update({
+      status: 'written',
+      written_at: new Date().toISOString(),
+    })
+    .eq('id', reviewSessionId);
+
+  console.log(`[WriteSession] Wrote ${written} records to HubSpot (${failed} failed)`);
+
+  return { written, skipped: 0, failed };
 }
 
 // ─────────────────────────────────────────────────────────────
