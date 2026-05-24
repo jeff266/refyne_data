@@ -95,17 +95,18 @@ export async function GET() {
 
     // Build HubSpot OAuth URL with full scope list
     const scopes = [
-      // Required
+      // Core company permissions
       'crm.objects.companies.read',
       'crm.objects.companies.write',
       'crm.schemas.companies.read',
-      'oauth',
-      // Conditionally required
+      'crm.schemas.companies.write',  // NEW: schema sync with write access
+      // Export API for streaming (CRITICAL - enables memory-efficient processing)
       'crm.export',
-      'crm.objects.contacts.read',
-      'crm.objects.contacts.write',
-      'crm.schemas.contacts.read',
-      'crm.lists.read',
+      // Lists and owners
+      'crm.lists.write',  // Upgraded from read
+      'crm.objects.owners.read',  // NEW: owner information
+      // OAuth
+      'oauth',
     ];
 
     const authUrl = new URL('https://app.hubspot.com/oauth/authorize');
