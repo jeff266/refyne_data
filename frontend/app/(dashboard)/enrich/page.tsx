@@ -1858,32 +1858,73 @@ export default function EnrichPage() {
                 {selectedProviders.map(p => p === 'apollo' ? 'Apollo' : p === 'graphiq' || p === 'refyne' ? 'GraphIQ' : p).join(' → ')} · {selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label).join(', ')} · {writePolicy === 'overwrite' ? 'Overwrite all' : 'Fill empty'}
               </div>
 
-              {/* Progress bar */}
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ height: 24, background: C.bg, borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
+              {/* Fetch State (when records_processed === 0) */}
+              {runProgress.records_processed === 0 && (
+                <div style={{ marginBottom: 20 }}>
                   <div style={{
-                    width: `${runProgress.records_total > 0 ? (runProgress.records_processed / runProgress.records_total) * 100 : 0}%`,
-                    height: '100%',
-                    background: C.indigo,
-                    transition: 'width 0.3s ease'
-                  }} />
+                    padding: '16px',
+                    background: C.bg,
+                    borderRadius: 4,
+                    marginBottom: 12,
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: 13, color: C.text2, marginBottom: 12 }}>
+                      Fetching companies from HubSpot...
+                    </div>
+                    <div style={{
+                      height: 4,
+                      background: C.surface,
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                      position: 'relative'
+                    }}>
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        height: '100%',
+                        width: '40%',
+                        background: C.indigo,
+                        animation: 'fetchProgress 1.5s ease-in-out infinite'
+                      }} />
+                    </div>
+                  </div>
+                  <style jsx>{`
+                    @keyframes fetchProgress {
+                      0% { transform: translateX(-100%); }
+                      100% { transform: translateX(350%); }
+                    }
+                  `}</style>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.text2 }}>
-                  <span>{runProgress.records_processed.toLocaleString()} / {runProgress.records_total.toLocaleString()}</span>
-                  {runProgress.records_processed > 0 && runProgress.records_total > 0 && (
-                    <span>
-                      {(() => {
-                        const elapsed = Date.now() - new Date(runProgress.started_at || Date.now()).getTime();
-                        const rate = runProgress.records_processed / (elapsed / 1000);
-                        const remaining = (runProgress.records_total - runProgress.records_processed) / rate;
-                        const mins = Math.floor(remaining / 60);
-                        const secs = Math.floor(remaining % 60);
-                        return remaining > 0 ? `Estimated ${mins}m ${secs}s remaining` : '';
-                      })()}
-                    </span>
-                  )}
+              )}
+
+              {/* Progress bar (when records_processed > 0) */}
+              {runProgress.records_processed > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ height: 24, background: C.bg, borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
+                    <div style={{
+                      width: `${runProgress.records_total > 0 ? (runProgress.records_processed / runProgress.records_total) * 100 : 0}%`,
+                      height: '100%',
+                      background: C.indigo,
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.text2 }}>
+                    <span>{runProgress.records_processed.toLocaleString()} / {runProgress.records_total.toLocaleString()}</span>
+                    {runProgress.records_total > 0 && (
+                      <span>
+                        {(() => {
+                          const elapsed = Date.now() - new Date(runProgress.started_at || Date.now()).getTime();
+                          const rate = runProgress.records_processed / (elapsed / 1000);
+                          const remaining = (runProgress.records_total - runProgress.records_processed) / rate;
+                          const mins = Math.floor(remaining / 60);
+                          return mins > 0 ? `~${mins} minute${mins === 1 ? '' : 's'} remaining` : 'Less than a minute';
+                        })()}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Stats */}
               <div style={{ fontSize: 12, color: C.text2, marginBottom: 20 }}>
