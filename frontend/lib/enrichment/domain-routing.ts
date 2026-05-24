@@ -13,6 +13,7 @@ export interface HubSpotCompany {
   properties: {
     domain?: string | null;
     website?: string | null;
+    hs_additional_domains?: string | null;
     name?: string | null;
     city?: string | null;
     state?: string | null;
@@ -56,38 +57,82 @@ export function cleanDomain(raw: string): string | null {
 /**
  * Check if company has a valid domain
  *
- * Checks both 'domain' and 'website' properties from HubSpot.
+ * Checks domain, website, and hs_additional_domains in priority order.
  * Applies regex validation to prevent injection attacks.
+ *
+ * Priority:
+ * 1. domain (already clean)
+ * 2. website (needs cleaning - has https://, paths, etc.)
+ * 3. hs_additional_domains (alternate domains, needs cleaning)
  *
  * Security: Treats null, undefined, and empty string as "no domain"
  */
 export function hasDomain(company: HubSpotCompany): boolean {
-  const raw = company.properties?.domain ?? company.properties?.website;
+  // Try domain first (already clean)
+  const domain = company.properties?.domain;
+  if (domain && domain.trim() !== '') {
+    const cleaned = cleanDomain(domain);
+    if (cleaned && DOMAIN_REGEX.test(cleaned)) return true;
+  }
 
-  // Treat null, undefined, empty string as "no domain"
-  if (!raw || raw.trim() === '') return false;
+  // Fall back to website (needs cleaning)
+  const website = company.properties?.website;
+  if (website && website.trim() !== '') {
+    const cleaned = cleanDomain(website);
+    if (cleaned && DOMAIN_REGEX.test(cleaned)) return true;
+  }
 
-  // Clean and validate domain format
-  const cleaned = cleanDomain(raw);
-  if (!cleaned) return false;
+  // Fall back to hs_additional_domains (may be comma-separated)
+  const additionalDomains = company.properties?.hs_additional_domains;
+  if (additionalDomains && additionalDomains.trim() !== '') {
+    // Split by comma if multiple domains
+    const domains = additionalDomains.split(',').map(d => d.trim());
+    for (const d of domains) {
+      const cleaned = cleanDomain(d);
+      if (cleaned && DOMAIN_REGEX.test(cleaned)) return true;
+    }
+  }
 
-  // Validate with regex
-  return DOMAIN_REGEX.test(cleaned);
+  return false;
 }
 
 /**
  * Get cleaned domain value from company record
  *
+ * Priority:
+ * 1. domain (already clean - just "example.com")
+ * 2. website (needs cleaning - has "https://example.com/home/")
+ * 3. hs_additional_domains (alternate domains, may be comma-separated)
+ *
  * Returns null if no valid domain found.
  */
 export function getDomain(company: HubSpotCompany): string | null {
-  const raw = company.properties?.domain ?? company.properties?.website;
-  if (!raw || raw.trim() === '') return null;
+  // Try domain first (already clean)
+  const domain = company.properties?.domain;
+  if (domain && domain.trim() !== '') {
+    const cleaned = cleanDomain(domain);
+    if (cleaned && DOMAIN_REGEX.test(cleaned)) return cleaned;
+  }
 
-  const cleaned = cleanDomain(raw);
-  if (!cleaned || !DOMAIN_REGEX.test(cleaned)) return null;
+  // Fall back to website (needs cleaning)
+  const website = company.properties?.website;
+  if (website && website.trim() !== '') {
+    const cleaned = cleanDomain(website);
+    if (cleaned && DOMAIN_REGEX.test(cleaned)) return cleaned;
+  }
 
-  return cleaned;
+  // Fall back to hs_additional_domains (first valid domain wins)
+  const additionalDomains = company.properties?.hs_additional_domains;
+  if (additionalDomains && additionalDomains.trim() !== '') {
+    // Split by comma if multiple domains
+    const domains = additionalDomains.split(',').map(d => d.trim());
+    for (const d of domains) {
+      const cleaned = cleanDomain(d);
+      if (cleaned && DOMAIN_REGEX.test(cleaned)) return cleaned;
+    }
+  }
+
+  return null;
 }
 
 /**

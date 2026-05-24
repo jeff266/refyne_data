@@ -915,6 +915,7 @@ async function processLiveRunJob(
         'name',
         'domain',
         'website',  // HubSpot has both domain and website properties
+        'hs_additional_domains',  // Alternate domains (some portals use this)
         'industry',
         'numberofemployees',
         'annualrevenue',
@@ -1458,6 +1459,7 @@ async function fetchRecordsForProcessing(
     'name',
     'domain',
     'website',  // HubSpot has both domain and website properties
+    'hs_additional_domains',  // Alternate domains (some portals use this)
     'industry',
     'numberofemployees',
     'annualrevenue',
