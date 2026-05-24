@@ -1171,7 +1171,7 @@ export class HubSpotClient {
         // Build company object
         const properties: Record<string, string | null> = {};
         for (let j = 0; j < headers.length; j++) {
-          const key = headers[j].toLowerCase().replace(/\s+/g, '_');
+          const key = normalizeHeaderName(headers[j]); // Use header mapping logic
           properties[key] = values[j] || null;
         }
 
