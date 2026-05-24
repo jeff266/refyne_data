@@ -908,6 +908,7 @@ async function processLiveRunJob(
     let lastProcessedId: string | undefined;
     const CHUNK_SIZE = 50;
     let chunkNumber = 0;
+    let exportApiFailed = false; // Track if Export API failed to avoid retry
 
     // Path A: Streaming Export API (memory-efficient)
     if (useStreamingExport) {
@@ -1047,8 +1048,9 @@ async function processLiveRunJob(
           console.warn(`[Arrangement ${config.id}] Export API daily limit reached, falling back to pagination`);
           console.warn(`[Arrangement ${config.id}] Export error: ${errorMessage}`);
 
-          // Fall through to pagination path below
+          // Mark Export API as failed to force pagination
           useStreamingExport = false;
+          exportApiFailed = true;
         } else {
           // Other Export API errors should fail the run
           throw exportError;
@@ -1058,11 +1060,27 @@ async function processLiveRunJob(
 
     // Path B: Non-streaming (pagination or lists) - also used as fallback from Export API
     if (!useStreamingExport) {
-      const records = await fetchRecordsForProcessing(
-        config.source_config,
-        checkpointData?.lastProcessedId,
-        orgId
-      );
+      // When Export API failed, directly use pagination to avoid retry
+      const records = exportApiFailed
+        ? await fetchViaPagination(accessToken, [
+            'name',
+            'domain',
+            'website',
+            'hs_additional_domains',
+            'industry',
+            'numberofemployees',
+            'annualrevenue',
+            'phone',
+            'linkedin_company_page',
+            'founded_year',
+            'city',
+            'country',
+          ], checkpointData?.lastProcessedId)
+        : await fetchRecordsForProcessing(
+            config.source_config,
+            checkpointData?.lastProcessedId,
+            orgId
+          );
 
       console.log(`[Arrangement ${config.id}] Processing ${records.length} records with worker pool (concurrency: ${WORKER_POOL_SIZE})`);
 
