@@ -1,6 +1,6 @@
 # Refyne Context
 
-**Last updated:** 2026-05-22
+**Last updated:** 2026-05-24
 **Status:** Active development
 **Product name:** TBD (Refyne is working name)
 
@@ -43,8 +43,8 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 | **Org ID (RevOps Impact)** | org_3DuSdb0FBnx7RMLmJSUegrpiNLS | Primary test org |
 | **HubSpot Portal (Frontera)** | 49169539 | Primary test portal, 2,816 companies |
 | **Vercel** | Next.js frontend hosting | Production deployment at app.refynedata.com |
-| **Coolify/Hostinger** | BullMQ worker processes | Arrangement worker, dedup worker, digest worker, webhook worker |
-| **Railway** | Alternative worker hosting | Option B for worker processes if Coolify not used |
+| **Railway** | BullMQ worker deployment | US East region, 8GB RAM, 8 vCPU, auto-deploys from GitHub main |
+| **Coolify** | Deprecated worker hosting | Worker stopped, no longer in use |
 | **Supabase** | PostgreSQL database | RLS policies, service role for workers, org client for user operations |
 | **Upstash Redis** | Job queue + rate limiting | BullMQ backend, sliding window rate limiters |
 | **Clerk** | Authentication + org management | Multi-tenant with org_id extraction |
@@ -114,10 +114,20 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 
 16. **NAICS is the canonical intermediate for industry classification.** All providers normalize TO NAICS first, then NAICS maps to the org's CRM field via the industry_crosswalk table. Never transform industry values with string manipulation.
 
+17. **Export API falls back to pagination on daily limit.** HubSpot limits Export API to 30 exports/day. When limit hit, fall back to cursor pagination. Never fail a run due to export limit.
+
+18. **arrangement_runs.status includes pending_review.** Enrichment review flow uses pending_review status for runs awaiting admin approval before HubSpot write.
+
+19. **Enrichment write behavior configurable per org.** Write behavior stored in org_enrichment_settings table: always_review (always require approval), review_first_run (approve first run, then auto-write), always_auto_write (no approval needed).
+
+20. **Pending enrichments stored with 7-day TTL.** pending_enrichment_values table holds enriched values before HubSpot write. After admin approval, values written to HubSpot. Expires after 7 days.
+
+21. **Harmony auto-generated on first run.** First enrichment run per portal+field auto-generates Harmony using NAICS crosswalk + Claude API fallback. Stored in harmonies_library and reused on subsequent runs.
+
 ### Infrastructure Locked
 
 1. **Vercel for frontend:** Next.js deployment on Vercel edge network.
-2. **Coolify for workers:** BullMQ workers on Coolify/Hostinger VPS. Railway is fallback.
+2. **Railway for workers:** BullMQ workers on Railway (US East, 8GB RAM, 8 vCPU). Auto-deploys from GitHub main.
 3. **Supabase for database:** PostgreSQL with RLS. Service role client for workers, org client for user operations.
 4. **Upstash Redis for queue:** BullMQ backend. No self-hosted Redis.
 
@@ -174,6 +184,11 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 | 036 | `dedup_merge_history` | org_id, master_id, retired_id, snapshots | Audit log for merges |
 | 037 | `industry_crosswalk` | naics_code, naics_label, apollo_label, hubspot_value, linkedin_value | NAICS-based industry mapping to CRM enums |
 | 037 | `lookup_industry_crosswalk` | RPC function | Multi-strategy lookup (NAICS code → NAICS label → provider label), returns matched/output/naics_code |
+| 038 | `enrichment_review_sessions` | org_id, run_id, status, pending_count | Tracks pending review state per enrichment run |
+| 038 | `pending_enrichment_values` | org_id, run_id, company_id, field_key, enriched_value, provider, expires_at | Stores enriched values before HubSpot write, 7-day TTL |
+| 038 | `org_enrichment_settings` | org_id, write_behavior (always_review/review_first_run/always_auto_write) | Write behavior preferences per org |
+| 039 | `csv_import_sessions` | org_id, status, file_name, rows_total, rows_processed | CSV import tracking (spec written, not yet built) |
+| 039 | `csv_import_records` | session_id, row_number, record_data, status | CSV import record-level data (spec written, not yet built) |
 
 ### RLS Pattern
 
@@ -310,10 +325,10 @@ export async function POST(request: NextRequest) {
 
 ### Deployment
 
-- **Coolify:** Primary worker hosting on Hostinger VPS
-- **Railway:** Fallback option for worker hosting
+- **Railway:** Primary worker hosting (US East, 8GB RAM, 8 vCPU)
+- **Auto-deploy:** GitHub main branch triggers automatic Railway deployment
 - **Separate processes:** Each worker type runs as its own service
-- **Environment variables:** Shared from Vercel (synced manually or via Coolify)
+- **Environment variables:** Synced from Vercel via Railway dashboard
 
 ---
 
@@ -367,7 +382,7 @@ At connect time:
 
 **Location:** lib/queue/arrangement-queue.ts
 **Startup script:** scripts/start-digest-worker.ts (starts all 4 workers)
-**Deployment:** Coolify on Hostinger VPS 31.220.63.174
+**Deployment:** Railway (US East region, 8GB RAM, 8 vCPU, auto-deploys from GitHub main)
 
 ### Workers
 
@@ -440,6 +455,12 @@ This was the root cause of the May 21 worker failure.
 | Compliance dashboard | Complete | Scores, trends, breakdown |
 | Always-on monitoring | Complete | Nightly scan, email digest |
 | Industry crosswalk | Complete | NAICS-based mapping, 173 mappings covering all 148 HubSpot industry enums |
+| Railway migration | Complete | Worker deployed on Railway US East, auto-deploys from GitHub main |
+| Export API fallback | Complete | Pagination fallback when daily Export API limit hit (30/day) |
+| Domain extraction | Complete | Extracts domain from website + hs_additional_domains fields |
+| Enrichment review backend | Complete | pending_review pattern with enrichment_review_sessions table |
+| Harmony auto-generation | Complete | Claude + NAICS crosswalk, auto-generates on first run per portal+field |
+| Progress bar polling fix | Complete | Fetch state + 3s polling interval for live updates |
 
 ### Built but Not End-to-End Verified
 
@@ -465,15 +486,16 @@ This was the root cause of the May 21 worker failure.
 
 ## Pending Work — Priority Order
 
-1. Benchmark worker parallel processing with 2,816 records (target <20 min)
-2. Verify Normalize end-to-end (apply to HubSpot, rollback)
-3. Verify Prospect search returns results in browser
-4. Fix inline live feed rows (progress bar works, rows do not populate)
-5. Serper+Haiku provider for domain-less company enrichment
-6. Normalize BullMQ queue implementation
-7. Railway worker migration for auto-scaling
-8. GitHub Harmonies repo (open-source default library)
-9. Salesforce connector
+1. QA verify enrichment review backend (run + 3 queries to confirm pending_review pattern works)
+2. Build enrichment review UI on Enrich page (approve/reject modal for pending enrichments)
+3. CSV import workflow (/import page with upload, mapping, preview, confirm)
+4. Field mappings guided setup (onboarding flow for canonical ↔ HubSpot mapping)
+5. Serper+Haiku provider for domain-less company enrichment (fill gap for companies without domains)
+6. Credit system and pricing page (Stripe metering integration, usage-based pricing)
+7. Write pipeline optimization (parallel writes to HubSpot, worker pool pattern)
+8. Prospect page canonical schema normalization (merge Apollo + GraphIQ + ZoomInfo results by domain)
+9. Normalize BullMQ queue implementation (async processing for normalize apply)
+10. GitHub Harmonies repo (open-source default library for community contributions)
 
 ---
 
