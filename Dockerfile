@@ -10,7 +10,7 @@ RUN npm ci
 # Copy all frontend source code
 COPY frontend/ .
 
-# Start worker with 4GB heap limit
+# Start worker with 6GB heap limit (Railway has 8GB RAM)
 CMD ["node_modules/.bin/tsx", \
-     "--max-old-space-size=4096", \
+     "--max-old-space-size=6144", \
      "scripts/start-digest-worker.ts"]

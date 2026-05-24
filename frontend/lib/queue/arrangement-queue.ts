@@ -40,14 +40,13 @@ const QUEUE_NAME = 'arrangements';
 /**
  * Worker concurrency - how many arrangement jobs to process in parallel.
  */
-const WORKER_CONCURRENCY = 3; // Reduced from 10 to limit memory pressure (3 jobs × 50 companies = 150 in RAM)
+const WORKER_CONCURRENCY = 5; // Railway has 8GB RAM, streaming keeps memory low
 
 /**
  * Provider batch size - how many records to enrich in parallel per batch.
- * Reduced to 3 to minimize token bucket contention.
  */
 const PROVIDER_BATCH_SIZE = 3; // Legacy: no longer used, kept for reference
-const WORKER_POOL_SIZE = 3; // Reduced from 5 to limit memory pressure during enrichment
+const WORKER_POOL_SIZE = 5; // Railway has 8GB RAM, streaming keeps memory low
 
 /**
  * Progress batch size - how many progress records to insert at once.
