@@ -914,6 +914,7 @@ async function processLiveRunJob(
       const properties = [
         'name',
         'domain',
+        'website',  // HubSpot has both domain and website properties
         'industry',
         'numberofemployees',
         'annualrevenue',
@@ -1456,6 +1457,7 @@ async function fetchRecordsForProcessing(
   const properties = [
     'name',
     'domain',
+    'website',  // HubSpot has both domain and website properties
     'industry',
     'numberofemployees',
     'annualrevenue',
