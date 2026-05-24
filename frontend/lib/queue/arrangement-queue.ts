@@ -1948,7 +1948,7 @@ async function queryProvider(
   if (!canEnrich) {
     console.log(
       `[Worker] Skipping ${provider} for ${record.id}: ` +
-      `domain='${record.properties?.domain ?? 'null'}'`
+      `domain='${record.properties?.domain ?? 'null'}' website='${record.properties?.website ?? 'null'}'`
     );
     return null;
   }
@@ -1960,9 +1960,10 @@ async function queryProvider(
   // Make real API call
   const providerAdapter = await getProviderAdapter(provider, orgId);
 
-  // HubSpot records have properties nested: record.properties.domain
-  const domain = record.properties?.domain || record.domain;
-  const name = record.properties?.name || record.name;
+  // Use domain-routing helpers to extract domain (checks both 'domain' and 'website' properties)
+  const { getDomain, getName } = await import('../enrichment/domain-routing');
+  const domain = getDomain(record) ?? undefined;
+  const name = getName(record) ?? undefined;
 
   const result = await providerAdapter.enrichCompany({ domain, name });
 
