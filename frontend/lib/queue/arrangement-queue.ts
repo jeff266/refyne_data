@@ -56,7 +56,7 @@ const WORKER_CONCURRENCY = 5; // Railway has 8GB RAM, streaming keeps memory low
  * Provider batch size - how many records to enrich in parallel per batch.
  */
 const PROVIDER_BATCH_SIZE = 3; // Legacy: no longer used, kept for reference
-const WORKER_POOL_SIZE = 5; // Railway has 8GB RAM, streaming keeps memory low
+const WORKER_POOL_SIZE = 3; // Reduced to prevent memory accumulation
 
 /**
  * Progress batch size - how many progress records to insert at once.
@@ -735,11 +735,17 @@ async function enrichSingleRecord(
  * Returns successful and failed results separately.
  */
 /**
- * Process records using a worker pool pattern that maintains constant concurrency.
+ * Process records in simple batches using Promise.allSettled.
  *
- * Instead of waiting for batches of N to complete, this keeps WORKER_POOL_SIZE
- * requests in-flight at all times, starting a new one immediately when one completes.
- * This fully saturates the rate limit without idle time between batches.
+ * Replaces complex worker pool pattern that had closure accumulation issues.
+ * Simple batch processing eliminates:
+ * - Promise.race in while loop (created wrapper on every iteration)
+ * - Recursive processNext calls
+ * - inFlight Set with growing references
+ * - Closures capturing growing successful/failed arrays
+ *
+ * Trade-off: Slight idle time between batches vs memory safety.
+ * Correctness over speed.
  *
  * @param records - Records to process
  * @param fieldConfigs - Field configurations for enrichment
@@ -753,48 +759,36 @@ async function processWithPool(
 ): Promise<{ successful: EnrichedRecord[]; failed: FailedRecord[] }> {
   const successful: EnrichedRecord[] = [];
   const failed: FailedRecord[] = [];
-  const queue = [...records];
-  const inFlight = new Set<Promise<void>>();
 
-  async function processNext(): Promise<void> {
-    const record = queue.shift();
-    if (!record) return;
+  // Process in simple batches of WORKER_POOL_SIZE
+  // No Promise.race, no closures capturing growing arrays
+  for (let i = 0; i < records.length; i += WORKER_POOL_SIZE) {
+    const batch = records.slice(i, i + WORKER_POOL_SIZE);
 
-    const promise = enrichSingleRecord(record, fieldConfigs, orgId)
-      .then(result => {
-        successful.push(result);
-      })
-      .catch(err => {
+    const results = await Promise.allSettled(
+      batch.map(record => enrichSingleRecord(record, fieldConfigs, orgId))
+    );
+
+    // Process results
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      const record = batch[j];
+
+      if (result.status === 'fulfilled') {
+        successful.push(result.value);
+      } else {
         const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
         failed.push({
           companyId,
-          error: err?.message ?? 'Unknown error',
+          error: result.reason?.message ?? 'Unknown error',
         });
-        console.error(`[Worker] Record ${companyId} failed:`, err.message);
-      })
-      .finally(() => {
-        inFlight.delete(promise);
-        // Immediately start next record when this one completes
-        if (queue.length > 0) {
-          const next = processNext();
-          inFlight.add(next);
-        }
-      });
+        console.error(`[Worker] Record ${companyId} failed:`, result.reason?.message);
+      }
+    }
 
-    inFlight.add(promise);
-    return promise;
-  }
-
-  // Start initial pool of workers
-  const initial = Math.min(WORKER_POOL_SIZE, records.length);
-  for (let i = 0; i < initial; i++) {
-    const p = processNext();
-    if (p) inFlight.add(p);
-  }
-
-  // Wait for all to complete
-  while (inFlight.size > 0) {
-    await Promise.race(inFlight);
+    // Explicit cleanup after each batch to help GC
+    results.length = 0;
+    batch.length = 0;
   }
 
   return { successful, failed };
