@@ -2647,12 +2647,17 @@ export default function EnrichPage() {
                       .filter(([_, count]) => count > 0)
                       .map(([fieldKey, count]) => {
                         const FIELD_LABELS: Record<string, string> = {
+                          // Canonical field keys
                           employee_count: 'Employee count',
                           industry: 'Industry',
                           revenue: 'Revenue',
                           linkedin_url: 'LinkedIn URL',
                           phone: 'Phone',
                           domain: 'Domain',
+                          // HubSpot property names
+                          numberofemployees: 'Employee count',
+                          annualrevenue: 'Revenue',
+                          linkedin_company_page: 'LinkedIn URL',
                         };
                         return (
                           <div key={fieldKey} style={{ display: 'contents' }}>
