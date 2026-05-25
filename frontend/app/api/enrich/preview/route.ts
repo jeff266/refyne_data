@@ -16,6 +16,7 @@ import { ApolloAdapter } from '@/lib/providers/apollo';
 import { getApolloKey } from '@/lib/providers/apollo-key';
 import { GraphiqAdapter } from '@/lib/providers/graphiq';
 import { getGraphiqKey } from '@/lib/providers/graphiq-key';
+import { generateHarmonyForField, type HarmonyMapping } from '@/lib/enrichment/harmony-generator';
 import { Redis } from '@upstash/redis';
 import { randomUUID } from 'crypto';
 
@@ -50,6 +51,8 @@ interface PreviewFieldResult {
   current_value: string | null;
   found_value: string | null;
   found_raw: string | null;
+  mapped_value: string | null;  // Harmony-mapped value for enum fields
+  mapping_confidence: 'high' | 'medium' | 'low' | 'no_match' | null;  // Confidence of mapping
   source: string | null;
   status: 'would_fill' | 'would_override' | 'already_set' | 'no_data' | 'skipped';
   harmony_applied: boolean;
@@ -357,6 +360,8 @@ export async function POST(req: NextRequest) {
           current_value: currentValue,
           found_value: foundValue,
           found_raw: foundRaw,
+          mapped_value: null,  // Will be set by harmony generation
+          mapping_confidence: null,  // Will be set by harmony generation
           source: source,
           status: status,
           harmony_applied: harmonyApplied,
@@ -365,6 +370,94 @@ export async function POST(req: NextRequest) {
         });
       }
     }
+
+    console.log(`[Preview] Collected ${results.length} field results, starting harmony generation for enum fields`);
+
+    // Step 1: Collect unique raw values for each enum field
+    const enumFieldValues: Record<string, Set<string>> = {};
+    const isEnumField = (fieldKey: string) => fieldKey === 'industry';  // Only industry for now
+
+    for (const row of results) {
+      if (row.found_value && isEnumField(row.field_key)) {
+        if (!enumFieldValues[row.field_key]) {
+          enumFieldValues[row.field_key] = new Set();
+        }
+        enumFieldValues[row.field_key].add(row.found_value);
+      }
+    }
+
+    // Step 2: Generate harmonies for each enum field that has values
+    const generatedHarmonies: Record<string, HarmonyMapping[]> = {};
+
+    for (const [fieldKey, rawValues] of Object.entries(enumFieldValues)) {
+      console.log(`[Preview] Generating harmony for ${fieldKey} with ${rawValues.size} unique values`);
+
+      // Fetch valid HubSpot values from industry_crosswalk table
+      const { data: crosswalkData } = await supabase
+        .from('industry_crosswalk')
+        .select('hubspot_value')
+        .not('hubspot_value', 'is', null);
+
+      const hubspotValidValues = Array.from(
+        new Set(
+          (crosswalkData || [])
+            .map(row => row.hubspot_value)
+            .filter((v): v is string => v !== null)
+        )
+      );
+
+      console.log(`[Preview] Loaded ${hubspotValidValues.length} valid HubSpot ${fieldKey} values`);
+
+      // Generate harmony
+      const harmony = await generateHarmonyForField(
+        ctx.orgId,
+        connection.portal_id,
+        fieldKey,
+        Array.from(rawValues),
+        hubspotValidValues
+      );
+
+      generatedHarmonies[fieldKey] = harmony;
+      console.log(`[Preview] Generated ${harmony.length} mappings for ${fieldKey}`);
+    }
+
+    // Step 3: Apply harmony to preview rows before returning
+    for (const row of results) {
+      if (isEnumField(row.field_key) && row.found_value) {
+        const harmony = generatedHarmonies[row.field_key];
+
+        if (harmony) {
+          const mapping = harmony.find(m => m.raw === row.found_value);
+
+          if (mapping && mapping.mapped && mapping.confidence !== 'no_match') {
+            row.mapped_value = mapping.mapped;  // MENTAL_HEALTH_CARE
+            row.mapping_confidence = mapping.confidence;  // high, medium, low
+            row.harmony_applied = true;
+            row.harmony_name = `${row.field_key}_harmony`;
+
+            // Update status and selection based on mapping confidence
+            if (row.status === 'would_fill' || row.status === 'would_override') {
+              // Keep actionable status but adjust selection based on confidence
+              if (mapping.confidence === 'low') {
+                row.selected = false;  // Don't auto-select low confidence mappings
+              }
+            }
+          } else {
+            // No mapping found
+            row.mapped_value = null;
+            row.mapping_confidence = 'no_match';
+            row.status = 'no_data';  // Can't write without valid mapping
+            row.selected = false;
+          }
+        }
+      } else {
+        // Non-enum fields: use found_value as-is
+        row.mapped_value = row.found_value;
+        row.mapping_confidence = null;
+      }
+    }
+
+    console.log(`[Preview] Applied harmony mappings to ${results.length} rows`);
 
     // Generate preview ID
     const previewId = randomUUID();

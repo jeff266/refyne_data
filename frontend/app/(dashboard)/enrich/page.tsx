@@ -60,6 +60,8 @@ interface PreviewFieldResult {
   current_value: string | null;
   found_value: string | null;
   found_raw: string | null;
+  mapped_value: string | null;
+  mapping_confidence: 'high' | 'medium' | 'low' | 'no_match' | null;
   source: string | null;
   status: 'would_fill' | 'would_override' | 'already_set' | 'no_data' | 'skipped';
   harmony_applied: boolean;
@@ -769,7 +771,7 @@ export default function EnrichPage() {
       .map(result => ({
         company_id: result.company_id,
         field_key: result.field_key,
-        found_value: result.found_value!,
+        found_value: result.mapped_value || result.found_value!,  // Use mapped value for enum fields
       }));
 
     if (rowsToApply.length === 0) {
@@ -2430,12 +2432,41 @@ export default function EnrichPage() {
                             </td>
                             <td style={{
                               padding: '8px 12px',
-                              color: result.found_value ? C.text : C.text3,
-                              background: result.found_value ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                              color: result.mapped_value ? C.text : C.text3,
+                              background: result.mapped_value ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                              fontSize: 12,
                             }}>
-                              {result.found_value || <span style={{ fontStyle: 'italic' }}>(none)</span>}
-                              {result.harmony_applied && result.found_value && (
-                                <span style={{ marginLeft: 6, color: '#6366F1', fontSize: 11 }}>✦</span>
+                              {result.field_key === 'industry' && result.found_value && result.mapped_value ? (
+                                // Enum field with mapping: show "raw → mapped [confidence]"
+                                <span>
+                                  <span style={{ color: C.text3, fontSize: 11 }}>{result.found_value}</span>
+                                  {' → '}
+                                  <span style={{ color: C.text, fontWeight: 500 }}>{result.mapped_value}</span>
+                                  {result.mapping_confidence && (
+                                    <span style={{
+                                      marginLeft: 6,
+                                      fontSize: 10,
+                                      color: result.mapping_confidence === 'high' ? '#22C55E' : result.mapping_confidence === 'medium' ? '#F59E0B' : '#EF4444',
+                                      fontWeight: 500
+                                    }}>
+                                      [{result.mapping_confidence}]
+                                    </span>
+                                  )}
+                                  <span style={{ marginLeft: 6, color: '#6366F1', fontSize: 11 }}>✦</span>
+                                </span>
+                              ) : result.field_key === 'industry' && result.found_value && !result.mapped_value ? (
+                                // Enum field with no mapping
+                                <span>
+                                  <span style={{ color: C.text3 }}>{result.found_value}</span>
+                                  {' → '}
+                                  <span style={{ color: '#EF4444', fontSize: 11, fontStyle: 'italic' }}>(no mapping)</span>
+                                </span>
+                              ) : result.mapped_value ? (
+                                // Non-enum field with value
+                                <span>{result.mapped_value}</span>
+                              ) : (
+                                // No value found
+                                <span style={{ fontStyle: 'italic' }}>(none)</span>
                               )}
                             </td>
                             <td style={{ padding: '8px 12px' }}>
