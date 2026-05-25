@@ -197,10 +197,19 @@ export default function EnrichPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Preview state
+  type PreviewState = 'idle' | 'loading' | 'ready' | 'applying' | 'completed';
   const [previewResults, setPreviewResults] = useState<PreviewResults | null>(null);
   const [showingPreview, setShowingPreview] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [previewState, setPreviewState] = useState<PreviewState>('idle');
+  const [applyResult, setApplyResult] = useState<{
+    written: number;
+    failed: number;
+    skipped_invalid_value: number;
+    field_breakdown: Record<string, number>;
+  } | null>(null);
+  const [portalId, setPortalId] = useState<string | null>(null);
 
   // Benchmark state
   const [benchmarking, setBenchmarking] = useState(false);
@@ -548,12 +557,27 @@ export default function EnrichPage() {
       }
     }
 
+    async function fetchPortalId() {
+      try {
+        const res = await fetch('/api/hubspot/connections');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.connections && data.connections.length > 0) {
+            setPortalId(data.connections[0].portalId);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch portal ID:', error);
+      }
+    }
+
     fetchConnections();
     fetchHubSpotLists();
     fetchLifecycleStages();
     fetchOwners();
     fetchIndustries();
     fetchEnrichmentHistory();
+    fetchPortalId();
   }, []);
 
   // Fetch harmony preview when selected fields change
@@ -801,27 +825,14 @@ export default function EnrichPage() {
 
       const data = await response.json();
 
-      // Show detailed success message
-      let message = `Written ${data.written} fields to HubSpot`;
-      if (data.skipped_invalid_value > 0) {
-        message += `, skipped ${data.skipped_invalid_value} invalid values`;
-      }
-      if (data.failed > 0) {
-        message += `, ${data.failed} failed`;
-      }
-
-      addToast('success', message);
+      // Store apply result and show completion screen
+      setApplyResult(data);
+      setPreviewState('completed');
 
       // Refresh gap analysis if data was written
       if (data.written > 0) {
         fetchGapsNonStreaming();
       }
-
-      // Reset to gap analysis view
-      setShowingPreview(false);
-      setPreviewResults(null);
-      setSelectedRows(new Set());
-      setTestMode(false);
     } catch (error) {
       console.error('Apply error:', error);
       addToast('error', `Failed to apply changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -837,6 +848,15 @@ export default function EnrichPage() {
 
   // Start over from preview
   function startOver() {
+    setShowingPreview(false);
+    setPreviewResults(null);
+    setSelectedRows(new Set());
+  }
+
+  // Reset from completion screen to run another enrichment
+  function runAnother() {
+    setPreviewState('idle');
+    setApplyResult(null);
     setShowingPreview(false);
     setPreviewResults(null);
     setSelectedRows(new Set());
@@ -2595,6 +2615,90 @@ export default function EnrichPage() {
                   }}
                 >
                   Start over
+                </button>
+              </div>
+            </div>
+          ) : previewState === 'completed' && applyResult ? (
+            // Completion screen
+            <div style={{ background: '#162944', border: `1px solid ${C.border}`, padding: 40 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 32 }}>
+                APPLIED SUCCESSFULLY
+              </div>
+
+              {/* Check icon and main stat */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                <div style={{ fontSize: 28, fontWeight: 600, color: C.text }}>
+                  {applyResult.written} {applyResult.written === 1 ? 'company' : 'companies'} updated in HubSpot
+                </div>
+              </div>
+
+              {/* Field breakdown */}
+              {Object.keys(applyResult.field_breakdown).length > 0 && (
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+                    FIELD BREAKDOWN
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px 24px', fontSize: 14 }}>
+                    {Object.entries(applyResult.field_breakdown)
+                      .filter(([_, count]) => count > 0)
+                      .map(([fieldKey, count]) => {
+                        const FIELD_LABELS: Record<string, string> = {
+                          employee_count: 'Employee count',
+                          industry: 'Industry',
+                          revenue: 'Revenue',
+                          linkedin_url: 'LinkedIn URL',
+                          phone: 'Phone',
+                          domain: 'Domain',
+                        };
+                        return (
+                          <div key={fieldKey} style={{ display: 'contents' }}>
+                            <div style={{ color: C.text2 }}>{FIELD_LABELS[fieldKey] || fieldKey}</div>
+                            <div style={{ color: C.text, textAlign: 'right', fontWeight: 500 }}>
+                              {count} {count === 1 ? 'company' : 'companies'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* Skipped and failed */}
+              <div style={{ fontSize: 12, color: C.text3, marginBottom: 32 }}>
+                {applyResult.skipped_invalid_value > 0 && (
+                  <div>{applyResult.skipped_invalid_value} skipped · invalid enum value</div>
+                )}
+                {applyResult.failed > 0 && (
+                  <div>{applyResult.failed} failed</div>
+                )}
+                {applyResult.skipped_invalid_value === 0 && applyResult.failed === 0 && (
+                  <div>0 skipped · 0 failed</div>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 12 }}>
+                {portalId && (
+                  <PrimaryBtn onClick={() => window.open(`https://app.hubspot.com/contacts/${portalId}/companies`, '_blank')}>
+                    View in HubSpot →
+                  </PrimaryBtn>
+                )}
+                <button
+                  onClick={runAnother}
+                  style={{
+                    padding: '10px 16px',
+                    background: 'transparent',
+                    border: `1px solid ${C.border}`,
+                    color: C.text2,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Run another →
                 </button>
               </div>
             </div>
