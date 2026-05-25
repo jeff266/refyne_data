@@ -206,6 +206,7 @@ export default function EnrichPage() {
   const [arrangementId, setArrangementId] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'complete' | 'failed' | 'cancelled'>('idle');
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [runProgress, setRunProgress] = useState<{
     records_processed: number;
     records_total: number;
@@ -979,11 +980,14 @@ export default function EnrichPage() {
       return;
     }
 
-    const confirmed = window.confirm(
-      'Cancel this enrichment run?\n\nRecords processed so far will be saved.'
-    );
+    setShowCancelModal(true);
+  }
 
-    if (!confirmed) return;
+  // Confirm cancel run
+  async function confirmCancelRun() {
+    setShowCancelModal(false);
+
+    if (!arrangementId || !runId) return;
 
     try {
       const response = await fetch(`/api/arrangements/${arrangementId}/runs/${runId}/cancel`, {
@@ -2632,6 +2636,97 @@ export default function EnrichPage() {
               >
                 Enrich {(companyScope === 'segment' ? (previewCount || 0) : (gapAnalysis?.total_companies || 0)).toLocaleString()} companies →
               </PrimaryBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+          }}
+          onClick={() => setShowCancelModal(false)}
+        >
+          <div
+            style={{
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 0,
+              padding: 32,
+              maxWidth: 480,
+              width: '90%',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+              Cancel this enrichment run?
+            </div>
+
+            {/* Message */}
+            <div style={{ fontSize: 13, color: C.text2, marginBottom: 32, lineHeight: 1.5 }}>
+              Records processed so far will be saved.
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowCancelModal(false)}
+                style={{
+                  padding: '10px 20px',
+                  background: 'transparent',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 0,
+                  color: C.text2,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = C.text3;
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = C.border;
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                Keep running
+              </button>
+              <button
+                onClick={confirmCancelRun}
+                style={{
+                  padding: '10px 20px',
+                  background: C.red,
+                  border: 'none',
+                  borderRadius: 0,
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#d32f2f';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = C.red;
+                }}
+              >
+                Cancel run
+              </button>
             </div>
           </div>
         </div>
