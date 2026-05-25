@@ -37,6 +37,7 @@ import {
   checkIsFirstRun,
   notifyReviewReady,
   updateReviewSessionResults,
+  type PendingEnrichmentRow,
 } from '../enrichment/pending-store';
 import { generateHarmonyForField } from '../enrichment/harmony-generator';
 
@@ -965,18 +966,43 @@ async function processLiveRunJob(
         const memAfterEnrich = process.memoryUsage();
         console.log(`[Memory] After enrich: heap ${Math.round(memAfterEnrich.heapUsed/1024/1024)}MB, delta +${Math.round((memAfterEnrich.heapUsed - memBefore.heapUsed)/1024/1024)}MB`);
 
-        // BINARY SEARCH: Comment out storePendingEnrichments to test memory leak
+        // Store enriched records as pending (do not write to HubSpot yet)
+        // MEMORY FIX: Extract lightweight rows to avoid holding full HubSpot objects in RAM
         if (successful.length > 0) {
           const recordsToStore = successful.filter(r => Object.keys(r.propertiesToWrite).length > 0);
 
           if (recordsToStore.length > 0) {
-            // await storePendingEnrichments(
-            //   reviewSessionId,
-            //   orgId,
-            //   connection.portal_id,
-            //   recordsToStore
-            // );
-            console.log(`[BINARY SEARCH] Would store ${recordsToStore.length} records as pending enrichments (storePendingEnrichments commented out)`);
+            // Extract lightweight pending rows (no heavy objects)
+            const pendingRows: PendingEnrichmentRow[] = [];
+            for (const enrichedRecord of recordsToStore) {
+              const companyName = enrichedRecord.record?.properties?.name || '';
+
+              for (const [hsProperty, hsValue] of Object.entries(enrichedRecord.propertiesToWrite)) {
+                if (hsValue === null || hsValue === undefined) continue;
+
+                const detail = enrichedRecord.fieldDetail[hsProperty] || {};
+                pendingRows.push({
+                  companyId: enrichedRecord.companyId,
+                  companyName,
+                  hsProperty,
+                  hsValue,
+                  fieldKey: detail.fieldKey || hsProperty,
+                  rawValue: detail.raw || String(hsValue),
+                  normalizedValue: detail.normalized || String(hsValue),
+                  naicsCode: detail.metadata?.naicsCode || null,
+                  confidence: detail.confidence || 'high',
+                  harmonyApplied: detail.metadata?.harmony?.matched || false,
+                });
+              }
+            }
+
+            await storePendingEnrichments(
+              reviewSessionId,
+              orgId,
+              connection.portal_id,
+              pendingRows
+            );
+            console.log(`[Arrangement ${config.id}] Stored ${pendingRows.length} pending enrichment values`);
           }
         }
 
@@ -1103,18 +1129,43 @@ async function processLiveRunJob(
             const memAfterEnrich = process.memoryUsage();
             console.log(`[Memory] After enrich: heap ${Math.round(memAfterEnrich.heapUsed/1024/1024)}MB, delta +${Math.round((memAfterEnrich.heapUsed - memBefore.heapUsed)/1024/1024)}MB`);
 
-            // BINARY SEARCH: Comment out storePendingEnrichments to test memory leak
+            // Store enriched records as pending (do not write to HubSpot yet)
+            // MEMORY FIX: Extract lightweight rows to avoid holding full HubSpot objects in RAM
             if (successful.length > 0) {
               const recordsToStore = successful.filter(r => Object.keys(r.propertiesToWrite).length > 0);
 
               if (recordsToStore.length > 0) {
-                // await storePendingEnrichments(
-                //   reviewSessionId,
-                //   orgId,
-                //   connection.portal_id,
-                //   recordsToStore
-                // );
-                console.log(`[BINARY SEARCH] Would store ${recordsToStore.length} records as pending enrichments (storePendingEnrichments commented out)`);
+                // Extract lightweight pending rows (no heavy objects)
+                const pendingRows: any[] = [];
+                for (const enrichedRecord of recordsToStore) {
+                  const companyName = enrichedRecord.record?.properties?.name || '';
+
+                  for (const [hsProperty, hsValue] of Object.entries(enrichedRecord.propertiesToWrite)) {
+                    if (hsValue === null || hsValue === undefined) continue;
+
+                    const detail = enrichedRecord.fieldDetail[hsProperty] || {};
+                    pendingRows.push({
+                      companyId: enrichedRecord.companyId,
+                      companyName,
+                      hsProperty,
+                      hsValue,
+                      fieldKey: detail.fieldKey || hsProperty,
+                      rawValue: detail.raw || String(hsValue),
+                      normalizedValue: detail.normalized || String(hsValue),
+                      naicsCode: detail.metadata?.naicsCode || null,
+                      confidence: detail.confidence || 'high',
+                      harmonyApplied: detail.metadata?.harmony?.matched || false,
+                    });
+                  }
+                }
+
+                await storePendingEnrichments(
+                  reviewSessionId,
+                  orgId,
+                  connection.portal_id,
+                  pendingRows
+                );
+                console.log(`[Arrangement ${config.id}] Stored ${pendingRows.length} pending enrichment values`);
               }
             }
 
@@ -1246,18 +1297,43 @@ async function processLiveRunJob(
           orgId
         );
 
-        // BINARY SEARCH: Comment out storePendingEnrichments to test memory leak
+        // Store enriched records as pending (do not write to HubSpot yet)
+        // MEMORY FIX: Extract lightweight rows to avoid holding full HubSpot objects in RAM
         if (successful.length > 0) {
           const recordsToStore = successful.filter(r => Object.keys(r.propertiesToWrite).length > 0);
 
           if (recordsToStore.length > 0) {
-            // await storePendingEnrichments(
-            //   reviewSessionId,
-            //   orgId,
-            //   connection.portal_id,
-            //   recordsToStore
-            // );
-            console.log(`[BINARY SEARCH] Would store ${recordsToStore.length} records as pending enrichments (storePendingEnrichments commented out)`);
+            // Extract lightweight pending rows (no heavy objects)
+            const pendingRows: PendingEnrichmentRow[] = [];
+            for (const enrichedRecord of recordsToStore) {
+              const companyName = enrichedRecord.record?.properties?.name || '';
+
+              for (const [hsProperty, hsValue] of Object.entries(enrichedRecord.propertiesToWrite)) {
+                if (hsValue === null || hsValue === undefined) continue;
+
+                const detail = enrichedRecord.fieldDetail[hsProperty] || {};
+                pendingRows.push({
+                  companyId: enrichedRecord.companyId,
+                  companyName,
+                  hsProperty,
+                  hsValue,
+                  fieldKey: detail.fieldKey || hsProperty,
+                  rawValue: detail.raw || String(hsValue),
+                  normalizedValue: detail.normalized || String(hsValue),
+                  naicsCode: detail.metadata?.naicsCode || null,
+                  confidence: detail.confidence || 'high',
+                  harmonyApplied: detail.metadata?.harmony?.matched || false,
+                });
+              }
+            }
+
+            await storePendingEnrichments(
+              reviewSessionId,
+              orgId,
+              connection.portal_id,
+              pendingRows
+            );
+            console.log(`[Arrangement ${config.id}] Stored ${pendingRows.length} pending enrichment values`);
           }
         }
 

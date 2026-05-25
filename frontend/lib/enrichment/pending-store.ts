@@ -1,6 +1,11 @@
 import { supabase } from '@/lib/db/supabase';
 import { sanitizeCSVValue } from './harmony-generator';
 
+/**
+ * Full enriched record interface (used in arrangement-queue.ts).
+ * WARNING: Contains heavy objects (full HubSpot record, provider responses).
+ * Do NOT pass this directly to storePendingEnrichments - causes OOM.
+ */
 export interface EnrichedRecord {
   record: any;
   companyId: string;
@@ -13,62 +18,58 @@ export interface EnrichedRecord {
 }
 
 /**
+ * Lightweight pending enrichment row (memory-safe).
+ * Only contains fields needed for review UI and HubSpot write.
+ */
+export interface PendingEnrichmentRow {
+  companyId: string;
+  companyName: string;
+  hsProperty: string;
+  hsValue: any;
+  fieldKey: string;
+  rawValue: string;
+  normalizedValue: string;
+  naicsCode: string | null;
+  confidence: string;
+  harmonyApplied: boolean;
+}
+
+/**
  * Store enriched records as pending enrichments in the review session.
  * Does not write to HubSpot - records await user approval.
+ *
+ * MEMORY FIX: Accepts lightweight PendingEnrichmentRow[] instead of full EnrichedRecord[]
+ * to avoid holding full HubSpot company objects and provider responses in memory.
  */
 export async function storePendingEnrichments(
   reviewSessionId: string,
   orgId: string,
   portalId: string,
-  enrichedRecords: EnrichedRecord[]
+  pendingRows: PendingEnrichmentRow[]
 ): Promise<void> {
   if (!supabase) {
     throw new Error('Database not configured');
   }
 
-  const pendingValues: any[] = [];
-
-  for (const record of enrichedRecords) {
-    const companyId = record.companyId;
-    const companyName = record.record?.properties?.name || '';
-
-    // Convert each property to a pending enrichment value
-    for (const [hsProperty, hsValue] of Object.entries(record.propertiesToWrite)) {
-      if (hsValue === null || hsValue === undefined) continue;
-
-      // Get field detail for this property
-      const detail = record.fieldDetail[hsProperty] || {};
-      const rawValue = detail.rawValue || String(hsValue);
-      const normalizedValue = detail.normalizedValue || String(hsValue);
-      const naicsCode = detail.naicsCode || null;
-      const confidence = detail.confidence || 'high';
-
-      // Sanitize values to prevent CSV injection
-      const sanitizedRaw = sanitizeCSVValue(String(rawValue));
-      const sanitizedNormalized = sanitizeCSVValue(String(normalizedValue));
-      const sanitizedHsValue = sanitizeCSVValue(String(hsValue));
-
-      pendingValues.push({
-        org_id: orgId,
-        review_session_id: reviewSessionId,
-        hubspot_company_id: companyId,
-        company_name: companyName,
-        field_key: detail.fieldKey || hsProperty,
-        raw_value: sanitizedRaw,
-        normalized_value: sanitizedNormalized,
-        naics_code: naicsCode,
-        hubspot_property: hsProperty,
-        hubspot_value: sanitizedHsValue,
-        confidence: confidence,
-        harmony_applied: detail.harmonyApplied || false,
-        current_hubspot_value: null, // Will be populated during review if needed
-      });
-    }
-  }
-
-  if (pendingValues.length === 0) {
+  if (pendingRows.length === 0) {
     return;
   }
+
+  const pendingValues = pendingRows.map(row => ({
+    org_id: orgId,
+    review_session_id: reviewSessionId,
+    hubspot_company_id: row.companyId,
+    company_name: row.companyName,
+    field_key: row.fieldKey,
+    raw_value: sanitizeCSVValue(row.rawValue),
+    normalized_value: sanitizeCSVValue(row.normalizedValue),
+    naics_code: row.naicsCode,
+    hubspot_property: row.hsProperty,
+    hubspot_value: sanitizeCSVValue(String(row.hsValue)),
+    confidence: row.confidence,
+    harmony_applied: row.harmonyApplied,
+    current_hubspot_value: null, // Will be populated during review if needed
+  }));
 
   // Batch insert pending enrichment values
   const { error } = await supabase
