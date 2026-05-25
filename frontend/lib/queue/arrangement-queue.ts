@@ -836,6 +836,10 @@ async function processLiveRunJob(
 ): Promise<LiveRunJobResult> {
   const { runId, config, totalRecords, checkpointData, orgId } = job.data;
 
+  // DIAGNOSTIC: Memory checkpoint at job start
+  const memAtStart = process.memoryUsage();
+  console.log(`[Memory] Job start: heap ${Math.round(memAtStart.heapUsed/1024/1024)}MB`);
+
   if (!supabase) {
     throw new Error('Database not configured');
   }
@@ -946,6 +950,10 @@ async function processLiveRunJob(
       ];
 
       console.log(`[Arrangement ${config.id}] Processing via streaming Export API (chunks of ${CHUNK_SIZE})`);
+
+      // DIAGNOSTIC: Memory before starting Export API stream
+      const memBeforeExport = process.memoryUsage();
+      console.log(`[Memory] Before export stream: heap ${Math.round(memBeforeExport.heapUsed/1024/1024)}MB`);
 
       try {
         // Stream and process chunks as they arrive
