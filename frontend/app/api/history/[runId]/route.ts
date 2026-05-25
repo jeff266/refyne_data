@@ -53,6 +53,24 @@ export async function GET(
       .single();
 
     if (runError || !run) {
+      console.error(`[History API] Run not found - runId: ${runId}, org_id: ${ctx.orgId}, error:`, runError);
+
+      // Check if this is actually an arrangement ID
+      const { data: arrangement } = await supabase
+        .from('arrangements')
+        .select('id')
+        .eq('id', runId)
+        .eq('org_id', ctx.orgId)
+        .single();
+
+      if (arrangement) {
+        console.error(`[History API] ID ${runId} is an arrangement ID, not a run ID`);
+        return NextResponse.json(
+          { error: 'Invalid run ID - this appears to be an arrangement ID. Use the run ID instead.' },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json(
         { error: 'Run not found' },
         { status: 404 }
