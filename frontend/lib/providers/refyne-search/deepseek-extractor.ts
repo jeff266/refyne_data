@@ -1,9 +1,11 @@
-// DeepSeek V3 extraction
+// DeepSeek V3 extraction via Fireworks.ai
 // Keys managed centrally by Refyne
-// Model: deepseek-chat (V3)
+// Model: accounts/fireworks/models/deepseek-v3
+// US-hosted for better latency vs direct DeepSeek China routing
 
-const DEEPSEEK_API_KEY = process.env.REFYNE_DEEPSEEK_KEY;
-const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com/v1/chat/completions';
+const FIREWORKS_API_KEY = process.env.REFYNE_FIREWORKS_KEY;
+const FIREWORKS_ENDPOINT = 'https://api.fireworks.ai/inference/v1/chat/completions';
+const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-v3';
 
 export interface ExtractionField {
   value: string | number | null;
@@ -102,14 +104,14 @@ export async function extractWithDeepSeek(
     fieldKeys
   );
 
-  const response = await fetch(DEEPSEEK_ENDPOINT, {
+  const response = await fetch(FIREWORKS_ENDPOINT, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+      Authorization: `Bearer ${FIREWORKS_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'deepseek-chat',
+      model: DEEPSEEK_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: prompt },
@@ -120,19 +122,20 @@ export async function extractWithDeepSeek(
   });
 
   if (!response.ok) {
-    throw new Error(`DeepSeek error: ${response.status}`);
+    throw new Error(`Fireworks DeepSeek error: ${response.status}`);
   }
 
   const data = await response.json();
   const text = data.choices[0]?.message?.content ?? '';
 
-  // Track token usage for cost accounting
+  // Track token usage for cost accounting (Fireworks pricing)
+  // Input: $0.90/M tokens, Output: $2.73/M tokens
   const usage = {
     inputTokens: data.usage?.prompt_tokens ?? 0,
     outputTokens: data.usage?.completion_tokens ?? 0,
     costUsd:
-      (data.usage?.prompt_tokens ?? 0) * 0.00000027 +
-      (data.usage?.completion_tokens ?? 0) * 0.0000011,
+      (data.usage?.prompt_tokens ?? 0) * 0.00000090 +
+      (data.usage?.completion_tokens ?? 0) * 0.00000273,
   };
 
   try {
@@ -143,7 +146,7 @@ export async function extractWithDeepSeek(
     const parsed = JSON.parse(cleaned);
     return { ...parsed, _usage: usage };
   } catch {
-    console.error('[DeepSeek] Failed to parse JSON:', text.slice(0, 200));
+    console.error('[Fireworks DeepSeek] Failed to parse JSON:', text.slice(0, 200));
     return {};
   }
 }

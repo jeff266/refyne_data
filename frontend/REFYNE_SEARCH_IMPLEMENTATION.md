@@ -2,7 +2,7 @@
 
 ## Overview
 
-Refyne Search is a proprietary enrichment provider that combines Serper web search + DeepSeek V3 extraction + intelligent caching. Users see "Refyne Search" as a first-class provider option, with no visibility into underlying APIs.
+Refyne Search is a proprietary enrichment provider that combines Serper web search + DeepSeek V3 extraction (via Fireworks.ai US hosting) + intelligent caching. Users see "Refyne Search" as a first-class provider option, with no visibility into underlying APIs.
 
 ## Implementation Status
 
@@ -32,7 +32,7 @@ refyne_search_usage table
 ```
 lib/providers/refyne-search/
 ├─ serper-client.ts          # Google search via Serper API
-├─ deepseek-extractor.ts     # DeepSeek V3 JSON extraction
+├─ deepseek-extractor.ts     # DeepSeek V3 via Fireworks.ai (US-hosted)
 ├─ cache.ts                  # Cache layer (0.70+ confidence only)
 ├─ index.ts                  # Public refyneSearch() interface
 └─ (registered in capabilities.ts)
@@ -65,10 +65,15 @@ app/(dashboard)/enrich/page.tsx
 ### Vercel (Next.js)
 ```bash
 REFYNE_SERPER_KEY=<your-serper-api-key>
-REFYNE_DEEPSEEK_KEY=<your-deepseek-api-key>
+REFYNE_FIREWORKS_KEY=<your-fireworks-api-key>
 ```
 
-**IMPORTANT:** These keys are managed centrally by Refyne, never exposed to orgs. Do not add to provider_connections table.
+**IMPORTANT:**
+- Fireworks.ai hosts DeepSeek V3 on US infrastructure (faster, more reliable than direct China routing)
+- Model: `accounts/fireworks/models/deepseek-v3`
+- Pricing: $0.90/M input, $2.73/M output (55% cheaper than Haiku, 55% more than direct DeepSeek)
+- These keys are managed centrally by Refyne, never exposed to orgs
+- Do not add to provider_connections table
 
 ## How It Works
 
@@ -145,7 +150,7 @@ GROUP BY org_id;
 ## Testing Checklist
 
 - [ ] Add REFYNE_SERPER_KEY to Vercel env vars
-- [ ] Add REFYNE_DEEPSEEK_KEY to Vercel env vars
+- [ ] Add REFYNE_FIREWORKS_KEY to Vercel env vars
 - [ ] Deploy to Vercel
 - [ ] Open /enrich page
 - [ ] Verify "Refyne Search ✦ Included" appears in provider list
@@ -213,9 +218,10 @@ GROUP BY org_id;
    - Employee count: 90 days (changes quarterly)
    - Revenue: 180 days (annual reporting)
 
-4. **Serper + DeepSeek vs other LLMs**:
+4. **Serper + DeepSeek (via Fireworks) vs other LLMs**:
    - Serper: Best Google search API, no rate limits
-   - DeepSeek V3: 90% cheaper than GPT-4, same accuracy for extraction
+   - DeepSeek V3 via Fireworks: US-hosted (1-3s latency vs 4-8s direct), 55% cheaper than Haiku
+   - Fireworks eliminates China routing concerns while maintaining cost advantage
 
 5. **Managed provider (always available)**:
    - Rationale: Product differentiator, no setup friction
