@@ -807,6 +807,11 @@ export default function EnrichPage() {
 
       addToast('success', message);
 
+      // Refresh gap analysis if data was written
+      if (data.written > 0) {
+        fetchGapsNonStreaming();
+      }
+
       // Reset to gap analysis view
       setShowingPreview(false);
       setPreviewResults(null);

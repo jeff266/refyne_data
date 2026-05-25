@@ -53,6 +53,8 @@ export async function POST(req: NextRequest) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
+  const startTime = new Date();
+
   try {
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
@@ -169,6 +171,34 @@ export async function POST(req: NextRequest) {
       }),
       field_breakdown: fieldBreakdown,
     };
+
+    // Log to enrichment history
+    try {
+      await supabase.from('arrangement_runs').insert({
+        org_id: ctx.orgId,
+        arrangement_id: null,
+        run_type: 'preview_apply',
+        status: 'completed',
+        total_records: body.selectedRows.length,
+        processed_records: body.selectedRows.length,
+        successful_records: results.length,
+        failed_records: errors.length,
+        initiated_by: ctx.userId,
+        started_at: startTime.toISOString(),
+        completed_at: new Date().toISOString(),
+        source_snapshot: {},
+        results_snapshot: {
+          provider: 'preview',
+          written: results.length,
+          failed: errors.length,
+          skipped: skippedRows.length,
+          field_breakdown: fieldBreakdown,
+        },
+      });
+    } catch (historyError) {
+      console.error('[Apply] Failed to log to history:', historyError);
+      // Don't fail the request if history logging fails
+    }
 
     return NextResponse.json(response);
   } catch (error) {
