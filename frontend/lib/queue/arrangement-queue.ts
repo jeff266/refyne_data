@@ -612,7 +612,8 @@ async function enrichSingleRecord(
   fieldConfigs: FieldConfig[],
   orgId: string
 ): Promise<EnrichedRecord> {
-  const enrichedData: Record<string, unknown> = { ...record };
+  // REMOVED: enrichedData copies full record (50KB per company) but is never returned
+  // const enrichedData: Record<string, unknown> = { ...record };
   let recordCredits = 0;
   const fieldDetail: Record<string, any> = {};
   let fieldsAttempted = 0;
@@ -643,7 +644,7 @@ async function enrichSingleRecord(
 
       try {
         if (result.written) {
-          enrichedData[fieldConfig.field_key] = result.value;
+          // REMOVED: enrichedData[fieldConfig.field_key] = result.value; (never used)
           fieldsWritten++;
           recordCredits += fieldConfig.steps.length;
 
