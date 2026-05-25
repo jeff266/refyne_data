@@ -1114,6 +1114,10 @@ async function processLiveRunJob(
 
         console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
 
+        // Clear provider response cache after each chunk
+        providerResponseCache.clear();
+        console.log(`[Provider Cache] Cleared cache after chunk ${chunkNumber}`);
+
         // Clear chunk references to help GC
         successful.length = 0;
         failed.length = 0;
@@ -1448,6 +1452,10 @@ async function processLiveRunJob(
         }
 
         console.log(`[Arrangement ${config.id}] Chunk ${chunkNumber}: ${successful.length} successful, ${failed.length} failed`);
+
+        // Clear provider response cache after each chunk
+        providerResponseCache.clear();
+        console.log(`[Provider Cache] Cleared cache after chunk ${chunkNumber}`);
 
         // Clear chunk references to help GC
         successful.length = 0;
@@ -2325,8 +2333,16 @@ async function normalizeTwoStage(
   };
 }
 
+// Provider response cache - call provider once per company, extract all fields
+// Key: `${provider}:${companyId}`, Value: full provider response
+const providerResponseCache = new Map<string, any>();
+
 /**
  * Query a provider for a specific field value.
+ *
+ * PERFORMANCE FIX: Caches provider responses per company to avoid redundant API calls.
+ * Before: 3 fields = 3 Apollo calls per company (wasteful)
+ * After: 3 fields = 1 Apollo call per company (3x faster)
  */
 async function queryProvider(
   provider: string,
@@ -2351,6 +2367,27 @@ async function queryProvider(
     return null;
   }
 
+  // Generate cache key for this provider + company
+  const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
+  const cacheKey = `${provider}:${companyId}`;
+
+  // Check cache first - if we already called this provider for this company, reuse response
+  if (providerResponseCache.has(cacheKey)) {
+    const cached = providerResponseCache.get(cacheKey);
+    console.log(`[Provider Cache] HIT: ${provider} for company ${companyId}, extracting field ${fieldKey}`);
+
+    // Extract requested field from cached response
+    if (cached && cached.normalized?.[fieldKey]) {
+      return cached.normalized[fieldKey];
+    } else if (cached && cached.raw?.[fieldKey]) {
+      return cached.raw[fieldKey];
+    }
+    return null;
+  }
+
+  // Cache MISS - make API call
+  console.log(`[Provider Cache] MISS: ${provider} for company ${companyId}, calling API`);
+
   // Live mode: acquire rate limit token before making API call
   const limiter = getRateLimiter(orgId, provider);
   await limiter.acquire();
@@ -2364,6 +2401,11 @@ async function queryProvider(
   const name = getName(record) ?? undefined;
 
   const result = await providerAdapter.enrichCompany({ domain, name });
+
+  // Store full response in cache for future field extractions
+  if (result) {
+    providerResponseCache.set(cacheKey, result);
+  }
 
   // DIAGNOSTIC: Log provider response size to find memory leak
   if (result) {
