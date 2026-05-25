@@ -501,10 +501,18 @@ function buildSearchFilters(filters: any): any[] {
   }
 
   // Add additional filters to each filter group
-  if (additionalFilters.length > 0 && filterGroups.length > 0) {
-    filterGroups.forEach(group => {
-      group.filters.push(...additionalFilters);
-    });
+  if (additionalFilters.length > 0) {
+    if (filterGroups.length > 0) {
+      // Add to existing filter groups (AND with missing field checks)
+      filterGroups.forEach(group => {
+        group.filters.push(...additionalFilters);
+      });
+    } else {
+      // No missing field filters - create a single filter group with just the additional filters
+      filterGroups.push({
+        filters: additionalFilters
+      });
+    }
   }
 
   return filterGroups;
