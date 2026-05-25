@@ -55,7 +55,7 @@ const WORKER_CONCURRENCY = 5; // Railway has 8GB RAM, streaming keeps memory low
  * Provider batch size - how many records to enrich in parallel per batch.
  */
 const PROVIDER_BATCH_SIZE = 3; // Legacy: no longer used, kept for reference
-const WORKER_POOL_SIZE = 1; // TEMPORARY: reduced for memory debugging
+const WORKER_POOL_SIZE = 5; // Railway has 8GB RAM, streaming keeps memory low
 
 /**
  * Progress batch size - how many progress records to insert at once.
@@ -906,7 +906,7 @@ async function processLiveRunJob(
     // Shared processing variables
     const progressBuffer: any[] = [];
     let lastProcessedId: string | undefined;
-    const CHUNK_SIZE = 10; // TEMPORARY: reduced for memory debugging
+    const CHUNK_SIZE = 50; // Process records in chunks
     let chunkNumber = 0;
     let exportApiFailed = false; // Track if Export API failed to avoid retry
 

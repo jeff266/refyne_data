@@ -105,6 +105,38 @@ async function main() {
     console.log('✅ Arrangement worker started successfully\n');
   }
 
+  // FIX: Fail all stalled jobs from previous crashes on startup
+  // This prevents old jobs running for hours in the background and causing OOM
+  console.log('Checking for stalled arrangement jobs from previous worker crashes...');
+  try {
+    const { getArrangementQueue } = await import('../lib/queue/arrangement-queue');
+    const queue = getArrangementQueue();
+
+    if (queue) {
+      const stalledJobs = await queue.getJobs(['active']);
+
+      if (stalledJobs && stalledJobs.length > 0) {
+        console.log(`[Startup] Found ${stalledJobs.length} stalled jobs - failing them now`);
+
+        for (const job of stalledJobs) {
+          try {
+            await job.moveToFailed(new Error('Worker restarted - job was stalled'), true);
+            console.log(`[Startup] Failed stalled job ${job.id}`);
+          } catch (err) {
+            console.warn(`[Startup] Could not fail job ${job.id}:`, err);
+          }
+        }
+
+        console.log(`[Startup] Cleared ${stalledJobs.length} stalled jobs\n`);
+      } else {
+        console.log('[Startup] No stalled jobs found\n');
+      }
+    }
+  } catch (error) {
+    console.error('[Startup] Error cleaning stalled jobs:', error);
+    // Don't fail startup if cleanup fails
+  }
+
   // Display initial queue stats
   const stats = await getDigestQueueStats();
   if (stats) {
