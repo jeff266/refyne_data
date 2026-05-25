@@ -675,6 +675,11 @@ async function enrichSingleRecord(
           const hubspotPropertyName = mapCanonicalToHubSpot(fieldConfig.field_key);
           const transformedValue = transformValueForHubSpot(hubspotPropertyName, result.value);
 
+          // DIAGNOSTIC: Log when transformation returns null
+          if (transformedValue === null) {
+            console.log(`[Enrich] Field ${fieldConfig.field_key} transformed to null, skipping write. Original value:`, result.value);
+          }
+
           // Only write if value is not null after transformation
           if (transformedValue !== null) {
             propertiesToWrite[hubspotPropertyName] = transformedValue;
@@ -998,16 +1003,21 @@ async function processLiveRunJob(
             for (const enrichedRecord of recordsToStore) {
               const companyName = enrichedRecord.companyName;
 
-              for (const [hsProperty, hsValue] of Object.entries(enrichedRecord.propertiesToWrite)) {
+              // Iterate over fieldDetail (canonical keys) instead of propertiesToWrite (HubSpot keys)
+              for (const [fieldKey, detail] of Object.entries(enrichedRecord.fieldDetail)) {
+                if (!detail.written) continue; // Skip fields that weren't written
+
+                const hsProperty = mapCanonicalToHubSpot(fieldKey);
+                const hsValue = enrichedRecord.propertiesToWrite[hsProperty];
+
                 if (hsValue === null || hsValue === undefined) continue;
 
-                const detail = enrichedRecord.fieldDetail[hsProperty] || {};
                 pendingRows.push({
                   companyId: enrichedRecord.companyId,
                   companyName,
                   hsProperty,
                   hsValue,
-                  fieldKey: detail.fieldKey || hsProperty,
+                  fieldKey,
                   rawValue: detail.raw || String(hsValue),
                   normalizedValue: detail.normalized || String(hsValue),
                   naicsCode: detail.metadata?.naicsCode || null,
@@ -1333,16 +1343,21 @@ async function processLiveRunJob(
             for (const enrichedRecord of recordsToStore) {
               const companyName = enrichedRecord.companyName;
 
-              for (const [hsProperty, hsValue] of Object.entries(enrichedRecord.propertiesToWrite)) {
+              // Iterate over fieldDetail (canonical keys) instead of propertiesToWrite (HubSpot keys)
+              for (const [fieldKey, detail] of Object.entries(enrichedRecord.fieldDetail)) {
+                if (!detail.written) continue; // Skip fields that weren't written
+
+                const hsProperty = mapCanonicalToHubSpot(fieldKey);
+                const hsValue = enrichedRecord.propertiesToWrite[hsProperty];
+
                 if (hsValue === null || hsValue === undefined) continue;
 
-                const detail = enrichedRecord.fieldDetail[hsProperty] || {};
                 pendingRows.push({
                   companyId: enrichedRecord.companyId,
                   companyName,
                   hsProperty,
                   hsValue,
-                  fieldKey: detail.fieldKey || hsProperty,
+                  fieldKey,
                   rawValue: detail.raw || String(hsValue),
                   normalizedValue: detail.normalized || String(hsValue),
                   naicsCode: detail.metadata?.naicsCode || null,
