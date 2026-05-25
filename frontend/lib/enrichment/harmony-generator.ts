@@ -102,6 +102,10 @@ async function attemptCrosswalkMapping(
     });
 
     if (error) {
+      // Skip silently if RPC doesn't exist - will fall back to Claude
+      if (error.code === 'PGRST202') {
+        continue;
+      }
       console.error('[Harmony] Crosswalk lookup error:', error);
       continue;
     }
@@ -183,7 +187,14 @@ If no good match exists, use "no_match" for mapped.`,
     }
 
     const data = await response.json();
-    const text = data.content[0].text.trim();
+    let text = data.content[0].text.trim();
+
+    // Strip markdown code fences if present
+    if (text.startsWith('```json')) {
+      text = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (text.startsWith('```')) {
+      text = text.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
 
     try {
       const parsed = JSON.parse(text) as HarmonyMapping[];
@@ -191,8 +202,9 @@ If no good match exists, use "no_match" for mapped.`,
         ...m,
         mapped: m.confidence === 'no_match' ? null : m.mapped,
       }));
-    } catch {
+    } catch (err) {
       console.error('[Harmony] Claude returned invalid JSON:', text);
+      console.error('[Harmony] Parse error:', err);
       return values.map((v) => ({
         raw: v,
         mapped: null,
@@ -262,7 +274,7 @@ async function saveHarmony(
     }
   }
 
-  // Upsert to field_mappings
+  // Upsert to field_mappings (skip if column doesn't exist yet)
   const { error } = await supabase
     .from('field_mappings')
     .upsert(
@@ -277,6 +289,11 @@ async function saveHarmony(
     );
 
   if (error) {
+    // Skip silently if column doesn't exist - mappings still work in-memory
+    if (error.code === 'PGRST204') {
+      console.log('[Harmony] Skipping save (canonical_to_hubspot_map column not yet added to field_mappings)');
+      return;
+    }
     console.error('[Harmony] Failed to save harmony:', error);
   }
 }
