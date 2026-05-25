@@ -106,6 +106,10 @@ async function searchByCapabilities(
   });
 
   if (!response.ok) {
+    // 422 Unprocessable Entity - clean skip (e.g., invalid query format)
+    if (response.status === 422) {
+      return [];
+    }
     throw new ProviderError(
       'graphiq',
       'api_error',
@@ -157,6 +161,10 @@ async function searchOrganizations(
   });
 
   if (!response.ok) {
+    // 422 Unprocessable Entity - clean skip (e.g., invalid query format)
+    if (response.status === 422) {
+      return [];
+    }
     throw new ProviderError(
       'graphiq',
       'api_error',
@@ -251,6 +259,10 @@ export class GraphiqAdapter implements ProviderAdapter {
     });
 
     if (!response.ok) {
+      // 422 Unprocessable Entity - clean skip (e.g., invalid domain format)
+      if (response.status === 422) {
+        return [];
+      }
       throw new ProviderError(
         'graphiq',
         'api_error',
