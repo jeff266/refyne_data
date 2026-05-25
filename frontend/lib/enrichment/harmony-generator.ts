@@ -245,12 +245,27 @@ async function getExistingHarmony(
   }
 
   // Convert map to HarmonyMapping array
-  const map = data.canonical_to_hubspot_map as Record<string, string>;
-  return Object.entries(map).map(([raw, mapped]) => ({
-    raw,
-    mapped,
-    confidence: 'high', // Existing harmonies are assumed high confidence
-  }));
+  const map = data.canonical_to_hubspot_map as Record<
+    string,
+    string | { hubspot_value: string; confidence: string }
+  >;
+
+  return Object.entries(map).map(([raw, value]) => {
+    // Handle both old format (string) and new format (object)
+    if (typeof value === 'string') {
+      return {
+        raw,
+        mapped: value,
+        confidence: 'high' as const,
+      };
+    } else {
+      return {
+        raw,
+        mapped: value.hubspot_value,
+        confidence: value.confidence as 'high' | 'medium' | 'low' | 'no_match',
+      };
+    }
+  });
 }
 
 /**
@@ -266,15 +281,18 @@ async function saveHarmony(
     return;
   }
 
-  // Convert HarmonyMapping array to map format
-  const map: Record<string, string> = {};
+  // Convert HarmonyMapping array to structured map format
+  const map: Record<string, { hubspot_value: string; confidence: string }> = {};
   for (const m of mappings) {
-    if (m.mapped) {
-      map[m.raw] = m.mapped;
+    if (m.mapped && m.confidence !== 'no_match') {
+      map[m.raw] = {
+        hubspot_value: m.mapped,
+        confidence: m.confidence,
+      };
     }
   }
 
-  // Upsert to field_mappings (skip if column doesn't exist yet)
+  // Upsert to field_mappings
   const { error } = await supabase
     .from('field_mappings')
     .upsert(
@@ -282,6 +300,7 @@ async function saveHarmony(
         org_id: orgId,
         canonical_field: fieldKey,
         canonical_to_hubspot_map: map,
+        updated_at: new Date().toISOString(),
       },
       {
         onConflict: 'org_id,canonical_field',
@@ -289,12 +308,9 @@ async function saveHarmony(
     );
 
   if (error) {
-    // Skip silently if column doesn't exist - mappings still work in-memory
-    if (error.code === 'PGRST204') {
-      console.log('[Harmony] Skipping save (canonical_to_hubspot_map column not yet added to field_mappings)');
-      return;
-    }
     console.error('[Harmony] Failed to save harmony:', error);
+  } else {
+    console.log(`[Harmony] Saved ${Object.keys(map).length} mappings for ${fieldKey} to field_mappings`);
   }
 }
 

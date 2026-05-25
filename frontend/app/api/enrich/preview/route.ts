@@ -386,39 +386,72 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Step 2: Generate harmonies for each enum field that has values
+    // Step 2: Load or generate harmonies for each enum field that has values
     const generatedHarmonies: Record<string, HarmonyMapping[]> = {};
 
     for (const [fieldKey, rawValues] of Object.entries(enumFieldValues)) {
-      console.log(`[Preview] Generating harmony for ${fieldKey} with ${rawValues.size} unique values`);
+      console.log(`[Preview] Processing harmony for ${fieldKey} with ${rawValues.size} unique values`);
 
-      // Fetch valid HubSpot values from industry_crosswalk table
-      const { data: crosswalkData } = await supabase
-        .from('industry_crosswalk')
-        .select('hubspot_value')
-        .not('hubspot_value', 'is', null);
+      // Check for existing harmony first
+      const { data: existingHarmony } = await supabase
+        .from('field_mappings')
+        .select('canonical_to_hubspot_map')
+        .eq('org_id', ctx.orgId)
+        .eq('canonical_field', fieldKey)
+        .maybeSingle();
 
-      const hubspotValidValues = Array.from(
-        new Set(
-          (crosswalkData || [])
-            .map(row => row.hubspot_value)
-            .filter((v): v is string => v !== null)
-        )
-      );
+      if (existingHarmony?.canonical_to_hubspot_map && Object.keys(existingHarmony.canonical_to_hubspot_map).length > 0) {
+        // Use stored harmony, skip Claude entirely
+        console.log(`[Harmony] Using stored harmony for ${fieldKey}, skipping Claude`);
 
-      console.log(`[Preview] Loaded ${hubspotValidValues.length} valid HubSpot ${fieldKey} values`);
+        const map = existingHarmony.canonical_to_hubspot_map as Record<
+          string,
+          string | { hubspot_value: string; confidence: string }
+        >;
 
-      // Generate harmony
-      const harmony = await generateHarmonyForField(
-        ctx.orgId,
-        connection.portal_id,
-        fieldKey,
-        Array.from(rawValues),
-        hubspotValidValues
-      );
+        generatedHarmonies[fieldKey] = Object.entries(map).map(([raw, value]) => {
+          if (typeof value === 'string') {
+            return { raw, mapped: value, confidence: 'high' as const };
+          } else {
+            return {
+              raw,
+              mapped: value.hubspot_value,
+              confidence: value.confidence as 'high' | 'medium' | 'low' | 'no_match',
+            };
+          }
+        });
+      } else {
+        // No stored harmony - generate using Claude (first run only)
+        console.log(`[Harmony] No stored harmony for ${fieldKey}, generating with Claude`);
 
-      generatedHarmonies[fieldKey] = harmony;
-      console.log(`[Preview] Generated ${harmony.length} mappings for ${fieldKey}`);
+        // Fetch valid HubSpot values from industry_crosswalk table
+        const { data: crosswalkData } = await supabase
+          .from('industry_crosswalk')
+          .select('hubspot_value')
+          .not('hubspot_value', 'is', null);
+
+        const hubspotValidValues = Array.from(
+          new Set(
+            (crosswalkData || [])
+              .map(row => row.hubspot_value)
+              .filter((v): v is string => v !== null)
+          )
+        );
+
+        console.log(`[Preview] Loaded ${hubspotValidValues.length} valid HubSpot ${fieldKey} values`);
+
+        // Generate harmony using generateHarmonyForField (includes NAICS crosswalk + Claude fallback)
+        const harmony = await generateHarmonyForField(
+          ctx.orgId,
+          connection.portal_id,
+          fieldKey,
+          Array.from(rawValues),
+          hubspotValidValues
+        );
+
+        generatedHarmonies[fieldKey] = harmony;
+        console.log(`[Preview] Generated ${harmony.length} mappings for ${fieldKey}`);
+      }
     }
 
     // Step 3: Apply harmony to preview rows before returning
