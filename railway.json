@@ -6,6 +6,13 @@
   },
   "deploy": {
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3
+    "restartPolicyMaxRetries": 3,
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 300,
+    "healthcheckInterval": 30,
+    "startCommand": "npx tsx --max-old-space-size=6144 scripts/start-digest-worker.ts",
+    "numReplicas": 1,
+    "sleepApplication": false,
+    "cronSchedule": null
   }
 }

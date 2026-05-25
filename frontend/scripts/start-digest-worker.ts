@@ -20,10 +20,20 @@
 import http from 'http';
 
 // Start HTTP health check server for Railway
-const PORT = parseInt(process.env.PORT || '3000');
+const PORT = parseInt(process.env.PORT || '8080');
 const healthServer = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('OK');
+  if (req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      status: 'healthy',
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      timestamp: new Date().toISOString(),
+    }));
+  } else {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+  }
 });
 healthServer.listen(PORT, () => {
   console.log(`[Health] HTTP server listening on port ${PORT}`);
@@ -272,20 +282,28 @@ async function main() {
   console.log('Worker is running. Press Ctrl+C to stop.\n');
 
   // Graceful shutdown
-  const shutdown = async () => {
-    console.log('\nShutting down...');
+  const shutdown = async (signal: string) => {
+    console.log(`\n[Shutdown] ${signal} received at ${new Date().toISOString()}`);
+    console.log('[Shutdown] Stopping cron intervals...');
     clearInterval(cronInterval);
     clearInterval(missedJobsInterval);
     clearInterval(nightlyMaintenanceInterval);
+
+    console.log('[Shutdown] Closing workers (waiting for active jobs to complete)...');
     await stopDigestWorker();
     await stopCompanyDedupScanWorker();
     await stopArrangementWorker();
-    console.log('Workers stopped.');
+
+    console.log('[Shutdown] All workers stopped gracefully');
+    console.log('[Shutdown] Closing health check server...');
+    healthServer.close();
+
+    console.log('[Shutdown] Shutdown complete');
     process.exit(0);
   };
 
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 
   // Periodic stats logging
   setInterval(async () => {
