@@ -14,6 +14,8 @@ import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { HubSpotClient } from '@/lib/hubspot/client';
 import { ApolloAdapter } from '@/lib/providers/apollo';
 import { getApolloKey } from '@/lib/providers/apollo-key';
+import { GraphiqAdapter } from '@/lib/providers/graphiq';
+import { getGraphiqKey } from '@/lib/providers/graphiq-key';
 import { Redis } from '@upstash/redis';
 import { randomUUID } from 'crypto';
 
@@ -164,12 +166,28 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Get Apollo API key using helper
-    const apolloKey = await getApolloKey(ctx.orgId);
+    // Initialize providers based on what's selected
+    let apollo: ApolloAdapter | null = null;
+    let graphiq: GraphiqAdapter | null = null;
 
-    if (!apolloKey) {
+    if (body.providers.includes('apollo')) {
+      const apolloKey = await getApolloKey(ctx.orgId);
+      if (apolloKey) {
+        apollo = new ApolloAdapter(apolloKey);
+      }
+    }
+
+    if (body.providers.includes('graphiq') || body.providers.includes('refyne')) {
+      const graphiqKey = await getGraphiqKey(ctx.orgId);
+      if (graphiqKey) {
+        graphiq = new GraphiqAdapter(graphiqKey);
+      }
+    }
+
+    // Require at least one provider
+    if (!apollo && !graphiq) {
       return NextResponse.json({
-        error: 'Apollo is not connected. Please connect Apollo in Settings → Connections.',
+        error: 'No providers connected. Please connect Apollo or GraphIQ in Settings → Connections.',
         preview_id: randomUUID(),
         status: 'completed',
         records_processed: 0,
@@ -198,8 +216,6 @@ export async function POST(req: NextRequest) {
     let noDomain = 0;
     let alreadyComplete = 0;
 
-    const apollo = new ApolloAdapter(apolloKey);
-
     for (const company of companies) {
       const companyDomain = company.properties.domain || '';
 
@@ -223,13 +239,36 @@ export async function POST(req: NextRequest) {
         fields: [],
       };
 
-      // Enrich via Apollo
-      let apolloData: any = null;
-      if (body.providers.includes('apollo') && companyDomain) {
+      // Enrich via providers (waterfall: try first provider, then second)
+      let providerData: any = null;
+      let usedProvider: string | null = null;
+
+      // Try Apollo first if selected
+      if (apollo && companyDomain) {
         try {
-          apolloData = await apollo.enrichCompany({ domain: companyDomain });
+          const apolloResult = await apollo.enrichCompany({ domain: companyDomain });
+          if (apolloResult) {
+            providerData = apolloResult;
+            usedProvider = 'apollo';
+          }
         } catch (err) {
           console.warn(`[Preview] Apollo enrichment failed for ${companyDomain}:`, err);
+        }
+      }
+
+      // Try GraphIQ if Apollo didn't return data or if GraphIQ selected
+      if (!providerData && graphiq) {
+        try {
+          const graphiqResult = await graphiq.enrichCompany({
+            domain: companyDomain || undefined,
+            name: company.properties.name || undefined
+          });
+          if (graphiqResult) {
+            providerData = graphiqResult;
+            usedProvider = 'graphiq';
+          }
+        } catch (err) {
+          console.warn(`[Preview] GraphIQ enrichment failed:`, err);
         }
       }
 
@@ -237,14 +276,14 @@ export async function POST(req: NextRequest) {
       for (const fieldKey of body.fields) {
         const beforeValue = company.properties[fieldKey] || null;
         let afterValue: string | null = null;
-        let provider: string | null = null;
+        let provider: string | null = usedProvider;
 
-        // Get value from Apollo
-        if (apolloData && apolloData.fields) {
-          const apolloFieldValue = getApolloFieldValue(apolloData.fields, fieldKey);
-          if (apolloFieldValue) {
-            afterValue = apolloFieldValue;
-            provider = 'apollo';
+        // Extract value from provider data
+        if (providerData) {
+          if (usedProvider === 'apollo' && providerData.normalized) {
+            afterValue = getFieldValueFromProvider(providerData.normalized, fieldKey, 'apollo');
+          } else if (usedProvider === 'graphiq' && providerData.normalized) {
+            afterValue = getFieldValueFromProvider(providerData.normalized, fieldKey, 'graphiq');
           }
         }
 
@@ -561,22 +600,25 @@ async function loadHarmonies(
 }
 
 /**
- * Extract field value from Apollo response
+ * Extract field value from provider response (Apollo or GraphIQ)
  */
-function getApolloFieldValue(apolloFields: any, fieldKey: string): string | null {
+function getFieldValueFromProvider(normalizedFields: any, fieldKey: string, provider: string): string | null {
   switch (fieldKey) {
     case 'industry':
-      return apolloFields.industry || null;
+      return normalizedFields.industry || null;
     case 'numberofemployees':
-      return apolloFields.employee_count ? String(apolloFields.employee_count) : null;
+      return normalizedFields.employee_count ? String(normalizedFields.employee_count) : null;
     case 'linkedin_company_page':
-      return apolloFields.linkedin_url || null;
+      return normalizedFields.linkedin_url || null;
     case 'phone':
-      return null; // Apollo doesn't provide company phone
+      return normalizedFields.phone || null; // GraphIQ provides phone, Apollo doesn't
     case 'domain':
-      return apolloFields.domain || null;
+      return normalizedFields.domain || null;
     case 'annualrevenue':
-      return apolloFields.revenue_range || null;
+      if (provider === 'apollo') {
+        return normalizedFields.revenue_range || normalizedFields.revenue || null;
+      }
+      return normalizedFields.revenue || null;
     default:
       return null;
   }

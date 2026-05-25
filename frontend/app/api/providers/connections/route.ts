@@ -33,9 +33,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch connections' }, { status: 500 });
     }
 
+    // Add managed providers (GraphIQ) if they have env keys configured
+    const allConnections = [...(connections || [])];
+
+    // GraphIQ: Check if env var is set or if there's an org-specific connection
+    if (process.env.GRAPHIQ_API_KEY || connections?.some(c => c.provider === 'graphiq')) {
+      const hasGraphIQ = allConnections.some(c => c.provider === 'graphiq');
+      if (!hasGraphIQ) {
+        allConnections.push({
+          provider: 'graphiq',
+          status: 'active',
+          key_hint: null,
+          last_tested_at: null,
+        });
+      }
+    }
+
     return NextResponse.json({
-      connections: connections || [],
-      count: connections?.length || 0,
+      connections: allConnections,
+      count: allConnections.length,
     });
 
   } catch (error) {

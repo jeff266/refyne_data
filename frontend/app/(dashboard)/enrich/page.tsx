@@ -101,6 +101,7 @@ const ENRICHABLE_FIELDS = [
 
 const PROVIDER_REGISTRY = [
   { key: 'apollo', label: 'Apollo' },
+  { key: 'graphiq', label: 'GraphIQ' },
   { key: 'zoominfo', label: 'ZoomInfo' },
   { key: 'cognism', label: 'Cognism' },
   { key: 'clearbit', label: 'Clearbit' },
