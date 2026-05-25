@@ -281,7 +281,7 @@ async function main() {
 
   console.log('Worker is running. Press Ctrl+C to stop.\n');
 
-  // Graceful shutdown
+  // Graceful shutdown - wait for active jobs before exit
   const shutdown = async (signal: string) => {
     console.log(`\n[Shutdown] ${signal} received at ${new Date().toISOString()}`);
     console.log('[Shutdown] Stopping cron intervals...');
@@ -289,12 +289,60 @@ async function main() {
     clearInterval(missedJobsInterval);
     clearInterval(nightlyMaintenanceInterval);
 
-    console.log('[Shutdown] Closing workers (waiting for active jobs to complete)...');
+    // Check for active arrangement jobs
+    const { getArrangementQueue } = await import('../lib/queue/arrangement-queue');
+    const queue = getArrangementQueue();
+
+    if (queue) {
+      let activeJobs = await queue.getJobs(['active']);
+      let waitTime = 0;
+      const MAX_WAIT = 30000; // 30 seconds max wait
+
+      if (activeJobs.length > 0) {
+        console.log(`[Shutdown] Found ${activeJobs.length} active jobs, waiting for completion...`);
+
+        // Wait for active jobs to complete (with timeout)
+        while (activeJobs.length > 0 && waitTime < MAX_WAIT) {
+          console.log(`[Shutdown] Waiting for ${activeJobs.length} active jobs... (${waitTime/1000}s elapsed)`);
+          await new Promise(r => setTimeout(r, 1000));
+          waitTime += 1000;
+          activeJobs = await queue.getJobs(['active']);
+        }
+
+        // If jobs still running after timeout, mark them as failed
+        if (activeJobs.length > 0) {
+          console.log(`[Shutdown] Force stopping after ${MAX_WAIT/1000}s timeout`);
+          console.log(`[Shutdown] Abandoning ${activeJobs.length} active jobs`);
+
+          for (const job of activeJobs) {
+            try {
+              console.log(`[Shutdown] Marking job ${job.id} as failed due to shutdown`);
+              await supabase
+                ?.from('arrangement_runs')
+                .update({
+                  status: 'failed',
+                  error_message: 'Worker shutdown during processing',
+                  completed_at: new Date().toISOString(),
+                })
+                .eq('id', job.data.runId);
+            } catch (err) {
+              console.error(`[Shutdown] Failed to mark job ${job.id} as failed:`, err);
+            }
+          }
+        } else {
+          console.log('[Shutdown] All active jobs completed successfully');
+        }
+      } else {
+        console.log('[Shutdown] No active jobs found');
+      }
+    }
+
+    console.log('[Shutdown] Closing workers...');
     await stopDigestWorker();
     await stopCompanyDedupScanWorker();
     await stopArrangementWorker();
 
-    console.log('[Shutdown] All workers stopped gracefully');
+    console.log('[Shutdown] All workers stopped');
     console.log('[Shutdown] Closing health check server...');
     healthServer.close();
 
