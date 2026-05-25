@@ -587,9 +587,9 @@ async function processRehearsalJob(
 // ─────────────────────────────────────────────────────────────
 
 interface EnrichedRecord {
-  record: any;
+  // REMOVED: record: any (was holding 50KB HubSpot object, causing OOM)
   companyId: string;
-  companyName: string; // Extract during enrichment to avoid re-accessing record later
+  companyName: string;
   propertiesToWrite: Record<string, unknown>;
   fieldsAttempted: number;
   fieldsWritten: number;
@@ -599,7 +599,7 @@ interface EnrichedRecord {
 }
 
 interface FailedRecord {
-  record: any;
+  // REMOVED: record: any (not needed, just companyId for tracking)
   companyId: string;
   error: string;
 }
@@ -701,8 +701,9 @@ async function enrichSingleRecord(
   const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
   const companyName = record.properties?.name || record.name || '';
 
+  // Do NOT include 'record' in return value - it holds 50KB+ HubSpot object
+  // All needed data extracted above (companyId, companyName)
   return {
-    record,
     companyId,
     companyName,
     propertiesToWrite,
@@ -751,7 +752,6 @@ async function processWithPool(
       .catch(err => {
         const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
         failed.push({
-          record,
           companyId,
           error: err?.message ?? 'Unknown error',
         });
@@ -804,7 +804,6 @@ async function processBatch(
       const record = records[index];
       const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
       failed.push({
-        record,
         companyId,
         error: result.reason?.message ?? 'Unknown error',
       });
