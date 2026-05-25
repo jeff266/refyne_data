@@ -462,6 +462,19 @@ This was the root cause of the May 21 worker failure.
 | Harmony auto-generation | Complete | Claude + NAICS crosswalk, auto-generates on first run per portal+field |
 | Progress bar polling fix | Complete | Fetch state + 3s polling interval for live updates |
 
+### Session Accomplishments (May 24 2026)
+
+| Accomplishment | Details |
+|----------------|---------|
+| **Memory leak fixed** | Root cause: `processWithPool` used recursive closure pattern holding 6GB RAM. Replaced with simple `Promise.allSettled` batching. Memory now 3MB per chunk vs 6GB crash. |
+| **Railway deployment overlap** | Fixed graceful SIGTERM shutdown, stalled job cleanup on startup |
+| **Export API fallback** | Confirmed working - falls back to pagination when daily limit hit (30/day) |
+| **Domain extraction** | Confirmed working - extracts from `website` + `hs_additional_domains` fields |
+| **Enrichment review backend** | Deployed Spec 1: `pending_enrichment_values`, `enrichment_review_sessions`, `org_enrichment_settings` tables live with RLS |
+| **Progress counters fixed** | `skipped` and `fields_filled` now tracking correctly |
+| **Worker pool size** | Increased to 5 after memory confirmed stable (was 10, reduced to 3, now 5) |
+| **History detail error logging** | Enhanced error messages distinguish arrangement ID vs run ID mismatch |
+
 ### Built but Not End-to-End Verified
 
 | Feature | Status | What Needs Verification |
@@ -486,16 +499,18 @@ This was the root cause of the May 21 worker failure.
 
 ## Pending Work — Priority Order
 
-1. QA verify enrichment review backend (run + 3 queries to confirm pending_review pattern works)
-2. Build enrichment review UI on Enrich page (approve/reject modal for pending enrichments)
-3. CSV import workflow (/import page with upload, mapping, preview, confirm)
-4. Field mappings guided setup (onboarding flow for canonical ↔ HubSpot mapping)
-5. Serper+Haiku provider for domain-less company enrichment (fill gap for companies without domains)
-6. Credit system and pricing page (Stripe metering integration, usage-based pricing)
-7. Write pipeline optimization (parallel writes to HubSpot, worker pool pattern)
-8. Prospect page canonical schema normalization (merge Apollo + GraphIQ + ZoomInfo results by domain)
-9. Normalize BullMQ queue implementation (async processing for normalize apply)
-10. GitHub Harmonies repo (open-source default library for community contributions)
+1. **Run three QA queries** after current run completes, verify Spec 1 backend (pending_enrichment_values, enrichment_review_sessions, org_enrichment_settings)
+2. **Fix history detail 'Run not found' root cause** - enhanced logging added, need to identify why ID mismatch occurs
+3. **Build enrichment review UI** on Enrich page (Spec 1 UI: approve/reject modal for pending enrichments)
+4. **Serper+Haiku provider** - **P0 for Frontera** - Apollo 422 rate ~95%+, fills 0 fields without this
+5. CSV import workflow (/import page with upload, mapping, preview, confirm)
+6. Field mappings guided setup (onboarding flow for canonical ↔ HubSpot mapping)
+7. **refyne_record_status table** - track last enriched timestamp per field per company
+8. **Job priority queue** - high-priority runs jump ahead of long-running jobs
+9. Credit system and pricing page (Stripe metering integration, usage-based pricing)
+10. Prospect page canonical schema normalization (merge Apollo + GraphIQ + ZoomInfo results by domain)
+11. Normalize BullMQ queue implementation (async processing for normalize apply)
+12. GitHub Harmonies repo (open-source default library for community contributions)
 
 ---
 
@@ -518,6 +533,28 @@ This was the root cause of the May 21 worker failure.
 2,816 companies scanned. Apollo filled approximately 106 fields total across a full enrichment run. Fill rate is low because most companies are small ABA therapy practices with no domain in HubSpot. Apollo cannot match companies without a domain.
 
 This is the gap Serper+Haiku is designed to fill.
+
+---
+
+## Critical Product Insights
+
+### Apollo Coverage Gap - Healthcare Vertical
+
+**Discovery Date:** May 24, 2026
+**Portal:** Frontera Health (49169539) - 2,816 companies
+**Vertical:** ABA therapy providers (Applied Behavior Analysis)
+
+**Finding:** Apollo 422 rate on Frontera Health is approximately **95%+**. Almost every ABA therapy domain gets rejected with "Company not found" error. Apollo does not have coverage for this vertical.
+
+**Impact:**
+- **Without Serper+Haiku:** Enrichment fills **0 fields** for this client
+- **With Apollo alone:** ~422 errors / ~445 attempted enrichments = 95% failure rate
+- **Root cause:** Small healthcare practices, regional ABA clinics, pediatric therapy centers not in Apollo's B2B SaaS database
+
+**Business Implication:**
+Serper+Haiku is **not optional** for healthcare/therapy verticals. It is **required** for any client with small regional service providers. Apollo-only enrichment would deliver zero value to Frontera Health.
+
+**Priority:** P0 - blocking production use for healthcare vertical clients.
 
 ---
 
