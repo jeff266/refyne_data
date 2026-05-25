@@ -5,9 +5,12 @@
 
 const FIREWORKS_API_KEY = process.env.REFYNE_FIREWORKS_KEY;
 const FIREWORKS_ENDPOINT = 'https://api.fireworks.ai/inference/v1/chat/completions';
-// Updated to use DeepSeek R1 (latest model available on Fireworks)
-// DeepSeek V3 may not be available; R1 is the current flagship model
-const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-r1';
+// Updated to use DeepSeek V3.2 (current release on Fireworks)
+const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-v3p2';
+
+// Pricing constants for DeepSeek V3.2 on Fireworks
+const INPUT_COST_PER_TOKEN = 0.00000056;
+const OUTPUT_COST_PER_TOKEN = 0.00000168;
 
 export interface ExtractionField {
   value: string | number | null;
@@ -130,14 +133,13 @@ export async function extractWithDeepSeek(
   const data = await response.json();
   const text = data.choices[0]?.message?.content ?? '';
 
-  // Track token usage for cost accounting (Fireworks pricing)
-  // Input: $0.90/M tokens, Output: $2.73/M tokens
+  // Track token usage for cost accounting (Fireworks pricing for DeepSeek V3.2)
   const usage = {
     inputTokens: data.usage?.prompt_tokens ?? 0,
     outputTokens: data.usage?.completion_tokens ?? 0,
     costUsd:
-      (data.usage?.prompt_tokens ?? 0) * 0.00000090 +
-      (data.usage?.completion_tokens ?? 0) * 0.00000273,
+      (data.usage?.prompt_tokens ?? 0) * INPUT_COST_PER_TOKEN +
+      (data.usage?.completion_tokens ?? 0) * OUTPUT_COST_PER_TOKEN,
   };
 
   try {
