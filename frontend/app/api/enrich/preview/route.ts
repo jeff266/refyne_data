@@ -216,6 +216,10 @@ export async function POST(req: NextRequest) {
     let noDomain = 0;
     let alreadyComplete = 0;
 
+    // Provider Promise cache - prevents race condition when multiple fields query same provider
+    const providerPromiseCache = new Map<string, Promise<any>>();
+    let apiCallCount = 0; // Track actual API calls
+
     for (const company of companies) {
       const companyDomain = company.properties.domain || '';
 
@@ -239,36 +243,65 @@ export async function POST(req: NextRequest) {
         fields: [],
       };
 
-      // Enrich via providers (waterfall: try first provider, then second)
+      // Enrich via providers with Promise cache (prevents duplicate API calls)
       let providerData: any = null;
       let usedProvider: string | null = null;
 
       // Try Apollo first if selected
       if (apollo && companyDomain) {
-        try {
-          const apolloResult = await apollo.enrichCompany({ domain: companyDomain });
-          if (apolloResult) {
-            providerData = apolloResult;
-            usedProvider = 'apollo';
-          }
-        } catch (err) {
-          console.warn(`[Preview] Apollo enrichment failed for ${companyDomain}:`, err);
+        const cacheKey = `apollo:${companyDomain}`;
+
+        // Check cache first
+        if (providerPromiseCache.has(cacheKey)) {
+          console.log(`[Preview Cache] HIT: apollo for ${companyDomain}`);
+          providerData = await providerPromiseCache.get(cacheKey);
+        } else {
+          console.log(`[Preview Cache] MISS: apollo for ${companyDomain}, calling API`);
+          apiCallCount++;
+
+          // Create and cache Promise BEFORE awaiting
+          const promise = apollo.enrichCompany({ domain: companyDomain })
+            .catch(err => {
+              console.warn(`[Preview] Apollo enrichment failed for ${companyDomain}:`, err);
+              return null;
+            });
+
+          providerPromiseCache.set(cacheKey, promise);
+          providerData = await promise;
+        }
+
+        if (providerData) {
+          usedProvider = 'apollo';
         }
       }
 
       // Try GraphIQ if Apollo didn't return data or if GraphIQ selected
       if (!providerData && graphiq) {
-        try {
-          const graphiqResult = await graphiq.enrichCompany({
+        const cacheKey = `graphiq:${companyDomain || company.properties.name}`;
+
+        // Check cache first
+        if (providerPromiseCache.has(cacheKey)) {
+          console.log(`[Preview Cache] HIT: graphiq for ${companyDomain || company.properties.name}`);
+          providerData = await providerPromiseCache.get(cacheKey);
+        } else {
+          console.log(`[Preview Cache] MISS: graphiq for ${companyDomain || company.properties.name}, calling API`);
+          apiCallCount++;
+
+          // Create and cache Promise BEFORE awaiting
+          const promise = graphiq.enrichCompany({
             domain: companyDomain || undefined,
             name: company.properties.name || undefined
+          }).catch(err => {
+            console.warn(`[Preview] GraphIQ enrichment failed:`, err);
+            return null;
           });
-          if (graphiqResult) {
-            providerData = graphiqResult;
-            usedProvider = 'graphiq';
-          }
-        } catch (err) {
-          console.warn(`[Preview] GraphIQ enrichment failed:`, err);
+
+          providerPromiseCache.set(cacheKey, promise);
+          providerData = await promise;
+        }
+
+        if (providerData) {
+          usedProvider = 'graphiq';
         }
       }
 
@@ -360,7 +393,7 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    // Debug logging
+    // Debug logging with API call tracking
     const responseSize = JSON.stringify(response).length;
     console.log('[Preview API] Built response:', {
       results_count: results.length,
@@ -368,7 +401,11 @@ export async function POST(req: NextRequest) {
       first_company_fields: results[0]?.fields?.length,
       response_size_kb: Math.round(responseSize / 1024),
       response_has_results: !!response.results,
-      response_results_length: response.results?.length
+      response_results_length: response.results?.length,
+      api_calls_made: apiCallCount,
+      fields_would_fill: fieldsWouldFill,
+      fields_skipped: fieldsSkipped,
+      fields_not_found: fieldsNotFound
     });
 
     // Cache results in Redis for 30 minutes
