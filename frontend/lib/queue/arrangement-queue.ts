@@ -965,18 +965,18 @@ async function processLiveRunJob(
         const memAfterEnrich = process.memoryUsage();
         console.log(`[Memory] After enrich: heap ${Math.round(memAfterEnrich.heapUsed/1024/1024)}MB, delta +${Math.round((memAfterEnrich.heapUsed - memBefore.heapUsed)/1024/1024)}MB`);
 
-        // Store enriched records as pending (do not write to HubSpot yet)
+        // BINARY SEARCH: Comment out storePendingEnrichments to test memory leak
         if (successful.length > 0) {
           const recordsToStore = successful.filter(r => Object.keys(r.propertiesToWrite).length > 0);
 
           if (recordsToStore.length > 0) {
-            await storePendingEnrichments(
-              reviewSessionId,
-              orgId,
-              connection.portal_id,
-              recordsToStore
-            );
-            console.log(`[Arrangement ${config.id}] Stored ${recordsToStore.length} records as pending enrichments`);
+            // await storePendingEnrichments(
+            //   reviewSessionId,
+            //   orgId,
+            //   connection.portal_id,
+            //   recordsToStore
+            // );
+            console.log(`[BINARY SEARCH] Would store ${recordsToStore.length} records as pending enrichments (storePendingEnrichments commented out)`);
           }
         }
 
@@ -1103,18 +1103,18 @@ async function processLiveRunJob(
             const memAfterEnrich = process.memoryUsage();
             console.log(`[Memory] After enrich: heap ${Math.round(memAfterEnrich.heapUsed/1024/1024)}MB, delta +${Math.round((memAfterEnrich.heapUsed - memBefore.heapUsed)/1024/1024)}MB`);
 
-            // Store enriched records as pending
+            // BINARY SEARCH: Comment out storePendingEnrichments to test memory leak
             if (successful.length > 0) {
               const recordsToStore = successful.filter(r => Object.keys(r.propertiesToWrite).length > 0);
 
               if (recordsToStore.length > 0) {
-                await storePendingEnrichments(
-                  reviewSessionId,
-                  orgId,
-                  connection.portal_id,
-                  recordsToStore
-                );
-                console.log(`[Arrangement ${config.id}] Stored ${recordsToStore.length} records as pending enrichments`);
+                // await storePendingEnrichments(
+                //   reviewSessionId,
+                //   orgId,
+                //   connection.portal_id,
+                //   recordsToStore
+                // );
+                console.log(`[BINARY SEARCH] Would store ${recordsToStore.length} records as pending enrichments (storePendingEnrichments commented out)`);
               }
             }
 
@@ -1246,18 +1246,18 @@ async function processLiveRunJob(
           orgId
         );
 
-        // Store enriched records as pending (do not write to HubSpot yet)
+        // BINARY SEARCH: Comment out storePendingEnrichments to test memory leak
         if (successful.length > 0) {
           const recordsToStore = successful.filter(r => Object.keys(r.propertiesToWrite).length > 0);
 
           if (recordsToStore.length > 0) {
-            await storePendingEnrichments(
-              reviewSessionId,
-              orgId,
-              connection.portal_id,
-              recordsToStore
-            );
-            console.log(`[Arrangement ${config.id}] Stored ${recordsToStore.length} records as pending enrichments`);
+            // await storePendingEnrichments(
+            //   reviewSessionId,
+            //   orgId,
+            //   connection.portal_id,
+            //   recordsToStore
+            // );
+            console.log(`[BINARY SEARCH] Would store ${recordsToStore.length} records as pending enrichments (storePendingEnrichments commented out)`);
           }
         }
 
