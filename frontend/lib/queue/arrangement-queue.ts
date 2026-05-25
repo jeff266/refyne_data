@@ -621,18 +621,26 @@ async function enrichSingleRecord(
   let fieldsSkipped = 0;
   const propertiesToWrite: Record<string, unknown> = {};
 
-  // Process all field configs in parallel using Promise.allSettled
-  const fieldResults = await Promise.allSettled(
-    fieldConfigs.map(fieldConfig =>
-      processFieldConfig(
+  // FIX: Process fields SEQUENTIALLY to avoid cache race condition
+  // When Promise.allSettled processes in parallel, all fields check cache simultaneously
+  // before any complete, causing duplicate API calls. Sequential processing ensures
+  // first field populates cache, subsequent fields hit cache.
+  const fieldResults: Array<PromiseSettledResult<any>> = [];
+
+  for (const fieldConfig of fieldConfigs) {
+    try {
+      const result = await processFieldConfig(
         fieldConfig,
         record,
         orgId,
         record.properties?.[fieldConfig.field_key] || record[fieldConfig.field_key],
         'live'
-      )
-    )
-  );
+      );
+      fieldResults.push({ status: 'fulfilled', value: result });
+    } catch (error) {
+      fieldResults.push({ status: 'rejected', reason: error });
+    }
+  }
 
   // Process results
   fieldResults.forEach((promiseResult, index) => {
