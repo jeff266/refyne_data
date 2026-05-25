@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
             org_id: ctx.orgId,
             name: 'Preview Apply',
             description: 'System arrangement for tracking preview apply operations',
-            source_type: 'preview',
+            source_type: 'manual',
             source_config: {},
             enrichment_steps: [],
             output_destination: 'hubspot',
