@@ -292,6 +292,18 @@ async function saveHarmony(
     }
   }
 
+  // Map canonical field to HubSpot property name
+  const CANONICAL_TO_HUBSPOT: Record<string, string> = {
+    'industry': 'industry',
+    'employee_count': 'numberofemployees',
+    'linkedin_url': 'linkedin_company_page',
+    'phone': 'phone',
+    'domain': 'domain',
+    'revenue': 'annualrevenue',
+  };
+
+  const hubspotProperty = CANONICAL_TO_HUBSPOT[fieldKey] || fieldKey;
+
   // Upsert to field_mappings
   const { error } = await supabase
     .from('field_mappings')
@@ -299,6 +311,9 @@ async function saveHarmony(
       {
         org_id: orgId,
         canonical_field: fieldKey,
+        hubspot_property: hubspotProperty,
+        direction: 'inbound',
+        write_policy: 'overwrite_if_blank_or_ours',
         canonical_to_hubspot_map: map,
         updated_at: new Date().toISOString(),
       },
