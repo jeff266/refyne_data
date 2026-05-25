@@ -621,26 +621,20 @@ async function enrichSingleRecord(
   let fieldsSkipped = 0;
   const propertiesToWrite: Record<string, unknown> = {};
 
-  // FIX: Process fields SEQUENTIALLY to avoid cache race condition
-  // When Promise.allSettled processes in parallel, all fields check cache simultaneously
-  // before any complete, causing duplicate API calls. Sequential processing ensures
-  // first field populates cache, subsequent fields hit cache.
-  const fieldResults: Array<PromiseSettledResult<any>> = [];
-
-  for (const fieldConfig of fieldConfigs) {
-    try {
-      const result = await processFieldConfig(
+  // Process fields in PARALLEL using Promise.allSettled
+  // Race condition fixed: queryProvider caches Promise before resolution, so all fields
+  // awaiting same provider get back the same Promise, eliminating duplicate API calls.
+  const fieldResults = await Promise.allSettled(
+    fieldConfigs.map(fieldConfig =>
+      processFieldConfig(
         fieldConfig,
         record,
         orgId,
         record.properties?.[fieldConfig.field_key] || record[fieldConfig.field_key],
         'live'
-      );
-      fieldResults.push({ status: 'fulfilled', value: result });
-    } catch (error) {
-      fieldResults.push({ status: 'rejected', reason: error });
-    }
-  }
+      )
+    )
+  );
 
   // Process results
   fieldResults.forEach((promiseResult, index) => {
@@ -2347,8 +2341,10 @@ async function normalizeTwoStage(
 }
 
 // Provider response cache - call provider once per company, extract all fields
-// Key: `${provider}:${companyId}`, Value: full provider response
-const providerResponseCache = new Map<string, any>();
+// Key: `${provider}:${companyId}`, Value: Promise<ProviderResponse | null>
+// CRITICAL: Stores the Promise BEFORE it resolves, not the resolved value.
+// This eliminates race condition when multiple fields query same provider simultaneously.
+const providerResponseCache = new Map<string, Promise<any>>();
 
 /**
  * Query a provider for a specific field value.
@@ -2384,10 +2380,11 @@ async function queryProvider(
   const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
   const cacheKey = `${provider}:${companyId}`;
 
-  // Check cache first - if we already called this provider for this company, reuse response
+  // Check cache first - if we already called this provider for this company, await same Promise
   if (providerResponseCache.has(cacheKey)) {
-    const cached = providerResponseCache.get(cacheKey);
     console.log(`[Provider Cache] HIT: ${provider} for company ${companyId}, extracting field ${fieldKey}`);
+    const cachedPromise = providerResponseCache.get(cacheKey)!;
+    const cached = await cachedPromise;
 
     // Extract requested field from cached response
     if (cached && cached.normalized?.[fieldKey]) {
@@ -2398,27 +2395,30 @@ async function queryProvider(
     return null;
   }
 
-  // Cache MISS - make API call
+  // Cache MISS - create Promise and cache it IMMEDIATELY (before awaiting)
   console.log(`[Provider Cache] MISS: ${provider} for company ${companyId}, calling API`);
 
-  // Live mode: acquire rate limit token before making API call
-  const limiter = getRateLimiter(orgId, provider);
-  await limiter.acquire();
+  const promise = (async () => {
+    // Live mode: acquire rate limit token before making API call
+    const limiter = getRateLimiter(orgId, provider);
+    await limiter.acquire();
 
-  // Make real API call
-  const providerAdapter = await getProviderAdapter(provider, orgId);
+    // Make real API call
+    const providerAdapter = await getProviderAdapter(provider, orgId);
 
-  // Use domain-routing helpers to extract domain (checks both 'domain' and 'website' properties)
-  const { getDomain, getName } = await import('../enrichment/domain-routing');
-  const domain = getDomain(record) ?? undefined;
-  const name = getName(record) ?? undefined;
+    // Use domain-routing helpers to extract domain (checks both 'domain' and 'website' properties)
+    const { getDomain, getName } = await import('../enrichment/domain-routing');
+    const domain = getDomain(record) ?? undefined;
+    const name = getName(record) ?? undefined;
 
-  const result = await providerAdapter.enrichCompany({ domain, name });
+    return await providerAdapter.enrichCompany({ domain, name });
+  })();
 
-  // Store full response in cache for future field extractions
-  if (result) {
-    providerResponseCache.set(cacheKey, result);
-  }
+  // Store Promise BEFORE it resolves - this is critical for race condition prevention
+  providerResponseCache.set(cacheKey, promise);
+
+  // Now await the result
+  const result = await promise;
 
   // DIAGNOSTIC: Log provider response size to find memory leak
   if (result) {
