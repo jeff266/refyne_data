@@ -642,6 +642,20 @@ async function enrichSingleRecord(
     if (promiseResult.status === 'fulfilled') {
       const result = promiseResult.value;
 
+      // DIAGNOSTIC: Log large result objects to find memory leak
+      try {
+        const resultSize = JSON.stringify(result).length;
+        if (resultSize > 10000) {
+          console.log(`[Memory Warning] Large result for ${fieldConfig.field_key}: ${Math.round(resultSize/1024)}KB`);
+          console.log(`[Memory Warning] Result keys: ${Object.keys(result).join(', ')}`);
+          if (result.metadata) {
+            console.log(`[Memory Warning] Metadata size: ${Math.round(JSON.stringify(result.metadata).length/1024)}KB`);
+          }
+        }
+      } catch (e) {
+        // Ignore stringify errors
+      }
+
       try {
         if (result.written) {
           // REMOVED: enrichedData[fieldConfig.field_key] = result.value; (never used)
@@ -2322,7 +2336,25 @@ async function queryProvider(
 
   const result = await providerAdapter.enrichCompany({ domain, name });
 
+  // DIAGNOSTIC: Log provider response size to find memory leak
   if (result) {
+    try {
+      const responseSize = JSON.stringify(result).length;
+      const companyId = record.id || record.properties?.hs_object_id || 'unknown';
+      if (responseSize > 10000) {
+        console.log(`[Provider Response] ${provider} returned ${Math.round(responseSize/1024)}KB for company ${companyId}, field ${fieldKey}`);
+        console.log(`[Provider Response] Keys in response: ${Object.keys(result).join(', ')}`);
+        if (result.raw) {
+          console.log(`[Provider Response] raw keys: ${Object.keys(result.raw).join(', ')}`);
+        }
+        if (result.normalized) {
+          console.log(`[Provider Response] normalized keys: ${Object.keys(result.normalized).join(', ')}`);
+        }
+      }
+    } catch (e) {
+      // Ignore stringify errors
+    }
+
     return result.normalized?.[fieldKey] ?? result.raw[fieldKey];
   }
 
