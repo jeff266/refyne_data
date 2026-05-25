@@ -19,9 +19,10 @@ import {
 const GRAPHIQ_BASE_URL = 'https://app.graphiq.ai/api/v2';
 
 /**
- * Get GraphIQ API key from environment.
+ * DEPRECATED: Use constructor parameter instead.
+ * Get GraphIQ API key from environment (fallback only).
  */
-function getApiKey(): string {
+function getApiKeyFromEnv(): string {
   const key = process.env.GRAPHIQ_API_KEY;
   if (!key) {
     throw new ProviderError('graphiq', 'config_error', 'GRAPHIQ_API_KEY not configured');
@@ -83,13 +84,13 @@ function transformOrganization(org: Record<string, unknown>): Record<string, unk
 
 /**
  * Search for organizations by capabilities.
+ * DEPRECATED: Use GraphiqAdapter.searchByCapabilities() instance method.
  */
 async function searchByCapabilities(
+  apiKey: string,
   capabilities: string[],
   limit: number = 20
 ): Promise<Record<string, unknown>[]> {
-  const apiKey = getApiKey();
-
   const response = await fetch(`${GRAPHIQ_BASE_URL}/organizations/search`, {
     method: 'POST',
     headers: {
@@ -121,15 +122,15 @@ async function searchByCapabilities(
 
 /**
  * General organization search with multiple filters.
+ * DEPRECATED: Use GraphiqAdapter.searchOrganizations() instance method.
  */
 async function searchOrganizations(
+  apiKey: string,
   query?: string,
   industry?: string,
   location?: string,
   limit: number = 20
 ): Promise<Record<string, unknown>[]> {
-  const apiKey = getApiKey();
-
   // Build filter payload
   const orgFilter: Record<string, string> = {};
 
@@ -178,6 +179,21 @@ async function searchOrganizations(
 export class GraphiqAdapter implements ProviderAdapter {
   id = 'graphiq';
   name = 'GraphIQ';
+  private apiKey?: string;
+
+  constructor(apiKey?: string) {
+    this.apiKey = apiKey;
+  }
+
+  /**
+   * Get GraphIQ API key from constructor (must be passed from provider_connections).
+   */
+  private getApiKey(): string {
+    if (!this.apiKey) {
+      throw new ProviderError('graphiq', 'config_error', 'GraphIQ API key not provided. Must be retrieved from provider_connections table or env var.');
+    }
+    return this.apiKey;
+  }
 
   /**
    * Enrich a company by searching for it by name or domain.
@@ -186,6 +202,8 @@ export class GraphiqAdapter implements ProviderAdapter {
     if (!query.name && !query.domain) {
       throw new ProviderError('graphiq', 'api_error', 'Must provide either domain or name');
     }
+
+    const apiKey = this.getApiKey();
 
     // If domain provided, search by website_url for better accuracy
     if (query.domain) {
@@ -197,7 +215,7 @@ export class GraphiqAdapter implements ProviderAdapter {
     }
 
     // Otherwise search by name
-    const results = await searchOrganizations(query.name, undefined, undefined, 1);
+    const results = await searchOrganizations(apiKey, query.name, undefined, undefined, 1);
 
     if (results.length === 0) {
       return null;
@@ -210,7 +228,7 @@ export class GraphiqAdapter implements ProviderAdapter {
    * Search by domain using website_url field (most accurate).
    */
   private async searchByDomain(domain: string): Promise<Record<string, unknown>[]> {
-    const apiKey = getApiKey();
+    const apiKey = this.getApiKey();
 
     // Clean domain: remove protocol and www prefix
     const cleanedDomain = domain
@@ -251,14 +269,16 @@ export class GraphiqAdapter implements ProviderAdapter {
    * Search for organizations by capabilities, industry, or query.
    */
   async search(query: SearchQuery): Promise<ProviderResponse[]> {
+    const apiKey = this.getApiKey();
     let results: Record<string, unknown>[];
 
     // If capabilities are provided, use capability search
     if (query.capabilities && query.capabilities.length > 0) {
-      results = await searchByCapabilities(query.capabilities, query.limit || 20);
+      results = await searchByCapabilities(apiKey, query.capabilities, query.limit || 20);
     } else {
       // Otherwise use general search
       results = await searchOrganizations(
+        apiKey,
         query.query || query.term,
         query.industry,
         query.location,

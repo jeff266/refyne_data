@@ -1561,9 +1561,14 @@ async function getProviderAdapter(provider: string, orgId: string): Promise<Prov
     }
     case 'graphiq':
     case 'refyne': {
-      // GraphIQ: embedded provider, uses GRAPHIQ_API_KEY env var
+      // GraphIQ: fetch API key from provider_connections or fallback to env var
+      const { getGraphiqKey } = await import('../providers/graphiq-key');
+      const apiKey = await getGraphiqKey(orgId);
+      if (!apiKey) {
+        throw new Error(`GraphIQ API key not configured for org ${orgId}`);
+      }
       const { GraphiqAdapter } = await import('../providers/graphiq');
-      return new GraphiqAdapter();
+      return new GraphiqAdapter(apiKey);
     }
     case 'zoominfo': {
       // ZoomInfo: uses env var like GraphIQ
