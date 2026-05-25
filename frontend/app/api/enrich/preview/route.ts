@@ -719,8 +719,10 @@ function buildSearchFilters(filters: any): any[] {
   const filterGroups: any[] = [];
 
   // Create separate filter group for each missing field (OR logic)
+  // HubSpot allows max 5 filterGroups, so limit to first 5 fields
   if (filters.missing_fields && filters.missing_fields.length > 0) {
-    for (const field of filters.missing_fields) {
+    const fieldsToQuery = filters.missing_fields.slice(0, 5);
+    for (const field of fieldsToQuery) {
       filterGroups.push({
         filters: [{
           propertyName: field,
