@@ -589,6 +589,7 @@ async function processRehearsalJob(
 interface EnrichedRecord {
   record: any;
   companyId: string;
+  companyName: string; // Extract during enrichment to avoid re-accessing record later
   propertiesToWrite: Record<string, unknown>;
   fieldsAttempted: number;
   fieldsWritten: number;
@@ -698,10 +699,12 @@ async function enrichSingleRecord(
   });
 
   const companyId = record.id || record.properties?.hs_object_id || String(record.hs_object_id);
+  const companyName = record.properties?.name || record.name || '';
 
   return {
     record,
     companyId,
+    companyName,
     propertiesToWrite,
     fieldsAttempted,
     fieldsWritten,
@@ -975,7 +978,7 @@ async function processLiveRunJob(
             // Extract lightweight pending rows (no heavy objects)
             const pendingRows: PendingEnrichmentRow[] = [];
             for (const enrichedRecord of recordsToStore) {
-              const companyName = enrichedRecord.record?.properties?.name || '';
+              const companyName = enrichedRecord.companyName;
 
               for (const [hsProperty, hsValue] of Object.entries(enrichedRecord.propertiesToWrite)) {
                 if (hsValue === null || hsValue === undefined) continue;
@@ -1138,7 +1141,7 @@ async function processLiveRunJob(
                 // Extract lightweight pending rows (no heavy objects)
                 const pendingRows: any[] = [];
                 for (const enrichedRecord of recordsToStore) {
-                  const companyName = enrichedRecord.record?.properties?.name || '';
+                  const companyName = enrichedRecord.companyName;
 
                   for (const [hsProperty, hsValue] of Object.entries(enrichedRecord.propertiesToWrite)) {
                     if (hsValue === null || hsValue === undefined) continue;
@@ -1306,7 +1309,7 @@ async function processLiveRunJob(
             // Extract lightweight pending rows (no heavy objects)
             const pendingRows: PendingEnrichmentRow[] = [];
             for (const enrichedRecord of recordsToStore) {
-              const companyName = enrichedRecord.record?.properties?.name || '';
+              const companyName = enrichedRecord.companyName;
 
               for (const [hsProperty, hsValue] of Object.entries(enrichedRecord.propertiesToWrite)) {
                 if (hsValue === null || hsValue === undefined) continue;
