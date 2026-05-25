@@ -174,27 +174,63 @@ export async function POST(req: NextRequest) {
 
     // Log to enrichment history
     try {
-      await supabase.from('arrangement_runs').insert({
-        org_id: ctx.orgId,
-        arrangement_id: null,
-        run_type: 'preview_apply',
-        status: 'completed',
-        total_records: body.selectedRows.length,
-        processed_records: body.selectedRows.length,
-        successful_records: results.length,
-        failed_records: errors.length,
-        initiated_by: ctx.userId,
-        started_at: startTime.toISOString(),
-        completed_at: new Date().toISOString(),
-        source_snapshot: {},
-        results_snapshot: {
-          provider: 'preview',
-          written: results.length,
-          failed: errors.length,
-          skipped: skippedRows.length,
-          field_breakdown: fieldBreakdown,
-        },
-      });
+      // Get or create "Preview Apply" arrangement for this org
+      let previewArrangementId: string | null = null;
+
+      const { data: existingArrangement } = await supabase
+        .from('arrangements')
+        .select('id')
+        .eq('org_id', ctx.orgId)
+        .eq('name', 'Preview Apply')
+        .single();
+
+      if (existingArrangement) {
+        previewArrangementId = existingArrangement.id;
+      } else {
+        // Create the Preview Apply arrangement
+        const { data: newArrangement, error: createError } = await supabase
+          .from('arrangements')
+          .insert({
+            org_id: ctx.orgId,
+            name: 'Preview Apply',
+            description: 'System arrangement for tracking preview apply operations',
+            enrichment_steps: [],
+            is_active: false,
+          })
+          .select('id')
+          .single();
+
+        if (createError) {
+          console.error('[Apply] Failed to create Preview Apply arrangement:', createError);
+        } else if (newArrangement) {
+          previewArrangementId = newArrangement.id;
+        }
+      }
+
+      if (previewArrangementId) {
+        await supabase.from('arrangement_runs').insert({
+          org_id: ctx.orgId,
+          arrangement_id: previewArrangementId,
+          run_type: 'preview_apply',
+          status: 'completed',
+          total_records: body.selectedRows.length,
+          processed_records: body.selectedRows.length,
+          successful_records: results.length,
+          failed_records: errors.length,
+          initiated_by: ctx.userId,
+          started_at: startTime.toISOString(),
+          completed_at: new Date().toISOString(),
+          source_snapshot: {},
+          results_snapshot: {
+            provider: 'preview',
+            written: results.length,
+            failed: errors.length,
+            skipped: skippedRows.length,
+            field_breakdown: fieldBreakdown,
+          },
+        });
+        console.log('[Apply] Logged to history successfully');
+      }
     } catch (historyError) {
       console.error('[Apply] Failed to log to history:', historyError);
       // Don't fail the request if history logging fails

@@ -30,13 +30,17 @@ export async function GET() {
       .select(`
         id,
         arrangement_id,
+        run_type,
         status,
         processed_records,
         total_records,
+        successful_records,
+        failed_records,
         fields_filled,
         started_at,
         completed_at,
         error_message,
+        results_snapshot,
         arrangements!inner (
           id,
           name,
@@ -59,25 +63,41 @@ export async function GET() {
     const history = runs.map((run: any) => {
       const arrangement = run.arrangements;
       const enrichmentSteps = arrangement?.enrichment_steps || [];
+      const isPreviewApply = run.run_type === 'preview_apply';
+      const resultsSnapshot = run.results_snapshot || {};
 
-      // Extract provider from first step
-      const provider = enrichmentSteps[0]?.provider || 'Unknown';
+      // For preview_apply, extract from results_snapshot; otherwise from enrichment_steps
+      let provider: string;
+      let fields: string[] = [];
 
-      // Extract fields from all steps
-      const fields: string[] = [];
-      enrichmentSteps.forEach((step: any) => {
-        if (step.field_configs) {
-          Object.keys(step.field_configs).forEach((field) => {
-            if (!fields.includes(field)) {
-              fields.push(field);
-            }
-          });
-        }
-      });
+      if (isPreviewApply) {
+        // Preview apply: extract from results_snapshot
+        provider = resultsSnapshot.provider || 'Preview';
+        const fieldBreakdown = resultsSnapshot.field_breakdown || {};
+        fields = Object.keys(fieldBreakdown);
+      } else {
+        // Regular run: extract from enrichment_steps
+        provider = enrichmentSteps[0]?.provider || 'Unknown';
+        enrichmentSteps.forEach((step: any) => {
+          if (step.field_configs) {
+            Object.keys(step.field_configs).forEach((field) => {
+              if (!fields.includes(field)) {
+                fields.push(field);
+              }
+            });
+          }
+        });
+      }
 
       // Calculate total fields filled
-      const fieldsFilled = run.fields_filled || {};
-      const totalFilled = Object.values(fieldsFilled).reduce((sum: number, count: any) => sum + (count || 0), 0);
+      // For preview_apply, use successful_records; otherwise use fields_filled
+      let totalFilled: number;
+      if (isPreviewApply) {
+        totalFilled = run.successful_records || 0;
+      } else {
+        const fieldsFilled = run.fields_filled || {};
+        totalFilled = Object.values(fieldsFilled).reduce((sum: number, count: any) => sum + (count || 0), 0);
+      }
 
       return {
         id: run.id,
