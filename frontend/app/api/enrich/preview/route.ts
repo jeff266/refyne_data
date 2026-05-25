@@ -16,6 +16,7 @@ import { ApolloAdapter } from '@/lib/providers/apollo';
 import { getApolloKey } from '@/lib/providers/apollo-key';
 import { GraphiqAdapter } from '@/lib/providers/graphiq';
 import { getGraphiqKey } from '@/lib/providers/graphiq-key';
+import { refyneSearch, type RefyneSearchResult } from '@/lib/providers/refyne-search';
 import { generateHarmonyForField, type HarmonyMapping } from '@/lib/enrichment/harmony-generator';
 import { Redis } from '@upstash/redis';
 import { randomUUID } from 'crypto';
@@ -58,6 +59,10 @@ interface PreviewFieldResult {
   harmony_applied: boolean;
   harmony_name: string | null;
   selected: boolean;
+  confidence?: number;  // For Refyne Search: 0-1 confidence score
+  confidence_level?: 'high' | 'medium' | 'low' | 'insufficient';  // For Refyne Search
+  evidence?: string;  // For Refyne Search: evidence snippet
+  from_cache?: boolean;  // For Refyne Search: whether from cache
 }
 
 interface PreviewCompanyResult {
@@ -176,6 +181,7 @@ export async function POST(req: NextRequest) {
     // Initialize providers based on what's selected
     let apollo: ApolloAdapter | null = null;
     let graphiq: GraphiqAdapter | null = null;
+    const useRefyneSearch = body.providers.includes('refyne_search');
 
     if (body.providers.includes('apollo')) {
       const apolloKey = await getApolloKey(ctx.orgId);
@@ -191,10 +197,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Require at least one provider
-    if (!apollo && !graphiq) {
+    // Require at least one provider (refyne_search is always available)
+    if (!apollo && !graphiq && !useRefyneSearch) {
       return NextResponse.json({
-        error: 'No providers connected. Please connect Apollo or GraphIQ in Settings → Connections.',
+        error: 'No providers connected. Please connect Apollo, GraphIQ, or use Refyne Search in Settings → Connections.',
         preview_id: randomUUID(),
         status: 'completed',
         records_processed: 0,
@@ -294,12 +300,55 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Try Refyne Search if no other provider returned data
+      let refyneResults: Record<string, RefyneSearchResult> = {};
+      if (!providerData && useRefyneSearch) {
+        const cacheKey = `refyne_search:${companyDomain || company.properties.name}`;
+
+        if (providerPromiseCache.has(cacheKey)) {
+          console.log(`[Preview Cache] HIT: refyne_search for ${companyDomain || company.properties.name}`);
+          const results = await providerPromiseCache.get(cacheKey);
+          refyneResults = results || {};
+        } else {
+          console.log(`[Preview Cache] MISS: refyne_search for ${companyDomain || company.properties.name}, calling API`);
+          apiCallCount++;
+
+          const promise = refyneSearch(
+            ctx.orgId,
+            companyDomain || null,
+            company.properties.name || null,
+            body.fields
+          ).then(results => {
+            // Convert array to keyed object
+            const keyed: Record<string, RefyneSearchResult> = {};
+            for (const r of results) {
+              keyed[r.fieldKey] = r;
+            }
+            return keyed;
+          }).catch(err => {
+            console.warn(`[Preview] Refyne Search failed:`, err);
+            return {};
+          });
+
+          providerPromiseCache.set(cacheKey, promise);
+          refyneResults = await promise;
+        }
+
+        if (Object.keys(refyneResults).length > 0) {
+          usedProvider = 'refyne_search';
+        }
+      }
+
       // Process each field
       for (const fieldKey of body.fields) {
         const currentValue = company.properties[fieldKey] || null;
         let foundValue: string | null = null;
         let foundRaw: string | null = null;
         let source: string | null = usedProvider;
+        let confidence: number | undefined = undefined;
+        let confidenceLevel: 'high' | 'medium' | 'low' | 'insufficient' | undefined = undefined;
+        let evidence: string | undefined = undefined;
+        let fromCache: boolean | undefined = undefined;
 
         // Extract raw and normalized values from provider data
         if (providerData) {
@@ -307,6 +356,16 @@ export async function POST(req: NextRequest) {
             foundRaw = providerData.raw?.[fieldKey] || getFieldValueFromProvider(providerData.raw, fieldKey, usedProvider);
             foundValue = getFieldValueFromProvider(providerData.normalized, fieldKey, usedProvider);
           }
+        } else if (usedProvider === 'refyne_search' && refyneResults[fieldKey]) {
+          // Refyne Search results
+          const rsResult = refyneResults[fieldKey];
+          foundValue = rsResult.value ? String(rsResult.value) : null;
+          foundRaw = foundValue; // Refyne Search doesn't have separate raw/normalized
+          confidence = rsResult.confidence;
+          confidenceLevel = rsResult.level;
+          evidence = rsResult.evidence;
+          fromCache = rsResult.fromCache;
+          source = 'refyne_search';
         }
 
         // Apply harmony if configured
@@ -367,6 +426,10 @@ export async function POST(req: NextRequest) {
           harmony_applied: harmonyApplied,
           harmony_name: harmonyName,
           selected: selected,
+          confidence,
+          confidence_level: confidenceLevel,
+          evidence,
+          from_cache: fromCache,
         });
       }
     }

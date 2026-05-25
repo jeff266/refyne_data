@@ -1,0 +1,149 @@
+// DeepSeek V3 extraction
+// Keys managed centrally by Refyne
+// Model: deepseek-chat (V3)
+
+const DEEPSEEK_API_KEY = process.env.REFYNE_DEEPSEEK_KEY;
+const DEEPSEEK_ENDPOINT = 'https://api.deepseek.com/v1/chat/completions';
+
+export interface ExtractionField {
+  value: string | number | null;
+  confidence: number; // 0-1
+  evidence: string; // snippet supporting the value
+  sources: string[]; // URLs that contained the evidence
+}
+
+export interface ExtractionResult {
+  industry?: ExtractionField;
+  employee_count?: ExtractionField;
+  revenue?: ExtractionField;
+  linkedin_url?: ExtractionField;
+  phone?: ExtractionField;
+}
+
+const SYSTEM_PROMPT = `You are a company data extraction specialist.
+Extract structured firmographic data from web search results.
+Return ONLY valid JSON. No explanation, no markdown, no code blocks.
+Only extract values explicitly stated in the results.
+Do not infer, estimate, or hallucinate values.`;
+
+function buildExtractionPrompt(
+  companyName: string | null,
+  domain: string | null,
+  searchResults: Array<{ query: string; results: any[] }>,
+  fieldKeys: string[]
+): string {
+  const resultsText = searchResults
+    .map((sr) => {
+      const snippets = sr.results
+        .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.link}\n${r.snippet}`)
+        .join('\n\n');
+      return `Query: "${sr.query}"\n${snippets}`;
+    })
+    .join('\n\n---\n\n');
+
+  const fieldInstructions = fieldKeys
+    .map((f) => {
+      switch (f) {
+        case 'industry':
+          return `"industry": extract the company's primary industry or sector`;
+        case 'employee_count':
+          return `"employee_count": extract total number of employees as integer`;
+        case 'revenue':
+          return `"revenue": extract annual revenue as integer in USD (e.g. 4200000 for $4.2M)`;
+        case 'linkedin_url':
+          return `"linkedin_url": extract the full LinkedIn company page URL`;
+        case 'phone':
+          return `"phone": extract the main business phone number`;
+        default:
+          return null;
+      }
+    })
+    .filter(Boolean)
+    .join('\n');
+
+  return `Company: ${companyName ?? 'unknown'}
+Domain: ${domain ?? 'unknown'}
+
+Search Results:
+${resultsText}
+
+Extract these fields:
+${fieldInstructions}
+
+Return JSON with this exact structure for each requested field:
+{
+  "field_name": {
+    "value": <extracted value or null>,
+    "confidence": <0.0 to 1.0>,
+    "evidence": "<exact text snippet from results>",
+    "sources": ["<url1>", "<url2>"]
+  }
+}
+
+Confidence guidelines:
+- 0.9+: Multiple authoritative sources agree (LinkedIn + one other)
+- 0.7-0.89: One authoritative source (LinkedIn, Crunchbase, company website)
+- 0.5-0.69: One lower-authority source (job postings, news articles)
+- 0.3-0.49: Indirect evidence or single mention
+- below 0.3: Uncertain, include but flag as low confidence
+- 0.0 / null: No evidence found`;
+}
+
+export async function extractWithDeepSeek(
+  companyName: string | null,
+  domain: string | null,
+  searchResults: Array<{ query: string; results: any[] }>,
+  fieldKeys: string[]
+): Promise<ExtractionResult> {
+  const prompt = buildExtractionPrompt(
+    companyName,
+    domain,
+    searchResults,
+    fieldKeys
+  );
+
+  const response = await fetch(DEEPSEEK_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 800,
+      temperature: 0.1, // low temperature for factual extraction
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`DeepSeek error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text = data.choices[0]?.message?.content ?? '';
+
+  // Track token usage for cost accounting
+  const usage = {
+    inputTokens: data.usage?.prompt_tokens ?? 0,
+    outputTokens: data.usage?.completion_tokens ?? 0,
+    costUsd:
+      (data.usage?.prompt_tokens ?? 0) * 0.00000027 +
+      (data.usage?.completion_tokens ?? 0) * 0.0000011,
+  };
+
+  try {
+    const cleaned = text
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim();
+    const parsed = JSON.parse(cleaned);
+    return { ...parsed, _usage: usage };
+  } catch {
+    console.error('[DeepSeek] Failed to parse JSON:', text.slice(0, 200));
+    return {};
+  }
+}

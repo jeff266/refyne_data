@@ -67,6 +67,10 @@ interface PreviewFieldResult {
   harmony_applied: boolean;
   harmony_name: string | null;
   selected: boolean;
+  confidence?: number;
+  confidence_level?: 'high' | 'medium' | 'low' | 'insufficient';
+  evidence?: string;
+  from_cache?: boolean;
 }
 
 interface PreviewResults {
@@ -100,12 +104,13 @@ const ENRICHABLE_FIELDS = [
 ];
 
 const PROVIDER_REGISTRY = [
-  { key: 'apollo', label: 'Apollo' },
-  { key: 'graphiq', label: 'GraphIQ' },
-  { key: 'zoominfo', label: 'ZoomInfo' },
-  { key: 'cognism', label: 'Cognism' },
-  { key: 'clearbit', label: 'Clearbit' },
-  { key: 'refyne', label: 'Refyne Data' },
+  { key: 'apollo', label: 'Apollo', managed: false },
+  { key: 'graphiq', label: 'GraphIQ', managed: true },
+  { key: 'zoominfo', label: 'ZoomInfo', managed: false },
+  { key: 'cognism', label: 'Cognism', managed: false },
+  { key: 'clearbit', label: 'Clearbit', managed: false },
+  { key: 'refyne', label: 'Refyne Data', managed: true },
+  { key: 'refyne_search', label: 'Refyne Search', managed: true, alwaysAvailable: true, badge: '✦ Included' },
 ];
 
 interface LifecycleStage {
@@ -1580,23 +1585,41 @@ export default function EnrichPage() {
                 </button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {PROVIDER_REGISTRY.filter(p => connectedProviders.includes(p.key)).map(provider => (
-                  <label key={provider.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedProviders.includes(provider.key)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedProviders(prev => [...prev, provider.key]);
-                        } else {
-                          setSelectedProviders(prev => prev.filter(p => p !== provider.key));
-                        }
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: 12, color: C.text2 }}>{provider.label}</span>
-                  </label>
-                ))}
+                {PROVIDER_REGISTRY.filter(p => p.alwaysAvailable || connectedProviders.includes(p.key)).map(provider => {
+                  const isConnected = connectedProviders.includes(provider.key) || provider.alwaysAvailable;
+                  return (
+                    <label key={provider.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedProviders.includes(provider.key)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedProviders(prev => [...prev, provider.key]);
+                          } else {
+                            setSelectedProviders(prev => prev.filter(p => p !== provider.key));
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 12, color: C.text2 }}>{provider.label}</span>
+                      {provider.badge && (
+                        <span style={{
+                          fontSize: 10,
+                          color: C.indigo,
+                          background: C.indigoDim,
+                          padding: '2px 6px',
+                          borderRadius: 3,
+                          fontWeight: 500
+                        }}>
+                          {provider.badge}
+                        </span>
+                      )}
+                      {!isConnected && (
+                        <span style={{ fontSize: 10, color: C.text3 }}>Connect key</span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
             </div>
 
@@ -2466,9 +2489,30 @@ export default function EnrichPage() {
                                   {' → '}
                                   <span style={{ color: '#EF4444', fontSize: 11, fontStyle: 'italic' }}>(no mapping)</span>
                                 </span>
-                              ) : result.mapped_value ? (
-                                // Non-enum field with value
-                                <span>{result.mapped_value}</span>
+                              ) : result.mapped_value || result.found_value ? (
+                                // Non-enum field with value (including Refyne Search results)
+                                <span>
+                                  <span>{result.mapped_value || result.found_value}</span>
+                                  {result.source === 'refyne_search' && result.confidence_level && (
+                                    <span
+                                      style={{
+                                        marginLeft: 6,
+                                        fontSize: 10,
+                                        padding: '2px 6px',
+                                        borderRadius: 3,
+                                        fontWeight: 500,
+                                        background: result.confidence_level === 'high' ? '#22C55E22' : result.confidence_level === 'medium' ? '#F59E0B22' : '#EF444422',
+                                        color: result.confidence_level === 'high' ? '#22C55E' : result.confidence_level === 'medium' ? '#F59E0B' : '#EF4444',
+                                      }}
+                                      title={result.evidence || ''}
+                                    >
+                                      {result.confidence_level} {result.confidence ? `${(result.confidence * 100).toFixed(0)}%` : ''}
+                                    </span>
+                                  )}
+                                  {result.from_cache && (
+                                    <span style={{ marginLeft: 4, fontSize: 10, color: C.text3 }} title="From cache">⚡</span>
+                                  )}
+                                </span>
                               ) : (
                                 // No value found
                                 <span style={{ fontStyle: 'italic' }}>(none)</span>

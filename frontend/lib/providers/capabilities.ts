@@ -18,6 +18,9 @@ export interface ProviderCapabilities {
   supportsFields: string[]; // canonical field keys
   rateLimitPerMinute: number; // default, overridden by detected
   managed: boolean; // true = Refyne pays, false = BYOK
+  label?: string; // display name in UI
+  badge?: string; // badge text for managed providers
+  description?: string; // tooltip/help text
 }
 
 export interface HubSpotCompany {
@@ -106,6 +109,23 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapabilities> = {
     ],
     rateLimitPerMinute: 100, // orchestrates GraphIQ + Serper
     managed: true,
+  },
+  refyne_search: {
+    requiresDomain: false, // works with name only
+    requiresName: true,
+    requiresLocation: false,
+    supportsFields: [
+      'industry',
+      'employee_count',
+      'revenue',
+      'phone',
+      'linkedin_url',
+    ],
+    rateLimitPerMinute: 100, // conservative default
+    managed: true, // Refyne provides keys
+    label: 'Refyne Search',
+    badge: 'Powered by Refyne',
+    description: "Refyne's proprietary web intelligence engine",
   },
 };
 
