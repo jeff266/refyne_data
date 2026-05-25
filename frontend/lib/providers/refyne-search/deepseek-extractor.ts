@@ -5,7 +5,9 @@
 
 const FIREWORKS_API_KEY = process.env.REFYNE_FIREWORKS_KEY;
 const FIREWORKS_ENDPOINT = 'https://api.fireworks.ai/inference/v1/chat/completions';
-const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-v3';
+// Updated to use DeepSeek R1 (latest model available on Fireworks)
+// DeepSeek V3 may not be available; R1 is the current flagship model
+const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-r1';
 
 export interface ExtractionField {
   value: string | number | null;
