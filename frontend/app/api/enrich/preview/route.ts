@@ -453,7 +453,7 @@ async function fetchCompaniesForPreview(
     const searchRequest = {
       filterGroups,
       properties,
-      limit: Math.min(limit, 100),
+      limit: limit,
       sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }]
     };
 
@@ -493,7 +493,7 @@ async function fetchCompaniesForPreview(
     const searchRequest = {
       filterGroups,
       properties,
-      limit: Math.min(limit, 100),
+      limit: limit,
       sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }]
     };
 

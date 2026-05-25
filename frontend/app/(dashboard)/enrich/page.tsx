@@ -763,13 +763,27 @@ export default function EnrichPage() {
   async function applyPreviewResults() {
     if (!previewResults) return;
 
+    // Build selectedRows array from preview results
+    const rowsToApply = previewResults.results
+      .filter(result => selectedRows.has(`${result.company_id}-${result.field_key}`))
+      .map(result => ({
+        company_id: result.company_id,
+        field_key: result.field_key,
+        found_value: result.found_value!,
+      }));
+
+    if (rowsToApply.length === 0) {
+      addToast('error', 'No rows selected');
+      return;
+    }
+
     setRunning(true);
     try {
       const response = await fetch('/api/enrich/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          preview_id: previewResults.preview_id,
+          selectedRows: rowsToApply,
         }),
       });
 
@@ -779,15 +793,26 @@ export default function EnrichPage() {
       }
 
       const data = await response.json();
-      addToast('success', `Applied changes to ${data.applied} companies.`);
+
+      // Show detailed success message
+      let message = `Written ${data.written} fields to HubSpot`;
+      if (data.skipped_invalid_value > 0) {
+        message += `, skipped ${data.skipped_invalid_value} invalid values`;
+      }
+      if (data.failed > 0) {
+        message += `, ${data.failed} failed`;
+      }
+
+      addToast('success', message);
 
       // Reset to gap analysis view
       setShowingPreview(false);
       setPreviewResults(null);
+      setSelectedRows(new Set());
       setTestMode(false);
     } catch (error) {
       console.error('Apply error:', error);
-      alert(`Failed to apply changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      addToast('error', `Failed to apply changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setRunning(false);
     }

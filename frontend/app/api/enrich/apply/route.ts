@@ -3,8 +3,8 @@
  *
  * POST /api/enrich/apply
  *
- * Applies cached preview results to HubSpot companies.
- * Only writes fields where would_write is true.
+ * Applies selected preview results to HubSpot companies.
+ * Only writes fields that the user has selected in the preview UI.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -12,22 +12,38 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { HubSpotClient } from '@/lib/hubspot/client';
-import { Redis } from '@upstash/redis';
 
-// Initialize Redis from URL (extracts token from URL automatically)
-const redis = process.env.UPSTASH_REDIS_URL
-  ? Redis.fromEnv()
-  : null;
+interface SelectedRow {
+  company_id: string;
+  field_key: string;
+  found_value: string;
+}
 
 interface ApplyRequest {
-  preview_id: string;
+  selectedRows: SelectedRow[];
 }
 
 interface ApplyResponse {
-  applied: number;
+  written: number;
   failed: number;
-  skipped: number;
+  skipped_invalid_value: number;
+  errors: Array<{
+    company_id: string;
+    field_key: string;
+    error: string;
+  }>;
+  field_breakdown: Record<string, number>;
 }
+
+// Map canonical field keys to HubSpot property names
+const CANONICAL_TO_HUBSPOT: Record<string, string> = {
+  'industry': 'industry',
+  'employee_count': 'numberofemployees',
+  'linkedin_url': 'linkedin_company_page',
+  'phone': 'phone',
+  'domain': 'domain',
+  'revenue': 'annualrevenue',
+};
 
 export async function POST(req: NextRequest) {
   let ctx;
@@ -45,31 +61,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!redis) {
-      return NextResponse.json(
-        { error: 'Redis not configured' },
-        { status: 503 }
-      );
-    }
-
     const body: ApplyRequest = await req.json();
 
-    if (!body.preview_id) {
-      return NextResponse.json({ error: 'No preview_id provided' }, { status: 400 });
+    if (!body.selectedRows || body.selectedRows.length === 0) {
+      return NextResponse.json({ error: 'No rows selected' }, { status: 400 });
     }
 
-    // Retrieve preview results from Redis
-    const cacheKey = `${ctx.orgId}:enrich:preview:${body.preview_id}`;
-    const cached = await redis.get(cacheKey);
-
-    if (!cached) {
-      return NextResponse.json(
-        { error: 'Preview not found or expired' },
-        { status: 404 }
-      );
-    }
-
-    const previewResults = typeof cached === 'string' ? JSON.parse(cached) : cached;
+    console.log(`[Apply] Processing ${body.selectedRows.length} selected rows for org ${ctx.orgId}`);
 
     // Get HubSpot access token
     const accessToken = await getAccessToken(ctx.orgId);
@@ -91,44 +89,85 @@ export async function POST(req: NextRequest) {
 
     const hubspot = new HubSpotClient(accessToken, connection.portal_id);
 
-    // Build batch update records
-    const recordsToUpdate: Array<{
-      id: string;
-      properties: Record<string, string>;
-    }> = [];
+    // Fetch valid HubSpot industry enum values from crosswalk table
+    const { data: industryValues } = await supabase
+      .from('industry_crosswalk')
+      .select('hubspot_value')
+      .not('hubspot_value', 'is', null);
 
-    for (const companyResult of previewResults.results) {
-      const properties: Record<string, string> = {};
+    const validIndustries = new Set(
+      (industryValues || [])
+        .map(row => row.hubspot_value)
+        .filter((v): v is string => v !== null)
+    );
 
-      for (const field of companyResult.fields) {
-        if (field.would_write && field.after) {
-          properties[field.field_key] = field.after;
+    console.log(`[Apply] Loaded ${validIndustries.size} valid industry enum values`);
+
+    // Group rows by company and validate
+    const companyUpdates = new Map<string, Record<string, string>>();
+    const skippedRows: SelectedRow[] = [];
+    const fieldBreakdown: Record<string, number> = {};
+
+    for (const row of body.selectedRows) {
+      const hubspotProperty = CANONICAL_TO_HUBSPOT[row.field_key] || row.field_key;
+
+      // Validate industry values
+      if (row.field_key === 'industry') {
+        if (!validIndustries.has(row.found_value)) {
+          console.warn(`[Apply] Skipping invalid industry value: ${row.found_value} for company ${row.company_id}`);
+          skippedRows.push(row);
+          continue;
         }
       }
 
-      if (Object.keys(properties).length > 0) {
-        recordsToUpdate.push({
-          id: companyResult.hubspot_company_id,
-          properties,
-        });
+      // Group by company
+      if (!companyUpdates.has(row.company_id)) {
+        companyUpdates.set(row.company_id, {});
       }
+
+      companyUpdates.get(row.company_id)![hubspotProperty] = row.found_value;
+
+      // Track field breakdown
+      fieldBreakdown[row.field_key] = (fieldBreakdown[row.field_key] || 0) + 1;
     }
+
+    console.log(`[Apply] Grouped into ${companyUpdates.size} companies, skipped ${skippedRows.length} invalid values`);
+
+    // Build batch update records
+    const recordsToUpdate = Array.from(companyUpdates.entries()).map(([companyId, properties]) => ({
+      id: companyId,
+      properties,
+    }));
 
     if (recordsToUpdate.length === 0) {
       return NextResponse.json({
-        applied: 0,
+        written: 0,
         failed: 0,
-        skipped: previewResults.results.length,
+        skipped_invalid_value: skippedRows.length,
+        errors: [],
+        field_breakdown: {},
       });
     }
 
-    // Batch update via HubSpot client
+    // Batch update via HubSpot client (handles batching internally)
     const { results, errors } = await hubspot.batchUpdateCompanies(recordsToUpdate);
 
+    console.log(`[Apply] Written: ${results.length}, Failed: ${errors.length}, Skipped: ${skippedRows.length}`);
+
     const response: ApplyResponse = {
-      applied: results.length,
+      written: results.length,
       failed: errors.length,
-      skipped: previewResults.results.length - recordsToUpdate.length,
+      skipped_invalid_value: skippedRows.length,
+      errors: errors.map(err => {
+        // Map error index back to company_id
+        const record = recordsToUpdate[err.index];
+        return {
+          company_id: record?.id || 'unknown',
+          field_key: 'multiple',
+          error: err.error,
+        };
+      }),
+      field_breakdown: fieldBreakdown,
     };
 
     return NextResponse.json(response);
