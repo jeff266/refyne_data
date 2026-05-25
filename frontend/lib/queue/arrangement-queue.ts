@@ -950,12 +950,20 @@ async function processLiveRunJob(
         chunkNumber++;
         console.log(`[Arrangement ${config.id}] Processing stream chunk ${chunkNumber} (${chunk.length} records)`);
 
+        // MEMORY CHECKPOINT 1: Before enrichment
+        const memBefore = process.memoryUsage();
+        console.log(`[Memory] Before chunk: heap ${Math.round(memBefore.heapUsed/1024/1024)}MB`);
+
         // Process chunk with worker pool (maintains WORKER_POOL_SIZE concurrent requests)
         const { successful, failed } = await processWithPool(
           chunk,
           config.field_configs || [],
           orgId
         );
+
+        // MEMORY CHECKPOINT 2: After enrichment, before store
+        const memAfterEnrich = process.memoryUsage();
+        console.log(`[Memory] After enrich: heap ${Math.round(memAfterEnrich.heapUsed/1024/1024)}MB, delta +${Math.round((memAfterEnrich.heapUsed - memBefore.heapUsed)/1024/1024)}MB`);
 
         // Store enriched records as pending (do not write to HubSpot yet)
         if (successful.length > 0) {
@@ -971,6 +979,11 @@ async function processLiveRunJob(
             console.log(`[Arrangement ${config.id}] Stored ${recordsToStore.length} records as pending enrichments`);
           }
         }
+
+        // MEMORY CHECKPOINT 3: After store
+        const memAfterStore = process.memoryUsage();
+        console.log(`[Memory] After store: heap ${Math.round(memAfterStore.heapUsed/1024/1024)}MB, delta +${Math.round((memAfterStore.heapUsed - memAfterEnrich.heapUsed)/1024/1024)}MB`);
+        console.log(`[Memory] Total chunk delta: +${Math.round((memAfterStore.heapUsed - memBefore.heapUsed)/1024/1024)}MB`);
 
         // Add successful records to progress buffer
         for (const enrichedRecord of successful) {
