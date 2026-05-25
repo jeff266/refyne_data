@@ -828,6 +828,7 @@ export default function EnrichPage() {
       // Store apply result and show completion screen
       setApplyResult(data);
       setPreviewState('completed');
+      setShowingPreview(false); // Hide preview to show completion screen
 
       // Refresh gap analysis if data was written
       if (data.written > 0) {
