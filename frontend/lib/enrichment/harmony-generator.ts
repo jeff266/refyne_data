@@ -312,7 +312,7 @@ async function saveHarmony(
         org_id: orgId,
         canonical_field: fieldKey,
         hubspot_property: hubspotProperty,
-        direction: 'inbound',
+        direction: 'write',
         write_policy: 'overwrite_if_blank_or_ours',
         canonical_to_hubspot_map: map,
         updated_at: new Date().toISOString(),
