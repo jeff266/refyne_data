@@ -53,20 +53,18 @@ interface HarmonyPreview {
 }
 
 interface PreviewFieldResult {
+  company_id: string;
+  company_name: string;
   field_key: string;
   field_label: string;
-  before: string | null;
-  after: string | null;
-  would_write: boolean;
+  current_value: string | null;
+  found_value: string | null;
+  found_raw: string | null;
+  source: string | null;
+  status: 'would_fill' | 'would_override' | 'already_set' | 'no_data' | 'skipped';
   harmony_applied: boolean;
   harmony_name: string | null;
-  provider: string | null;
-}
-
-interface PreviewCompanyResult {
-  hubspot_company_id: string;
-  company_name: string;
-  fields: PreviewFieldResult[];
+  selected: boolean;
 }
 
 interface PreviewResults {
@@ -74,14 +72,14 @@ interface PreviewResults {
   status: 'completed';
   records_processed: number;
   duration_seconds: number;
-  results: PreviewCompanyResult[];
+  results: PreviewFieldResult[];
   summary: {
-    fields_would_fill: number;
-    fields_skipped: number;
-    fields_not_found: number;
+    would_fill: number;
+    would_override: number;
+    already_set: number;
+    no_data: number;
+    skipped: number;
     harmonies_applied: number;
-    no_domain: number;
-    already_complete: number;
   };
 }
 
@@ -195,6 +193,7 @@ export default function EnrichPage() {
   const [previewResults, setPreviewResults] = useState<PreviewResults | null>(null);
   const [showingPreview, setShowingPreview] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
 
   // Benchmark state
   const [benchmarking, setBenchmarking] = useState(false);
@@ -803,6 +802,62 @@ export default function EnrichPage() {
   function startOver() {
     setShowingPreview(false);
     setPreviewResults(null);
+    setSelectedRows(new Set());
+  }
+
+  // Initialize selectedRows when preview results load
+  useEffect(() => {
+    if (previewResults) {
+      const initialSelected = new Set<string>();
+      previewResults.results.forEach((result, idx) => {
+        if (result.selected) {
+          initialSelected.add(`${result.company_id}-${result.field_key}`);
+        }
+      });
+      setSelectedRows(initialSelected);
+    }
+  }, [previewResults]);
+
+  // Selection handlers
+  function toggleRowSelection(companyId: string, fieldKey: string) {
+    const rowKey = `${companyId}-${fieldKey}`;
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(rowKey)) {
+        next.delete(rowKey);
+      } else {
+        next.add(rowKey);
+      }
+      return next;
+    });
+  }
+
+  function selectAll() {
+    if (!previewResults) return;
+    const allSelectable = new Set<string>();
+    previewResults.results.forEach(result => {
+      if (result.status === 'would_fill' || result.status === 'would_override') {
+        allSelectable.add(`${result.company_id}-${result.field_key}`);
+      }
+    });
+    setSelectedRows(allSelectable);
+  }
+
+  function deselectAll() {
+    setSelectedRows(new Set());
+  }
+
+  function deselectOverrides() {
+    if (!previewResults) return;
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      previewResults.results.forEach(result => {
+        if (result.status === 'would_override') {
+          next.delete(`${result.company_id}-${result.field_key}`);
+        }
+      });
+      return next;
+    });
   }
 
   async function executeEnrichment() {
@@ -2210,24 +2265,90 @@ export default function EnrichPage() {
               </div>
             </div>
           ) : showingPreview && previewResults ? (
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, padding: 24 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
                 Preview results
               </div>
 
               {/* Summary stats */}
               <div style={{ fontSize: 14, color: C.text2, marginBottom: 20 }}>
-                {previewResults.records_processed} records · {previewResults.summary.fields_would_fill} fields would be filled
+                {previewResults.records_processed} records · {previewResults.summary.would_fill + previewResults.summary.would_override} changes possible
+                {previewResults.summary.would_fill > 0 && (
+                  <span> · {previewResults.summary.would_fill} fill empty</span>
+                )}
+                {previewResults.summary.would_override > 0 && (
+                  <span> · {previewResults.summary.would_override} override existing</span>
+                )}
                 {previewResults.summary.harmonies_applied > 0 && (
-                  <span> · {previewResults.summary.harmonies_applied} normalized by harmony</span>
+                  <span> · {previewResults.summary.harmonies_applied} normalized</span>
                 )}
                 {' · '}
                 {Math.round(previewResults.duration_seconds)}s
               </div>
 
+              {/* Selection summary bar */}
+              {(previewResults.summary.would_fill > 0 || previewResults.summary.would_override > 0) && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '8px 12px',
+                  background: C.hover,
+                  border: `1px solid ${C.border}`,
+                  marginBottom: 12,
+                  fontSize: 12,
+                  color: C.text2,
+                }}>
+                  <span style={{ fontWeight: 500 }}>
+                    {selectedRows.size} selected
+                  </span>
+                  <button
+                    onClick={selectAll}
+                    style={{
+                      padding: '4px 8px',
+                      background: 'transparent',
+                      border: `1px solid ${C.border}`,
+                      color: C.text2,
+                      fontSize: 11,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Select all
+                  </button>
+                  <button
+                    onClick={deselectAll}
+                    style={{
+                      padding: '4px 8px',
+                      background: 'transparent',
+                      border: `1px solid ${C.border}`,
+                      color: C.text2,
+                      fontSize: 11,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Deselect all
+                  </button>
+                  {previewResults.summary.would_override > 0 && (
+                    <button
+                      onClick={deselectOverrides}
+                      style={{
+                        padding: '4px 8px',
+                        background: 'transparent',
+                        border: `1px solid ${C.border}`,
+                        color: C.text2,
+                        fontSize: 11,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Deselect overrides
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Always show table */}
               {previewResults.results && previewResults.results.length > 0 ? (
-                <div style={{ maxHeight: 500, overflowY: 'auto', marginBottom: 20, border: `1px solid ${C.border}`, borderRadius: 4 }}>
+                <div style={{ maxHeight: 500, overflowY: 'auto', marginBottom: 20, border: `1px solid ${C.border}` }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead style={{ position: 'sticky', top: 0, background: C.surface, zIndex: 1 }}>
                       <tr style={{ borderBottom: `1px solid ${C.border}` }}>
@@ -2238,94 +2359,114 @@ export default function EnrichPage() {
                           Field
                         </th>
                         <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                          Current Value
+                          Current
                         </th>
                         <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                          Status
+                          Found
+                        </th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
+                          Action
                         </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {previewResults.results.flatMap(company =>
-                      company.fields.map(field => {
-                        // Determine status and styling
-                        let status = '';
+                      {previewResults.results.map((result, idx) => {
+                        const rowKey = `${result.company_id}-${result.field_key}`;
+                        const isSelected = selectedRows.has(rowKey);
+                        const isSelectable = result.status === 'would_fill' || result.status === 'would_override';
+
+                        // Status display
+                        let statusLabel = '';
                         let statusColor: string = C.text3;
 
-                        if (field.would_write) {
-                          if (field.harmony_applied) {
-                            status = 'Normalized ✦';
-                            statusColor = '#6366F1'; // indigo
-                          } else {
-                            status = 'Filled';
-                            statusColor = '#22C55E'; // green
-                          }
-                        } else if (field.before && field.before.trim() !== '') {
-                          status = 'Already set';
+                        if (result.status === 'would_fill') {
+                          statusLabel = result.harmony_applied ? 'Fill (normalized)' : 'Fill';
+                          statusColor = '#22C55E'; // green
+                        } else if (result.status === 'would_override') {
+                          statusLabel = result.harmony_applied ? 'Override (normalized)' : 'Override';
+                          statusColor = '#F59E0B'; // amber
+                        } else if (result.status === 'already_set') {
+                          statusLabel = 'Already set';
                           statusColor = C.text3;
-                        } else if (!field.after) {
-                          // Check if company has domain
-                          const companyHasDomain = company.fields.some(f => f.field_key === 'domain' && f.before);
-                          if (!companyHasDomain && previewResults.summary.no_domain > 0) {
-                            status = 'No domain';
-                            statusColor = '#F59E0B'; // amber
-                          } else {
-                            status = 'Not found in Apollo';
-                            statusColor = '#F59E0B'; // amber
-                          }
-                        } else {
-                          status = 'Skipped';
+                        } else if (result.status === 'no_data') {
+                          statusLabel = `No data from ${result.source || 'provider'}`;
+                          statusColor = C.text3;
+                        } else if (result.status === 'skipped') {
+                          statusLabel = 'Skipped (no domain/name)';
                           statusColor = C.text3;
                         }
 
                         return (
-                          <tr key={`${company.hubspot_company_id}-${field.field_key}`} style={{ borderBottom: `1px solid ${C.border}` }}>
-                            <td style={{ padding: '8px 12px', color: C.text }}>{company.company_name}</td>
-                            <td style={{ padding: '8px 12px', color: C.text2 }}>{field.field_label}</td>
+                          <tr key={rowKey} style={{ borderBottom: `1px solid ${C.border}` }}>
+                            <td style={{ padding: '8px 12px', color: C.text }}>{result.company_name}</td>
+                            <td style={{ padding: '8px 12px', color: C.text2 }}>{result.field_label}</td>
                             <td style={{ padding: '8px 12px', color: C.text3 }}>
-                              {field.before || <span style={{ fontStyle: 'italic', color: C.text3 }}>(empty)</span>}
+                              {result.current_value || <span style={{ fontStyle: 'italic', color: C.text3 }}>(empty)</span>}
                             </td>
-                            <td style={{ padding: '8px 12px', color: statusColor, fontWeight: 500 }}>
-                              {status}
+                            <td style={{
+                              padding: '8px 12px',
+                              color: result.found_value ? C.text : C.text3,
+                              background: result.found_value ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                            }}>
+                              {result.found_value || <span style={{ fontStyle: 'italic' }}>(none)</span>}
+                              {result.harmony_applied && result.found_value && (
+                                <span style={{ marginLeft: 6, color: '#6366F1', fontSize: 11 }}>✦</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px 12px' }}>
+                              {isSelectable ? (
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleRowSelection(result.company_id, result.field_key)}
+                                    style={{ cursor: 'pointer' }}
+                                  />
+                                  <span style={{ color: statusColor, fontSize: 11, fontWeight: 500 }}>
+                                    {statusLabel}
+                                  </span>
+                                </label>
+                              ) : (
+                                <span style={{ color: statusColor, fontSize: 11 }}>
+                                  {statusLabel}
+                                </span>
+                              )}
                             </td>
                           </tr>
                         );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <div style={{
                   padding: 40,
                   textAlign: 'center',
                   border: `1px solid ${C.border}`,
-                  borderRadius: 4,
                   marginBottom: 20,
                   color: C.text3
                 }}>
                   <div style={{ marginBottom: 8, fontSize: 13 }}>No company data returned</div>
                   <div style={{ fontSize: 11 }}>
-                    The preview API returned no results. This may indicate an issue with the data source or Apollo connection.
+                    The preview API returned no results. This may indicate an issue with the data source or provider connection.
                   </div>
                 </div>
               )}
 
               {/* Warning if all failed */}
-              {previewResults.summary.fields_would_fill === 0 && (
+              {previewResults.summary.would_fill === 0 && previewResults.summary.would_override === 0 && (
                 <div style={{
                   background: C.amberDim,
                   border: `1px solid ${C.amberBrd}`,
-                  borderRadius: 6,
                   padding: 16,
                   marginBottom: 20,
                   fontSize: 13,
                   color: C.text
                 }}>
-                  <strong>Apollo returned no data</strong> for these {previewResults.records_processed} companies.
-                  {previewResults.summary.no_domain > 0 && (
+                  <strong>Provider returned no data</strong> for these {previewResults.records_processed} companies.
+                  {previewResults.summary.skipped > 0 && (
                     <div style={{ marginTop: 8, color: C.text2 }}>
-                      {previewResults.summary.no_domain} companies have no domain in HubSpot and cannot be enriched.
+                      {previewResults.summary.skipped} companies have no domain or name in HubSpot and cannot be enriched.
                     </div>
                   )}
                 </div>
@@ -2333,30 +2474,22 @@ export default function EnrichPage() {
 
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: 12 }}>
-                {previewResults.summary.fields_would_fill > 0 && (
-                  <>
-                    <PrimaryBtn onClick={applyPreviewResults}>
-                      Apply to these {previewResults.records_processed} records
-                    </PrimaryBtn>
-                    <PrimaryBtn onClick={runFullEnrichment}>
-                      Run on all {(companyScope === 'segment' ? (previewCount || 0) : gapAnalysis?.total_companies || 0).toLocaleString()} companies →
-                    </PrimaryBtn>
-                  </>
-                )}
+                <PrimaryBtn onClick={applyPreviewResults} disabled={selectedRows.size === 0}>
+                  Apply selected ({selectedRows.size}) →
+                </PrimaryBtn>
                 <button
                   onClick={startOver}
                   style={{
                     padding: '10px 16px',
                     background: 'transparent',
                     border: `1px solid ${C.border}`,
-                    borderRadius: 6,
                     color: C.text2,
                     fontSize: 13,
                     fontWeight: 500,
                     cursor: 'pointer',
                   }}
                 >
-                  {previewResults.summary.fields_would_fill > 0 ? 'Start over' : 'Try different sample →'}
+                  Start over
                 </button>
               </div>
             </div>

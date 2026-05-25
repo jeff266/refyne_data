@@ -43,14 +43,18 @@ interface PreviewRequest {
 }
 
 interface PreviewFieldResult {
+  company_id: string;
+  company_name: string;
   field_key: string;
   field_label: string;
-  before: string | null;
-  after: string | null;
-  would_write: boolean;
+  current_value: string | null;
+  found_value: string | null;
+  found_raw: string | null;
+  source: string | null;
+  status: 'would_fill' | 'would_override' | 'already_set' | 'no_data' | 'skipped';
   harmony_applied: boolean;
   harmony_name: string | null;
-  provider: string | null;
+  selected: boolean;
 }
 
 interface PreviewCompanyResult {
@@ -64,14 +68,14 @@ interface PreviewResponse {
   status: 'completed';
   records_processed: number;
   duration_seconds: number;
-  results: PreviewCompanyResult[];
+  results: PreviewFieldResult[]; // Flattened array of field results
   summary: {
-    fields_would_fill: number;
-    fields_skipped: number;
-    fields_not_found: number;
+    would_fill: number;
+    would_override: number;
+    already_set: number;
+    no_data: number;
+    skipped: number;
     harmonies_applied: number;
-    no_domain: number;
-    already_complete: number;
   };
 }
 
@@ -208,13 +212,13 @@ export async function POST(req: NextRequest) {
     const harmonies = await loadHarmonies(ctx.orgId, connection.portal_id, body.fields);
 
     // Enrich companies
-    const results: PreviewCompanyResult[] = [];
-    let fieldsWouldFill = 0;
-    let fieldsSkipped = 0;
-    let fieldsNotFound = 0;
+    const results: PreviewFieldResult[] = []; // Flattened field results
+    let wouldFill = 0;
+    let wouldOverride = 0;
+    let alreadySet = 0;
+    let noData = 0;
+    let skipped = 0;
     let harmoniesApplied = 0;
-    let noDomain = 0;
-    let alreadyComplete = 0;
 
     // Provider Promise cache - prevents race condition when multiple fields query same provider
     const providerPromiseCache = new Map<string, Promise<any>>();
@@ -222,26 +226,8 @@ export async function POST(req: NextRequest) {
 
     for (const company of companies) {
       const companyDomain = company.properties.domain || '';
-
-      // Track if company has no domain
-      if (!companyDomain) {
-        noDomain++;
-      }
-
-      // Track if all selected fields are already complete
-      const allFieldsComplete = body.fields.every(f => {
-        const val = company.properties[f];
-        return val && val.trim() !== '';
-      });
-      if (allFieldsComplete) {
-        alreadyComplete++;
-      }
-
-      const companyResult: PreviewCompanyResult = {
-        hubspot_company_id: company.id,
-        company_name: company.properties.name || companyDomain || company.id,
-        fields: [],
-      };
+      const companyId = company.id;
+      const companyName = company.properties.name || companyDomain || company.id;
 
       // Enrich via providers with Promise cache (prevents duplicate API calls)
       let providerData: any = null;
@@ -307,16 +293,16 @@ export async function POST(req: NextRequest) {
 
       // Process each field
       for (const fieldKey of body.fields) {
-        const beforeValue = company.properties[fieldKey] || null;
-        let afterValue: string | null = null;
-        let provider: string | null = usedProvider;
+        const currentValue = company.properties[fieldKey] || null;
+        let foundValue: string | null = null;
+        let foundRaw: string | null = null;
+        let source: string | null = usedProvider;
 
-        // Extract value from provider data
+        // Extract raw and normalized values from provider data
         if (providerData) {
-          if (usedProvider === 'apollo' && providerData.normalized) {
-            afterValue = getFieldValueFromProvider(providerData.normalized, fieldKey, 'apollo');
-          } else if (usedProvider === 'graphiq' && providerData.normalized) {
-            afterValue = getFieldValueFromProvider(providerData.normalized, fieldKey, 'graphiq');
+          if (usedProvider === 'apollo' || usedProvider === 'graphiq') {
+            foundRaw = providerData.raw?.[fieldKey] || getFieldValueFromProvider(providerData.raw, fieldKey, usedProvider);
+            foundValue = getFieldValueFromProvider(providerData.normalized, fieldKey, usedProvider);
           }
         }
 
@@ -324,53 +310,60 @@ export async function POST(req: NextRequest) {
         let harmonyApplied = false;
         let harmonyName: string | null = null;
 
-        if (afterValue && harmonies[fieldKey]) {
+        if (foundValue && harmonies[fieldKey]) {
           const harmony = harmonies[fieldKey];
           const normalized = await applyHarmony(
-            afterValue,
+            foundValue,
             harmony,
             ctx.orgId
           );
 
-          if (normalized && normalized !== afterValue) {
-            afterValue = normalized;
+          if (normalized && normalized !== foundValue) {
+            foundValue = normalized;
             harmonyApplied = true;
             harmonyName = harmony.name;
             harmoniesApplied++;
           }
         }
 
-        // Determine if we would write
-        let wouldWrite = false;
-        if (afterValue) {
-          if (body.write_policy === 'fill_empty') {
-            wouldWrite = !beforeValue || beforeValue.trim() === '';
-          } else {
-            wouldWrite = true;
-          }
+        // Determine status
+        let status: 'would_fill' | 'would_override' | 'already_set' | 'no_data' | 'skipped';
+        let selected = false;
+
+        if (!companyDomain && !company.properties.name) {
+          status = 'skipped';
+          skipped++;
+        } else if (!foundValue) {
+          status = 'no_data';
+          noData++;
+        } else if (!currentValue || currentValue.trim() === '') {
+          status = 'would_fill';
+          wouldFill++;
+          selected = true; // Auto-select fill actions
+        } else if (body.write_policy === 'overwrite' && currentValue !== foundValue) {
+          status = 'would_override';
+          wouldOverride++;
+          selected = true; // Auto-select override actions
+        } else {
+          status = 'already_set';
+          alreadySet++;
         }
 
-        if (wouldWrite) {
-          fieldsWouldFill++;
-        } else if (afterValue && beforeValue) {
-          fieldsSkipped++;
-        } else if (!afterValue) {
-          fieldsNotFound++;
-        }
-
-        companyResult.fields.push({
+        results.push({
+          company_id: companyId,
+          company_name: companyName,
           field_key: fieldKey,
           field_label: FIELD_LABELS[fieldKey] || fieldKey,
-          before: beforeValue,
-          after: afterValue,
-          would_write: wouldWrite,
+          current_value: currentValue,
+          found_value: foundValue,
+          found_raw: foundRaw,
+          source: source,
+          status: status,
           harmony_applied: harmonyApplied,
           harmony_name: harmonyName,
-          provider: provider,
+          selected: selected,
         });
       }
-
-      results.push(companyResult);
     }
 
     // Generate preview ID
@@ -384,12 +377,12 @@ export async function POST(req: NextRequest) {
       duration_seconds: (Date.now() - startTime) / 1000,
       results,
       summary: {
-        fields_would_fill: fieldsWouldFill,
-        fields_skipped: fieldsSkipped,
-        fields_not_found: fieldsNotFound,
+        would_fill: wouldFill,
+        would_override: wouldOverride,
+        already_set: alreadySet,
+        no_data: noData,
+        skipped: skipped,
         harmonies_applied: harmoniesApplied,
-        no_domain: noDomain,
-        already_complete: alreadyComplete,
       },
     };
 
@@ -397,15 +390,14 @@ export async function POST(req: NextRequest) {
     const responseSize = JSON.stringify(response).length;
     console.log('[Preview API] Built response:', {
       results_count: results.length,
-      first_company: results[0]?.company_name,
-      first_company_fields: results[0]?.fields?.length,
+      first_result: results[0] ? `${results[0].company_name} - ${results[0].field_label}` : 'none',
       response_size_kb: Math.round(responseSize / 1024),
-      response_has_results: !!response.results,
-      response_results_length: response.results?.length,
       api_calls_made: apiCallCount,
-      fields_would_fill: fieldsWouldFill,
-      fields_skipped: fieldsSkipped,
-      fields_not_found: fieldsNotFound
+      would_fill: wouldFill,
+      would_override: wouldOverride,
+      already_set: alreadySet,
+      no_data: noData,
+      skipped: skipped
     });
 
     // Cache results in Redis for 30 minutes
