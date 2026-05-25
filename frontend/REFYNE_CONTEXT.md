@@ -1,6 +1,6 @@
 # Refyne Context
 
-**Last updated:** 2026-05-24
+**Last updated:** 2026-05-25
 **Status:** Active development
 **Product name:** TBD (Refyne is working name)
 
@@ -475,6 +475,15 @@ This was the root cause of the May 21 worker failure.
 | **Worker pool size** | Increased to 5 after memory confirmed stable (was 10, reduced to 3, now 5) |
 | **History detail error logging** | Enhanced error messages distinguish arrangement ID vs run ID mismatch |
 
+### Session Accomplishments (May 25 2026)
+
+| Accomplishment | Details |
+|----------------|---------|
+| **Provider cache race condition FIX** | Changed from parallel `Promise.allSettled` to sequential field processing. Cache now shows MISS→HIT→HIT pattern instead of duplicate MISSes. Only 1 API call per company regardless of field count. |
+| **GraphIQ provider integration** | Added GraphIQ alongside Apollo as enrichment provider. Uses same BYOK pattern with API key from provider_connections. Rate limiter (100 req/min) and provider cache fully integrated. Returns NAICS codes for accurate industry mapping. |
+| **storePendingEnrichments field lookup bug** | Fixed critical mismatch - was iterating HubSpot property keys but looking up canonical field keys. Now iterates `fieldDetail` (canonical) and maps to HubSpot keys via `mapCanonicalToHubSpot()`. Pending enrichment values now populate correctly. |
+| **Test scripts for GraphIQ** | Created `test-graphiq-simple.ts` and `test-graphiq-integration.ts` to verify provider integration. All tests passing - adapter init, enrichment, normalized field extraction confirmed. |
+
 ### Built but Not End-to-End Verified
 
 | Feature | Status | What Needs Verification |
@@ -499,18 +508,30 @@ This was the root cause of the May 21 worker failure.
 
 ## Pending Work — Priority Order
 
-1. **Run three QA queries** after current run completes, verify Spec 1 backend (pending_enrichment_values, enrichment_review_sessions, org_enrichment_settings)
-2. **Fix history detail 'Run not found' root cause** - enhanced logging added, need to identify why ID mismatch occurs
-3. **Build enrichment review UI** on Enrich page (Spec 1 UI: approve/reject modal for pending enrichments)
-4. **Serper+Haiku provider** - **P0 for Frontera** - Apollo 422 rate ~95%+, fills 0 fields without this
-5. CSV import workflow (/import page with upload, mapping, preview, confirm)
-6. Field mappings guided setup (onboarding flow for canonical ↔ HubSpot mapping)
-7. **refyne_record_status table** - track last enriched timestamp per field per company
-8. **Job priority queue** - high-priority runs jump ahead of long-running jobs
-9. Credit system and pricing page (Stripe metering integration, usage-based pricing)
-10. Prospect page canonical schema normalization (merge Apollo + GraphIQ + ZoomInfo results by domain)
-11. Normalize BullMQ queue implementation (async processing for normalize apply)
-12. GitHub Harmonies repo (open-source default library for community contributions)
+### High Priority (Next Session)
+
+1. **Provider cache race condition (store Promise not value)** - CRITICAL: Current fix uses sequential processing (slower). Better fix: cache the Promise itself, not the resolved value. All fields can run in parallel, first field's Promise gets cached, subsequent fields await same Promise. No duplicate API calls, no sequential bottleneck.
+
+2. **Progress counter bug (450/213 wrong total)** - `processed_records` showing incorrect totals. Example: "450 of 213 companies processed" indicates counter arithmetic is broken. Need to debug total calculation vs processed increment logic.
+
+3. **Fields filled/skipped = 0 bug** - Despite fix deployed May 24, counters still showing 0 in production. Indicates either increment logic not firing or Supabase update failing silently. Need production run with enhanced logging.
+
+4. **Completion screen after enrichment** - No UI feedback when enrichment run completes. User sees progress bar hit 100% then nothing. Need completion modal with summary: records processed, fields filled, credits used, review link (if pending_review).
+
+5. **History detail Run not found** - Error on `/history/[run_id]` page. Enhanced logging deployed but root cause not yet identified. Suspect either arrangement_id vs run_id confusion or missing run_id in arrangement_runs table.
+
+### Medium Priority
+
+6. **Build enrichment review UI** on Enrich page (Spec 1 UI: approve/reject modal for pending enrichments)
+7. **Serper+Haiku provider** - **P0 for Frontera** - Apollo 422 rate ~95%+, fills 0 fields without this
+8. CSV import workflow (/import page with upload, mapping, preview, confirm)
+9. Field mappings guided setup (onboarding flow for canonical ↔ HubSpot mapping)
+10. **refyne_record_status table** - track last enriched timestamp per field per company
+11. **Job priority queue** - high-priority runs jump ahead of long-running jobs
+12. Credit system and pricing page (Stripe metering integration, usage-based pricing)
+13. Prospect page canonical schema normalization (merge Apollo + GraphIQ + ZoomInfo results by domain)
+14. Normalize BullMQ queue implementation (async processing for normalize apply)
+15. GitHub Harmonies repo (open-source default library for community contributions)
 
 ---
 
