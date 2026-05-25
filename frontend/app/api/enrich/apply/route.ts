@@ -194,8 +194,12 @@ export async function POST(req: NextRequest) {
             org_id: ctx.orgId,
             name: 'Preview Apply',
             description: 'System arrangement for tracking preview apply operations',
+            source_type: 'preview',
+            source_config: {},
             enrichment_steps: [],
-            is_active: false,
+            output_destination: 'hubspot',
+            output_config: {},
+            created_by: ctx.userId,
           })
           .select('id')
           .single();
