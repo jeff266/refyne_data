@@ -978,7 +978,7 @@ async function processLiveRunJob(
 
         // MEMORY CHECKPOINT 1: Before enrichment
         const memBefore = process.memoryUsage();
-        console.log(`[Memory] Before chunk: heap ${Math.round(memBefore.heapUsed/1024/1024)}MB`);
+        console.log(`[Memory] Before chunk: heap ${Math.round(memBefore.heapUsed/1024/1024)}MB, listeners: ${process.listenerCount('uncaughtException')}`);
 
         // Process chunk with worker pool (maintains WORKER_POOL_SIZE concurrent requests)
         const { successful, failed } = await processWithPool(
