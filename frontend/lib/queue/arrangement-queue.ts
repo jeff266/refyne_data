@@ -56,7 +56,7 @@ const WORKER_CONCURRENCY = 5; // Railway has 8GB RAM, streaming keeps memory low
  * Provider batch size - how many records to enrich in parallel per batch.
  */
 const PROVIDER_BATCH_SIZE = 3; // Legacy: no longer used, kept for reference
-const WORKER_POOL_SIZE = 3; // Reduced to prevent memory accumulation
+const WORKER_POOL_SIZE = 5; // Memory stable at 3MB per chunk, increasing for speed
 
 /**
  * Progress batch size - how many progress records to insert at once.
@@ -841,6 +841,8 @@ async function processLiveRunJob(
   let processedCount = checkpointData?.processedCount || 0;
   let successfulCount = 0;
   let failedCount = 0;
+  let skippedCount = 0;
+  let fieldsFilledCount = 0;
   let creditsUsed = 0;
 
   // Check if using new field_configs format or legacy enrichment_steps
@@ -1034,6 +1036,8 @@ async function processLiveRunJob(
         for (const enrichedRecord of successful) {
           successfulCount++;
           creditsUsed += enrichedRecord.creditsUsed;
+          skippedCount += enrichedRecord.fieldsSkipped;
+          fieldsFilledCount += enrichedRecord.fieldsWritten;
           lastProcessedId = enrichedRecord.companyId;
 
           progressBuffer.push({
@@ -1085,6 +1089,8 @@ async function processLiveRunJob(
               processed_records: processedCount,
               successful_records: successfulCount,
               failed_records: failedCount,
+              skipped_records: skippedCount,
+              fields_filled: fieldsFilledCount,
               actual_credits_used: creditsUsed,
             })
             .eq('id', runId);
@@ -1360,6 +1366,8 @@ async function processLiveRunJob(
         for (const enrichedRecord of successful) {
           successfulCount++;
           creditsUsed += enrichedRecord.creditsUsed;
+          skippedCount += enrichedRecord.fieldsSkipped;
+          fieldsFilledCount += enrichedRecord.fieldsWritten;
           lastProcessedId = enrichedRecord.companyId;
 
           progressBuffer.push({
@@ -1411,6 +1419,8 @@ async function processLiveRunJob(
               processed_records: processedCount,
               successful_records: successfulCount,
               failed_records: failedCount,
+              skipped_records: skippedCount,
+              fields_filled: fieldsFilledCount,
               actual_credits_used: creditsUsed,
             })
             .eq('id', runId);
@@ -1466,6 +1476,8 @@ async function processLiveRunJob(
           processed_records: processedCount,
           successful_records: successfulCount,
           failed_records: failedCount,
+          skipped_records: skippedCount,
+          fields_filled: fieldsFilledCount,
           actual_credits_used: creditsUsed,
           completed_at: new Date().toISOString(),
         })
