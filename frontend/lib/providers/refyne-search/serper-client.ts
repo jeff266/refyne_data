@@ -50,32 +50,31 @@ export function buildCompanyQueries(
   fieldKeys: string[]
 ): string[] {
   const queries: string[] = [];
-  const target = domain ?? companyName;
 
-  if (!target) return queries;
+  if (!domain && !companyName) return queries;
 
-  // Base query: LinkedIn for employee count + industry
-  if (fieldKeys.includes('employee_count') || fieldKeys.includes('industry')) {
-    queries.push(
-      domain
-        ? `site:linkedin.com/company "${domain.replace(/\.[^.]+$/, '')}"`
-        : `site:linkedin.com/company "${companyName}"`
-    );
+  // Query 1: LinkedIn by domain (best signal for employee count + industry)
+  if (domain) {
+    queries.push(`site:linkedin.com/company "${domain.replace(/\.[^.]+$/, '')}"`);
   }
 
-  // Revenue query: Crunchbase, Pitchbook, ZoomInfo
-  if (fieldKeys.includes('revenue')) {
-    queries.push(
-      `"${companyName ?? domain}" revenue annual 2024 OR 2025`
-    );
+  // Query 2: LinkedIn by company name (fallback for domains with no SEO)
+  if (companyName && companyName !== domain) {
+    queries.push(`site:linkedin.com/company "${companyName}"`);
   }
 
-  // General firmographic query
-  queries.push(
-    domain
-      ? `"${domain}" company employees industry`
-      : `"${companyName}" company employees industry headquarters`
-  );
+  // Query 3: General web search with company name
+  // CRITICAL for small local businesses - finds LinkedIn, Glassdoor, Indeed, etc.
+  // even when domain itself has no indexed pages
+  if (companyName) {
+    queries.push(`"${companyName}" ABA therapy employees OR revenue OR staff`);
+  }
 
-  return queries;
+  // Query 4: Domain general search (fallback)
+  if (domain && queries.length < 3) {
+    queries.push(`"${domain}" OR "${domain.replace(/\.[^.]+$/, '')}" employees`);
+  }
+
+  // Deduplicate and return max 3 queries to save API costs
+  return [...new Set(queries)].slice(0, 3);
 }
