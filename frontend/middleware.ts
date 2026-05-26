@@ -26,13 +26,19 @@ export default clerkMiddleware(async (auth, request) => {
 
     // Only redirect if we haven't already tried to set the org (prevent redirect loop)
     if (userId && !orgId && !url.searchParams.has('__clerk_org')) {
-      const client = await clerkClient();
-      const userMemberships = await client.users.getOrganizationMembershipList({ userId });
+      try {
+        const client = await clerkClient();
+        const userMemberships = await client.users.getOrganizationMembershipList({ userId });
 
-      if (userMemberships.data.length > 0) {
-        const firstOrg = userMemberships.data[0].organization;
-        url.searchParams.set('__clerk_org', firstOrg.id);
-        return NextResponse.redirect(url);
+        if (userMemberships.data.length > 0) {
+          const firstOrg = userMemberships.data[0].organization;
+          url.searchParams.set('__clerk_org', firstOrg.id);
+          return NextResponse.redirect(url);
+        }
+      } catch (error) {
+        // Clerk API error - log and continue without org activation
+        console.error('[Middleware] Clerk API error:', error);
+        // Continue to page without redirecting
       }
     }
   }
