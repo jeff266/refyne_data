@@ -3,7 +3,8 @@
 // Model: accounts/fireworks/models/deepseek-v4-flash
 // US-hosted for better latency vs direct DeepSeek China routing
 
-const FIREWORKS_API_KEY = process.env.REFYNE_FIREWORKS_KEY;
+// Railway uses FIREWORKS_API_KEY, local dev uses REFYNE_FIREWORKS_KEY
+const FIREWORKS_API_KEY = process.env.FIREWORKS_API_KEY || process.env.REFYNE_FIREWORKS_KEY;
 const FIREWORKS_ENDPOINT = 'https://api.fireworks.ai/inference/v1/chat/completions';
 // DeepSeek V4 Flash - fastest and cheapest DeepSeek model on Fireworks
 const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-v4-flash';

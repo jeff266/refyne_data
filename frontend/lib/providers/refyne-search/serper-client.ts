@@ -2,7 +2,8 @@
 // Keys managed centrally by Refyne (not org-specific)
 // Never exposed to clients
 
-const SERPER_API_KEY = process.env.REFYNE_SERPER_KEY;
+// Railway uses SERPER_API_KEY, local dev uses REFYNE_SERPER_KEY
+const SERPER_API_KEY = process.env.SERPER_API_KEY || process.env.REFYNE_SERPER_KEY;
 const SERPER_ENDPOINT = 'https://google.serper.dev/search';
 
 export interface SerperResult {
