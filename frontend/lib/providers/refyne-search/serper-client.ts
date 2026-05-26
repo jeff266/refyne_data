@@ -76,5 +76,5 @@ export function buildCompanyQueries(
   }
 
   // Deduplicate and return max 3 queries to save API costs
-  return [...new Set(queries)].slice(0, 3);
+  return Array.from(new Set(queries)).slice(0, 3);
 }
