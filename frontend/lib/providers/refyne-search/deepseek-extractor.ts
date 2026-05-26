@@ -102,6 +102,12 @@ export async function extractWithDeepSeek(
   searchResults: Array<{ query: string; results: any[] }>,
   fieldKeys: string[]
 ): Promise<ExtractionResult> {
+  // Debug logging for diagnostics
+  console.log('[Fireworks] API key prefix:',
+    FIREWORKS_API_KEY ? FIREWORKS_API_KEY.slice(0, 8) + '...' : 'MISSING');
+  console.log('[Fireworks] Model:', DEEPSEEK_MODEL);
+  console.log('[Fireworks] Endpoint:', FIREWORKS_ENDPOINT);
+
   const prompt = buildExtractionPrompt(
     companyName,
     domain,
