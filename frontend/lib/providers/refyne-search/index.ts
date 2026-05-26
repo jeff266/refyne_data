@@ -84,7 +84,7 @@ export async function refyneSearch(
         value: null,
         confidence: 0,
         level: 'insufficient',
-        evidence: '',
+        evidence: 'No domain or company name provided',
         sources: [],
         fromCache: false,
       });
@@ -102,11 +102,46 @@ export async function refyneSearch(
 
   const successfulSearches = searchResults
     .filter((r) => r.status === 'fulfilled')
-    .map((r) => (r as PromiseFulfilledResult<any>).value);
+    .map((r) => (r as PromiseFulfilledResult<any>).value)
+    .filter((sr) => sr.results && sr.results.length > 0); // Filter out empty results
 
-  const serperCallCount = successfulSearches.length;
+  const serperCallCount = queries.length; // Count attempts, not just successful
 
-  // Extract with DeepSeek
+  // Check if we got any actual search results
+  const hasResults = successfulSearches.length > 0 &&
+    successfulSearches.some(sr => sr.results && sr.results.length > 0);
+
+  if (!hasResults) {
+    // No search results found - skip DeepSeek entirely
+    console.log(`[Refyne Search] No search results for ${domain || companyName}, skipping extraction`);
+
+    for (const fieldKey of fieldsToSearch) {
+      results.push({
+        fieldKey,
+        value: null,
+        confidence: 0,
+        level: 'insufficient',
+        evidence: 'No search results found',
+        sources: [],
+        fromCache: false,
+      });
+
+      await logUsage(
+        orgId,
+        lookupKey ?? companyName ?? 'unknown',
+        fieldKey,
+        false,
+        0,
+        serperCallCount,
+        0,
+        0,
+        0
+      );
+    }
+    return results;
+  }
+
+  // Extract with DeepSeek (only if we have search results)
   const extraction = await extractWithDeepSeek(
     companyName,
     domain,

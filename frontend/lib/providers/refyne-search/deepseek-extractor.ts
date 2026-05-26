@@ -31,9 +31,23 @@ export interface ExtractionResult {
 
 const SYSTEM_PROMPT = `You are a company data extraction specialist.
 Extract structured firmographic data from web search results.
-Return ONLY valid JSON. No explanation, no markdown, no code blocks.
-Only extract values explicitly stated in the results.
-Do not infer, estimate, or hallucinate values.`;
+
+CRITICAL: Return ONLY valid JSON matching the exact structure requested.
+- NO explanations before or after the JSON
+- NO markdown code blocks
+- NO comments inside the JSON
+- If no evidence found, return the structure with null values and 0.0 confidence
+- NEVER explain why you cannot extract data - just return the null structure
+
+Format:
+{
+  "field_name": {
+    "value": null,
+    "confidence": 0.0,
+    "evidence": "",
+    "sources": []
+  }
+}`;
 
 function buildExtractionPrompt(
   companyName: string | null,
