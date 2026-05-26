@@ -5,12 +5,13 @@
 
 const FIREWORKS_API_KEY = process.env.REFYNE_FIREWORKS_KEY;
 const FIREWORKS_ENDPOINT = 'https://api.fireworks.ai/inference/v1/chat/completions';
-// Updated to use DeepSeek V3.2 (current release on Fireworks)
-const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-v3p2';
+// DeepSeek V4 Flash - fastest and cheapest DeepSeek model on Fireworks
+const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-v4-flash';
 
-// Pricing constants for DeepSeek V3.2 on Fireworks
-const INPUT_COST_PER_TOKEN = 0.00000056;
-const OUTPUT_COST_PER_TOKEN = 0.00000168;
+// Pricing constants for DeepSeek V4 Flash on Fireworks
+// Source: https://fireworks.ai/pricing
+const INPUT_COST_PER_TOKEN = 0.00000014;  // $0.14 per 1M tokens
+const OUTPUT_COST_PER_TOKEN = 0.00000028; // $0.28 per 1M tokens
 
 export interface ExtractionField {
   value: string | number | null;
@@ -102,12 +103,6 @@ export async function extractWithDeepSeek(
   searchResults: Array<{ query: string; results: any[] }>,
   fieldKeys: string[]
 ): Promise<ExtractionResult> {
-  // Debug logging for diagnostics
-  console.log('[Fireworks] API key prefix:',
-    FIREWORKS_API_KEY ? FIREWORKS_API_KEY.slice(0, 8) + '...' : 'MISSING');
-  console.log('[Fireworks] Model:', DEEPSEEK_MODEL);
-  console.log('[Fireworks] Endpoint:', FIREWORKS_ENDPOINT);
-
   const prompt = buildExtractionPrompt(
     companyName,
     domain,
