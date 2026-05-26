@@ -24,8 +24,8 @@ export async function GET() {
       );
     }
 
-    // Query arrangement_runs joined with arrangements
-    const { data: runs, error } = await supabase
+    // Query both arrangement_runs and enrichment_runs
+    const { data: arrangementRuns, error: arrangementError } = await supabase
       .from('arrangement_runs')
       .select(`
         id,
@@ -49,18 +49,27 @@ export async function GET() {
       `)
       .eq('org_id', ctx.orgId)
       .order('started_at', { ascending: false })
-      .limit(10);
+      .limit(20);
 
-    if (error) {
-      console.error('Failed to fetch enrichment history:', error);
+    const { data: enrichmentRuns, error: enrichmentError } = await supabase
+      .from('enrichment_runs')
+      .select('*')
+      .eq('org_id', ctx.orgId)
+      .order('started_at', { ascending: false })
+      .limit(20);
+
+    if (arrangementError && enrichmentError) {
+      console.error('Failed to fetch enrichment history:', { arrangementError, enrichmentError });
       return NextResponse.json(
         { error: 'Failed to fetch enrichment history' },
         { status: 500 }
       );
     }
 
-    // Transform runs for display
-    const history = runs.map((run: any) => {
+    const runs = arrangementRuns || [];
+
+    // Transform arrangement runs for display
+    const arrangementHistory = runs.map((run: any) => {
       const arrangement = run.arrangements;
       const enrichmentSteps = arrangement?.enrichment_steps || [];
       const isPreviewApply = run.run_type === 'preview_apply';
@@ -112,10 +121,34 @@ export async function GET() {
         started_at: run.started_at,
         completed_at: run.completed_at,
         error_message: run.error_message,
+        run_type: 'arrangement',
       };
     });
 
-    return NextResponse.json({ runs: history });
+    // Transform enrichment runs for display
+    const enrichmentHistory = (enrichmentRuns || []).map((run: any) => ({
+      id: run.id,
+      arrangement_id: null,
+      arrangement_name: 'Ad-hoc Enrichment',
+      status: run.status,
+      provider: run.providers.join(', '),
+      fields: run.fields,
+      records_processed: run.processed_records || 0,
+      records_total: run.total_records || 0,
+      fields_filled: run.fields_enriched || 0,
+      started_at: run.started_at,
+      completed_at: run.completed_at,
+      error_message: run.error_message,
+      run_type: 'enrichment',
+      cost_usd: run.cost_usd,
+    }));
+
+    // Merge and sort by started_at
+    const allHistory = [...arrangementHistory, ...enrichmentHistory]
+      .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+      .slice(0, 10);
+
+    return NextResponse.json({ runs: allHistory });
   } catch (error) {
     console.error('Failed to fetch enrichment history:', error);
     return NextResponse.json(
