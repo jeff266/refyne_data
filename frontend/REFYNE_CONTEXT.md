@@ -1,6 +1,6 @@
 # Refyne Context
 
-**Last updated:** 2026-05-25
+**Last updated:** 2026-05-26
 **Status:** Active development
 **Product name:** TBD (Refyne is working name)
 
@@ -84,7 +84,7 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 
 1. **TypeScript consolidation:** All provider adapters, normalization engine, and pipeline logic in TypeScript. No Python runtime. Decision is locked per ARCHITECTURE.md.
 
-2. **BYOK (Bring Your Own Keys) model:** Customers use their own Apollo, ZoomInfo, Clearbit, Cognism accounts. Managed providers (Serper, GraphIQ, TinyFish) use platform keys. No credit markup. 88-92% gross margins. This is the core business model.
+2. **BYOK (Bring Your Own Keys) model:** Customers use their own Apollo, ZoomInfo, Clearbit, Cognism accounts. Managed providers (GraphIQ, TinyFish, Refyne Search) use platform keys. No credit markup. 88-92% gross margins. This is the core business model. Refyne Search is branded as proprietary but uses Fireworks AI (DeepSeek V4 Flash) + Serper under the hood.
 
 3. **Normalize-before-resolve ordering:** Multi-provider enrichment normalizes each provider's data first, then resolves conflicts across normalized candidates. Not the other way around. Critical for consensus and conservative strategies to work.
 
@@ -241,9 +241,10 @@ Platform provides keys. No customer setup required.
 
 | Provider | Auth Method | Notes |
 |----------|-------------|-------|
-| **Serper** | API key | process.env.SERPER_API_KEY |
+| **Serper** | API key | process.env.REFYNE_SERPER_KEY (for Refyne Search) |
 | **GraphIQ** | API key | process.env.GRAPHIQ_API_KEY |
 | **TinyFish** | API key | process.env.TINYFISH_API_KEY |
+| **Refyne Search** | Fireworks AI + Serper | process.env.REFYNE_FIREWORKS_KEY + REFYNE_SERPER_KEY. Branded as proprietary. Model: accounts/fireworks/models/deepseek-v4-flash. Cost: $0.14/$0.28 per M tokens. |
 
 ### Key Storage
 
@@ -484,6 +485,19 @@ This was the root cause of the May 21 worker failure.
 | **storePendingEnrichments field lookup bug** | Fixed critical mismatch - was iterating HubSpot property keys but looking up canonical field keys. Now iterates `fieldDetail` (canonical) and maps to HubSpot keys via `mapCanonicalToHubSpot()`. Pending enrichment values now populate correctly. |
 | **Test scripts for GraphIQ** | Created `test-graphiq-simple.ts` and `test-graphiq-integration.ts` to verify provider integration. All tests passing - adapter init, enrichment, normalized field extraction confirmed. |
 
+### Session Accomplishments (May 26 2026)
+
+| Accomplishment | Details |
+|----------------|---------|
+| **GraphIQ end-to-end write confirmed** | First real production write: 44 companies enriched, 0 failures. Full flow working: GraphIQ → harmony → preview → selective write → HubSpot. |
+| **Preview review table with selective write** | Found value column with arrow notation: `Healthcare → HOSPITAL_HEALTH_CARE [high]`. Checkboxes for selective write. Select all / Deselect all / Deselect overrides controls. Industry enum validation before write. |
+| **Harmony auto-generation** | Connected harmony-generator.ts to preview endpoint. NAICS crosswalk first, Claude fallback. Stored in field_mappings. Second preview confirmed reuse: `[Harmony] Using stored harmony, skipping Claude`. |
+| **Gap analysis refresh after apply** | Triggers automatically after successful write. |
+| **Completion screen (P4)** | Inline replacement after apply. Shows company count, field breakdown, View in HubSpot, Run another buttons. |
+| **HubSpot filterGroup limit fix** | Two-call approach for 6+ fields instead of slicing to 5. Prevents missing records in enrichment scope. |
+| **History Run not found fix (P5)** | Fixed column name mismatch, preview apply runs now log to history correctly. |
+| **Refyne Search architecture complete** | Full implementation: Serper + DeepSeek V4 Flash via Fireworks.ai. 4 provider files built (serper-client.ts, deepseek-extractor.ts, cache.ts, index.ts). Database tables created (refyne_company_cache, refyne_search_usage). Preview API integration complete. UI confidence display (high/medium/low badges) with evidence tooltips. Cost: $0.14/$0.28 per million tokens. Model: accounts/fireworks/models/deepseek-v4-flash. |
+
 ### Built but Not End-to-End Verified
 
 | Feature | Status | What Needs Verification |
@@ -493,12 +507,13 @@ This was the root cause of the May 21 worker failure.
 | Arrangements detail | Partial | Crash fixed, content never verified |
 | Inline live feed | Partial | Progress bar works, row-by-row feed not populating |
 | Worker parallel processing | Complete | Benchmark with 2,816 records needed, target <20 min |
+| **Refyne Search** | Built, not tested | Fireworks API key and Serper key not yet verified. Model: deepseek-v4-flash. End-to-end preview test needed on 10 companies. Cache behavior not confirmed. |
 
 ### Not Started
 
 | Feature | Priority |
 |---------|----------|
-| Serper+Haiku provider | P0 - core coverage for domain-less companies |
+| Haiku extractor (fallback for Refyne Search) | P0 - 5s timeout fallback when DeepSeek V4 Flash slow |
 | Normalize queue (BullMQ) | P1 - currently synchronous stub |
 | Railway worker migration | P1 - auto-scaling for multi-client |
 | Salesforce connector | P2 |
@@ -510,21 +525,22 @@ This was the root cause of the May 21 worker failure.
 
 ### High Priority (Next Session)
 
-1. **Provider cache race condition (store Promise not value)** - CRITICAL: Current fix uses sequential processing (slower). Better fix: cache the Promise itself, not the resolved value. All fields can run in parallel, first field's Promise gets cached, subsequent fields await same Promise. No duplicate API calls, no sequential bottleneck.
+1. **Refyne Search: Fireworks V4 Flash API test** - BLOCKING: Model string updated to `deepseek-v4-flash`, pricing constants updated ($0.14/$0.28 per M). Need to verify Fireworks API key works and returns coherent extraction. Create `test-fireworks.ts` script.
 
-2. **Progress counter bug (450/213 wrong total)** - `processed_records` showing incorrect totals. Example: "450 of 213 companies processed" indicates counter arithmetic is broken. Need to debug total calculation vs processed increment logic.
+2. **Refyne Search: Serper API test** - Create `test-serper.ts` script to verify Serper key working. Confirm search results returning for sample domain.
 
-3. **Fields filled/skipped = 0 bug** - Despite fix deployed May 24, counters still showing 0 in production. Indicates either increment logic not firing or Supabase update failing silently. Need production run with enhanced logging.
+3. **Refyne Search: End-to-end preview test** - Run preview on 10 companies with Refyne Search only (no Apollo, no GraphIQ). Verify confidence badges, evidence tooltips, cache behavior on second preview.
 
-4. **Completion screen after enrichment** - No UI feedback when enrichment run completes. User sees progress bar hit 100% then nothing. Need completion modal with summary: records processed, fields filled, credits used, review link (if pending_review).
+4. **Refyne Search: Wire into provider chain** - Currently runs independently. Wire as fallback: Apollo → GraphIQ → Refyne Search. Test with all three selected.
 
-5. **History detail Run not found** - Error on `/history/[run_id]` page. Enhanced logging deployed but root cause not yet identified. Suspect either arrangement_id vs run_id confusion or missing run_id in arrangement_runs table.
+5. **Progress counter bug (450/213 wrong total)** - `processed_records` showing incorrect totals. Need to debug total calculation vs processed increment logic.
 
 ### Medium Priority
 
-6. **Build enrichment review UI** on Enrich page (Spec 1 UI: approve/reject modal for pending enrichments)
-7. **Serper+Haiku provider** - **P0 for Frontera** - Apollo 422 rate ~95%+, fills 0 fields without this
-8. CSV import workflow (/import page with upload, mapping, preview, confirm)
+6. **Haiku extractor (fallback)** - Build haiku-extractor.ts for 5s timeout fallback when DeepSeek V4 Flash slow. Wire into extractWithFallback().
+7. **Preview context flag** - Pass context: 'preview' | 'background' to refyneSearch(). Preview → Haiku, Background → Haiku head (50) + V4 Flash tail.
+8. **Build enrichment review UI** on Enrich page (Spec 1 UI: approve/reject modal for pending enrichments)
+9. CSV import workflow (/import page with upload, mapping, preview, confirm)
 9. Field mappings guided setup (onboarding flow for canonical ↔ HubSpot mapping)
 10. **refyne_record_status table** - track last enriched timestamp per field per company
 11. **Job priority queue** - high-priority runs jump ahead of long-running jobs
