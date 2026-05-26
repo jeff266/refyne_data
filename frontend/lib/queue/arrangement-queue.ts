@@ -1553,8 +1553,7 @@ async function getProviderAdapter(provider: string, orgId: string): Promise<Prov
       }
       return new ApolloAdapter(apiKey);
     }
-    case 'graphiq':
-    case 'refyne': {
+    case 'graphiq': {
       // GraphIQ: fetch API key from provider_connections or fallback to env var
       const { getGraphiqKey } = await import('../providers/graphiq-key');
       const apiKey = await getGraphiqKey(orgId);
@@ -1563,6 +1562,11 @@ async function getProviderAdapter(provider: string, orgId: string): Promise<Prov
       }
       const { GraphiqAdapter } = await import('../providers/graphiq');
       return new GraphiqAdapter(apiKey);
+    }
+    case 'refyne': {
+      // Refyne Search: uses Serper + DeepSeek (API keys from env vars)
+      const { RefyneSearchAdapter } = await import('../providers/refyne-search-adapter');
+      return new RefyneSearchAdapter(orgId);
     }
     case 'zoominfo': {
       // ZoomInfo: uses env var like GraphIQ

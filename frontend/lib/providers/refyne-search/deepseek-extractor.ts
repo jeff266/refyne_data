@@ -1,6 +1,6 @@
-// DeepSeek V3 extraction via Fireworks.ai
+// DeepSeek V4 Flash extraction via Fireworks.ai
 // Keys managed centrally by Refyne
-// Model: accounts/fireworks/models/deepseek-v3
+// Model: accounts/fireworks/models/deepseek-v4-flash
 // US-hosted for better latency vs direct DeepSeek China routing
 
 const FIREWORKS_API_KEY = process.env.REFYNE_FIREWORKS_KEY;
@@ -134,7 +134,7 @@ export async function extractWithDeepSeek(
   const data = await response.json();
   const text = data.choices[0]?.message?.content ?? '';
 
-  // Track token usage for cost accounting (Fireworks pricing for DeepSeek V3.2)
+  // Track token usage for cost accounting (Fireworks pricing for DeepSeek V4 Flash)
   const usage = {
     inputTokens: data.usage?.prompt_tokens ?? 0,
     outputTokens: data.usage?.completion_tokens ?? 0,
