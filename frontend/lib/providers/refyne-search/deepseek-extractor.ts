@@ -6,6 +6,14 @@
 // Railway uses FIREWORKS_API_KEY, local dev uses REFYNE_FIREWORKS_KEY
 const FIREWORKS_API_KEY = process.env.FIREWORKS_API_KEY || process.env.REFYNE_FIREWORKS_KEY;
 const FIREWORKS_ENDPOINT = 'https://api.fireworks.ai/inference/v1/chat/completions';
+
+// Startup check: warn if API key is missing
+if (!FIREWORKS_API_KEY) {
+  console.error('[Refyne Search] CRITICAL: FIREWORKS_API_KEY or REFYNE_FIREWORKS_KEY not set - extraction disabled');
+  console.error('[Refyne Search] Set FIREWORKS_API_KEY in production or REFYNE_FIREWORKS_KEY for local dev');
+} else {
+  console.log(`[Refyne Search] Fireworks API key configured (${FIREWORKS_API_KEY.substring(0, 8)}...)`);
+}
 // DeepSeek V4 Flash - fastest and cheapest DeepSeek model on Fireworks
 const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-v4-flash';
 
@@ -118,6 +126,12 @@ export async function extractWithDeepSeek(
   searchResults: Array<{ query: string; results: any[] }>,
   fieldKeys: string[]
 ): Promise<ExtractionResult> {
+  // Early return if no API key
+  if (!FIREWORKS_API_KEY) {
+    console.warn('[Fireworks DeepSeek] Skipping extraction - no API key configured');
+    return {};
+  }
+
   const prompt = buildExtractionPrompt(
     companyName,
     domain,

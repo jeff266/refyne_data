@@ -6,6 +6,14 @@
 const SERPER_API_KEY = process.env.SERPER_API_KEY || process.env.REFYNE_SERPER_KEY;
 const SERPER_ENDPOINT = 'https://google.serper.dev/search';
 
+// Startup check: warn if API key is missing
+if (!SERPER_API_KEY) {
+  console.error('[Refyne Search] CRITICAL: SERPER_API_KEY or REFYNE_SERPER_KEY not set - all searches will return empty');
+  console.error('[Refyne Search] Set SERPER_API_KEY in production or REFYNE_SERPER_KEY for local dev');
+} else {
+  console.log(`[Refyne Search] Serper API key configured (${SERPER_API_KEY.substring(0, 8)}...)`);
+}
+
 export interface SerperResult {
   title: string;
   link: string;
@@ -17,10 +25,16 @@ export async function searchWeb(
   query: string,
   numResults: number = 5
 ): Promise<SerperResult[]> {
+  // Early return if no API key
+  if (!SERPER_API_KEY) {
+    console.warn('[Serper] Skipping search - no API key configured');
+    return [];
+  }
+
   const response = await fetch(SERPER_ENDPOINT, {
     method: 'POST',
     headers: {
-      'X-API-KEY': SERPER_API_KEY!,
+      'X-API-KEY': SERPER_API_KEY,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -32,6 +46,8 @@ export async function searchWeb(
   });
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[Serper] API error ${response.status}:`, errorText);
     throw new Error(`Serper error: ${response.status}`);
   }
 
