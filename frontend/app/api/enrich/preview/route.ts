@@ -12,6 +12,7 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { HubSpotClient } from '@/lib/hubspot/client';
+import { fetchCompaniesWithEmptyFields } from '@/lib/hubspot/fetch-companies';
 import { ApolloAdapter } from '@/lib/providers/apollo';
 import { getApolloKey } from '@/lib/providers/apollo-key';
 import { GraphiqAdapter } from '@/lib/providers/graphiq';
@@ -32,8 +33,9 @@ interface PreviewRequest {
   write_policy: 'fill_empty' | 'overwrite';
   record_limit: number;
   source: {
-    type: 'all' | 'list' | 'segment' | 'csv';
+    type: 'all' | 'list' | 'segment' | 'csv' | 'gaps';
     list_id?: string;
+    fields?: string[];  // For gaps: which fields to check for emptiness
     filters?: {
       missing_fields?: string[];
       lifecyclestage?: string;
@@ -96,6 +98,9 @@ const FIELD_LABELS: Record<string, string> = {
   annualrevenue: 'Revenue',
 };
 
+// Hard cap on preview size to prevent timeouts
+const PREVIEW_LIMIT = 20;
+
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
@@ -153,11 +158,13 @@ export async function POST(req: NextRequest) {
     const hubspot = new HubSpotClient(accessToken, connection.portal_id);
 
     // Fetch companies based on source config
+    // Cap at PREVIEW_LIMIT to prevent timeouts
+    const effectiveLimit = Math.min(body.record_limit, PREVIEW_LIMIT);
     const companies = await fetchCompaniesForPreview(
       hubspot,
       body.source,
       body.fields,
-      body.record_limit
+      effectiveLimit
     );
 
     if (companies.length === 0) {
@@ -673,6 +680,19 @@ async function fetchCompaniesForPreview(
       }
       if (companies.length >= limit) break;
     }
+  } else if (source.type === 'gaps' && source.fields && source.fields.length > 0) {
+    // Fetch companies with gaps in selected fields
+    const gapResults = await fetchCompaniesWithEmptyFields(
+      hubspot,
+      source.fields, // Already HubSpot property names from UI
+      { properties }
+    );
+    companies.push(...gapResults.map(r => ({
+      id: r.id,
+      properties: r.properties,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    })));
   } else {
     // All companies with missing fields
     const filterGroups = buildSearchFilters({

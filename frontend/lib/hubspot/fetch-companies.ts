@@ -152,3 +152,82 @@ export function getLatestModifiedDate(companies: HubSpotCompany[]): Date {
     return d > latest ? d : latest;
   }, new Date(0));
 }
+
+/**
+ * Fetch companies where ANY of the specified properties are empty (null or empty string).
+ * Used for "Companies with gaps" source filter.
+ *
+ * @param client - HubSpot API client
+ * @param hubspotProperties - Array of HubSpot property names to check for emptiness
+ * @param options - Optional configuration
+ * @returns Array of companies with at least one empty property
+ */
+export async function fetchCompaniesWithEmptyFields(
+  client: HubSpotClient,
+  hubspotProperties: string[],
+  options: {
+    properties?: string[];
+    onProgress?: (fetched: number) => void;
+  } = {}
+): Promise<HubSpotCompany[]> {
+  const properties = options.properties || REQUIRED_PROPERTIES;
+  const companies: HubSpotCompany[]= [];
+  const seenIds = new Set<string>(); // Deduplicate since we use OR logic
+  let totalFetched = 0;
+
+  // Build filter groups: one for NOT_HAS_PROPERTY (null), one for EQ "" (empty string)
+  // Each property needs both conditions to catch all empty cases
+  const filterGroups = hubspotProperties.flatMap(propertyName => [
+    {
+      filters: [
+        { propertyName, operator: 'NOT_HAS_PROPERTY' as const }
+      ]
+    },
+    {
+      filters: [
+        { propertyName, operator: 'EQ' as const, value: '' }
+      ]
+    }
+  ]);
+
+  // HubSpot Search API processes filter groups with OR logic between groups
+  // This gives us: (property1 IS NULL) OR (property1 = '') OR (property2 IS NULL) OR (property2 = '')
+  let after: string | undefined;
+
+  do {
+    const response = await client.request<{
+      results: HubSpotCompany[];
+      paging?: { next?: { after: string } };
+    }>(
+      '/crm/v3/objects/companies/search',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          filterGroups,
+          properties,
+          limit: 100,
+          after,
+        }),
+      },
+      true // isSearchApi = true for separate rate limiting
+    );
+
+    // Deduplicate results (same company can match multiple filter groups)
+    for (const company of response.results) {
+      if (!seenIds.has(company.id)) {
+        seenIds.add(company.id);
+        companies.push(company);
+        totalFetched++;
+      }
+    }
+
+    // Report progress
+    if (options.onProgress) {
+      options.onProgress(totalFetched);
+    }
+
+    after = response.paging?.next?.after;
+  } while (after);
+
+  return companies;
+}
