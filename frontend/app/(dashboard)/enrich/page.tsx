@@ -1267,7 +1267,7 @@ export default function EnrichPage() {
     );
   }
 
-  const maxMissing = gapAnalysis.field_gaps.reduce((sum, g) => Math.max(sum, g.missing), 0);
+  const totalCompanies = gapAnalysis.total_companies;
 
   return (
     <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto', fontFamily: F.sans }}>
@@ -1304,7 +1304,7 @@ export default function EnrichPage() {
                     style={{ cursor: 'pointer' }}
                   />
                   <span style={{ fontSize: 12, color: C.text2 }}>
-                    All companies ({maxMissing.toLocaleString()})
+                    All companies ({totalCompanies.toLocaleString()})
                   </span>
                 </label>
 
