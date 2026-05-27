@@ -130,15 +130,33 @@ export async function GET(request: NextRequest) {
 
         // Check provider filter
         if (provider && provider !== 'all') {
-          const hasProvider = fieldConfigs.some((fc: any) =>
-            fc.steps?.some((step: any) => step.provider === provider)
-          );
+          let hasProvider = false;
+
+          // For enrich page runs, check source_snapshot.provider
+          if (run.arrangement_id === null && run.source_snapshot?.provider === provider) {
+            hasProvider = true;
+          } else {
+            // For arrangement runs, check field_configs
+            hasProvider = fieldConfigs.some((fc: any) =>
+              fc.steps?.some((step: any) => step.provider === provider)
+            );
+          }
+
           if (!hasProvider) return false;
         }
 
         // Check field filter
         if (field && field !== 'all') {
-          const hasField = fieldConfigs.some((fc: any) => fc.field_key === field);
+          let hasField = false;
+
+          // For enrich page runs, check source_snapshot.fields
+          if (run.arrangement_id === null && run.source_snapshot?.fields?.includes(field)) {
+            hasField = true;
+          } else {
+            // For arrangement runs, check field_configs
+            hasField = fieldConfigs.some((fc: any) => fc.field_key === field);
+          }
+
           if (!hasField) return false;
         }
 
@@ -172,9 +190,15 @@ export async function GET(request: NextRequest) {
       const arrangement = arrangementsById.get(run.arrangement_id);
       const fieldConfigs = arrangement?.field_configs || [];
 
-      // Extract unique providers (graceful fallback if no arrangement)
+      // Extract unique providers
+      // For arrangement runs: read from field_configs
+      // For enrich page runs (null arrangement_id): read from source_snapshot.provider
       const providers: string[] = [];
-      if (fieldConfigs.length > 0) {
+      if (run.arrangement_id === null && run.source_snapshot?.provider) {
+        // Enrich page run - provider in source_snapshot
+        providers.push(run.source_snapshot.provider);
+      } else if (fieldConfigs.length > 0) {
+        // Arrangement run - providers in field_configs
         fieldConfigs.forEach((fc: any) => {
           if (fc.steps && Array.isArray(fc.steps)) {
             fc.steps.forEach((step: any) => {
@@ -186,10 +210,12 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      // Extract fields (graceful fallback if no arrangement)
-      const fields = fieldConfigs
-        .map((fc: any) => fc.field_key)
-        .filter(Boolean);
+      // Extract fields
+      // For enrich page runs: read from source_snapshot.fields
+      // For arrangement runs: read from field_configs
+      const fields = run.arrangement_id === null && run.source_snapshot?.fields
+        ? run.source_snapshot.fields
+        : fieldConfigs.map((fc: any) => fc.field_key).filter(Boolean);
 
       // Calculate total fields filled
       const fieldsFilled = run.fields_filled || {};
