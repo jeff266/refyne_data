@@ -174,7 +174,8 @@ export async function POST(req: NextRequest) {
 
     // Log to enrichment history
     try {
-      await supabase.from('arrangement_runs').insert({
+      console.log('[Apply] Attempting to log to arrangement_runs...');
+      const { data, error: insertError } = await supabase.from('arrangement_runs').insert({
         org_id: ctx.orgId,
         arrangement_id: null,  // Enrich page runs have no parent arrangement
         run_type: 'live',
@@ -201,9 +202,14 @@ export async function POST(req: NextRequest) {
         started_at: startTime.toISOString(),
         completed_at: new Date().toISOString(),
       });
-      console.log('[Apply] Logged to history successfully');
+
+      if (insertError) {
+        console.error('[Apply] arrangement_runs insert error:', insertError);
+      } else {
+        console.log('[Apply] Logged to history successfully:', data);
+      }
     } catch (historyError) {
-      console.error('[Apply] Failed to log to history:', historyError);
+      console.error('[Apply] Failed to log to history (exception):', historyError);
       // Don't fail the request if history logging fails
     }
 
