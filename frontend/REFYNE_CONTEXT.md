@@ -1,6 +1,6 @@
 # Refyne Context
 
-**Last updated:** 2026-05-26
+**Last updated:** 2026-05-26 (Session 5)
 **Status:** Active development
 **Product name:** TBD (Refyne is working name)
 
@@ -39,11 +39,13 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 | Service | Purpose | Details |
 |---------|---------|---------|
 | **app.refynedata.com** | Production URL | Vercel deployment, live in production |
+| **data.refynedata.com** | Internal ops dashboard | Refyne Data Platform UI - cache metrics, seed management, vertical stats (Session 5) |
+| **refyne-platform** | Data platform API | Scaffolded, not yet deployed. Handles cache, scraping, extraction, seed ingestion (Session 5) |
 | **coolify.refynedata.com** | Coolify dashboard | Worker management at 31.220.63.174:8000 |
 | **Org ID (RevOps Impact)** | org_3DuSdb0FBnx7RMLmJSUegrpiNLS | Primary test org |
 | **HubSpot Portal (Frontera)** | 49169539 | Primary test portal, 2,816 companies |
 | **Vercel** | Next.js frontend hosting | Production deployment at app.refynedata.com |
-| **Railway** | BullMQ worker deployment | US East region, 8GB RAM, 8 vCPU, auto-deploys from GitHub main |
+| **Railway** | BullMQ worker + platform API | US East region, 8GB RAM, 8 vCPU, auto-deploys from GitHub main |
 | **Coolify** | Deprecated worker hosting | Worker stopped, no longer in use |
 | **Supabase** | PostgreSQL database | RLS policies, service role for workers, org client for user operations |
 | **Upstash Redis** | Job queue + rate limiting | BullMQ backend, sliding window rate limiters |
@@ -498,6 +500,16 @@ This was the root cause of the May 21 worker failure.
 | **History Run not found fix (P5)** | Fixed column name mismatch, preview apply runs now log to history correctly. |
 | **Refyne Search architecture complete** | Full implementation: Serper + DeepSeek V4 Flash via Fireworks.ai. 4 provider files built (serper-client.ts, deepseek-extractor.ts, cache.ts, index.ts). Database tables created (refyne_company_cache, refyne_search_usage). Preview API integration complete. UI confidence display (high/medium/low badges) with evidence tooltips. Cost: $0.14/$0.28 per million tokens. Model: accounts/fireworks/models/deepseek-v4-flash. |
 
+### Session Accomplishments (May 26 2026 - Session 5)
+
+| Accomplishment | Details |
+|----------------|---------|
+| **New repos created** | refyne-data-platform-ui (data.refynedata.com internal ops dashboard) and refyne-platform (API service, scaffolded, not yet deployed). |
+| **Architecture decision: Platform separation** | Data platform is separate API service from Refyne app. data.refynedata.com is internal team ops dashboard only. Refyne app will call platform API instead of providers directly. Platform handles: cache, scraping, extraction, seed ingestion. App handles: HubSpot auth, users, harmony, preview UI. |
+| **Data strategy: Proactive cache builder** | Nightly Railway cron job. Seed sources: NPI database (healthcare), G2 (SaaS), Google Maps. Vertical-aware extraction: detect vertical, extract vertical-specific fields. |
+| **Claygent Light stack** | Jina.ai scrape + Serper targeted + DeepSeek V4 Flash. Fake progress delay on preview (cache feels like live enrichment). Cross-org domain-level cache: public web data shared, HubSpot data org-scoped. |
+| **Refyne Search keys confirmed** | Serper + Fireworks keys working in Vercel. Phone numbers being found (Step Ahead 888-686-1263, Triangle ABA 919-504-4171). Coverage still low: need Jina.ai + website scraping to improve yield. |
+
 ### Built but Not End-to-End Verified
 
 | Feature | Status | What Needs Verification |
@@ -525,15 +537,17 @@ This was the root cause of the May 21 worker failure.
 
 ### High Priority (Next Session)
 
-1. **Refyne Search: Fireworks V4 Flash API test** - BLOCKING: Model string updated to `deepseek-v4-flash`, pricing constants updated ($0.14/$0.28 per M). Need to verify Fireworks API key works and returns coherent extraction. Create `test-fireworks.ts` script.
+1. **data.refynedata.com UI polish** - Review screenshots from Session 5, polish internal ops dashboard UI. Wire to real Supabase stats (cache hit rate, provider breakdown, vertical distribution).
 
-2. **Refyne Search: Serper API test** - Create `test-serper.ts` script to verify Serper key working. Confirm search results returning for sample domain.
+2. **refyne-platform deployment** - Deploy API service to Railway. Set up environment variables, test health endpoint.
 
-3. **Refyne Search: End-to-end preview test** - Run preview on 10 companies with Refyne Search only (no Apollo, no GraphIQ). Verify confidence badges, evidence tooltips, cache behavior on second preview.
+3. **NPI database download and seed ingestion** - Download NPI registry (healthcare providers), parse, seed into refyne_company_cache. First proactive cache build for healthcare vertical.
 
-4. **Refyne Search: Wire into provider chain** - Currently runs independently. Wire as fallback: Apollo → GraphIQ → Refyne Search. Test with all three selected.
+4. **Jina.ai integration** - Add Jina.ai website scraping to Claygent Light pipeline. Improves yield for companies with websites but no Serper results.
 
-5. **Progress counter bug (450/213 wrong total)** - `processed_records` showing incorrect totals. Need to debug total calculation vs processed increment logic.
+5. **Refyne Search: Wire into provider chain** - Currently runs independently. Wire as fallback: Apollo → GraphIQ → Refyne Search. Test with all three selected.
+
+6. **Progress counter bug (450/213 wrong total)** - `processed_records` showing incorrect totals. Need to debug total calculation vs processed increment logic.
 
 ### Medium Priority
 
