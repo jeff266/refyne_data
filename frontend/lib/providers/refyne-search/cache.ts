@@ -98,6 +98,13 @@ export async function storeCachedFields(
       extraction.value !== null &&
       extraction.confidence >= MIN_CONFIDENCE_TO_CACHE
     ) {
+      // Don't cache haiku_classified results - require review first
+      const trustLevel = (extraction as any)._trustLevel;
+      if (fieldKey === 'industry' && trustLevel === 'low') {
+        console.log(`[Cache] Skipping industry cache write - low trust (haiku_classified)`);
+        continue;
+      }
+
       const ttlDays = TTL_DAYS[fieldKey] ?? 90;
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + ttlDays);

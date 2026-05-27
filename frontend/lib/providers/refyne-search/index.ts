@@ -1,50 +1,42 @@
 // Refyne Search: the public interface
-// This is what the rest of the app sees
-// Serper, Jina, DeepSeek, and Haiku are internal implementation details
-//
 // Changes from previous version:
-//   - Jina homepage fetch runs in parallel with Serper (not after)
-//   - Haiku fallback when DeepSeek V4 Flash exceeds 5s timeout
-//   - Cached industry passed to query builder (removes ABA hardcode)
-//   - Preview vs background context controls which model runs
+//   - Industry field post-processed through NAICS crosswalk after extraction
+//   - Raw industry strings converted to canonical HubSpot picklist values
+//   - classifyIndustry() called before cache write, not after
 
-import { searchWeb, buildCompanyQueries } from './serper-client';
-import { fetchWithJina } from './jina-client';
-import { extractWithDeepSeek } from './deepseek-extractor';
-import { extractWithHaiku } from './haiku-extractor';
-import { getCachedFields, storeCachedFields } from './cache';
-import { supabase } from '@/lib/db/supabase';
+import { searchWeb, buildCompanyQueries } from './serper-client'
+import { fetchWithJina } from './jina-client'
+import { extractWithDeepSeek } from './deepseek-extractor'
+import { extractWithHaiku } from './haiku-extractor'
+import { classifyIndustry, getSourceTrustLevel } from './industry-classifier'
+import { getCachedFields, storeCachedFields } from './cache'
+import { supabase } from '@/lib/db/supabase'
 
 export interface RefyneSearchResult {
-  fieldKey: string;
-  value: string | number | null;
-  confidence: number;
-  level: 'high' | 'medium' | 'low' | 'insufficient';
-  evidence: string;
-  sources: string[];
-  fromCache: boolean;
+  fieldKey: string
+  value: string | number | null
+  confidence: number
+  level: 'high' | 'medium' | 'low' | 'insufficient'
+  evidence: string
+  sources: string[]
+  fromCache: boolean
+  requiresReview?: boolean  // For low-trust classifications (haiku_classified)
+  trustLevel?: 'high' | 'medium' | 'low'  // Trust level from classification source
 }
 
-export type SearchContext = 'preview' | 'background';
+export type SearchContext = 'preview' | 'background'
 
-const DEEPSEEK_TIMEOUT_MS = 5000;
+const DEEPSEEK_TIMEOUT_MS = 5000
 
 function confidenceLevel(
   score: number
 ): 'high' | 'medium' | 'low' | 'insufficient' {
-  if (score >= 0.85) return 'high';
-  if (score >= 0.6) return 'medium';
-  if (score >= 0.4) return 'low';
-  return 'insufficient';
+  if (score >= 0.85) return 'high'
+  if (score >= 0.6) return 'medium'
+  if (score >= 0.4) return 'low'
+  return 'insufficient'
 }
 
-/**
- * Extract fields using DeepSeek V4 Flash with a 5s timeout.
- * Falls back to Claude Haiku on timeout or error.
- *
- * Preview context: always uses Haiku (fast, good enough for UI feedback)
- * Background context: tries DeepSeek first, Haiku on timeout
- */
 async function extractWithFallback(
   companyName: string | null,
   domain: string | null,
@@ -52,13 +44,10 @@ async function extractWithFallback(
   fieldKeys: string[],
   context: SearchContext
 ): Promise<Record<string, any>> {
-  // Preview always uses Haiku for speed
   if (context === 'preview') {
-    console.log(`[Refyne Search] Preview context, using Haiku`);
-    return extractWithHaiku(companyName, domain, searchResults, fieldKeys);
+    return extractWithHaiku(companyName, domain, searchResults, fieldKeys)
   }
 
-  // Background: try DeepSeek with timeout, fall back to Haiku
   try {
     const result = await Promise.race([
       extractWithDeepSeek(companyName, domain, searchResults, fieldKeys),
@@ -68,15 +57,78 @@ async function extractWithFallback(
           DEEPSEEK_TIMEOUT_MS
         )
       ),
-    ]);
-    return result;
+    ])
+    return result
   } catch (err: any) {
-    const reason = err?.message ?? 'unknown';
     console.warn(
-      `[Refyne Search] DeepSeek failed (${reason}), falling back to Haiku`
-    );
-    return extractWithHaiku(companyName, domain, searchResults, fieldKeys);
+      `[Refyne Search] DeepSeek failed (${err?.message}), falling back to Haiku`
+    )
+    return extractWithHaiku(companyName, domain, searchResults, fieldKeys)
   }
+}
+
+/**
+ * Post-process extraction results.
+ * Industry field: run through NAICS crosswalk to get canonical HubSpot value.
+ * All other fields: pass through unchanged.
+ */
+async function postProcessExtraction(
+  extraction: Record<string, any>,
+  fieldKeys: string[]
+): Promise<Record<string, any>> {
+  const processed = { ...extraction }
+
+  if (fieldKeys.includes('industry') && extraction.industry?.value) {
+    const rawIndustry = extraction.industry.value as string
+    const rawConfidence = extraction.industry.confidence ?? 0
+
+    try {
+      const classified = await classifyIndustry(rawIndustry, rawConfidence)
+
+      if (classified) {
+        const trustLevel = getSourceTrustLevel(classified.source)
+
+        processed.industry = {
+          value: classified.hubspotValue,           // e.g. 'MENTAL_HEALTH_CARE'
+          confidence: classified.confidence,
+          evidence: extraction.industry.evidence,
+          sources: extraction.industry.sources ?? [],
+          // Store raw value and classification path in evidence for debugging
+          _rawValue: rawIndustry,
+          _naicsCode: classified.naicsCode,
+          _naicsLabel: classified.naicsLabel,
+          _classificationSource: classified.source,
+          _trustLevel: trustLevel,
+          _requiresReview: trustLevel === 'low',
+        }
+        console.log(
+          `[Industry] "${rawIndustry}" → ${classified.naicsCode} → ${classified.hubspotValue} (${classified.source}, trust: ${trustLevel})`
+        )
+      } else {
+        // Classification failed - null out the industry value
+        // Better to write nothing than write a non-HubSpot value
+        console.warn(
+          `[Industry] Could not classify "${rawIndustry}", skipping`
+        )
+        processed.industry = {
+          value: null,
+          confidence: 0,
+          evidence: `Classification failed for: ${rawIndustry}`,
+          sources: [],
+        }
+      }
+    } catch (err: any) {
+      console.error('[Industry] Post-processing error:', err?.message)
+      processed.industry = {
+        value: null,
+        confidence: 0,
+        evidence: `Classification error: ${err?.message}`,
+        sources: [],
+      }
+    }
+  }
+
+  return processed
 }
 
 export async function refyneSearch(
@@ -86,24 +138,22 @@ export async function refyneSearch(
   fieldKeys: string[],
   context: SearchContext = 'background'
 ): Promise<RefyneSearchResult[]> {
-  const lookupKey = domain?.toLowerCase() ?? null;
-  const results: RefyneSearchResult[] = [];
-  const fieldsToSearch: string[] = [];
+  const lookupKey = domain?.toLowerCase() ?? null
+  const results: RefyneSearchResult[] = []
+  const fieldsToSearch: string[] = []
 
-  // Step 1: Check cache first
-  // Also pull cached industry to use as query context (replaces ABA hardcode)
-  let cachedIndustry: string | null = null;
+  let cachedIndustry: string | null = null
 
+  // Step 1: Check cache
   if (lookupKey) {
-    const allCachedKeys = [...fieldKeys, 'industry'];
-    const cached = await getCachedFields(lookupKey, allCachedKeys);
+    const allCachedKeys = [...fieldKeys, 'industry']
+    const cached = await getCachedFields(lookupKey, allCachedKeys)
 
-    // Extract industry hint if available (used in query builder below)
-    cachedIndustry = (cached['industry']?.value as string) ?? null;
+    cachedIndustry = (cached['industry']?.value as string) ?? null
 
     for (const fieldKey of fieldKeys) {
       if (cached[fieldKey]) {
-        const c = cached[fieldKey]!;
+        const c = cached[fieldKey]!
         results.push({
           fieldKey,
           value: c.value,
@@ -112,26 +162,25 @@ export async function refyneSearch(
           evidence: c.evidence,
           sources: [],
           fromCache: true,
-        });
-
-        await logUsage(orgId, lookupKey, fieldKey, true, c.confidence, 0, 0, 0, 0);
+        })
+        await logUsage(orgId, lookupKey, fieldKey, true, c.confidence, 0, 0, 0, 0)
       } else {
-        fieldsToSearch.push(fieldKey);
+        fieldsToSearch.push(fieldKey)
       }
     }
   } else {
-    fieldsToSearch.push(...fieldKeys);
+    fieldsToSearch.push(...fieldKeys)
   }
 
-  if (fieldsToSearch.length === 0) return results;
+  if (fieldsToSearch.length === 0) return results
 
-  // Step 2: Cache miss - run Serper + Jina in parallel, then extract
+  // Step 2: Build queries
   const queries = buildCompanyQueries(
     domain,
     companyName,
     fieldsToSearch,
-    cachedIndustry // passes e.g. "Healthcare Technology" instead of hardcoded "ABA therapy"
-  );
+    cachedIndustry
+  )
 
   if (queries.length === 0) {
     for (const fieldKey of fieldsToSearch) {
@@ -143,14 +192,12 @@ export async function refyneSearch(
         evidence: 'No domain or company name provided',
         sources: [],
         fromCache: false,
-      });
+      })
     }
-    return results;
+    return results
   }
 
-  // Run Serper queries AND Jina homepage fetch in parallel
-  // Jina gives us full homepage text - critical for phone numbers
-  // which almost never appear in search snippets
+  // Step 3: Serper + Jina in parallel
   const [searchResults, jinaResults] = await Promise.all([
     Promise.allSettled(
       queries.map(async (q) => ({
@@ -159,34 +206,27 @@ export async function refyneSearch(
       }))
     ),
     domain ? fetchWithJina(domain) : Promise.resolve([]),
-  ]);
+  ])
 
-  const serperCallCount = queries.length;
+  const serperCallCount = queries.length
 
   const successfulSearches = searchResults
     .filter((r) => r.status === 'fulfilled')
     .map((r) => (r as PromiseFulfilledResult<any>).value)
-    .filter((sr) => sr.results && sr.results.length > 0);
+    .filter((sr) => sr.results && sr.results.length > 0)
 
-  // Append Jina homepage content as an additional "search result"
-  // It uses the same SerperResult[] shape so DeepSeek sees it naturally
   if (jinaResults.length > 0) {
     successfulSearches.push({
       query: `Homepage: ${domain}`,
       results: jinaResults,
-    });
-    console.log(`[Jina] Added homepage content for ${domain}`);
+    })
   }
 
   const hasResults =
     successfulSearches.length > 0 &&
-    successfulSearches.some((sr) => sr.results && sr.results.length > 0);
+    successfulSearches.some((sr) => sr.results && sr.results.length > 0)
 
   if (!hasResults) {
-    console.log(
-      `[Refyne Search] No results for ${domain || companyName}, skipping extraction`
-    );
-
     for (const fieldKey of fieldsToSearch) {
       results.push({
         fieldKey,
@@ -196,8 +236,7 @@ export async function refyneSearch(
         evidence: 'No search results found',
         sources: [],
         fromCache: false,
-      });
-
+      })
       await logUsage(
         orgId,
         lookupKey ?? companyName ?? 'unknown',
@@ -208,42 +247,44 @@ export async function refyneSearch(
         0,
         0,
         0
-      );
+      )
     }
-    return results;
+    return results
   }
 
-  // Step 3: Extract with DeepSeek (background) or Haiku (preview)
-  // Haiku fallback fires automatically on DeepSeek timeout
-  const extraction = await extractWithFallback(
+  // Step 4: Extract with DeepSeek or Haiku
+  const rawExtraction = await extractWithFallback(
     companyName,
     domain,
     successfulSearches,
     fieldsToSearch,
     context
-  );
+  )
+
+  // Step 5: Post-process - run industry through NAICS crosswalk
+  const extraction = await postProcessExtraction(rawExtraction, fieldsToSearch)
 
   const usage = (extraction as any)._usage ?? {
     inputTokens: 0,
     outputTokens: 0,
     costUsd: 0,
-  };
-
-  // Step 4: Store high-confidence results in cache
-  if (lookupKey) {
-    const toCache: Record<string, any> = {};
-    for (const fieldKey of fieldsToSearch) {
-      const e = (extraction as any)[fieldKey];
-      if (e) toCache[fieldKey] = e;
-    }
-    await storeCachedFields(lookupKey, companyName, toCache);
   }
 
-  // Step 5: Build results
+  // Step 6: Store in cache
+  if (lookupKey) {
+    const toCache: Record<string, any> = {}
+    for (const fieldKey of fieldsToSearch) {
+      const e = (extraction as any)[fieldKey]
+      if (e) toCache[fieldKey] = e
+    }
+    await storeCachedFields(lookupKey, companyName, toCache)
+  }
+
+  // Step 7: Build results
   for (const fieldKey of fieldsToSearch) {
-    const e = (extraction as any)[fieldKey];
-    const value = e?.value ?? null;
-    const confidence = e?.confidence ?? 0;
+    const e = (extraction as any)[fieldKey]
+    const value = e?.value ?? null
+    const confidence = e?.confidence ?? 0
 
     results.push({
       fieldKey,
@@ -253,7 +294,9 @@ export async function refyneSearch(
       evidence: e?.evidence ?? '',
       sources: e?.sources ?? [],
       fromCache: false,
-    });
+      requiresReview: e?._requiresReview ?? false,
+      trustLevel: e?._trustLevel,
+    })
 
     await logUsage(
       orgId,
@@ -265,10 +308,10 @@ export async function refyneSearch(
       usage.inputTokens,
       usage.outputTokens,
       usage.costUsd
-    );
+    )
   }
 
-  return results;
+  return results
 }
 
 async function logUsage(
@@ -282,7 +325,7 @@ async function logUsage(
   outputTokens: number,
   costUsd: number
 ): Promise<void> {
-  if (!supabase) return;
+  if (!supabase) return
 
   await supabase
     .from('refyne_search_usage')
@@ -297,5 +340,5 @@ async function logUsage(
       deepseek_output_tokens: outputTokens,
       cost_usd: costUsd,
     })
-    .throwOnError();
+    .throwOnError()
 }

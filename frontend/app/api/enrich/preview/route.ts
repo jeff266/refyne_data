@@ -57,7 +57,7 @@ interface PreviewFieldResult {
   mapped_value: string | null;  // Harmony-mapped value for enum fields
   mapping_confidence: 'high' | 'medium' | 'low' | 'no_match' | null;  // Confidence of mapping
   source: string | null;
-  status: 'would_fill' | 'would_override' | 'already_set' | 'no_data' | 'skipped';
+  status: 'would_fill' | 'would_override' | 'already_set' | 'no_data' | 'skipped' | 'requires_review';
   harmony_applied: boolean;
   harmony_name: string | null;
   selected: boolean;
@@ -65,6 +65,8 @@ interface PreviewFieldResult {
   confidence_level?: 'high' | 'medium' | 'low' | 'insufficient';  // For Refyne Search
   evidence?: string;  // For Refyne Search: evidence snippet
   from_cache?: boolean;  // For Refyne Search: whether from cache
+  requires_review?: boolean;  // For low-trust classifications (haiku_classified)
+  trust_level?: 'high' | 'medium' | 'low';  // Trust level from classification source
 }
 
 interface PreviewCompanyResult {
@@ -375,6 +377,15 @@ export async function POST(req: NextRequest) {
           source = 'refyne_search';
         }
 
+        // Extract trust level and review flag from Refyne Search results
+        let requiresReview = false;
+        let trustLevel: 'high' | 'medium' | 'low' | undefined = undefined;
+        if (usedProvider === 'refyne_search' && refyneResults[fieldKey]) {
+          const rsResult = refyneResults[fieldKey];
+          requiresReview = rsResult.requiresReview ?? false;
+          trustLevel = rsResult.trustLevel;
+        }
+
         // Apply harmony if configured
         let harmonyApplied = false;
         let harmonyName: string | null = null;
@@ -396,7 +407,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Determine status
-        let status: 'would_fill' | 'would_override' | 'already_set' | 'no_data' | 'skipped';
+        let status: 'would_fill' | 'would_override' | 'already_set' | 'no_data' | 'skipped' | 'requires_review';
         let selected = false;
 
         if (!companyDomain && !company.properties.name) {
@@ -405,6 +416,11 @@ export async function POST(req: NextRequest) {
         } else if (!foundValue) {
           status = 'no_data';
           noData++;
+        } else if (requiresReview) {
+          // Low-trust classification (haiku_classified) - requires manual review
+          status = 'requires_review';
+          selected = false; // Don't auto-select low-trust results
+          console.log(`[Preview] Low-trust result for ${companyName} - ${fieldKey}: requires review`);
         } else if (!currentValue || currentValue.trim() === '') {
           status = 'would_fill';
           wouldFill++;
@@ -437,6 +453,8 @@ export async function POST(req: NextRequest) {
           confidence_level: confidenceLevel,
           evidence,
           from_cache: fromCache,
+          requires_review: requiresReview,
+          trust_level: trustLevel,
         });
       }
     }
@@ -525,8 +543,26 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 3: Apply harmony to preview rows before returning
+    // Helper to check if value is already canonical
+    const isAlreadyCanonical = (value: string, fieldKey: string): boolean => {
+      if (fieldKey !== 'industry') return false;
+      // HubSpot industry values are UPPER_SNAKE_CASE (2+ uppercase letters/underscores)
+      return /^[A-Z][A-Z_]+$/.test(value);
+    };
+
     for (const row of results) {
       if (isEnumField(row.field_key) && row.found_value) {
+        // Check if already canonical (from NAICS crosswalk classification)
+        if (isAlreadyCanonical(row.found_value, row.field_key)) {
+          // Already classified by NAICS crosswalk, pass through unchanged
+          row.mapped_value = row.found_value;
+          row.mapping_confidence = 'high';
+          row.harmony_applied = false;  // Didn't need Harmony
+          row.harmony_name = null;
+          console.log(`[Preview] Skipping Harmony for already-canonical value: ${row.found_value}`);
+          continue;
+        }
+
         const harmony = generatedHarmonies[row.field_key];
 
         if (harmony) {
