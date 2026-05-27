@@ -18,7 +18,8 @@
     "worker:webhooks": "npx tsx scripts/start-webhook-worker.ts",
     "worker:digest": "npx tsx scripts/start-digest-worker.ts",
     "worker:arrangement": "npx tsx scripts/start-arrangement-worker.ts",
-    "worker:enrichment": "npx tsx scripts/start-enrichment-worker.ts"
+    "worker:enrichment": "npx tsx scripts/start-enrichment-worker.ts",
+    "cleanup:cache": "npx tsx scripts/cleanup-cache.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.97.0",
