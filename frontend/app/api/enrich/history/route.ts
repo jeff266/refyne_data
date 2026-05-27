@@ -41,7 +41,8 @@ export async function GET() {
         completed_at,
         error_message,
         results_snapshot,
-        arrangements!inner (
+        source_snapshot,
+        arrangements (
           id,
           name,
           enrichment_steps
@@ -73,19 +74,25 @@ export async function GET() {
       const arrangement = run.arrangements;
       const enrichmentSteps = arrangement?.enrichment_steps || [];
       const isPreviewApply = run.run_type === 'preview_apply';
+      const isManualApply = !run.arrangement_id; // NULL arrangement_id = manual enrich page apply
       const resultsSnapshot = run.results_snapshot || {};
+      const sourceSnapshot = run.source_snapshot || {};
 
-      // For preview_apply, extract from results_snapshot; otherwise from enrichment_steps
+      // Extract provider and fields based on run type
       let provider: string;
       let fields: string[] = [];
 
-      if (isPreviewApply) {
+      if (isManualApply) {
+        // Manual enrich page apply: extract from source_snapshot
+        provider = sourceSnapshot.provider || 'enrich_page';
+        fields = sourceSnapshot.fields || [];
+      } else if (isPreviewApply) {
         // Preview apply: extract from results_snapshot
         provider = resultsSnapshot.provider || 'Preview';
         const fieldBreakdown = resultsSnapshot.field_breakdown || {};
         fields = Object.keys(fieldBreakdown);
       } else {
-        // Regular run: extract from enrichment_steps
+        // Regular arrangement run: extract from enrichment_steps
         provider = enrichmentSteps[0]?.provider || 'Unknown';
         enrichmentSteps.forEach((step: any) => {
           if (step.field_configs) {
@@ -99,11 +106,12 @@ export async function GET() {
       }
 
       // Calculate total fields filled
-      // For preview_apply, use successful_records; otherwise use fields_filled
       let totalFilled: number;
-      if (isPreviewApply) {
+      if (isManualApply || isPreviewApply) {
+        // For manual/preview applies, use successful_records
         totalFilled = run.successful_records || 0;
       } else {
+        // For regular runs, sum fields_filled
         const fieldsFilled = run.fields_filled || {};
         totalFilled = Object.values(fieldsFilled).reduce((sum: number, count: any) => sum + (count || 0), 0);
       }
@@ -111,7 +119,7 @@ export async function GET() {
       return {
         id: run.id,
         arrangement_id: run.arrangement_id,
-        arrangement_name: arrangement?.name || 'Unknown',
+        arrangement_name: isManualApply ? 'Manual Apply' : (arrangement?.name || 'Unknown'),
         status: run.status,
         provider,
         fields,
