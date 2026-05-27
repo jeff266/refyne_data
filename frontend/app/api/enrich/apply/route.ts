@@ -184,6 +184,7 @@ export async function POST(req: NextRequest) {
         processed_records: companyUpdates.size,
         successful_records: results.length,
         failed_records: errors.length,
+        fields_filled: fieldBreakdown,  // Field-level counts for history page
         estimated_credits: 0,  // Calculate based on provider cost if available
         actual_credits_used: 0,  // Calculate based on actual API calls
         source_snapshot: {
