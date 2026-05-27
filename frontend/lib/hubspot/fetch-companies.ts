@@ -175,20 +175,14 @@ export async function fetchCompaniesWithEmptyFields(
   const seenIds = new Set<string>(); // Deduplicate since we use OR logic
   let totalFetched = 0;
 
-  // Build filter groups: one for NOT_HAS_PROPERTY (null), one for EQ "" (empty string)
-  // Each property needs both conditions to catch all empty cases
-  const filterGroups = hubspotProperties.flatMap(propertyName => [
-    {
-      filters: [
-        { propertyName, operator: 'NOT_HAS_PROPERTY' as const }
-      ]
-    },
-    {
-      filters: [
-        { propertyName, operator: 'EQ' as const, value: '' }
-      ]
-    }
-  ]);
+  // Build filter groups using NOT_HAS_PROPERTY (catches both null and empty string)
+  // HubSpot's NOT_HAS_PROPERTY returns companies where property is null OR empty string
+  // Create one filter group per property for OR logic between properties
+  const filterGroups = hubspotProperties.map(propertyName => ({
+    filters: [
+      { propertyName, operator: 'NOT_HAS_PROPERTY' as const }
+    ]
+  }));
 
   // HubSpot Search API processes filter groups with OR logic between groups
   // This gives us: (property1 IS NULL) OR (property1 = '') OR (property2 IS NULL) OR (property2 = '')
