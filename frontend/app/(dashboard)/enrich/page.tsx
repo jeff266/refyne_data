@@ -167,9 +167,10 @@ export default function EnrichPage() {
   const [lastScannedAt, setLastScannedAt] = useState<string | null>(null);
 
   // Configuration state
-  const [companyScope, setCompanyScope] = useState<'all' | 'list' | 'segment' | 'csv'>('all');
+  const [companyScope, setCompanyScope] = useState<'all' | 'list' | 'segment' | 'csv' | 'gaps'>('all');
   const [selectedList, setSelectedList] = useState<string>('');
   const [hubspotLists, setHubspotLists] = useState<HubSpotList[]>([]);
+  const [selectedGapFields, setSelectedGapFields] = useState<string[]>([]);
   const [listPermissionError, setListPermissionError] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvText, setCsvText] = useState<string>('');
@@ -700,7 +701,16 @@ export default function EnrichPage() {
     }
 
     // Show confirmation modal for large runs
-    const estimatedCount = companyScope === 'segment' ? (previewCount || 0) : gapAnalysis?.total_companies || 0;
+    const estimatedCount =
+      companyScope === 'segment' ? (previewCount || 0) :
+      companyScope === 'gaps' ? Math.min(
+        selectedGapFields.reduce((sum, field) => {
+          const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
+          return sum + (gap?.missing || 0);
+        }, 0),
+        gapAnalysis?.total_companies || 0
+      ) :
+      gapAnalysis?.total_companies || 0;
     if (estimatedCount > 100) {
       setShowConfirmModal(true);
       return;
@@ -727,6 +737,8 @@ export default function EnrichPage() {
         if (ownerId) filters.hubspot_owner_id = ownerId;
         if (selectedIndustries.length > 0) filters.industry = selectedIndustries;
         source.filters = filters;
+      } else if (companyScope === 'gaps') {
+        source.fields = selectedGapFields;
       } else if (companyScope === 'csv') {
         source.domains = csvText.split('\n').filter(d => d.trim());
       } else {
@@ -1027,9 +1039,16 @@ export default function EnrichPage() {
       }
 
       // Get total companies count
-      const totalCompanies = companyScope === 'segment'
-        ? (previewCount || 0)
-        : (gapAnalysis?.total_companies || 0);
+      const totalCompanies =
+        companyScope === 'segment' ? (previewCount || 0) :
+        companyScope === 'gaps' ? Math.min(
+          selectedGapFields.reduce((sum, field) => {
+            const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
+            return sum + (gap?.missing || 0);
+          }, 0),
+          gapAnalysis?.total_companies || 0
+        ) :
+        (gapAnalysis?.total_companies || 0);
 
       // Start the arrangement run (critical: this enqueues the job to the worker)
       const runResponse = await fetch(`/api/arrangements/${newArrangementId}/run`, {
@@ -1346,6 +1365,52 @@ export default function EnrichPage() {
                           }))}
                           placeholder="Select a list..."
                         />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      checked={companyScope === 'gaps'}
+                      onChange={() => setCompanyScope('gaps')}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 12, color: C.text2 }}>Companies with gaps</span>
+                  </label>
+                  {companyScope === 'gaps' && gapAnalysis && (
+                    <div style={{ marginLeft: 22, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {gapAnalysis.field_gaps.map((gap) => (
+                        <label key={gap.field} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedGapFields.includes(gap.field)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedGapFields([...selectedGapFields, gap.field]);
+                              } else {
+                                setSelectedGapFields(selectedGapFields.filter(f => f !== gap.field));
+                              }
+                            }}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: 11, color: C.text2 }}>
+                            {gap.field_label} <span style={{ color: C.text3 }}>{gap.missing.toLocaleString()} missing</span>
+                          </span>
+                        </label>
+                      ))}
+                      {selectedGapFields.length > 0 && (
+                        <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>
+                          {Math.min(
+                            selectedGapFields.reduce((sum, field) => {
+                              const gap = gapAnalysis.field_gaps.find(g => g.field === field);
+                              return sum + (gap?.missing || 0);
+                            }, 0),
+                            gapAnalysis.total_companies
+                          ).toLocaleString()} matches (estimated)
+                        </div>
                       )}
                     </div>
                   )}
@@ -1710,7 +1775,17 @@ export default function EnrichPage() {
                 ? 'Enrichment in progress'
                 : testMode
                 ? `Preview ${testRecordLimit} records`
-                : `Enrich all ${(companyScope === 'segment' ? (previewCount || 0) : gapAnalysis?.total_companies || 0).toLocaleString()} companies →`}
+                : `Enrich all ${(
+                  companyScope === 'segment' ? (previewCount || 0) :
+                  companyScope === 'gaps' ? Math.min(
+                    selectedGapFields.reduce((sum, field) => {
+                      const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
+                      return sum + (gap?.missing || 0);
+                    }, 0),
+                    gapAnalysis?.total_companies || 0
+                  ) :
+                  gapAnalysis?.total_companies || 0
+                ).toLocaleString()} companies →`}
             </PrimaryBtn>
 
             {/* Show message when run is active */}
@@ -2926,7 +3001,17 @@ export default function EnrichPage() {
               <div style={{ marginBottom: 12 }}>
                 Enriching{' '}
                 <strong style={{ color: C.text }}>
-                  {(companyScope === 'segment' ? (previewCount || 0) : (gapAnalysis?.total_companies || 0)).toLocaleString()}
+                  {(
+                    companyScope === 'segment' ? (previewCount || 0) :
+                    companyScope === 'gaps' ? Math.min(
+                      selectedGapFields.reduce((sum, field) => {
+                        const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
+                        return sum + (gap?.missing || 0);
+                      }, 0),
+                      gapAnalysis?.total_companies || 0
+                    ) :
+                    (gapAnalysis?.total_companies || 0)
+                  ).toLocaleString()}
                 </strong>{' '}
                 companies
               </div>
@@ -2983,7 +3068,17 @@ export default function EnrichPage() {
                   executeEnrichment();
                 }}
               >
-                Enrich {(companyScope === 'segment' ? (previewCount || 0) : (gapAnalysis?.total_companies || 0)).toLocaleString()} companies →
+                Enrich {(
+                  companyScope === 'segment' ? (previewCount || 0) :
+                  companyScope === 'gaps' ? Math.min(
+                    selectedGapFields.reduce((sum, field) => {
+                      const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
+                      return sum + (gap?.missing || 0);
+                    }, 0),
+                    gapAnalysis?.total_companies || 0
+                  ) :
+                  (gapAnalysis?.total_companies || 0)
+                ).toLocaleString()} companies →
               </PrimaryBtn>
             </div>
           </div>
