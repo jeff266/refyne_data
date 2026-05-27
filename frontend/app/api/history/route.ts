@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Step 2: Fetch arrangements separately (null-safe lookup)
-    const arrangementIds = [...new Set(runs.map(r => r.arrangement_id).filter(Boolean))];
+    const arrangementIds = Array.from(new Set(runs.map(r => r.arrangement_id).filter(Boolean)));
 
     const arrangementsById = new Map();
 
