@@ -1397,7 +1397,7 @@ export default function EnrichPage() {
                             style={{ cursor: 'pointer' }}
                           />
                           <span style={{ fontSize: 11, color: C.text2 }}>
-                            {gap.field_label} <span style={{ color: C.text3 }}>{gap.missing.toLocaleString()} missing</span>
+                            {ENRICHABLE_FIELDS.find(f => f.key === gap.field)?.label || gap.field} <span style={{ color: C.text3 }}>{gap.missing.toLocaleString()} missing</span>
                           </span>
                         </label>
                       ))}
