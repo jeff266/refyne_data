@@ -90,6 +90,9 @@ export async function storeCachedFields(
 
   let hasHighConfidenceData = false;
 
+  // Extract model name from extraction metadata (set by haiku/deepseek extractors)
+  const model = (extractions as any)._model ?? 'deepseek';
+
   for (const [fieldKey, extraction] of Object.entries(extractions)) {
     if (
       extraction.value !== null &&
@@ -101,7 +104,7 @@ export async function storeCachedFields(
 
       updates[fieldKey] = extraction.value;
       updates[`${fieldKey}_confidence`] = extraction.confidence;
-      updates[`${fieldKey}_source`] = 'refyne_search';
+      updates[`${fieldKey}_source`] = `refyne_search:${model}`;
       updates[`${fieldKey}_evidence`] = extraction.evidence;
       updates[`${fieldKey}_extracted_at`] = new Date().toISOString();
       updates[`${fieldKey}_expires_at`] = expiresAt.toISOString();

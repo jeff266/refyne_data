@@ -178,7 +178,7 @@ export async function extractWithDeepSeek(
       .replace(/```\n?/g, '')
       .trim();
     const parsed = JSON.parse(cleaned);
-    return { ...parsed, _usage: usage };
+    return { ...parsed, _usage: usage, _model: 'deepseek' };
   } catch {
     console.error('[Fireworks DeepSeek] Failed to parse JSON:', text.slice(0, 200));
     return {};

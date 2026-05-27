@@ -13,6 +13,9 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
  * - dateRange: filter by date range (today, last7days, last30days, alltime)
  * - page: page number (default 1)
  * - limit: items per page (default 20)
+ *
+ * Fixed: Uses two separate queries to avoid RLS issues with INNER JOIN.
+ * Handles deleted arrangements gracefully with "Deleted arrangement" fallback.
  */
 export async function GET(request: NextRequest) {
   let ctx;
@@ -50,25 +53,10 @@ export async function GET(request: NextRequest) {
       dateFilter = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
 
-    // Query arrangement_runs with arrangements
+    // Step 1: Query arrangement_runs (no join, avoids RLS issues)
     let query = supabase
       .from('arrangement_runs')
-      .select(`
-        id,
-        arrangement_id,
-        status,
-        records_processed,
-        records_total,
-        fields_filled,
-        started_at,
-        completed_at,
-        error_message,
-        arrangements!inner (
-          id,
-          name,
-          field_configs
-        )
-      `, { count: 'exact' })
+      .select('*', { count: 'exact' })
       .eq('org_id', ctx.orgId)
       .order('started_at', { ascending: false });
 
@@ -82,26 +70,66 @@ export async function GET(request: NextRequest) {
       query = query.gte('started_at', dateFilter.toISOString());
     }
 
-    // Fetch runs
+    // Fetch runs with pagination
     const { data: runs, error, count } = await query.range(offset, offset + limit - 1);
 
     if (error) {
-      console.error('Failed to fetch history:', error);
+      console.error('[History API] Failed to fetch arrangement_runs:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch history' },
+        { error: 'Failed to fetch history', details: error.message },
         { status: 500 }
       );
     }
 
-    // Post-process filtering for provider and field (since these are in JSONB)
-    let filteredRuns = runs || [];
+    // Handle empty results
+    if (!runs || runs.length === 0) {
+      return NextResponse.json({
+        runs: [],
+        total: count || 0,
+        summary: {
+          totalRuns: 0,
+          totalRecords: 0,
+          totalFilled: 0,
+          avgFillsPerRun: 0,
+        },
+      });
+    }
+
+    // Step 2: Fetch arrangements separately (null-safe lookup)
+    const arrangementIds = [...new Set(runs.map(r => r.arrangement_id).filter(Boolean))];
+
+    const arrangementsById = new Map();
+
+    if (arrangementIds.length > 0) {
+      try {
+        const { data: arrangements, error: arrangementsError } = await supabase
+          .from('arrangements')
+          .select('id, name, field_configs')
+          .in('id', arrangementIds)
+          .eq('org_id', ctx.orgId);
+
+        if (arrangementsError) {
+          console.error('[History API] Failed to fetch arrangements:', arrangementsError);
+          // Don't fail the whole request - continue with empty arrangements map
+        } else if (arrangements) {
+          arrangements.forEach(a => arrangementsById.set(a.id, a));
+        }
+      } catch (err) {
+        console.error('[History API] Exception fetching arrangements:', err);
+        // Continue with empty map
+      }
+    }
+
+    // Step 3: Post-process filtering for provider and field (JSONB fields)
+    let filteredRuns = runs;
 
     if (provider || field) {
       filteredRuns = filteredRuns.filter((run: any) => {
-        const fieldConfigs = run.arrangements?.field_configs || [];
+        const arrangement = arrangementsById.get(run.arrangement_id);
+        const fieldConfigs = arrangement?.field_configs || [];
 
         // Check provider filter
-        if (provider) {
+        if (provider && provider !== 'all') {
           const hasProvider = fieldConfigs.some((fc: any) =>
             fc.steps?.some((step: any) => step.provider === provider)
           );
@@ -109,7 +137,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Check field filter
-        if (field) {
+        if (field && field !== 'all') {
           const hasField = fieldConfigs.some((fc: any) => fc.field_key === field);
           if (!hasField) return false;
         }
@@ -118,7 +146,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Calculate summary stats (all runs, not just filtered)
+    // Step 4: Calculate summary stats (all runs, not just current page)
     const { data: allRuns } = await supabase
       .from('arrangement_runs')
       .select('records_processed, fields_filled')
@@ -128,38 +156,50 @@ export async function GET(request: NextRequest) {
     const totalRecords = allRuns?.reduce((sum, r) => sum + (r.records_processed || 0), 0) || 0;
 
     let totalFilled = 0;
-    allRuns?.forEach((r) => {
-      if (r.fields_filled && typeof r.fields_filled === 'object') {
-        totalFilled += Object.values(r.fields_filled as Record<string, number>).reduce((s, c) => s + c, 0);
-      }
-    });
+    if (allRuns) {
+      allRuns.forEach((r) => {
+        if (r.fields_filled && typeof r.fields_filled === 'object') {
+          const fieldCounts = Object.values(r.fields_filled as Record<string, number>);
+          totalFilled += fieldCounts.reduce((s, c) => s + (c || 0), 0);
+        }
+      });
+    }
 
     const avgFillsPerRun = totalRuns > 0 ? Math.round(totalFilled / totalRuns) : 0;
 
-    // Transform runs for display
+    // Step 5: Transform runs for display with null-safe arrangement lookup
     const history = filteredRuns.map((run: any) => {
-      const arrangement = run.arrangements;
+      const arrangement = arrangementsById.get(run.arrangement_id);
       const fieldConfigs = arrangement?.field_configs || [];
 
-      // Extract unique providers
+      // Extract unique providers (graceful fallback if no arrangement)
       const providers: string[] = [];
-      fieldConfigs.forEach((fc: any) => {
-        fc.steps?.forEach((step: any) => {
-          if (step.provider && !providers.includes(step.provider)) {
-            providers.push(step.provider);
+      if (fieldConfigs.length > 0) {
+        fieldConfigs.forEach((fc: any) => {
+          if (fc.steps && Array.isArray(fc.steps)) {
+            fc.steps.forEach((step: any) => {
+              if (step.provider && !providers.includes(step.provider)) {
+                providers.push(step.provider);
+              }
+            });
           }
         });
-      });
+      }
 
-      // Extract fields
-      const fields = fieldConfigs.map((fc: any) => fc.field_key).filter(Boolean);
+      // Extract fields (graceful fallback if no arrangement)
+      const fields = fieldConfigs
+        .map((fc: any) => fc.field_key)
+        .filter(Boolean);
 
       // Calculate total fields filled
       const fieldsFilled = run.fields_filled || {};
-      const totalFilledForRun = Object.values(fieldsFilled).reduce(
-        (sum: number, count: any) => sum + (count || 0),
-        0
-      );
+      let totalFilledForRun = 0;
+      if (typeof fieldsFilled === 'object') {
+        totalFilledForRun = Object.values(fieldsFilled as Record<string, number>).reduce(
+          (sum: number, count: any) => sum + (count || 0),
+          0
+        );
+      }
 
       // Calculate duration
       let durationSeconds = 0;
@@ -172,13 +212,13 @@ export async function GET(request: NextRequest) {
       return {
         run_id: run.id,
         arrangement_id: run.arrangement_id,
-        arrangement_name: arrangement?.name || 'Unknown',
+        arrangement_name: arrangement?.name || 'Deleted arrangement',
         started_at: run.started_at,
         completed_at: run.completed_at,
         duration_seconds: durationSeconds,
-        status: run.status,
-        providers,
-        fields,
+        status: run.status || 'unknown',
+        providers: providers.length > 0 ? providers : ['unknown'],
+        fields: fields.length > 0 ? fields : ['unknown'],
         records_processed: run.records_processed || 0,
         fields_filled: totalFilledForRun,
       };
@@ -194,10 +234,10 @@ export async function GET(request: NextRequest) {
         avgFillsPerRun,
       },
     });
-  } catch (error) {
-    console.error('Failed to fetch history:', error);
+  } catch (error: any) {
+    console.error('[History API] Unhandled exception:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch history' },
+      { error: 'Failed to fetch history', details: error?.message || 'Unknown error' },
       { status: 500 }
     );
   }
