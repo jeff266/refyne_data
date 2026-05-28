@@ -6,6 +6,7 @@ import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-featu
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { revalidatePath } from 'next/cache';
+import { loadRules, applyRules } from '@/lib/dedup/survivorship-rules';
 
 interface MergeClusterRequest {
   masterId: string;
@@ -128,27 +129,50 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
       }
 
-      // Step 2: Update field values if selections provided
-      if (body.fieldSelections && !body.absorb) {
+      // Step 2: Apply survivorship rules and field selections
+      // Load survivorship rules for this org
+      const rules = await loadRules(orgId);
+
+      // Apply survivorship rules to ALL record pairs in cluster
+      const survivorshipSelections: Record<string, string> = {};
+
+      for (const recordId of recordsToMerge) {
+        const masterSnapshot = preMergeSnapshots[masterId] || {};
+        const duplicateSnapshot = preMergeSnapshots[recordId] || {};
+
+        const survivorshipResult = applyRules(
+          masterSnapshot,
+          duplicateSnapshot,
+          rules
+        );
+
+        // Convert survivorship results to field selections
+        // (duplicate source = use duplicate's record ID, master source = use master ID)
+        for (const [field, winner] of Object.entries(survivorshipResult)) {
+          if (winner.source === 'duplicate' && winner.rule !== 'default_master') {
+            survivorshipSelections[field] = recordId;
+          }
+        }
+      }
+
+      // Merge manual selections with survivorship selections
+      // Manual selections override survivorship rules
+      const effectiveFieldSelections = {
+        ...survivorshipSelections,
+        ...(body.fieldSelections ?? {}),
+      };
+
+      // Update field values if selections exist
+      if (Object.keys(effectiveFieldSelections).length > 0 && !body.absorb) {
         const updates: Record<string, string> = {};
 
         // For each field selection, determine which record's value to use
-        for (const [field, sourceRecordId] of Object.entries(body.fieldSelections)) {
+        for (const [field, sourceRecordId] of Object.entries(effectiveFieldSelections)) {
           if (sourceRecordId !== masterId) {
-            // Fetch the source record to get the value
-            const sourceRes = await fetch(
-              `https://api.hubapi.com/crm/v3/objects/companies/${sourceRecordId}?properties=${field}`,
-              {
-                headers: { Authorization: `Bearer ${accessToken}` },
-              }
-            );
-
-            if (sourceRes.ok) {
-              const sourceData = await sourceRes.json();
-              const value = sourceData.properties[field];
-              if (value !== null && value !== '') {
-                updates[field] = value;
-              }
+            // Use pre-merge snapshot if available (record is already merged/deleted)
+            const value = preMergeSnapshots[sourceRecordId]?.[field];
+            if (value !== null && value !== '' && value !== undefined) {
+              updates[field] = value;
             }
           }
         }

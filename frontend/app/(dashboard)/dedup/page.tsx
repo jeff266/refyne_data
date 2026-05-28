@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Settings, Check, X } from 'lucide-react';
+import { Settings, Check, X, History, Clock } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { HowItWorksStrip } from '@/components/refyne';
-import { DedupSettings, ClusterQueue } from '@/components/dedup';
+import { DedupSettings, ClusterQueue, MergeHistoryTab, PendingMergesTab } from '@/components/dedup';
 
 // ─────────────────────────────────────────────────────────────
 // Tab type
 // ─────────────────────────────────────────────────────────────
 
-type DedupTab = 'queue' | 'settings';
+type DedupTab = 'queue' | 'pending' | 'history' | 'settings';
 
 // ─────────────────────────────────────────────────────────────
 // Main Page Component
@@ -114,6 +114,22 @@ export default function DedupPage() {
           Review queue
         </button>
         <button
+          style={tabStyle(tab === 'pending')}
+          onClick={() => setTab('pending')}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Clock size={14} /> Pending merges
+          </span>
+        </button>
+        <button
+          style={tabStyle(tab === 'history')}
+          onClick={() => setTab('history')}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <History size={14} /> History
+          </span>
+        </button>
+        <button
           style={tabStyle(tab === 'settings')}
           onClick={() => setTab('settings')}
         >
@@ -129,6 +145,12 @@ export default function DedupPage() {
           <DedupSettings isAdmin={true} />
         </div>
       )}
+
+      {/* Pending merges tab content */}
+      {tab === 'pending' && <PendingMergesTab />}
+
+      {/* History tab content */}
+      {tab === 'history' && <MergeHistoryTab />}
 
       {/* Review queue tab content */}
       {tab === 'queue' && (

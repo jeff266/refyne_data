@@ -158,6 +158,18 @@ export function evaluateCompanyPair(
     }
   }
 
+  // Apply TLD mismatch penalty before finalizing confidence
+  const tldPenalty = checkTldMismatch(domainA, domainB);
+  if (tldPenalty > 0) {
+    confidence = Math.max(0, confidence - tldPenalty);
+    signalsFired.push({
+      tier: 0,
+      type: 'tld_mismatch',
+      deterministic: false,
+      score: -tldPenalty,
+    });
+  }
+
   // Cap confidence at 100
   confidence = Math.min(100, confidence);
 
@@ -174,4 +186,38 @@ export function evaluateCompanyPair(
     nameSimilarity,
     signalsFired,
   };
+}
+
+/**
+ * Check for TLD mismatch that should downgrade confidence.
+ * Example: example.com vs example.com.au
+ * Returns penalty points to subtract from confidence.
+ */
+function checkTldMismatch(domain1: string | null, domain2: string | null): number {
+  if (!domain1 || !domain2) return 0;
+
+  // TLD pairs that are frequently mismatched (US vs international)
+  const tldPairs: string[][] = [
+    ['.com', '.com.au'],
+    ['.com', '.co.uk'],
+    ['.com', '.co.nz'],
+    ['.com', '.ca'],
+    ['.com', '.ie'],
+  ];
+  const penalty = 20; // Drops Grade A (95%) to Grade B (75%)
+
+  const getTld = (domain: string) => {
+    const parts = domain.toLowerCase().replace(/^www\./, '').split('.');
+    if (parts.length >= 3) return `.${parts.slice(-2).join('.')}`;
+    return `.${parts.slice(-1)[0]}`;
+  };
+
+  const tld1 = getTld(domain1);
+  const tld2 = getTld(domain2);
+
+  const isFlagged = tldPairs.some(
+    ([a, b]) => (tld1 === a && tld2 === b) || (tld1 === b && tld2 === a)
+  );
+
+  return isFlagged ? penalty : 0;
 }

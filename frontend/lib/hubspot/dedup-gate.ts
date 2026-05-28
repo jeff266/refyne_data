@@ -14,6 +14,7 @@ import type { HubSpotClient, CompanyIndex } from './client';
 import type { DedupFieldWeights } from '../db/types';
 import { getDedupSettings, getDefaultDedupSettings } from '../db/settings-repository';
 import { similarity, extractDomain } from '../harmonies/runtime/builtins';
+import { supabase } from '../db/supabase';
 
 /**
  * Default field weights per PRD.
@@ -156,6 +157,91 @@ export function isSuppressionActive(
 export function getSuppressions(orgId: string): DedupSuppression[] {
   return Array.from(suppressions.values())
     .filter(s => s.orgId === orgId);
+}
+
+/**
+ * Create a dedup cluster from webhook event.
+ * Bridges webhook dedup detection to the database-backed cluster system.
+ *
+ * @param orgId - Organization ID
+ * @param companyIdA - First company HubSpot ID (usually the existing record)
+ * @param companyIdB - Second company HubSpot ID (usually the incoming/new record)
+ * @param confidence - Similarity score (0-1, will be converted to 0-100)
+ * @param signals - Array of signal types that matched (e.g., ['domain', 'name', 'phone'])
+ * @param source - Source of detection ('webhook' or 'scanner')
+ * @returns Cluster ID if created, null if creation failed
+ */
+export async function createDedupClusterFromWebhook(
+  orgId: string,
+  companyIdA: string,
+  companyIdB: string,
+  confidence: number,
+  signals: string[],
+  source: 'webhook' | 'scanner' = 'webhook'
+): Promise<string | null> {
+  if (!supabase) {
+    console.warn('Supabase not configured - cannot create dedup cluster');
+    return null;
+  }
+
+  try {
+    // Convert 0-1 confidence to 0-100 scale
+    const confidenceScore = Math.round(confidence * 100);
+
+    // Determine grade based on confidence
+    let grade: 'A' | 'B' | 'C' | 'D';
+    if (confidenceScore >= 97) grade = 'A';
+    else if (confidenceScore >= 85) grade = 'B';
+    else if (confidenceScore >= 70) grade = 'C';
+    else grade = 'D';
+
+    // Create the pair first
+    const { data: pair, error: pairError } = await supabase
+      .from('dedup_pairs')
+      .insert({
+        org_id: orgId,
+        company_a: companyIdA,
+        company_b: companyIdB,
+        confidence: confidenceScore,
+        grade,
+        signals_fired: signals.map(s => ({ type: s })), // Simplified signal format
+        source,
+        reviewed: false,
+      })
+      .select('id')
+      .single();
+
+    if (pairError || !pair) {
+      console.error('Failed to create dedup pair:', pairError);
+      return null;
+    }
+
+    // Create a cluster containing just this pair
+    const { data: cluster, error: clusterError } = await supabase
+      .from('dedup_clusters')
+      .insert({
+        org_id: orgId,
+        companies: [companyIdA, companyIdB],
+        pair_ids: [pair.id],
+        confidence: confidenceScore,
+        grade,
+        status: 'open',
+        detected_via: source,
+      })
+      .select('id')
+      .single();
+
+    if (clusterError || !cluster) {
+      console.error('Failed to create dedup cluster:', clusterError);
+      return null;
+    }
+
+    console.log(`Created dedup cluster ${cluster.id} from ${source} (${grade} grade, ${confidenceScore}% confidence)`);
+    return cluster.id;
+  } catch (error) {
+    console.error('Error creating dedup cluster:', error);
+    return null;
+  }
 }
 
 /**
@@ -314,16 +400,8 @@ export async function checkDedupGate(
   }
 
   // Apply threshold logic (no parent-child relationship)
-  if (bestMatch.score >= thresholds.auto_merge) {
-    return {
-      action: 'upsert',
-      targetHubSpotId: bestMatch.record.id,
-      similarityScore: bestMatch.score,
-      fieldComparison: bestMatch.fieldComparison,
-      matchedRecord: bestMatch.record.properties,
-    };
-  }
-
+  // Note: Previously, scores >= 90% would auto-merge silently.
+  // Now all matches >= review_min go to cluster system for manual review or scheduled auto-merge.
   if (bestMatch.score >= thresholds.review_min) {
     return {
       action: 'review',
@@ -649,17 +727,56 @@ function computeEmployeeBandSimilarity(
 
 /**
  * Add a record to the review queue.
+ * Creates a dedup cluster in the database instead of using in-memory storage.
+ *
+ * @param record - Incoming record (must have _hubspot_id for webhook events)
+ * @param dedupResult - Dedup gate result with matched record info
+ * @param orgId - Organization ID (optional, will use 'default' if not provided)
+ * @returns Cluster ID if created successfully, review queue ID as fallback
  */
-export function addToReviewQueue(
+export async function addToReviewQueue(
   record: RawRecord,
-  dedupResult: DedupGateResult
-): string {
+  dedupResult: DedupGateResult,
+  orgId?: string
+): Promise<string> {
+  const incomingId = record._hubspot_id as string | undefined;
+  const matchedId = dedupResult.targetHubSpotId;
+
+  // If we have both HubSpot IDs, create a cluster in the database
+  if (incomingId && matchedId && orgId) {
+    // Extract signal types from field comparison
+    const signals: string[] = [];
+    if (dedupResult.fieldComparison) {
+      for (const [field, comparison] of Object.entries(dedupResult.fieldComparison)) {
+        if (comparison.similarity > 0.7) {
+          signals.push(field);
+        }
+      }
+    }
+
+    const clusterId = await createDedupClusterFromWebhook(
+      orgId,
+      matchedId, // Existing record (company_a)
+      incomingId, // Incoming record (company_b)
+      dedupResult.similarityScore || 0,
+      signals.length > 0 ? signals : ['webhook_match'],
+      'webhook'
+    );
+
+    if (clusterId) {
+      return clusterId;
+    }
+
+    console.warn('Failed to create dedup cluster, falling back to in-memory queue');
+  }
+
+  // Fallback to in-memory queue if database creation fails or IDs are missing
   const id = `review_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
   const item: ReviewQueueItem = {
     id,
     incomingRecord: record,
-    matchedHubSpotId: dedupResult.targetHubSpotId!,
+    matchedHubSpotId: matchedId!,
     similarityScore: dedupResult.similarityScore!,
     fieldComparison: dedupResult.fieldComparison,
     status: 'pending',

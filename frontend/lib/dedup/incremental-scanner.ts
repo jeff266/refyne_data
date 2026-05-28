@@ -14,6 +14,7 @@ import { fetchAllCompanies, fetchModifiedSince, getLatestModifiedDate } from '..
 import { rebuildFullIndex, upsertIndexRecords, findCandidatesFromIndex } from './dedup-index';
 import { evaluateCompanyPair, type CompanyProperties } from './company-signals';
 import { UnionFind } from './union-find';
+import { scheduleAutoMerges } from './auto-merge-scheduler';
 import type { HubSpotCompany } from '../hubspot/types';
 import type { PairGrade } from './types';
 
@@ -40,6 +41,7 @@ export interface DedupScanResult {
   recordsScanned: number;
   pairsFound: number;
   clustersFound: number;
+  newClusterIds: string[];
 }
 
 interface ScanRun {
@@ -265,8 +267,8 @@ async function buildClusters(
   portalId: string,
   connectionId: string,
   pairs: Array<{ id: string; record_a_id: string; record_b_id: string; grade: PairGrade }>
-): Promise<number> {
-  if (!supabase || pairs.length === 0) return 0;
+): Promise<{ count: number; clusterIds: string[] }> {
+  if (!supabase || pairs.length === 0) return { count: 0, clusterIds: [] };
 
   // Clear existing clusters for this portal
   await supabase.from('dedup_clusters').delete().eq('org_id', orgId).eq('portal_id', portalId);
@@ -290,6 +292,9 @@ async function buildClusters(
 
   const clusters = uf.getClusters();
   console.log(`[incremental-scanner] Built ${clusters.length} clusters from ${pairs.length} pairs`);
+
+  // Track newly created cluster IDs
+  const clusterIds: string[] = [];
 
   // Insert cluster rows
   for (const recordIds of clusters) {
@@ -326,6 +331,9 @@ async function buildClusters(
       continue;
     }
 
+    // Track cluster ID for auto-merge scheduling
+    clusterIds.push(cluster.id);
+
     // Backfill cluster_id on pairs
     await supabase
       .from('dedup_pairs')
@@ -336,7 +344,7 @@ async function buildClusters(
       );
   }
 
-  return clusters.length;
+  return { count: clusters.length, clusterIds };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,7 +379,7 @@ async function runFullScan(
 
   // Build clusters
   const allPairs = await getAllPendingPairs(orgId, portalId);
-  const clustersFound = await buildClusters(orgId, portalId, connectionId, allPairs);
+  const { count: clustersFound, clusterIds } = await buildClusters(orgId, portalId, connectionId, allPairs);
 
   // Update scan run
   const cursor = companies.length > 0 ? getLatestModifiedDate(companies) : new Date();
@@ -387,6 +395,7 @@ async function runFullScan(
     recordsScanned: companies.length,
     pairsFound: allPairs.length,
     clustersFound,
+    newClusterIds: clusterIds,
   };
 }
 
@@ -453,9 +462,12 @@ async function runIncrementalScan(
 
   // Rebuild clusters if new pairs were found
   let clustersFound = 0;
+  let clusterIds: string[] = [];
   if (newPairsFound > 0) {
     const allPairs = await getAllPendingPairs(orgId, portalId);
-    clustersFound = await buildClusters(orgId, portalId, connectionId, allPairs);
+    const result = await buildClusters(orgId, portalId, connectionId, allPairs);
+    clustersFound = result.count;
+    clusterIds = result.clusterIds;
   }
 
   // Update scan run
@@ -472,6 +484,7 @@ async function runIncrementalScan(
     recordsScanned: modifiedCompanies.length,
     pairsFound: newPairsFound,
     clustersFound,
+    newClusterIds: clusterIds,
   };
 }
 
@@ -503,11 +516,17 @@ export async function runDedupScan(
   const scanRun = await createScanRun(orgId, portalId, connectionId, scanType);
 
   try {
-    if (scanType === 'full') {
-      return await runFullScan(orgId, portalId, client, connectionId, scanRun);
-    } else {
-      return await runIncrementalScan(orgId, portalId, client, connectionId, scanRun, lastRun!.modified_cursor);
+    const result = scanType === 'full'
+      ? await runFullScan(orgId, portalId, client, connectionId, scanRun)
+      : await runIncrementalScan(orgId, portalId, client, connectionId, scanRun, lastRun!.modified_cursor);
+
+    // Schedule auto-merge for high-confidence clusters
+    if (result.newClusterIds.length > 0) {
+      await scheduleAutoMerges(orgId, result.newClusterIds);
+      console.log(`[incremental-scanner] Scheduled ${result.newClusterIds.length} clusters for auto-merge evaluation`);
     }
+
+    return result;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     await failScanRun(scanRun.id, errorMessage);

@@ -26,6 +26,7 @@ import { canonicalToHubSpotProperties, getDefaultWriteMappings } from './inverse
 import type { FieldMapping } from './types';
 import { DEFAULT_COMPANY_PROPERTIES } from './types';
 import { processAndWriteRecordFields } from '../compliance/normalized-records-writer';
+import { supabase } from '../db/supabase';
 
 // ─────────────────────────────────────────────────────────────
 // Signature Validation
@@ -256,6 +257,174 @@ function transformToRawRecord(company: {
   };
 }
 
+// ─────────────────────────────────────────────────────────────
+// Event-Specific Handlers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Handle company.deletion event.
+ * Updates dedup clusters and logs the deletion.
+ */
+async function handleCompanyDeletion(
+  orgId: string,
+  companyId: string
+): Promise<void> {
+  if (!supabase) {
+    console.warn('Supabase not configured - cannot handle company deletion');
+    return;
+  }
+
+  try {
+    // Find all clusters containing this company
+    const { data: clusters } = await supabase
+      .from('dedup_clusters')
+      .select('id, companies, status')
+      .eq('org_id', orgId)
+      .contains('companies', [companyId])
+      .neq('status', 'merged');
+
+    if (!clusters || clusters.length === 0) {
+      console.log(`No active clusters found for deleted company ${companyId}`);
+      return;
+    }
+
+    // Mark clusters as invalid since one of the companies no longer exists
+    for (const cluster of clusters) {
+      await supabase
+        .from('dedup_clusters')
+        .update({
+          status: 'invalid',
+          resolved_at: new Date().toISOString(),
+        })
+        .eq('id', cluster.id);
+
+      console.log(`Marked cluster ${cluster.id} as invalid due to company deletion: ${companyId}`);
+    }
+  } catch (error) {
+    console.error('Error handling company deletion:', error);
+  }
+}
+
+/**
+ * Handle company.merge event.
+ * Records the merge in history and marks clusters as resolved.
+ *
+ * Note: HubSpot doesn't have a specific company.merge event.
+ * Merges are detected through company.deletion + property changes on the surviving company.
+ * This handler is a placeholder for future HubSpot API support.
+ */
+async function handleCompanyMerge(
+  orgId: string,
+  survivingCompanyId: string,
+  mergedCompanyId: string
+): Promise<void> {
+  if (!supabase) {
+    console.warn('Supabase not configured - cannot handle company merge');
+    return;
+  }
+
+  try {
+    // Find cluster containing both companies
+    const { data: clusters } = await supabase
+      .from('dedup_clusters')
+      .select('id, companies, confidence, grade')
+      .eq('org_id', orgId)
+      .contains('companies', [survivingCompanyId, mergedCompanyId])
+      .eq('status', 'open');
+
+    if (!clusters || clusters.length === 0) {
+      console.log(`No cluster found for merge: ${mergedCompanyId} → ${survivingCompanyId}`);
+      return;
+    }
+
+    const cluster = clusters[0];
+
+    // Record merge in history
+    await supabase
+      .from('dedup_merge_history')
+      .insert({
+        org_id: orgId,
+        cluster_id: cluster.id,
+        master_id: survivingCompanyId,
+        absorbed_ids: [mergedCompanyId],
+        merge_method: 'hubspot_initiated',
+        merged_by: 'system',
+        confidence: cluster.confidence,
+        grade: cluster.grade,
+        field_selections: {},
+        rescued_fields: [],
+        pre_merge_snapshots: {},
+      });
+
+    // Mark cluster as merged
+    await supabase
+      .from('dedup_clusters')
+      .update({
+        status: 'merged',
+        resolved_at: new Date().toISOString(),
+      })
+      .eq('id', cluster.id);
+
+    console.log(`Recorded HubSpot-initiated merge: ${mergedCompanyId} → ${survivingCompanyId}`);
+  } catch (error) {
+    console.error('Error handling company merge:', error);
+  }
+}
+
+/**
+ * Handle company.restore event.
+ * Undoes merge history and reopens clusters.
+ *
+ * Note: HubSpot doesn't currently send company.restore events.
+ * This handler is a placeholder for future support.
+ */
+async function handleCompanyRestore(
+  orgId: string,
+  restoredCompanyId: string
+): Promise<void> {
+  if (!supabase) {
+    console.warn('Supabase not configured - cannot handle company restore');
+    return;
+  }
+
+  try {
+    // Find merge history entries where this company was absorbed
+    const { data: merges } = await supabase
+      .from('dedup_merge_history')
+      .select('id, cluster_id, master_id, absorbed_ids')
+      .eq('org_id', orgId)
+      .contains('absorbed_ids', [restoredCompanyId]);
+
+    if (!merges || merges.length === 0) {
+      console.log(`No merge history found for restored company ${restoredCompanyId}`);
+      return;
+    }
+
+    for (const merge of merges) {
+      // Mark merge history as reversed
+      await supabase
+        .from('dedup_merge_history')
+        .update({
+          merge_method: 'hubspot_initiated_reversed',
+        })
+        .eq('id', merge.id);
+
+      // Reopen the cluster for review
+      await supabase
+        .from('dedup_clusters')
+        .update({
+          status: 'open',
+          resolved_at: null,
+        })
+        .eq('id', merge.cluster_id);
+
+      console.log(`Reopened cluster ${merge.cluster_id} due to company restore: ${restoredCompanyId}`);
+    }
+  } catch (error) {
+    console.error('Error handling company restore:', error);
+  }
+}
+
 /**
  * Process a single webhook event.
  *
@@ -279,13 +448,40 @@ export async function processWebhookEvent(
   const objectIdStr = String(event.objectId);
 
   try {
-    // Skip deletion events
+    // Handle deletion events
     if (event.subscriptionType === 'company.deletion') {
+      await handleCompanyDeletion(orgId, objectIdStr);
       updateEventStatus(orgId, eventIdStr, 'processed');
       return {
         eventId: eventIdStr,
         objectId: objectIdStr,
-        action: 'skipped',
+        action: 'deletion_handled',
+      };
+    }
+
+    // Handle merge events (if HubSpot adds support in the future)
+    if (event.subscriptionType === 'company.merge') {
+      // Extract merged company ID from event (future API)
+      const mergedId = (event as any).mergedCompanyId || '';
+      if (mergedId) {
+        await handleCompanyMerge(orgId, objectIdStr, mergedId);
+      }
+      updateEventStatus(orgId, eventIdStr, 'processed');
+      return {
+        eventId: eventIdStr,
+        objectId: objectIdStr,
+        action: 'merge_handled',
+      };
+    }
+
+    // Handle restore events (if HubSpot adds support in the future)
+    if (event.subscriptionType === 'company.restore') {
+      await handleCompanyRestore(orgId, objectIdStr);
+      updateEventStatus(orgId, eventIdStr, 'processed');
+      return {
+        eventId: eventIdStr,
+        objectId: objectIdStr,
+        action: 'restore_handled',
       };
     }
 
@@ -314,7 +510,9 @@ export async function processWebhookEvent(
     // Mode-conditional behavior
     if (mode === 'explicit') {
       // Explicit mode: queue for review UI, do not write silently
-      addToReviewQueue(record, dedupResult);
+      // Ensure record has the HubSpot ID from the webhook event
+      record._hubspot_id = objectIdStr;
+      await addToReviewQueue(record, dedupResult, orgId);
       updateEventStatus(orgId, eventIdStr, 'processed');
       return {
         eventId: eventIdStr,
@@ -366,7 +564,9 @@ export async function processWebhookEvent(
 
     if (dedupResult.action === 'review') {
       // Queue for review even in implicit mode
-      addToReviewQueue(record, dedupResult);
+      // Ensure record has the HubSpot ID from the webhook event
+      record._hubspot_id = objectIdStr;
+      await addToReviewQueue(record, dedupResult, orgId);
       updateEventStatus(orgId, eventIdStr, 'processed');
       return {
         eventId: eventIdStr,

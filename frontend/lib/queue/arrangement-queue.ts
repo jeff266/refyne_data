@@ -1059,6 +1059,7 @@ async function processLiveRunJob(
             status: 'completed',
             enrichment_results: null, // Don't store full record - saves memory
             credits_used: enrichedRecord.creditsUsed,
+            started_at: new Date().toISOString(),
             completed_at: new Date().toISOString(),
             result: {
               fields_attempted: enrichedRecord.fieldsAttempted,
@@ -1080,6 +1081,7 @@ async function processLiveRunJob(
             record_id: failedRecord.companyId,
             status: 'failed',
             error_message: failedRecord.error,
+            started_at: new Date().toISOString(),
             completed_at: new Date().toISOString(),
           });
         }
@@ -1228,6 +1230,7 @@ async function processLiveRunJob(
                 status: 'completed',
                 enrichment_results: null, // Don't store full record - saves memory
                 credits_used: enrichedRecord.creditsUsed,
+                started_at: new Date().toISOString(),
                 completed_at: new Date().toISOString(),
                 result: {
                   fields_attempted: enrichedRecord.fieldsAttempted,
@@ -1249,6 +1252,7 @@ async function processLiveRunJob(
                 record_id: failedRecord.companyId,
                 status: 'failed',
                 error_message: failedRecord.error,
+                started_at: new Date().toISOString(),
                 completed_at: new Date().toISOString(),
               });
             }
@@ -1398,6 +1402,7 @@ async function processLiveRunJob(
             status: 'completed',
             enrichment_results: null, // Don't store full record - saves memory
             credits_used: enrichedRecord.creditsUsed,
+            started_at: new Date().toISOString(),
             completed_at: new Date().toISOString(),
             result: {
               fields_attempted: enrichedRecord.fieldsAttempted,
@@ -1419,6 +1424,7 @@ async function processLiveRunJob(
             record_id: failedRecord.companyId,
             status: 'failed',
             error_message: failedRecord.error,
+            started_at: new Date().toISOString(),
             completed_at: new Date().toISOString(),
           });
         }

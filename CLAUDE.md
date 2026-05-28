@@ -111,3 +111,104 @@ UPSTASH_REDIS_URL=rediss://xxx npx tsx scripts/start-webhook-worker.ts
 curl -X GET http://localhost:3000/api/webhooks/hubspot
 # Returns: { "status": "ok", "queue": { "concurrency": 5, ... } }
 ```
+
+## Dedup System
+
+### Status: Sprints 1-3 Complete ✅
+
+**Architecture:** Unified real-time + batch dedup system with database-backed clusters, survivorship rules, and auto-merge scheduling.
+
+### Dedup Sprint 1 ✅
+- 7-signal cascade matching (domain, LinkedIn, phone, name, industry, address, executive overlap)
+- Union-Find clustering algorithm groups duplicate pairs into clusters
+- Grade system: A (97%+), B (85-96%), C (70-84%), D (60-69%)
+- Cluster review UI with signal badges showing which signals fired
+- Field-level merge preview with master/duplicate selection
+- Pre-merge snapshots stored in `dedup_merge_history` for audit trail
+
+### Dedup Sprint 2 ✅
+- **Survivorship rules engine** (`dedup_survivorship_rules` table)
+  - Default rules: `never_downgrade` (lifecyclestage), `prefer_nonempty` (*), `tld_disqualifier` (domain)
+  - Org-specific rules override defaults
+  - Automatic field-level winner selection before manual review
+- **TLD mismatch penalty** (20 points) for international domain variants (e.g., `.com` vs `.com.au`)
+- **Rollback/restore UI** (`/dedup` History tab)
+  - Recreates absorbed companies from pre-merge snapshots
+  - Reopens cluster for re-review after restoration
+  - Full system field filtering (excludes `hs_object_id`, `createdate`, etc.)
+- **`started_at` fix** in `arrangement_run_progress` (6 locations)
+
+### Dedup Sprint 3 ✅
+- **Auto-merge with waiting period** (`dedup_auto_merge_settings` table)
+  - Default 24-hour waiting period for Grade A clusters (≥97% confidence)
+  - Configurable per org: enabled/disabled, waiting period, confidence threshold
+  - Email/Slack notifications when clusters are scheduled
+- **Pending merges UI** (`/dedup` Pending tab)
+  - Countdown timers showing time until auto-merge
+  - Individual "Cancel" buttons and "Cancel all" functionality
+  - Auto-refreshes every minute
+- **BullMQ auto-merge worker** runs every 15 minutes
+  - Finds clusters due for auto-merge (scheduled_at < now, not cancelled)
+  - Executes merge using survivorship rules
+  - Logs to `dedup_merge_history` with `merge_method='auto'`
+- **Cluster tracking** in incremental scanner
+  - `buildClusters()` returns `{ count, clusterIds }`
+  - Calls `scheduleAutoMerges()` at end of scan
+
+### Webhook Bridge Complete ✅
+**Critical fix:** Unified two previously separate dedup systems (webhook vs scanner)
+
+**Before:**
+- Webhook dedup used in-memory queue (Map-based `ReviewQueueItem`)
+- Silent 90% auto-merge with no audit trail or UI visibility
+- Duplicates detected by webhooks bypassed entire dedup UI
+
+**After:**
+- Webhook dedup creates database clusters (`createDedupClusterFromWebhook()`)
+- All matches ≥60% create `dedup_pairs` + `dedup_clusters` visible in UI
+- Silent 90% auto-merge removed - all matches go through cluster system
+- Webhook-detected duplicates follow same Grade A/B/C/D system with signal badges
+
+**Changes:**
+1. **Hardcoded portal IDs replaced** (`app/api/webhooks/hubspot/route.ts`)
+   - Queries `hubspot_connections` table for `org_id`, `access_token`, `connection_status` by `portal_id`
+   - Queries `normalization_settings` for `mode` (implicit/explicit)
+   - Real `org_id` from database replaces synthetic `portal-${portalId}`
+
+2. **Dedup gate bridged to cluster system** (`lib/hubspot/dedup-gate.ts`)
+   - `createDedupClusterFromWebhook()` creates `dedup_pairs` + `dedup_clusters`
+   - `addToReviewQueue()` calls database cluster creation instead of in-memory storage
+   - Threshold logic changed: all matches ≥`review_min` return `action='review'`
+
+3. **Event handlers added** (`lib/hubspot/webhook-handler.ts`)
+   - `company.deletion` → marks clusters as `status='invalid'`
+   - `company.merge` → records in `dedup_merge_history` with `merge_method='hubspot_initiated'` (placeholder)
+   - `company.restore` → reopens clusters, marks merge as reversed (placeholder)
+
+### Database Tables
+
+**Core dedup tables:**
+- `dedup_clusters` - Clustered duplicate groups with status (open/merged/invalid)
+- `dedup_pairs` - Individual company pairs with confidence, grade, signals
+- `dedup_merge_history` - Audit trail of all merges with pre-merge snapshots
+- `dedup_survivorship_rules` - Field-level rules for automatic winner selection (3 default rules seeded)
+- `dedup_auto_merge_settings` - Per-org auto-merge configuration (waiting period, threshold)
+- `dedup_decisions` - User accept/reject decisions for probabilistic weight training (**0 records** - accumulates from merges/rejects)
+
+**Waiting for 500+ decisions** before enabling probabilistic weight engine.
+
+### Running the Dedup Worker
+```bash
+# Start dedup scanner + auto-merge worker (on Railway worker dyno)
+npm run worker:dedup
+
+# Or directly
+UPSTASH_REDIS_URL=rediss://xxx npx tsx scripts/start-dedup-worker.ts
+```
+
+### Supported Webhook Events (Now Create Clusters)
+- `company.creation` - Creates cluster if matches existing company ≥60%
+- `company.propertyChange` - Creates cluster if changes trigger duplicate match
+- `company.deletion` - Marks clusters as invalid (NEW)
+- `company.merge` - Records HubSpot-initiated merge (NEW, placeholder for future API)
+- `company.restore` - Reopens clusters (NEW, placeholder for future API)

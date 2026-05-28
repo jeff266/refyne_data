@@ -24,62 +24,79 @@ import {
   getRateLimitSettings,
 } from '../../../../lib/queue/webhook-queue';
 import { isRedisConfigured } from '../../../../lib/queue/redis';
+import { supabase } from '../../../../lib/db/supabase';
 import type { HubSpotWebhookEvent, NormalizationMode } from '../../../../lib/hubspot/write-types';
 
 // ─────────────────────────────────────────────────────────────
 // Configuration
 // ─────────────────────────────────────────────────────────────
 
-// In production, these would be fetched from database/env per org
 interface OrgConfig {
+  orgId: string;
   clientSecret: string;
   accessToken: string;
   mode: NormalizationMode;
 }
 
-// Get org config by portal ID
-// In production, this would query hubspot_connections table
+/**
+ * Get org config by portal ID from database.
+ * Queries hubspot_connections and normalization_settings tables.
+ */
 async function getOrgConfigByPortalId(portalId: string): Promise<OrgConfig | null> {
-  // Check environment variables for known portals
-  const fronteraPortalId = '49169539';
-  const growthbookPortalId = '8863617';
+  if (!supabase) {
+    console.warn('Supabase not configured - falling back to environment variables');
 
-  if (portalId === fronteraPortalId) {
-    const token = process.env.HUBSPOT_TOKEN_FRONTERA || process.env.HUBSPOT_TOKEN;
-    const secret = process.env.HUBSPOT_CLIENT_SECRET_FRONTERA || process.env.HUBSPOT_CLIENT_SECRET;
+    // Fallback to env vars if database is not available
+    const token = process.env.HUBSPOT_TOKEN;
+    const secret = process.env.HUBSPOT_CLIENT_SECRET;
     if (token) {
       return {
-        clientSecret: secret || '',
-        accessToken: token,
-        mode: 'implicit', // Default to implicit for known portals
-      };
-    }
-  }
-
-  if (portalId === growthbookPortalId) {
-    const token = process.env.HUBSPOT_TOKEN_GROWTHBOOK;
-    const secret = process.env.HUBSPOT_CLIENT_SECRET_GROWTHBOOK || process.env.HUBSPOT_CLIENT_SECRET;
-    if (token) {
-      return {
+        orgId: `portal-${portalId}`, // Synthetic org ID as fallback
         clientSecret: secret || '',
         accessToken: token,
         mode: 'implicit',
       };
     }
+    return null;
   }
 
-  // Fallback to generic env vars
-  const token = process.env.HUBSPOT_TOKEN;
-  const secret = process.env.HUBSPOT_CLIENT_SECRET;
-  if (token) {
-    return {
-      clientSecret: secret || '',
-      accessToken: token,
-      mode: 'implicit',
-    };
+  // Query hubspot_connections for active connection with this portal_id
+  const { data: connection, error: connectionError } = await supabase
+    .from('hubspot_connections')
+    .select('org_id, access_token, connection_status')
+    .eq('portal_id', portalId)
+    .eq('connection_status', 'active')
+    .single();
+
+  if (connectionError || !connection) {
+    console.warn(`No active HubSpot connection found for portal: ${portalId}`, connectionError);
+    return null;
   }
 
-  return null;
+  if (!connection.access_token) {
+    console.warn(`HubSpot connection for portal ${portalId} has no access token`);
+    return null;
+  }
+
+  // Query normalization_settings for org mode
+  const { data: settings } = await supabase
+    .from('normalization_settings')
+    .select('mode')
+    .eq('org_id', connection.org_id)
+    .single();
+
+  const mode: NormalizationMode = (settings?.mode as NormalizationMode) || 'implicit';
+
+  // Client secret is the HubSpot app's client secret (from env vars)
+  // It's used for webhook signature validation and is app-level, not connection-specific
+  const clientSecret = process.env.HUBSPOT_CLIENT_SECRET || '';
+
+  return {
+    orgId: connection.org_id,
+    clientSecret,
+    accessToken: connection.access_token,
+    mode,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -164,8 +181,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const orgId = `portal-${portalId}`;
-
     // Check if queue is available
     if (!isRedisConfigured()) {
       console.warn('Redis not configured - webhook events will not be processed');
@@ -179,7 +194,7 @@ export async function POST(request: NextRequest) {
     // Enqueue events to BullMQ (returns immediately)
     const { queued, duplicates, errors } = await enqueueWebhookBatch(
       events,
-      orgId,
+      orgConfig.orgId, // Use real org_id from database
       orgConfig.accessToken,
       orgConfig.mode
     );
