@@ -18,6 +18,8 @@ import { getGraphiqKey } from '../providers/graphiq-key';
 import {
   processPreviewJob,
   processApplyJob,
+  type PreviewJobData,
+  type PreviewJobProgress,
   type ApplyJobData,
 } from './enrich-page-worker';
 
@@ -622,28 +624,6 @@ function getFieldValueFromProvider(
 // ─────────────────────────────────────────────────────────────
 // Enrich Preview Queue (for interactive preview flow)
 // ─────────────────────────────────────────────────────────────
-
-export interface PreviewJobData {
-  runId: string;
-  orgId: string;
-  userId: string;
-  source: {
-    type: 'gaps' | 'all' | 'list';
-    fields?: string[];
-    list_id?: string;
-  };
-  fieldKeys: string[];
-  providerId: string;
-  recordLimit: number;
-  harmonyIds: string[];
-}
-
-export interface PreviewJobProgress {
-  completed: number;
-  total: number;
-  percentage: number;
-  currentCompany: string | null;
-}
 
 let previewQueue: Queue | null = null;
 let previewWorker: Worker | null = null;

@@ -8,7 +8,6 @@
 
 import { Job } from 'bullmq';
 import { createClient } from 'redis';
-import type { PreviewJobData } from './enrichment-queue';
 import { supabase } from '../db/supabase';
 import { getAccessToken } from '../hubspot/get-access-token';
 import { HubSpotClient } from '../hubspot/client';
@@ -17,6 +16,32 @@ import { classifyIndustry } from '../providers/refyne-search/industry-classifier
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+// ─────────────────────────────────────────────────────────────
+// Job Data Types
+// ─────────────────────────────────────────────────────────────
+
+export interface PreviewJobData {
+  runId: string;
+  orgId: string;
+  userId: string;
+  source: {
+    type: 'gaps' | 'all' | 'list';
+    fields?: string[];
+    list_id?: string;
+  };
+  fieldKeys: string[];
+  providerId: string;
+  recordLimit: number;
+  harmonyIds: string[];
+}
+
+export interface PreviewJobProgress {
+  completed: number;
+  total: number;
+  percentage: number;
+  currentCompany: string | null;
+}
 
 /**
  * Redis client for caching preview results.
