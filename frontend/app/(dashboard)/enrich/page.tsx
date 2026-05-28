@@ -9,6 +9,8 @@ import type { CustomDropdownOption } from '@/components/refyne';
 import { EnrichLoadingState } from '@/components/enrich/EnrichLoadingState';
 import { addToast } from '@/components/ui/toast';
 import { useEnrichRun } from '@/context/EnrichRunContext';
+import { useJobPoller, useJobResults } from '@/hooks/useJobPoller';
+import type { JobStatus } from '@/hooks/useJobPoller';
 
 interface FieldGap {
   field: string;
@@ -210,6 +212,18 @@ export default function EnrichPage() {
     skipped_invalid_value: number;
     field_breakdown: Record<string, number>;
   } | null>(null);
+
+  // Async preview/apply state
+  const [previewJobId, setPreviewJobId] = useState<string | null>(null);
+  const [previewRunId, setPreviewRunId] = useState<string | null>(null);
+  const [applyJobId, setApplyJobId] = useState<string | null>(null);
+  const [applyRunId, setApplyRunId] = useState<string | null>(null);
+
+  // Use job poller hooks
+  const previewJobStatus = useJobPoller(previewJobId);
+  const applyJobStatus = useJobPoller(applyJobId);
+  const { results: previewResultsFromJob } = useJobResults(previewJobId, previewJobStatus);
+
   const [portalId, setPortalId] = useState<string | null>(null);
 
   // Benchmark state
@@ -719,11 +733,13 @@ export default function EnrichPage() {
     await executeEnrichment();
   }
 
-  // Run preview on sample records
+  // Run preview on sample records (ASYNC VERSION)
   async function runPreview() {
     setPreviewLoading(true);
     setShowingPreview(false);
     setPreviewResults(null);
+    setPreviewJobId(null);
+    setPreviewRunId(null);
 
     try {
       // Build source config
@@ -746,113 +762,190 @@ export default function EnrichPage() {
         source.filters = { missing_fields: selectedFields };
       }
 
-      const response = await fetch('/api/enrich/preview', {
+      // Enqueue preview job
+      const response = await fetch('/api/enrich/preview/enqueue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fields: selectedFields,
-          providers: selectedProviders,
-          write_policy: writePolicy,
-          record_limit: testRecordLimit,
           source,
-        }),
-      });
-
-      const data = await response.json();
-
-      // Debug logging
-      console.log('[Preview] Response data:', {
-        records_processed: data.records_processed,
-        results_count: data.results?.length || 0,
-        results_exists: !!data.results,
-        results_type: typeof data.results,
-        summary: data.summary,
-        has_error: !!data.error,
-        all_keys: Object.keys(data)
-      });
-
-      // If results array is missing but we have records_processed, something went wrong
-      if (data.records_processed > 0 && (!data.results || data.results.length === 0)) {
-        console.error('[Preview] Results array missing despite records_processed =', data.records_processed);
-        console.error('[Preview] Full response:', JSON.stringify(data, null, 2));
-      }
-
-      // Check for error in response (even if status is 200)
-      if (data.error) {
-        alert(data.error);
-        // Still show results if available
-        if (data.results) {
-          setPreviewResults(data);
-          setShowingPreview(true);
-        }
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate preview');
-      }
-
-      setPreviewResults(data);
-      setShowingPreview(true);
-    } catch (error) {
-      console.error('Preview error:', error);
-      alert(`Failed to generate preview: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setPreviewLoading(false);
-    }
-  }
-
-  // Apply preview results to HubSpot
-  async function applyPreviewResults() {
-    if (!previewResults) return;
-
-    // Build selectedRows array from preview results
-    const rowsToApply = previewResults.results
-      .filter(result => selectedRows.has(`${result.company_id}-${result.field_key}`))
-      .map(result => ({
-        company_id: result.company_id,
-        field_key: result.field_key,
-        found_value: result.mapped_value || result.found_value!,  // Use mapped value for enum fields
-      }));
-
-    if (rowsToApply.length === 0) {
-      addToast('error', 'No rows selected');
-      return;
-    }
-
-    setRunning(true);
-    try {
-      const response = await fetch('/api/enrich/apply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          selectedRows: rowsToApply,
+          fieldKeys: selectedFields,
+          providerId: selectedProviders[0] || 'refyne_search',
+          recordLimit: testRecordLimit,
+          harmonyIds: [],
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to apply changes');
+        throw new Error(errorData.error || 'Failed to enqueue preview');
       }
 
       const data = await response.json();
 
-      // Store apply result and show completion screen
-      setApplyResult(data);
-      setPreviewState('completed');
-      setShowingPreview(false); // Hide preview to show completion screen
+      // Set job IDs to start polling
+      setPreviewJobId(data.jobId);
+      setPreviewRunId(data.runId);
 
-      // Refresh gap analysis if data was written
-      if (data.written > 0) {
-        fetchGapsNonStreaming();
-      }
+      console.log(`[Preview] Job enqueued: ${data.jobId}, estimated ${data.estimatedSeconds}s`);
+
+      // Note: Preview loading stays true until job completes
+
     } catch (error) {
-      console.error('Apply error:', error);
-      addToast('error', `Failed to apply changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
+      console.error('Preview enqueue error:', error);
+      alert(`Failed to start preview: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setPreviewLoading(false);
+    }
+  }
+
+  // Handle preview job completion
+  useEffect(() => {
+    if (previewJobStatus?.status === 'completed' && previewResultsFromJob) {
+      console.log('[Preview] Job completed, transforming results');
+
+      // Transform results from job format to preview format
+      const transformedResults: PreviewFieldResult[] = [];
+
+      for (const companyResult of previewResultsFromJob as any[]) {
+        for (const field of companyResult.fields) {
+          transformedResults.push({
+            company_id: companyResult.hubspotCompanyId,
+            company_name: companyResult.companyName,
+            field_key: field.fieldKey,
+            field_label: ENRICHABLE_FIELDS.find(f => f.key === field.fieldKey)?.label || field.fieldKey,
+            current_value: field.currentValue,
+            found_value: field.foundValue,
+            found_raw: field.foundValue,
+            mapped_value: field.foundValue,
+            mapping_confidence: field.level === 'high' ? 'high' : field.level === 'medium' ? 'medium' : 'low',
+            source: field.provider,
+            status: field.action as any,
+            harmony_applied: false,
+            harmony_name: null,
+            selected: field.action === 'would_fill',
+            confidence: field.confidence,
+            confidence_level: field.level,
+            evidence: field.evidence,
+            from_cache: false,
+          });
+        }
+      }
+
+      // Calculate summary
+      const summary = {
+        would_fill: transformedResults.filter(r => r.status === 'would_fill').length,
+        would_override: transformedResults.filter(r => r.status === 'would_override').length,
+        already_set: transformedResults.filter(r => r.status === 'already_set').length,
+        no_data: transformedResults.filter(r => r.status === 'no_data').length,
+        skipped: transformedResults.filter(r => r.status === 'skipped').length,
+        harmonies_applied: 0,
+      };
+
+      setPreviewResults({
+        preview_id: previewJobId!,
+        status: 'completed',
+        records_processed: (previewResultsFromJob as any[]).length,
+        duration_seconds: 0,
+        results: transformedResults,
+        summary,
+      });
+
+      // Auto-select would_fill rows
+      const autoSelectedRows = new Set<string>();
+      transformedResults.forEach(r => {
+        if (r.status === 'would_fill') {
+          autoSelectedRows.add(`${r.company_id}-${r.field_key}`);
+        }
+      });
+      setSelectedRows(autoSelectedRows);
+
+      setShowingPreview(true);
+      setPreviewLoading(false);
+
+    } else if (previewJobStatus?.status === 'failed') {
+      console.error('[Preview] Job failed:', previewJobStatus.error);
+      alert(`Preview failed: ${previewJobStatus.error}`);
+      setPreviewLoading(false);
+    }
+  }, [previewJobStatus, previewResultsFromJob, previewJobId]);
+
+  // Apply preview results to HubSpot (ASYNC VERSION)
+  async function applyPreviewResults() {
+    if (!previewResults || !previewJobId) return;
+
+    // Get selected record IDs
+    const selectedRecordIds = Array.from(
+      new Set(
+        previewResults.results
+          .filter(r => selectedRows.has(`${r.company_id}-${r.field_key}`))
+          .map(r => r.company_id)
+      )
+    );
+
+    if (selectedRecordIds.length === 0) {
+      addToast('error', 'No rows selected');
+      return;
+    }
+
+    setRunning(true);
+    setApplyJobId(null);
+    setApplyRunId(null);
+
+    try {
+      const response = await fetch('/api/enrich/apply/enqueue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: previewJobId,
+          runId: previewRunId,
+          selectedRecordIds,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to enqueue apply');
+      }
+
+      const data = await response.json();
+
+      setApplyJobId(data.jobId);
+      setApplyRunId(data.runId);
+
+      console.log(`[Apply] Job enqueued: ${data.jobId}`);
+
+      // Running stays true until job completes
+
+    } catch (error) {
+      console.error('Apply enqueue error:', error);
+      addToast('error', `Failed to start apply: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setRunning(false);
     }
   }
+
+  // Handle apply job completion
+  useEffect(() => {
+    if (applyJobStatus?.status === 'completed') {
+      console.log('[Apply] Job completed');
+
+      setApplyResult({
+        written: applyJobStatus.progress.completed || 0,
+        failed: 0,
+        skipped_invalid_value: 0,
+        field_breakdown: { total: applyJobStatus.progress.completed || 0 },
+      });
+
+      setPreviewState('completed');
+      setShowingPreview(false);
+      setRunning(false);
+
+      fetchGapsNonStreaming();
+
+    } else if (applyJobStatus?.status === 'failed') {
+      console.error('[Apply] Job failed:', applyJobStatus.error);
+      addToast('error', `Apply failed: ${applyJobStatus.error}`);
+      setRunning(false);
+    }
+  }, [applyJobStatus]);
 
   // Run full enrichment on all matching companies
   async function runFullEnrichment() {
@@ -2411,8 +2504,49 @@ export default function EnrichPage() {
               <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
                 Generating preview
               </div>
-              <div style={{ padding: 40, textAlign: 'center', color: C.text3 }}>
-                <p>Loading preview results...</p>
+              <div style={{ padding: 32, textAlign: 'center' }}>
+                {previewJobStatus && (
+                  <>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 16 }}>
+                      {previewJobStatus.status === 'queued' && 'Starting preview...'}
+                      {previewJobStatus.status === 'processing' && `Enriching ${previewJobStatus.progress.completed} of ${previewJobStatus.progress.total} companies`}
+                    </div>
+
+                    {previewJobStatus.status === 'processing' && (
+                      <>
+                        <div style={{
+                          width: '100%',
+                          maxWidth: 400,
+                          height: 8,
+                          background: C.border,
+                          borderRadius: 4,
+                          margin: '0 auto 12px',
+                          overflow: 'hidden',
+                        }}>
+                          <div style={{
+                            width: `${previewJobStatus.progress.percentage}%`,
+                            height: '100%',
+                            background: C.indigo,
+                            transition: 'width 0.3s ease',
+                          }} />
+                        </div>
+
+                        <div style={{ fontSize: 13, color: C.text3, marginBottom: 8 }}>
+                          {previewJobStatus.progress.percentage}% complete
+                        </div>
+
+                        {previewJobStatus.progress.currentCompany && (
+                          <div style={{ fontSize: 12, color: C.text2, marginTop: 8 }}>
+                            Currently processing: {previewJobStatus.progress.currentCompany}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+                {!previewJobStatus && (
+                  <p style={{ color: C.text3 }}>Loading preview results...</p>
+                )}
               </div>
             </div>
           ) : showingPreview && previewResults ? (

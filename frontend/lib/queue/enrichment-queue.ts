@@ -15,6 +15,11 @@ import { ApolloAdapter } from '../providers/apollo';
 import { GraphiqAdapter } from '../providers/graphiq';
 import { getApolloKey } from '../providers/apollo-key';
 import { getGraphiqKey } from '../providers/graphiq-key';
+import {
+  processPreviewJob,
+  processApplyJob,
+  type ApplyJobData,
+} from './enrich-page-worker';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -611,5 +616,225 @@ function getFieldValueFromProvider(
       return normalizedFields.revenue || normalizedFields.revenue_range || null;
     default:
       return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enrich Preview Queue (for interactive preview flow)
+// ─────────────────────────────────────────────────────────────
+
+export interface PreviewJobData {
+  runId: string;
+  orgId: string;
+  userId: string;
+  source: {
+    type: 'gaps' | 'all' | 'list';
+    fields?: string[];
+    list_id?: string;
+  };
+  fieldKeys: string[];
+  providerId: string;
+  recordLimit: number;
+  harmonyIds: string[];
+}
+
+export interface PreviewJobProgress {
+  completed: number;
+  total: number;
+  percentage: number;
+  currentCompany: string | null;
+}
+
+let previewQueue: Queue | null = null;
+let previewWorker: Worker | null = null;
+
+/**
+ * Get or create the preview queue.
+ */
+export function getPreviewQueue(): Queue | null {
+  if (!isRedisConfigured()) {
+    console.warn('Redis not configured - preview queue disabled');
+    return null;
+  }
+
+  if (!previewQueue) {
+    const connection = createRedisConnection();
+    previewQueue = new Queue('enrich-preview', {
+      connection,
+      defaultJobOptions: {
+        attempts: 2,
+        backoff: { type: 'fixed', delay: 5000 },
+        removeOnComplete: { count: 100, age: 30 * 24 * 60 * 60 },
+        removeOnFail: { count: 50, age: 90 * 24 * 60 * 60 },
+      },
+    });
+  }
+
+  return previewQueue;
+}
+
+/**
+ * Enqueue a preview job.
+ */
+export async function enqueuePreviewJob(
+  data: PreviewJobData
+): Promise<{ queued: boolean; jobId?: string; reason?: string }> {
+  const queue = getPreviewQueue();
+  if (!queue) {
+    return { queued: false, reason: 'Queue not configured' };
+  }
+
+  const job = await queue.add('preview', data, { priority: 1 }); // High priority
+  return { queued: true, jobId: job.id };
+}
+
+/**
+ * Start the preview worker.
+ */
+export function startPreviewWorker(): Worker | null {
+  if (!isRedisConfigured()) {
+    console.error('Cannot start preview worker - Redis not configured');
+    return null;
+  }
+
+  if (previewWorker) {
+    console.log('Preview worker already running');
+    return previewWorker;
+  }
+
+  const connection = createRedisConnection();
+
+  previewWorker = new Worker(
+    'enrich-preview',
+    async (job: Job<PreviewJobData>) => {
+      console.log(`[Preview Worker] Processing job ${job.id} for run ${job.data.runId}`);
+      return await processPreviewJob(job);
+    },
+    {
+      connection,
+      concurrency: 5, // Higher concurrency for interactive preview
+    }
+  );
+
+  previewWorker.on('completed', (job) => {
+    console.log(`[Preview Worker] Job ${job.id} completed`);
+  });
+
+  previewWorker.on('failed', (job, err) => {
+    console.error(`[Preview Worker] Job ${job?.id} failed:`, err);
+  });
+
+  console.log('[Preview Worker] Started with concurrency 5');
+
+  return previewWorker;
+}
+
+/**
+ * Stop the preview worker.
+ */
+export async function stopPreviewWorker(): Promise<void> {
+  if (previewWorker) {
+    await previewWorker.close();
+    previewWorker = null;
+    console.log('[Preview Worker] Stopped');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enrich Apply Queue (write cached results to HubSpot)
+// ─────────────────────────────────────────────────────────────
+
+let applyQueue: Queue | null = null;
+let applyWorker: Worker | null = null;
+
+/**
+ * Get or create the apply queue.
+ */
+export function getApplyQueue(): Queue | null {
+  if (!isRedisConfigured()) {
+    console.warn('Redis not configured - apply queue disabled');
+    return null;
+  }
+
+  if (!applyQueue) {
+    const connection = createRedisConnection();
+    applyQueue = new Queue('enrich-apply', {
+      connection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 }, // 2s, 4s, 8s
+        removeOnComplete: { count: 200, age: 30 * 24 * 60 * 60 },
+        removeOnFail: { count: 100, age: 90 * 24 * 60 * 60 },
+      },
+    });
+  }
+
+  return applyQueue;
+}
+
+/**
+ * Enqueue an apply job.
+ */
+export async function enqueueApplyJob(
+  data: ApplyJobData
+): Promise<{ queued: boolean; jobId?: string; reason?: string }> {
+  const queue = getApplyQueue();
+  if (!queue) {
+    return { queued: false, reason: 'Queue not configured' };
+  }
+
+  const job = await queue.add('apply', data);
+  return { queued: true, jobId: job.id };
+}
+
+/**
+ * Start the apply worker.
+ */
+export function startApplyWorker(): Worker | null {
+  if (!isRedisConfigured()) {
+    console.error('Cannot start apply worker - Redis not configured');
+    return null;
+  }
+
+  if (applyWorker) {
+    console.log('Apply worker already running');
+    return applyWorker;
+  }
+
+  const connection = createRedisConnection();
+
+  applyWorker = new Worker(
+    'enrich-apply',
+    async (job: Job<ApplyJobData>) => {
+      console.log(`[Apply Worker] Processing job ${job.id} for run ${job.data.runId}`);
+      return await processApplyJob(job);
+    },
+    {
+      connection,
+      concurrency: 3,
+    }
+  );
+
+  applyWorker.on('completed', (job) => {
+    console.log(`[Apply Worker] Job ${job.id} completed`);
+  });
+
+  applyWorker.on('failed', (job, err) => {
+    console.error(`[Apply Worker] Job ${job?.id} failed:`, err);
+  });
+
+  console.log('[Apply Worker] Started with concurrency 3');
+
+  return applyWorker;
+}
+
+/**
+ * Stop the apply worker.
+ */
+export async function stopApplyWorker(): Promise<void> {
+  if (applyWorker) {
+    await applyWorker.close();
+    applyWorker = null;
+    console.log('[Apply Worker] Stopped');
   }
 }
