@@ -92,6 +92,17 @@ export async function POST(request: NextRequest) {
       const cluster = rowToCluster(clusterRow);
 
       try {
+        // Fetch signals from highest-confidence pair
+        const { data: topPair } = await supabase
+          .from('dedup_pairs')
+          .select('signals_fired')
+          .eq('cluster_id', cluster.id)
+          .order('confidence', { ascending: false })
+          .limit(1)
+          .single();
+
+        const pairSignals = topPair?.signals_fired || null;
+
         // Fetch company details
         const properties = [
           'name',
@@ -127,6 +138,12 @@ export async function POST(request: NextRequest) {
         const masterId = selectMaster(records);
         const recordsToMerge = cluster.recordIds.filter((id) => id !== masterId);
 
+        // Capture pre-merge snapshots
+        const preMergeSnapshots: Record<string, any> = {};
+        for (const record of records) {
+          preMergeSnapshots[record.id] = record.properties;
+        }
+
         // Merge all records into master
         for (const recordId of recordsToMerge) {
           const mergeRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies/merge', {
@@ -148,6 +165,54 @@ export async function POST(request: NextRequest) {
               error
             );
             throw new Error(`Merge failed: ${error}`);
+          }
+        }
+
+        // Capture post-merge snapshot
+        const postMergeRes = await fetch(
+          `https://api.hubapi.com/crm/v3/objects/companies/${masterId}`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+
+        let postMergeSnapshot = {};
+        if (postMergeRes.ok) {
+          const data = await postMergeRes.json();
+          postMergeSnapshot = data.properties;
+        }
+
+        // Save merge history for each merged record
+        for (const recordId of recordsToMerge) {
+          const historyEntry = {
+            org_id: orgId,
+            cluster_id: cluster.id,
+            merged_by: ctx.userId,
+            merged_by_name: null,
+            merged_at: new Date().toISOString(),
+            merge_method: 'auto',
+            survivor_record_id: masterId,
+            merged_record_id: recordId,
+            survivor_snapshot: preMergeSnapshots[masterId] || {},
+            merged_snapshot: preMergeSnapshots[recordId] || {},
+            result_snapshot: postMergeSnapshot,
+            field_selections: null,
+            confidence_score: cluster.grade === 'A' ? 95 : cluster.grade === 'B' ? 75 : 50,
+            similarity_signals: pairSignals,
+          };
+
+          try {
+            const { error: historyError } = await supabase
+              .from('dedup_merge_history')
+              .insert(historyEntry);
+
+            if (historyError) {
+              console.error('[Bulk Merge] Failed to save history:', historyError);
+              // Don't fail the merge if history save fails
+            }
+          } catch (histErr) {
+            console.error('[Bulk Merge] Exception saving history:', histErr);
+            // Don't fail the merge if history save fails
           }
         }
 
@@ -174,6 +239,21 @@ export async function POST(request: NextRequest) {
             updated_at: new Date().toISOString(),
           })
           .in('id', cluster.pairIds);
+
+        // Log decision for learning
+        try {
+          await supabase.from('dedup_decisions').insert({
+            org_id: orgId,
+            cluster_id: cluster.id,
+            decision: 'merged',
+            signal_scores: pairSignals || {},
+            cluster_grade: cluster.grade,
+            decided_by: ctx.userId,
+          });
+        } catch (decErr) {
+          console.error('[Bulk Merge] Failed to log decision:', decErr);
+          // Don't fail merge if decision logging fails
+        }
 
         results.merged++;
       } catch (error) {

@@ -172,6 +172,65 @@ function RecordCountBadge({ count }: { count: number }) {
   );
 }
 
+interface FiredSignal {
+  tier: number;
+  type: string;
+  deterministic: boolean;
+  score: number;
+}
+
+function SignalBadge({ signal }: { signal: FiredSignal }) {
+  const getSignalDisplay = () => {
+    switch (signal.type) {
+      case 'domain':
+        return { label: 'Domain exact', bg: C.greenDim, color: C.green };
+      case 'linkedin':
+        return { label: 'LinkedIn exact', bg: C.greenDim, color: C.green };
+      case 'phone':
+        return { label: 'Phone match', bg: C.greenDim, color: C.green };
+      case 'name':
+        return { label: `Name ${Math.round(signal.score)}%`, bg: C.indigoDim, color: C.indigoLt };
+      case 'name_industry':
+        return { label: 'Name + Industry', bg: C.amberDim, color: C.amber };
+      default:
+        return { label: signal.type, bg: C.hover, color: C.text3 };
+    }
+  };
+
+  const { label, bg, color } = getSignalDisplay();
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        fontSize: 10,
+        fontFamily: F.sans,
+        fontWeight: 500,
+        color,
+        background: bg,
+        padding: '3px 7px',
+        borderRadius: 4,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function SignalBadges({ signals }: { signals: FiredSignal[] }) {
+  if (!signals || signals.length === 0) return null;
+
+  return (
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+      {signals.map((signal, idx) => (
+        <SignalBadge key={idx} signal={signal} />
+      ))}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────────────
@@ -701,7 +760,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             color: C.text,
                             fontWeight: 500,
                             fontSize: 12,
-                            marginBottom: 8,
+                            marginBottom: 4,
                           }}
                         >
                           {(() => {
@@ -720,6 +779,9 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             return `Cluster ${cluster.id.slice(0, 8)}`;
                           })()}
                         </div>
+                        {/* Signal badges */}
+                        <SignalBadges signals={(cluster as any).signals || []} />
+                        <div style={{ height: 8 }} />
                         {/* Mini table with key fields */}
                         <div
                           style={{
@@ -882,7 +944,9 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             return `Cluster ${cluster.id.slice(0, 8)}`;
                           })()}
                         </div>
-                        <div style={{ fontSize: 11, color: C.text3 }}>
+                        {/* Signal badges */}
+                        <SignalBadges signals={(cluster as any).signals || []} />
+                        <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>
                           {cluster.recordIds.length} companies
                         </div>
                       </>

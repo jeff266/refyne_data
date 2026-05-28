@@ -79,7 +79,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const recordsToMerge = clusterData.recordIds.filter((id) => id !== masterId);
 
     try {
-      // Step 0: Capture pre-merge snapshots for audit trail
+      // Step 0: Fetch signals from highest-confidence pair
+      const { data: topPair } = await supabase
+        .from('dedup_pairs')
+        .select('signals_fired')
+        .eq('cluster_id', id)
+        .order('confidence', { ascending: false })
+        .limit(1)
+        .single();
+
+      const similaritySignals = topPair?.signals_fired ?? null;
+
+      // Step 1: Capture pre-merge snapshots for audit trail
       const preMergeSnapshots: Record<string, any> = {};
 
       for (const recordId of clusterData.recordIds) {
@@ -193,7 +204,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           result_snapshot: postMergeSnapshot,
           field_selections: body.fieldSelections || null,
           confidence_score: clusterData.grade === 'A' ? 95 : clusterData.grade === 'B' ? 75 : 50,
-          similarity_signals: null, // TODO: Extract from pair data if needed
+          similarity_signals: similaritySignals,
         };
 
         const { error: historyError } = await supabase
@@ -238,7 +249,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         console.error('[Merge Cluster] Failed to update pairs:', pairsError);
       }
 
-      // Step 5: Invalidate cache
+      // Step 5: Log decision for learning
+      try {
+        await supabase.from('dedup_decisions').insert({
+          org_id: orgId,
+          cluster_id: id,
+          decision: 'merged',
+          signal_scores: similaritySignals || {},
+          cluster_grade: clusterData.grade,
+          decided_by: ctx.userId,
+        });
+      } catch (decErr) {
+        console.error('[Merge Cluster] Failed to log decision:', decErr);
+        // Don't fail merge if decision logging fails
+      }
+
+      // Step 6: Invalidate cache
       revalidatePath('/dedup');
 
       return NextResponse.json({ success: true, masterId });

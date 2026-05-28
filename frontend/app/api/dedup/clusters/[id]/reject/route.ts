@@ -56,6 +56,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const clusterData = rowToCluster(cluster as DedupClusterRow);
 
+    // Fetch signals for decision logging
+    const { data: topPair } = await supabase
+      .from('dedup_pairs')
+      .select('signals_fired')
+      .eq('cluster_id', id)
+      .order('confidence', { ascending: false })
+      .limit(1)
+      .single();
+
     // Update cluster status
     const { error: updateError } = await supabase
       .from('dedup_clusters')
@@ -85,6 +94,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     if (pairsError) {
       console.error('[Reject Cluster] Failed to update pairs:', pairsError);
+    }
+
+    // Log decision for learning
+    try {
+      await supabase.from('dedup_decisions').insert({
+        org_id: orgId,
+        cluster_id: id,
+        decision: 'rejected',
+        signal_scores: topPair?.signals_fired || {},
+        cluster_grade: clusterData.grade,
+        decided_by: ctx.userId,
+      });
+    } catch (decErr) {
+      console.error('[Reject Cluster] Failed to log decision:', decErr);
+      // Don't fail rejection if decision logging fails
     }
 
     // Invalidate cache

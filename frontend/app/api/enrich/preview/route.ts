@@ -647,7 +647,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json(response);
+    const res = NextResponse.json(response);
+    res.headers.set('Deprecation', 'true');
+    res.headers.set('Sunset', '2026-07-01');
+    res.headers.set('Link', '</api/enrich/preview/enqueue>; rel="successor-version"');
+    return res;
   } catch (error) {
     console.error('[Preview] Error:', error);
     return NextResponse.json(

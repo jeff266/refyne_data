@@ -123,6 +123,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Fetch signals for each cluster (highest confidence pair)
+    const clusterSignals: Record<string, any[]> = {};
+    if (clusters.length > 0) {
+      const clusterIds = clusters.map((c) => c.id);
+
+      // Get highest confidence pair for each cluster
+      const { data: pairsData } = await supabase
+        .from('dedup_pairs')
+        .select('cluster_id, signals_fired')
+        .in('cluster_id', clusterIds);
+
+      if (pairsData) {
+        // Group by cluster_id and take first (should be highest confidence from scanner)
+        const pairsByCluster = new Map<string, any>();
+        for (const pair of pairsData) {
+          if (!pairsByCluster.has(pair.cluster_id)) {
+            pairsByCluster.set(pair.cluster_id, pair.signals_fired || []);
+          }
+        }
+        for (const [clusterId, signals] of Array.from(pairsByCluster.entries())) {
+          clusterSignals[clusterId] = signals;
+        }
+      }
+    }
+
     // Get counts for sidebar
     const [gradeCountsResult, statusCountsResult] = await Promise.all([
       supabase.from('dedup_clusters').select('grade').eq('org_id', orgId),
@@ -153,6 +178,7 @@ export async function GET(request: NextRequest) {
       clusters: clusters.map((cluster) => ({
         ...rowToCluster(cluster),
         clusterName: companyNames[cluster.record_ids[0]] || undefined,
+        signals: clusterSignals[cluster.id] || [],
       })),
       total: count || 0,
       counts: { byGrade, byStatus } as ClustersCounts,

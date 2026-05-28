@@ -57,6 +57,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const clusterData = rowToCluster(cluster as DedupClusterRow);
 
+    // Fetch signals from highest-confidence pair
+    const { data: topPair } = await supabase
+      .from('dedup_pairs')
+      .select('signals_fired, confidence, grade')
+      .eq('cluster_id', id)
+      .order('confidence', { ascending: false })
+      .limit(1)
+      .single();
+
     // Fetch full company details from HubSpot
     const records: HubSpotCompany[] = [];
 
@@ -134,6 +143,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       cluster: clusterData,
       records,
       suggestedMasterId,
+      signals: topPair?.signals_fired || [],
     });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/clusters/[id]' });

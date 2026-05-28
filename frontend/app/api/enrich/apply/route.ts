@@ -214,7 +214,11 @@ export async function POST(req: NextRequest) {
       // Don't fail the request if history logging fails
     }
 
-    return NextResponse.json(response);
+    const res = NextResponse.json(response);
+    res.headers.set('Deprecation', 'true');
+    res.headers.set('Sunset', '2026-07-01');
+    res.headers.set('Link', '</api/enrich/apply/enqueue>; rel="successor-version"');
+    return res;
   } catch (error) {
     console.error('[Apply] Error:', error);
     return NextResponse.json(
