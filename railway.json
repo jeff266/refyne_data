@@ -7,7 +7,6 @@
   "deploy": {
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3,
-    "startCommand": "npx tsx --max-old-space-size=6144 scripts/start-enrichment-worker.ts",
     "numReplicas": 1,
     "sleepApplication": false
   }
