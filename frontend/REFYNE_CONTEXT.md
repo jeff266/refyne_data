@@ -1,6 +1,6 @@
 # Refyne Context
 
-**Last updated:** 2026-05-26 (Session 5)
+**Last updated:** 2026-05-29 (Session 6)
 **Status:** Active development
 **Product name:** TBD (Refyne is working name)
 
@@ -42,8 +42,9 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 | **data.refynedata.com** | Internal ops dashboard | Refyne Data Platform UI - cache metrics, seed management, vertical stats (Session 5) |
 | **refyne-platform** | Data platform API | Scaffolded, not yet deployed. Handles cache, scraping, extraction, seed ingestion (Session 5) |
 | **coolify.refynedata.com** | Coolify dashboard | Worker management at 31.220.63.174:8000 |
-| **Org ID (RevOps Impact)** | org_3DuSdb0FBnx7RMLmJSUegrpiNLS | Primary test org |
-| **HubSpot Portal (Frontera)** | 49169539 | Primary test portal, 2,816 companies |
+| **Org ID (RevOps Impact)** | org_3DuSdb0FBnx7RMLmJSUegrpiNLS | Test org, Portal ID 24202132, 4,293 companies |
+| **Org ID (Frontera Health)** | org_2yrCtVBrECXIZzvrcFJ5dqPF62F | Primary test org, Portal ID 49169539, 2,835 companies |
+| **Org ID (GrowthBook)** | org_2vQMzVJPxlAb0Pc2yQaUiWNRJ1Q | Test org, Portal ID 8863617, 20,962 companies |
 | **Vercel** | Next.js frontend hosting | Production deployment at app.refynedata.com |
 | **Railway** | BullMQ worker + platform API | US East region, 8GB RAM, 8 vCPU, auto-deploys from GitHub main |
 | **Coolify** | Deprecated worker hosting | Worker stopped, no longer in use |
@@ -510,23 +511,54 @@ This was the root cause of the May 21 worker failure.
 | **Claygent Light stack** | Jina.ai scrape + Serper targeted + DeepSeek V4 Flash. Fake progress delay on preview (cache feels like live enrichment). Cross-org domain-level cache: public web data shared, HubSpot data org-scoped. |
 | **Refyne Search keys confirmed** | Serper + Fireworks keys working in Vercel. Phone numbers being found (Step Ahead 888-686-1263, Triangle ABA 919-504-4171). Coverage still low: need Jina.ai + website scraping to improve yield. |
 
+### Session Accomplishments (May 29 2026 - Session 6)
+
+| Accomplishment | Details |
+|----------------|---------|
+| **Scanner stub fixed** | Dedup scanner was creating incomplete clusters (no pairs, no signals, no grades). Fixed: pair generation now works. Each cluster gets full pair list with signals (domain, linkedin, phone, name, etc.) and confidence grades (A/B/C/D). |
+| **Scan performance baseline** | Frontera: 41s for 2,835 companies. GrowthBook: 91s for 20,962 companies. Performance acceptable for nightly scans. |
+| **Org isolation fixed** | `getOrgContext()` in clerk-helpers.ts was treating `sessionClaims.o` as string, but it's an object `{id, rol, slg}`. Fixed to extract `.id` property. Multi-tenant isolation now working - RevOps Impact, Frontera, and GrowthBook orgs all see their own data only. |
+| **Token encryption implemented** | AES-256-GCM encryption for HubSpot OAuth tokens. All tokens (access_token, refresh_token) encrypted before storing in hubspot_connections. Migration script ran successfully, encrypted 3 existing connections. Encryption key in TOKEN_ENCRYPTION_KEY env var (Railway + Vercel). |
+| **Arrangement delete fixed** | DELETE /api/arrangements/:id now cancels BullMQ jobs via `cancelArrangementJobs()`. Prevents deleted arrangements from continuing to run, stops memory leak and unnecessary HubSpot API calls. |
+| **Onboarding scan fixed** | POST /api/onboarding/scan-trigger now calls `enqueueScan()` to actually trigger compliance scan. Uses existing compliance scanner queue + worker. New users see real scan running instead of stub. |
+| **Normalize apply reverted** | Investigation revealed Normalize page never worked. UI calls /api/normalize/apply route which had TODO stub. No HubSpot write path exists. Created normalize-queue.ts with no worker (same bug pattern), reverted. Feature needs full implementation sprint before adding queue infrastructure. |
+| **Three orgs configured** | RevOps Impact (org_3DuSdb0FBnx7RMLmJSUegrpiNLS, Portal 24202132, 4,293 companies). Frontera Health (org_2yrCtVBrECXIZzvrcFJ5dqPF62F, Portal 49169539, 2,835 companies). GrowthBook (org_2vQMzVJPxlAb0Pc2yQaUiWNRJ1Q, Portal 8863617, 20,962 companies). All three orgs isolated, dedup clusters generated. |
+| **Dedup sprints 1-5 complete** | All dedup features shipped: 7-signal cascade, union-find clustering, grades (A/B/C/D), survivorship rules (6 types live in Policies tab), rollback/restore, auto-merge with waiting period, pending merges UI, webhook bridge (unified systems), incremental scan support. |
+| **120 pending clusters ready** | Frontera: 68 clusters (17 Grade A, 51 Grade B). RevOps Impact: 52 clusters (7 Grade A, 45 Grade B). GrowthBook: 0 clusters (clean portal). All clusters visible in /dedup UI with signal badges, field-level merge preview, master/duplicate selection. |
+| **dedup_decisions accumulation starts** | 0 records in dedup_decisions table. Waiting for 500+ user decisions (merge/reject) to train probabilistic weight engine. Each merge/reject creates decision record with signals + outcome for future ML training. |
+| **Survivorship rules live** | 6 rule types implemented: never_downgrade (lifecyclestage), prefer_nonempty (all fields), tld_disqualifier (domain), prefer_older (createdate), prefer_more_complete (row-level), prefer_hubspot_owner (hubspot_owner_id). Editable in /settings Policies tab. |
+
 ### Built but Not End-to-End Verified
 
 | Feature | Status | What Needs Verification |
 |---------|--------|------------------------|
-| Normalize | Partial | Apply to HubSpot and rollback never confirmed |
+| **Normalize** | **Never worked** | Route creates normalization_runs record with status='running' but has TODO stub instead of actual processing. No HubSpot write path exists. Needs full implementation sprint before adding BullMQ queue. |
 | Prospect search | Partial | Apollo key fixed, results in browser unconfirmed |
 | Arrangements detail | Partial | Crash fixed, content never verified |
 | Inline live feed | Partial | Progress bar works, row-by-row feed not populating |
 | Worker parallel processing | Complete | Benchmark with 2,816 records needed, target <20 min |
 | **Refyne Search** | Built, not tested | Fireworks API key and Serper key not yet verified. Model: deepseek-v4-flash. End-to-end preview test needed on 10 companies. Cache behavior not confirmed. |
 
+### Dedup System Status (May 29 2026)
+
+| Metric | Value |
+|--------|-------|
+| **Total orgs configured** | 3 (RevOps Impact, Frontera, GrowthBook) |
+| **Total companies scanned** | 28,090 (4,293 + 2,835 + 20,962) |
+| **Pending clusters** | 120 (68 Frontera + 52 RevOps Impact) |
+| **Grade A clusters (≥97%)** | 24 (17 Frontera + 7 RevOps Impact) |
+| **Grade B clusters (85-96%)** | 96 (51 Frontera + 45 RevOps Impact) |
+| **Auto-merge waiting period** | 24 hours (default for Grade A) |
+| **Dedup decisions collected** | 0 (accumulation starts from first merge) |
+| **Survivorship rules active** | 6 types (never_downgrade, prefer_nonempty, tld_disqualifier, prefer_older, prefer_more_complete, prefer_hubspot_owner) |
+| **Scan performance** | 41s for 2,835 companies (Frontera), 91s for 20,962 companies (GrowthBook) |
+
 ### Not Started
 
 | Feature | Priority |
 |---------|----------|
 | Haiku extractor (fallback for Refyne Search) | P0 - 5s timeout fallback when DeepSeek V4 Flash slow |
-| Normalize queue (BullMQ) | P1 - currently synchronous stub |
+| Normalize queue (BullMQ) | P1 - reverted, needs implementation before re-adding queue |
 | Railway worker migration | P1 - auto-scaling for multi-client |
 | Salesforce connector | P2 |
 | Chrome extension | P3 |
@@ -537,31 +569,38 @@ This was the root cause of the May 21 worker failure.
 
 ### High Priority (Next Session)
 
-1. **data.refynedata.com UI polish** - Review screenshots from Session 5, polish internal ops dashboard UI. Wire to real Supabase stats (cache hit rate, provider breakdown, vertical distribution).
+1. **Normalize worker implementation** - Normalize apply currently has TODO stub. Needs full implementation: fetch normalized_records, apply harmonies to each record, write to HubSpot via batchUpdateCompanies, update normalization_runs with results. BullMQ queue infrastructure reverted until actual processing logic exists.
 
-2. **refyne-platform deployment** - Deploy API service to Railway. Set up environment variables, test health endpoint.
+2. **Arrangement schedule update** - PUT /api/arrangements/:id has TODO comment: "If schedule changed, update BullMQ cron job". Arrangements can have schedules but worker doesn't respect them. Need to wire schedule changes to BullMQ repeatable jobs.
 
-3. **NPI database download and seed ingestion** - Download NPI registry (healthcare providers), parse, seed into refyne_company_cache. First proactive cache build for healthcare vertical.
+3. **Sync frequency update** - Always-on config has schedule field but changing it doesn't update worker cron. Need to handle schedule updates for digest worker and compliance scanner.
 
-4. **Jina.ai integration** - Add Jina.ai website scraping to Claygent Light pipeline. Improves yield for companies with websites but no Serper results.
+4. **Contact dedup UI** - Database tables support contact dedup (contact_dedup_pairs, contact_dedup_clusters). UI only shows company dedup. Need /dedup/contacts page with same pattern as company dedup.
 
-5. **Refyne Search: Wire into provider chain** - Currently runs independently. Wire as fallback: Apollo → GraphIQ → Refyne Search. Test with all three selected.
+5. **Next.js security upgrade** - Next.js 15 has known vulnerabilities. Upgrade to latest stable release for security patches.
 
-6. **Progress counter bug (450/213 wrong total)** - `processed_records` showing incorrect totals. Need to debug total calculation vs processed increment logic.
+6. **data.refynedata.com UI polish** - Review screenshots from Session 5, polish internal ops dashboard UI. Wire to real Supabase stats (cache hit rate, provider breakdown, vertical distribution).
+
+7. **refyne-platform deployment** - Deploy API service to Railway. Set up environment variables, test health endpoint.
+
+8. **NPI database download and seed ingestion** - Download NPI registry (healthcare providers), parse, seed into refyne_company_cache. First proactive cache build for healthcare vertical.
+
+9. **Jina.ai integration** - Add Jina.ai website scraping to Claygent Light pipeline. Improves yield for companies with websites but no Serper results.
+
+10. **Refyne Search: Wire into provider chain** - Currently runs independently. Wire as fallback: Apollo → GraphIQ → Refyne Search. Test with all three selected.
 
 ### Medium Priority
 
-6. **Haiku extractor (fallback)** - Build haiku-extractor.ts for 5s timeout fallback when DeepSeek V4 Flash slow. Wire into extractWithFallback().
-7. **Preview context flag** - Pass context: 'preview' | 'background' to refyneSearch(). Preview → Haiku, Background → Haiku head (50) + V4 Flash tail.
-8. **Build enrichment review UI** on Enrich page (Spec 1 UI: approve/reject modal for pending enrichments)
-9. CSV import workflow (/import page with upload, mapping, preview, confirm)
-9. Field mappings guided setup (onboarding flow for canonical ↔ HubSpot mapping)
-10. **refyne_record_status table** - track last enriched timestamp per field per company
-11. **Job priority queue** - high-priority runs jump ahead of long-running jobs
-12. Credit system and pricing page (Stripe metering integration, usage-based pricing)
-13. Prospect page canonical schema normalization (merge Apollo + GraphIQ + ZoomInfo results by domain)
-14. Normalize BullMQ queue implementation (async processing for normalize apply)
-15. GitHub Harmonies repo (open-source default library for community contributions)
+11. **Haiku extractor (fallback)** - Build haiku-extractor.ts for 5s timeout fallback when DeepSeek V4 Flash slow. Wire into extractWithFallback().
+12. **Preview context flag** - Pass context: 'preview' | 'background' to refyneSearch(). Preview → Haiku, Background → Haiku head (50) + V4 Flash tail.
+13. **Build enrichment review UI** on Enrich page (Spec 1 UI: approve/reject modal for pending enrichments)
+14. CSV import workflow (/import page with upload, mapping, preview, confirm)
+15. Field mappings guided setup (onboarding flow for canonical ↔ HubSpot mapping)
+16. **refyne_record_status table** - track last enriched timestamp per field per company
+17. **Job priority queue** - high-priority runs jump ahead of long-running jobs
+18. Credit system and pricing page (Stripe metering integration, usage-based pricing)
+19. Prospect page canonical schema normalization (merge Apollo + GraphIQ + ZoomInfo results by domain)
+20. GitHub Harmonies repo (open-source default library for community contributions)
 
 ---
 
