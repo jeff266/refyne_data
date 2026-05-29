@@ -93,7 +93,7 @@ async function migrateProviderTokens() {
   // Get all provider connections
   const { data: connections, error } = await supabase
     .from('provider_connections')
-    .select('id, org_id, provider_name, access_token, refresh_token, api_key');
+    .select('id, org_id, provider, api_key_enc');
 
   if (error) {
     throw new Error(`Failed to fetch provider connections: ${error.message}`);
@@ -113,24 +113,10 @@ async function migrateProviderTokens() {
     const updates: any = {};
     let needsUpdate = false;
 
-    // Check access_token
-    if (conn.access_token && !isTokenEncrypted(conn.access_token)) {
-      console.log(`[Migrate] Encrypting access_token for provider ${conn.provider_name}`);
-      updates.access_token = encryptToken(conn.access_token);
-      needsUpdate = true;
-    }
-
-    // Check refresh_token
-    if (conn.refresh_token && !isTokenEncrypted(conn.refresh_token)) {
-      console.log(`[Migrate] Encrypting refresh_token for provider ${conn.provider_name}`);
-      updates.refresh_token = encryptToken(conn.refresh_token);
-      needsUpdate = true;
-    }
-
-    // Check api_key
-    if (conn.api_key && !isTokenEncrypted(conn.api_key)) {
-      console.log(`[Migrate] Encrypting api_key for provider ${conn.provider_name}`);
-      updates.api_key = encryptToken(conn.api_key);
+    // Check api_key_enc (despite name "enc", these are actually plaintext)
+    if (conn.api_key_enc && !isTokenEncrypted(conn.api_key_enc)) {
+      console.log(`[Migrate] Encrypting api_key_enc for provider ${conn.provider}`);
+      updates.api_key_enc = encryptToken(conn.api_key_enc);
       needsUpdate = true;
     }
 
@@ -146,10 +132,10 @@ async function migrateProviderTokens() {
       }
 
       migrated++;
-      console.log(`[Migrate] ✓ Encrypted tokens for provider ${conn.provider_name} (org: ${conn.org_id})`);
+      console.log(`[Migrate] ✓ Encrypted tokens for provider ${conn.provider} (org: ${conn.org_id})`);
     } else {
       skipped++;
-      console.log(`[Migrate] ✓ Skipped provider ${conn.provider_name} (already encrypted)`);
+      console.log(`[Migrate] ✓ Skipped provider ${conn.provider} (already encrypted)`);
     }
   }
 
