@@ -11,7 +11,17 @@ export interface OrgContext {
 }
 
 export async function getOrgContext(): Promise<OrgContext> {
-  const { orgId, orgRole, userId, sessionClaims } = await auth();
+  const authData = await auth();
+  const { orgId, orgRole, userId, sessionClaims } = authData;
+
+  // Debug logging
+  console.log('[getOrgContext] auth() returned:', {
+    hasOrgId: !!orgId,
+    hasUserId: !!userId,
+    hasSessionClaims: !!sessionClaims,
+    orgIdValue: orgId,
+    sessionClaimsKeys: sessionClaims ? Object.keys(sessionClaims) : [],
+  });
 
   if (!userId) {
     throw new Error('UNAUTHENTICATED');

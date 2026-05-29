@@ -26,15 +26,15 @@ export default clerkMiddleware(async (auth, request) => {
     console.log('[Dev Mode] Skipping auth protection (session still processed)');
     // Don't call .protect() - allow unauthenticated access
     // But Clerk middleware still processes session cookies
-  } else {
-    // Production: require auth for non-public routes
-    if (!isPublicRoute(request)) {
-      await auth().protect();
-    }
+    return NextResponse.next();
   }
 
-  // Let Clerk middleware finish processing (this is important!)
-  // Don't return early in development
+  // Production: require auth for non-public routes
+  if (!isPublicRoute(request)) {
+    await auth().protect();
+  }
+
+  return NextResponse.next();
 });
 
 export const config = {

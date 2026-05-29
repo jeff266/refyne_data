@@ -33,7 +33,10 @@ export function TopBar() {
         }}
       >
         <OrganizationSwitcher
-          afterSelectOrganizationUrl="/dashboard"
+          afterSelectOrganizationUrl={pathname}
+          afterSelectPersonalUrl={pathname}
+          hidePersonal={true}
+          skipInvitationScreen={true}
           appearance={{
             elements: {
               rootBox: {
