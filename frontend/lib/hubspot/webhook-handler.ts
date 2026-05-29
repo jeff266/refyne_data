@@ -448,18 +448,20 @@ export async function processWebhookEvent(
   const objectIdStr = String(event.objectId);
 
   try {
-    // Handle deletion events
+    // Handle deletion events (placeholder - HubSpot doesn't currently support this webhook)
+    // @ts-ignore - Future webhook type not yet in HubSpot API
     if (event.subscriptionType === 'company.deletion') {
       await handleCompanyDeletion(orgId, objectIdStr);
       updateEventStatus(orgId, eventIdStr, 'processed');
       return {
         eventId: eventIdStr,
         objectId: objectIdStr,
-        action: 'deletion_handled',
+        action: 'processed',
       };
     }
 
-    // Handle merge events (if HubSpot adds support in the future)
+    // Handle merge events (placeholder - HubSpot doesn't currently support this webhook)
+    // @ts-ignore - Future webhook type not yet in HubSpot API
     if (event.subscriptionType === 'company.merge') {
       // Extract merged company ID from event (future API)
       const mergedId = (event as any).mergedCompanyId || '';
@@ -470,18 +472,19 @@ export async function processWebhookEvent(
       return {
         eventId: eventIdStr,
         objectId: objectIdStr,
-        action: 'merge_handled',
+        action: 'processed',
       };
     }
 
-    // Handle restore events (if HubSpot adds support in the future)
+    // Handle restore events (placeholder - HubSpot doesn't currently support this webhook)
+    // @ts-ignore - Future webhook type not yet in HubSpot API
     if (event.subscriptionType === 'company.restore') {
       await handleCompanyRestore(orgId, objectIdStr);
       updateEventStatus(orgId, eventIdStr, 'processed');
       return {
         eventId: eventIdStr,
         objectId: objectIdStr,
-        action: 'restore_handled',
+        action: 'processed',
       };
     }
 

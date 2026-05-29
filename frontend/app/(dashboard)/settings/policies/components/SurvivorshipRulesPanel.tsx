@@ -47,7 +47,7 @@ export function SurvivorshipRulesPanel() {
       setFieldOptions(data.field_options || []);
     } catch (error) {
       console.error('Failed to load survivorship rules:', error);
-      addToast('Failed to load survivorship rules', 'error');
+      addToast('error', 'Failed to load survivorship rules');
     } finally {
       setIsLoading(false);
     }
@@ -69,11 +69,11 @@ export function SurvivorshipRulesPanel() {
         throw new Error('Failed to create rule');
       }
 
-      addToast('Survivorship rule created', 'success');
+      addToast('success', 'Survivorship rule created');
       await loadRules();
     } catch (error) {
       console.error('Failed to create rule:', error);
-      addToast('Failed to create rule', 'error');
+      addToast('error', 'Failed to create rule');
       throw error;
     }
   };
@@ -90,11 +90,11 @@ export function SurvivorshipRulesPanel() {
         throw new Error('Failed to update rule');
       }
 
-      addToast(`Rule ${!currentActive ? 'activated' : 'deactivated'}`, 'success');
+      addToast('success', `Rule ${!currentActive ? 'activated' : 'deactivated'}`);
       await loadRules();
     } catch (error) {
       console.error('Failed to toggle rule:', error);
-      addToast('Failed to update rule', 'error');
+      addToast('error', 'Failed to update rule');
     }
   };
 
@@ -112,11 +112,11 @@ export function SurvivorshipRulesPanel() {
         throw new Error('Failed to delete rule');
       }
 
-      addToast('Rule deleted', 'success');
+      addToast('success', 'Rule deleted');
       await loadRules();
     } catch (error) {
       console.error('Failed to delete rule:', error);
-      addToast('Failed to delete rule', 'error');
+      addToast('error', 'Failed to delete rule');
     }
   };
 
@@ -161,7 +161,7 @@ export function SurvivorshipRulesPanel() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: '40px 0', textAlign: 'center', color: C.muted }}>Loading rules...</div>
+      <div style={{ padding: '40px 0', textAlign: 'center', color: C.text3 }}>Loading rules...</div>
     );
   }
 
@@ -175,12 +175,12 @@ export function SurvivorshipRulesPanel() {
             fontWeight: 500,
             color: C.text,
             marginBottom: 8,
-            fontFamily: F.serif,
+            fontFamily: F.sans,
           }}
         >
           SURVIVORSHIP RULES
         </h2>
-        <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, maxWidth: 800 }}>
+        <p style={{ fontSize: 13, color: C.text3, lineHeight: 1.6, maxWidth: 800 }}>
           Define which field values survive when duplicate records are merged. Rules apply in priority order. Default
           rules apply to all fields unless overridden.
         </p>
@@ -197,7 +197,7 @@ export function SurvivorshipRulesPanel() {
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>DEFAULT RULES</div>
-          <div style={{ fontSize: 11, color: C.muted }}>cannot be deleted</div>
+          <div style={{ fontSize: 11, color: C.text3 }}>cannot be deleted</div>
         </div>
 
         <div
@@ -215,7 +215,7 @@ export function SurvivorshipRulesPanel() {
               borderBottom: `1px solid ${C.border}`,
               fontSize: 11,
               fontWeight: 500,
-              color: C.muted,
+              color: C.text3,
               textTransform: 'uppercase',
             }}
           >
@@ -246,14 +246,14 @@ export function SurvivorshipRulesPanel() {
             >
               <div>{getFieldLabel(rule.field_key)}</div>
               <div>{getRuleTypeLabel(rule.rule_type)}</div>
-              <div style={{ color: C.muted }}>{getRuleBehaviorText(rule)}</div>
+              <div style={{ color: C.text3 }}>{getRuleBehaviorText(rule)}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span
                   style={{
                     padding: '2px 8px',
                     fontSize: 11,
                     background: rule.is_active ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.05)',
-                    color: rule.is_active ? '#22C55E' : C.muted,
+                    color: rule.is_active ? '#22C55E' : C.text3,
                     borderRadius: 2,
                   }}
                 >
@@ -304,7 +304,7 @@ export function SurvivorshipRulesPanel() {
               background: C.surface,
             }}
           >
-            <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: C.text3, marginBottom: 16 }}>
               No custom rules yet. Default rules apply to all merges.
             </div>
             <button
@@ -341,7 +341,7 @@ export function SurvivorshipRulesPanel() {
                 borderBottom: `1px solid ${C.border}`,
                 fontSize: 11,
                 fontWeight: 500,
-                color: C.muted,
+                color: C.text3,
                 textTransform: 'uppercase',
               }}
             >
@@ -373,14 +373,14 @@ export function SurvivorshipRulesPanel() {
               >
                 <div>{getFieldLabel(rule.field_key)}</div>
                 <div>{getRuleTypeLabel(rule.rule_type)}</div>
-                <div style={{ color: C.muted }}>{getRuleBehaviorText(rule)}</div>
+                <div style={{ color: C.text3 }}>{getRuleBehaviorText(rule)}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span
                     style={{
                       padding: '2px 8px',
                       fontSize: 11,
                       background: rule.is_active ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.05)',
-                      color: rule.is_active ? '#22C55E' : C.muted,
+                      color: rule.is_active ? '#22C55E' : C.text3,
                       borderRadius: 2,
                     }}
                   >
@@ -394,7 +394,7 @@ export function SurvivorshipRulesPanel() {
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
-                      color: C.muted,
+                      color: C.text3,
                       padding: 4,
                       display: 'flex',
                       alignItems: 'center',
@@ -403,7 +403,7 @@ export function SurvivorshipRulesPanel() {
                       e.currentTarget.style.color = C.text;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.color = C.muted;
+                      e.currentTarget.style.color = C.text3;
                     }}
                   >
                     <X size={14} />

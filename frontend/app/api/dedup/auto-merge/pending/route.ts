@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         );
 
         // Fetch highest confidence from pairs
-        const { data: topPair } = await supabase
+        const { data: topPair } = await supabase!
           .from('dedup_pairs')
           .select('confidence, signals_fired')
           .eq('cluster_id', cluster.id)

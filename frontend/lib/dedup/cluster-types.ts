@@ -44,6 +44,8 @@ export interface ClusterWithRecords {
   cluster: DedupCluster;
   records: HubSpotCompany[];
   suggestedMasterId: string;
+  signals?: string[];
+  survivorshipReasons?: Record<string, { rule: string; source?: string }>;
 }
 
 export interface ClustersCounts {

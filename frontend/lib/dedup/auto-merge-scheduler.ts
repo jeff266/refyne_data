@@ -63,9 +63,9 @@ export async function scheduleAutoMerges(
     .in('cluster_id', clusterIds)
     .gte('confidence', threshold * 100);
 
-  const highConfidenceClusterIds = [...new Set(
+  const highConfidenceClusterIds = Array.from(new Set(
     (pairs ?? []).map((p) => p.cluster_id)
-  )];
+  ));
 
   if (highConfidenceClusterIds.length === 0) {
     console.log('[Auto-merge] No clusters above confidence threshold', threshold);

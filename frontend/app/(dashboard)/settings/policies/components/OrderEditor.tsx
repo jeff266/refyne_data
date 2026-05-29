@@ -88,7 +88,7 @@ function SortableValueItem({
       <div
         {...attributes}
         {...listeners}
-        style={{ cursor: 'grab', color: C.muted, display: 'flex', alignItems: 'center' }}
+        style={{ cursor: 'grab', color: C.text3, display: 'flex', alignItems: 'center' }}
       >
         ⠿
       </div>
@@ -99,7 +99,7 @@ function SortableValueItem({
           minWidth: 24,
           fontSize: 13,
           fontWeight: 500,
-          color: C.muted,
+          color: C.text3,
         }}
       >
         {index + 1}
@@ -112,12 +112,12 @@ function SortableValueItem({
 
       {/* Advancement indicator */}
       {isMostAdvanced && (
-        <div style={{ fontSize: 11, color: C.muted }}>
+        <div style={{ fontSize: 11, color: C.text3 }}>
           Most advanced
         </div>
       )}
       {isLeastAdvanced && (
-        <div style={{ fontSize: 11, color: C.muted }}>
+        <div style={{ fontSize: 11, color: C.text3 }}>
           Least advanced
         </div>
       )}
@@ -130,7 +130,7 @@ function SortableValueItem({
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            color: C.muted,
+            color: C.text3,
             padding: 4,
             display: 'flex',
             alignItems: 'center',
@@ -139,7 +139,7 @@ function SortableValueItem({
             e.currentTarget.style.color = C.text;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.color = C.muted;
+            e.currentTarget.style.color = C.text3;
           }}
         >
           <X size={14} />
@@ -184,7 +184,7 @@ export function OrderEditor({ values, onChange, fieldKey }: OrderEditorProps) {
 
   return (
     <div>
-      <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: C.text3, marginBottom: 12 }}>
         Define the value order. Higher values will never be overwritten by lower ones.
       </div>
 
@@ -234,7 +234,7 @@ export function OrderEditor({ values, onChange, fieldKey }: OrderEditorProps) {
               padding: '8px 12px',
               fontSize: 13,
               background: newValue.trim() ? C.indigo : C.surface,
-              color: newValue.trim() ? C.text : C.muted,
+              color: newValue.trim() ? C.text : C.text3,
               border: `1px solid ${newValue.trim() ? C.indigo : C.border}`,
               borderRadius: 0,
               cursor: newValue.trim() ? 'pointer' : 'not-allowed',

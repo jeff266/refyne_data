@@ -97,10 +97,10 @@ export function applyRules(
 ): Record<string, FieldWinner> {
   const result: Record<string, FieldWinner> = {};
 
-  const allFields = new Set([
+  const allFields = Array.from(new Set([
     ...Object.keys(masterRecord),
     ...Object.keys(duplicateRecord),
-  ]);
+  ]));
 
   for (const field of allFields) {
     const masterVal = masterRecord[field];

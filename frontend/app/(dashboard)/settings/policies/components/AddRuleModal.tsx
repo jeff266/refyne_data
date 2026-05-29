@@ -177,7 +177,7 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              color: C.muted,
+              color: C.text3,
               padding: 4,
             }}
           >
@@ -292,10 +292,10 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                     />
                     <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Most recent</span>
                   </div>
-                  <div style={{ fontSize: 12, color: C.muted, paddingLeft: 28 }}>
+                  <div style={{ fontSize: 12, color: C.text3, paddingLeft: 28 }}>
                     Keep the value from whichever record was most recently updated
                   </div>
-                  <div style={{ fontSize: 11, color: C.muted, paddingLeft: 28 }}>
+                  <div style={{ fontSize: 11, color: C.text3, paddingLeft: 28 }}>
                     Best for: Phone, Email, Address
                   </div>
                 </label>
@@ -320,10 +320,10 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                     />
                     <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Source preference</span>
                   </div>
-                  <div style={{ fontSize: 12, color: C.muted, paddingLeft: 28 }}>
+                  <div style={{ fontSize: 12, color: C.text3, paddingLeft: 28 }}>
                     Prefer values from more trusted data sources
                   </div>
-                  <div style={{ fontSize: 11, color: C.muted, paddingLeft: 28 }}>
+                  <div style={{ fontSize: 11, color: C.text3, paddingLeft: 28 }}>
                     Best for: Industry, Revenue, Employee count
                   </div>
                 </label>
@@ -348,10 +348,10 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                     />
                     <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Never downgrade</span>
                   </div>
-                  <div style={{ fontSize: 12, color: C.muted, paddingLeft: 28 }}>
+                  <div style={{ fontSize: 12, color: C.text3, paddingLeft: 28 }}>
                     Keep the most advanced value in a defined order
                   </div>
-                  <div style={{ fontSize: 11, color: C.muted, paddingLeft: 28 }}>
+                  <div style={{ fontSize: 11, color: C.text3, paddingLeft: 28 }}>
                     Best for: Lifecycle stage, Lead status
                   </div>
                 </label>
@@ -376,10 +376,10 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                     />
                     <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Prefer nonempty</span>
                   </div>
-                  <div style={{ fontSize: 12, color: C.muted, paddingLeft: 28 }}>
+                  <div style={{ fontSize: 12, color: C.text3, paddingLeft: 28 }}>
                     Keep any value over an empty field
                   </div>
-                  <div style={{ fontSize: 11, color: C.muted, paddingLeft: 28 }}>
+                  <div style={{ fontSize: 11, color: C.text3, paddingLeft: 28 }}>
                     Best for: All fields (already a default)
                   </div>
                 </label>
@@ -396,7 +396,7 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                     For {fieldScope === 'all' ? 'all fields' : selectedFieldLabel}: keep the most recently updated
                     value.
                   </div>
-                  <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
+                  <div style={{ fontSize: 13, color: C.text3, lineHeight: 1.6 }}>
                     When two records are merged, the {fieldScope === 'all' ? 'field values' : selectedFieldLabel} from
                     whichever record was updated more recently will be kept, regardless of which record is selected as
                     master.
@@ -427,7 +427,7 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                   <div style={{ fontSize: 14, color: C.text, marginBottom: 12 }}>
                     For {fieldScope === 'all' ? 'all fields' : selectedFieldLabel}: prefer any value over empty fields.
                   </div>
-                  <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
+                  <div style={{ fontSize: 13, color: C.text3, lineHeight: 1.6 }}>
                     When two records are merged, if the master has an empty{' '}
                     {fieldScope === 'all' ? 'field' : selectedFieldLabel} and the duplicate has a value, the
                     duplicate's value will be kept.
@@ -471,7 +471,7 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                 fontSize: 13,
                 background:
                   (step === 1 && canProceedStep1) || (step === 2 && canProceedStep2) ? C.indigo : C.surface,
-                color: (step === 1 && canProceedStep1) || (step === 2 && canProceedStep2) ? C.text : C.muted,
+                color: (step === 1 && canProceedStep1) || (step === 2 && canProceedStep2) ? C.text : C.text3,
                 border: `1px solid ${
                   (step === 1 && canProceedStep1) || (step === 2 && canProceedStep2) ? C.indigo : C.border
                 }`,
@@ -490,7 +490,7 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                 padding: '8px 16px',
                 fontSize: 13,
                 background: isSaving ? C.surface : C.indigo,
-                color: isSaving ? C.muted : C.text,
+                color: isSaving ? C.text3 : C.text,
                 border: `1px solid ${isSaving ? C.border : C.indigo}`,
                 borderRadius: 0,
                 cursor: isSaving ? 'not-allowed' : 'pointer',

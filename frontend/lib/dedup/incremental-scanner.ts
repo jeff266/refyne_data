@@ -429,6 +429,7 @@ async function runIncrementalScan(
       recordsScanned: 0,
       pairsFound: 0,
       clustersFound: 0,
+      newClusterIds: [],
     };
   }
 

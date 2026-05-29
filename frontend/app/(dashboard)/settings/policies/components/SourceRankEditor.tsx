@@ -78,7 +78,7 @@ function SortableSourceItem({ source, index }: { source: string; index: number }
       <div
         {...attributes}
         {...listeners}
-        style={{ cursor: 'grab', color: C.muted, display: 'flex', alignItems: 'center' }}
+        style={{ cursor: 'grab', color: C.text3, display: 'flex', alignItems: 'center' }}
       >
         ⠿
       </div>
@@ -89,7 +89,7 @@ function SortableSourceItem({ source, index }: { source: string; index: number }
           minWidth: 24,
           fontSize: 13,
           fontWeight: 500,
-          color: C.muted,
+          color: C.text3,
         }}
       >
         {index + 1}
@@ -102,12 +102,12 @@ function SortableSourceItem({ source, index }: { source: string; index: number }
 
       {/* Trust indicator */}
       {isMostTrusted && (
-        <div style={{ fontSize: 11, color: C.muted }}>
+        <div style={{ fontSize: 11, color: C.text3 }}>
           Most trusted
         </div>
       )}
       {isLeastTrusted && (
-        <div style={{ fontSize: 11, color: C.muted }}>
+        <div style={{ fontSize: 11, color: C.text3 }}>
           Least trusted
         </div>
       )}
@@ -135,7 +135,7 @@ export function SourceRankEditor({ sources, onChange }: SourceRankEditorProps) {
 
   return (
     <div>
-      <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: C.text3, marginBottom: 12 }}>
         Drag to reorder. Higher = more trusted.
       </div>
 
@@ -151,7 +151,7 @@ export function SourceRankEditor({ sources, onChange }: SourceRankEditorProps) {
         style={{
           marginTop: 12,
           fontSize: 11,
-          color: C.muted,
+          color: C.text3,
           lineHeight: 1.5,
         }}
       >
