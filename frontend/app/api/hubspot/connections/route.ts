@@ -93,7 +93,7 @@ export async function GET() {
     const transformedConnections = await Promise.all(
       (connections || []).map(async (conn: any) => {
         // Get company count from normalized_records
-        const { count } = await supabase
+        const { count } = await supabase!
           .from('normalized_records')
           .select('*', { count: 'exact', head: true })
           .eq('org_id', ctx.orgId)

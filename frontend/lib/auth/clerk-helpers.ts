@@ -45,18 +45,17 @@ export async function getOrgContext(): Promise<OrgContext> {
     // Track in Sentry for monitoring
     if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
       try {
-        const { captureMessage } = await import('@/lib/monitoring/sentry');
-        captureMessage('Org context fallback used', {
-          level: 'warning',
-          tags: { feature: 'auth', org_id: fallbackOrgId },
-          extra: {
+        const { captureWithOrgContext } = await import('@/lib/monitoring/sentry');
+        captureWithOrgContext(
+          new Error('Org context fallback used'),
+          fallbackOrgId,
+          {
             userId,
             userEmail,
-            fallbackOrgId,
             fallbackOrgName,
             totalMemberships: userMemberships.data.length,
-          },
-        });
+          }
+        );
       } catch (err) {
         // Sentry import failed, skip
       }

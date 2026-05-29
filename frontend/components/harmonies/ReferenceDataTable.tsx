@@ -23,10 +23,9 @@ interface UnmatchedValue {
 interface ReferenceDataTableProps {
   harmonyId: string;
   tableName: string;
-  orgId: string;
 }
 
-export function ReferenceDataTable({ harmonyId, tableName, orgId }: ReferenceDataTableProps) {
+export function ReferenceDataTable({ harmonyId, tableName }: ReferenceDataTableProps) {
   const [rows, setRows] = useState<ReferenceDataRow[]>([]);
   const [unmatchedValues, setUnmatchedValues] = useState<UnmatchedValue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +39,7 @@ export function ReferenceDataTable({ harmonyId, tableName, orgId }: ReferenceDat
   useEffect(() => {
     fetchData();
     fetchUnmatchedValues();
-  }, [harmonyId, tableName, orgId]);
+  }, [harmonyId, tableName]);
 
   async function fetchData() {
     try {
@@ -142,7 +141,7 @@ export function ReferenceDataTable({ harmonyId, tableName, orgId }: ReferenceDat
         body: JSON.stringify({
           ...newRow,
           table_name: tableName,
-          org_id: orgId,
+          // org_id will be added by backend from Clerk context
         }),
       });
 
