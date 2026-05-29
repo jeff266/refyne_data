@@ -683,7 +683,7 @@ async function processScanJob(
     });
 
     // Run incremental scan (auto-detects full vs incremental unless forced)
-    const result = await runDedupScan(orgId, portalId, client, connectionId, forceFullScan);
+    const result = await runDedupScan(orgId, portalId, client, connectionId, forceFullScan, job);
 
     // Emit completion progress
     await job.updateProgress({

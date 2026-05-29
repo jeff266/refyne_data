@@ -356,7 +356,8 @@ async function runFullScan(
   portalId: string,
   client: HubSpotClient,
   connectionId: string,
-  scanRun: ScanRun
+  scanRun: ScanRun,
+  job?: any // Optional job for progress updates
 ): Promise<DedupScanResult> {
   console.log(`[incremental-scanner] Starting full scan for portal ${portalId}`);
 
@@ -364,8 +365,26 @@ async function runFullScan(
   const companies = await fetchAllCompanies(client);
   console.log(`[incremental-scanner] Fetched ${companies.length} companies`);
 
+  if (job) {
+    await job.updateProgress({
+      phase: 'progress',
+      message: `Fetched ${companies.length} companies, building index...`,
+      progress: 5,
+      pairsFound: 0,
+    });
+  }
+
   // Rebuild index
   await rebuildFullIndex(orgId, portalId, companies);
+
+  if (job) {
+    await job.updateProgress({
+      phase: 'progress',
+      message: 'Index built, evaluating duplicate candidates...',
+      progress: 10,
+      pairsFound: 0,
+    });
+  }
 
   // Get domain exclusions
   const exclusions = await getDomainExclusionSet(orgId);
@@ -382,9 +401,19 @@ async function runFullScan(
   for (let i = 0; i < companies.length; i++) {
     const company = companies[i];
 
-    // Progress logging every 100 companies
+    // Progress updates every 100 companies
     if (i > 0 && i % 100 === 0) {
+      const progressPercent = 10 + Math.floor((i / companies.length) * 80); // 10-90%
       console.log(`[incremental-scanner] Progress: ${i}/${companies.length} companies evaluated, ${newPairsFound} pairs found`);
+
+      if (job) {
+        await job.updateProgress({
+          phase: 'progress',
+          message: `Evaluated ${i}/${companies.length} companies...`,
+          progress: progressPercent,
+          pairsFound: newPairsFound,
+        });
+      }
     }
 
     // Find candidates using blocking key index
@@ -448,9 +477,28 @@ async function runFullScan(
 
   console.log(`[incremental-scanner] Pair generation complete: ${newPairsFound} pairs found`);
 
+  if (job) {
+    await job.updateProgress({
+      phase: 'progress',
+      message: `Building clusters from ${newPairsFound} pairs...`,
+      progress: 90,
+      pairsFound: newPairsFound,
+    });
+  }
+
   // Build clusters
   const allPairs = await getAllPendingPairs(orgId, portalId);
   const { count: clustersFound, clusterIds } = await buildClusters(orgId, portalId, connectionId, allPairs);
+
+  if (job) {
+    await job.updateProgress({
+      phase: 'progress',
+      message: `Built ${clustersFound} clusters from ${newPairsFound} pairs`,
+      progress: 95,
+      pairsFound: newPairsFound,
+      clustersBuilt: clustersFound,
+    });
+  }
 
   // Update scan run
   const cursor = companies.length > 0 ? getLatestModifiedDate(companies) : new Date();
@@ -569,7 +617,8 @@ export async function runDedupScan(
   portalId: string,
   client: HubSpotClient,
   connectionId: string,
-  forceFullScan = false
+  forceFullScan = false,
+  job?: any // Optional BullMQ job for progress updates
 ): Promise<DedupScanResult> {
   if (!isSupabaseConfigured()) {
     throw new Error('Supabase not configured');
@@ -589,7 +638,7 @@ export async function runDedupScan(
 
   try {
     const result = scanType === 'full'
-      ? await runFullScan(orgId, portalId, client, connectionId, scanRun)
+      ? await runFullScan(orgId, portalId, client, connectionId, scanRun, job)
       : await runIncrementalScan(orgId, portalId, client, connectionId, scanRun, lastRun!.modified_cursor);
 
     // Schedule auto-merge for high-confidence clusters
