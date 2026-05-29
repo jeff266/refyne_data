@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 const DEFAULT_FIELDS = [
   'name',
@@ -23,7 +24,13 @@ const DEFAULT_FIELDS = [
  * If null or empty, returns the default array.
  */
 export async function GET(request: NextRequest) {
-  const orgId = request.headers.get('x-org-id') || 'default';
+  // Auth check - get org from Clerk context
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
 
   if (!isSupabaseConfigured() || !supabase) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
@@ -33,7 +40,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase
       .from('org_policies')
       .select('dedup_display_fields')
-      .eq('org_id', orgId)
+      .eq('org_id', ctx.orgId)
       .single();
 
     if (error) {
@@ -48,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ fields });
   } catch (error) {
-    captureWithOrgContext(error, orgId, { route: '/api/org/dedup-fields' });
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/dedup-fields' });
     console.error('[Dedup Fields] GET failed:', error);
     return NextResponse.json({ error: 'Failed to fetch dedup fields' }, { status: 500 });
   }
@@ -61,7 +68,13 @@ export async function GET(request: NextRequest) {
  * Accepts { fields: string[] } and persists to database.
  */
 export async function PUT(request: NextRequest) {
-  const orgId = request.headers.get('x-org-id') || 'default';
+  // Auth check - get org from Clerk context
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
 
   if (!isSupabaseConfigured() || !supabase) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
@@ -83,7 +96,7 @@ export async function PUT(request: NextRequest) {
     const { error } = await supabase
       .from('org_policies')
       .update({ dedup_display_fields: fields })
-      .eq('org_id', orgId);
+      .eq('org_id', ctx.orgId);
 
     if (error) {
       throw error;
@@ -91,7 +104,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true, fields });
   } catch (error) {
-    captureWithOrgContext(error, orgId, { route: '/api/org/dedup-fields' });
+    captureWithOrgContext(error, ctx.orgId, { route: '/api/org/dedup-fields' });
     console.error('[Dedup Fields] PUT failed:', error);
     return NextResponse.json({ error: 'Failed to update dedup fields' }, { status: 500 });
   }

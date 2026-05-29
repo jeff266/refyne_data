@@ -332,7 +332,6 @@ function HarmonyRow({
           <ReferenceDataTable
             harmonyId={h.id}
             tableName={h.referenceTable}
-            orgId="default"
           />
         </div>
       )}
@@ -362,7 +361,6 @@ function getAlgorithmDescription(harmonyId: string): string {
 }
 
 export default function HarmoniesPage() {
-  const orgId = 'default'; // TODO: get from auth context
   const [harmonies, setHarmonies] = useState<HarmonyItem[]>([]);
   const [enabledIds, setEnabledIds] = useState<Set<string>>(new Set());
   const [insights, setInsights] = useState<Map<string, ComplianceInsight>>(new Map());
@@ -378,7 +376,7 @@ export default function HarmoniesPage() {
     try {
       const [harmoniesRes, insightsRes] = await Promise.all([
         fetch('/api/harmonies'),
-        fetch(`/api/compliance/insights?orgId=${orgId}`)
+        fetch('/api/compliance/insights')
       ]);
 
       if (harmoniesRes.ok) {
@@ -408,7 +406,7 @@ export default function HarmoniesPage() {
     } finally {
       setLoading(false);
     }
-  }, [orgId]);
+  }, []);
 
   useEffect(() => {
     fetchHarmonies();
@@ -433,7 +431,6 @@ export default function HarmoniesPage() {
     try {
       const res = await fetch(`/api/harmonies/${id}/toggle`, {
         method: 'POST',
-        headers: { 'x-org-id': orgId },
       });
 
       if (!res.ok) {

@@ -89,18 +89,30 @@ export async function GET() {
       connections: connections?.map(c => ({ id: c.id, portalId: c.portal_id, status: c.connection_status })),
     });
 
-    // Transform snake_case to camelCase for UI
-    const transformedConnections = (connections || []).map((conn: any) => ({
-      id: conn.id,
-      portalId: conn.portal_id,
-      hubId: conn.hub_id,
-      friendlyName: conn.friendly_name,
-      connectionStatus: conn.connection_status,
-      lastActiveAt: conn.last_active_at,
-      createdAt: conn.created_at,
-      accessToken: conn.access_token,
-      encryptedToken: conn.encrypted_token,
-    }));
+    // Transform snake_case to camelCase for UI, and fetch company counts
+    const transformedConnections = await Promise.all(
+      (connections || []).map(async (conn: any) => {
+        // Get company count from normalized_records
+        const { count } = await supabase
+          .from('normalized_records')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', ctx.orgId)
+          .eq('record_type', 'company');
+
+        return {
+          id: conn.id,
+          portalId: conn.portal_id,
+          hubId: conn.hub_id,
+          friendlyName: conn.friendly_name,
+          connectionStatus: conn.connection_status,
+          lastActiveAt: conn.last_active_at,
+          createdAt: conn.created_at,
+          accessToken: conn.access_token,
+          encryptedToken: conn.encrypted_token,
+          companyCount: count || 0,
+        };
+      })
+    );
 
     return NextResponse.json({
       connections: transformedConnections,

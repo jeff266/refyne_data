@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/user/notification-prefs
  * Returns current user's notification preferences
  */
 export async function GET(request: NextRequest) {
-  const orgId = request.headers.get('x-org-id') || 'demo-org';
-  const userId = request.headers.get('x-user-id') || 'demo-user';
+  // Auth check - get org and user from Clerk context
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
 
   if (!supabase) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
@@ -16,8 +22,8 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase
     .from('user_notification_prefs')
     .select('*')
-    .eq('org_id', orgId)
-    .eq('user_id', userId);
+    .eq('org_id', ctx.orgId)
+    .eq('user_id', ctx.userId);
 
   if (error) {
     return NextResponse.json({ error: 'Failed to fetch preferences' }, { status: 500 });
@@ -31,8 +37,14 @@ export async function GET(request: NextRequest) {
  * Updates current user's notification preferences
  */
 export async function PUT(request: NextRequest) {
-  const orgId = request.headers.get('x-org-id') || 'demo-org';
-  const userId = request.headers.get('x-user-id') || 'demo-user';
+  // Auth check - get org and user from Clerk context
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
   const { preferences } = await request.json();
 
   if (!supabase) {
@@ -41,8 +53,8 @@ export async function PUT(request: NextRequest) {
 
   // Upsert all preferences
   const rows = preferences.map((p: { event_key: string; email: boolean; in_app: boolean }) => ({
-    org_id: orgId,
-    user_id: userId,
+    org_id: ctx.orgId,
+    user_id: ctx.userId,
     event_key: p.event_key,
     email: p.email,
     in_app: p.in_app,

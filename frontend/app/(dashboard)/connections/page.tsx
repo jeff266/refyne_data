@@ -17,6 +17,7 @@ interface HubSpotConnection {
   createdAt: string;
   accessToken?: string;
   encryptedToken?: string;
+  companyCount?: number;
   lastSyncAt?: string | null;
   lastSyncStatus?: 'success' | 'failed' | 'running' | null;
   lastSyncDurationMs?: number | null;
@@ -619,7 +620,12 @@ export default function ConnectionsPage() {
                               </>
                             )}
                             <span style={{ fontSize: 13, color: C.text3 }}>•</span>
-                            <span style={{ fontSize: 13, color: C.text2 }}>2,798 companies</span>
+                            <span style={{ fontSize: 13, color: C.text2 }}>
+                              {conn.companyCount !== undefined
+                                ? `${conn.companyCount.toLocaleString()} ${conn.companyCount === 1 ? 'company' : 'companies'}`
+                                : 'Loading...'
+                              }
+                            </span>
 
                             {/* Sync status line (admin only) */}
                             {isAdmin && syncStatus && (

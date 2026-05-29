@@ -18,16 +18,23 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
-  // In development, skip auth protection entirely
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[Dev Mode] Bypassing Clerk auth');
-    return NextResponse.next();
+  // In development, skip auth PROTECTION but still process Clerk session
+  // This allows getOrgContext() to work correctly in API routes
+  const isDevelopment = process.env.NODE_ENV === 'development';
+
+  if (isDevelopment) {
+    console.log('[Dev Mode] Skipping auth protection (session still processed)');
+    // Don't call .protect() - allow unauthenticated access
+    // But Clerk middleware still processes session cookies
+  } else {
+    // Production: require auth for non-public routes
+    if (!isPublicRoute(request)) {
+      await auth().protect();
+    }
   }
 
-  // Production: normal auth flow
-  if (!isPublicRoute(request)) {
-    await auth().protect();
-  }
+  // Let Clerk middleware finish processing (this is important!)
+  // Don't return early in development
 });
 
 export const config = {

@@ -595,9 +595,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
   useEffect(() => {
     async function loadDedupFields() {
       try {
-        const res = await fetch('/api/org/dedup-fields', {
-          headers: { 'x-org-id': 'default' },
-        });
+        const res = await fetch('/api/org/dedup-fields');
 
         if (res.ok) {
           const data = await res.json();
@@ -621,7 +619,6 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'default',
         },
         body: JSON.stringify({ fields }),
       });
@@ -663,9 +660,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
   useEffect(() => {
     const fetchCluster = async () => {
       try {
-        const res = await fetch(`/api/dedup/clusters/${params.id}`, {
-          headers: { 'x-org-id': 'default' },
-        });
+        const res = await fetch(`/api/dedup/clusters/${params.id}`);
 
         if (!res.ok) {
           const data = await res.json();
@@ -758,7 +753,6 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'default',
         },
         body: JSON.stringify({
           masterId,
@@ -822,7 +816,6 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
     try {
       const res = await fetch(`/api/dedup/clusters/${params.id}/reject`, {
         method: 'POST',
-        headers: { 'x-org-id': 'default' },
       });
 
       if (!res.ok) {
@@ -844,7 +837,6 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
     try {
       const res = await fetch(`/api/dedup/clusters/${params.id}/skip`, {
         method: 'POST',
-        headers: { 'x-org-id': 'default' },
       });
 
       if (!res.ok) {
@@ -868,7 +860,6 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'default',
         },
         body: JSON.stringify({ recordId }),
       });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 const DEFAULT_EVENTS = [
   { key: 'nightly_digest', enabled: true },
@@ -16,7 +17,13 @@ const DEFAULT_EVENTS = [
  * Returns org-wide notification event settings (admin only)
  */
 export async function GET(request: NextRequest) {
-  const orgId = request.headers.get('x-org-id') || 'demo-org';
+  // Auth check - get org from Clerk context
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
 
   if (!supabase) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
@@ -25,7 +32,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase
     .from('org_notification_events')
     .select('*')
-    .eq('org_id', orgId);
+    .eq('org_id', ctx.orgId);
 
   if (error) {
     return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });
@@ -33,7 +40,7 @@ export async function GET(request: NextRequest) {
 
   // If no events exist, return defaults
   const events = data?.length > 0 ? data : DEFAULT_EVENTS.map(e => ({
-    org_id: orgId,
+    org_id: ctx.orgId,
     event_key: e.key,
     enabled: e.enabled,
   }));
@@ -46,7 +53,14 @@ export async function GET(request: NextRequest) {
  * Updates org-wide notification event settings (admin only)
  */
 export async function PUT(request: NextRequest) {
-  const orgId = request.headers.get('x-org-id') || 'demo-org';
+  // Auth check - get org from Clerk context
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
   const { events } = await request.json();
 
   if (!supabase) {
@@ -55,7 +69,7 @@ export async function PUT(request: NextRequest) {
 
   // Upsert all events
   const rows = events.map((e: { event_key: string; enabled: boolean }) => ({
-    org_id: orgId,
+    org_id: ctx.orgId,
     event_key: e.event_key,
     enabled: e.enabled,
   }));

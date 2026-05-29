@@ -29,8 +29,41 @@ export async function getOrgContext(): Promise<OrgContext> {
       throw new Error('UNAUTHENTICATED');
     }
 
+    const fallbackOrgId = firstMembership.organization.id;
+    const fallbackOrgName = firstMembership.organization.name;
+
+    // Log warning - this indicates Clerk is not returning active org
+    console.warn('[ORG CONTEXT FALLBACK] No active org from Clerk, using first membership', {
+      userId,
+      userEmail,
+      fallbackOrgId,
+      fallbackOrgName,
+      totalMemberships: userMemberships.data.length,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Track in Sentry for monitoring
+    if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+      try {
+        const { captureMessage } = await import('@/lib/monitoring/sentry');
+        captureMessage('Org context fallback used', {
+          level: 'warning',
+          tags: { feature: 'auth', org_id: fallbackOrgId },
+          extra: {
+            userId,
+            userEmail,
+            fallbackOrgId,
+            fallbackOrgName,
+            totalMemberships: userMemberships.data.length,
+          },
+        });
+      } catch (err) {
+        // Sentry import failed, skip
+      }
+    }
+
     return {
-      orgId: firstMembership.organization.id,
+      orgId: fallbackOrgId,
       orgRole: firstMembership.role as OrgRole,
       userId,
       userEmail,
