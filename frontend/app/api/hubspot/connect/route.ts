@@ -6,6 +6,7 @@ import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { checkOrgRateLimit, rateLimitErrorResponse } from '@/lib/hubspot/org-rate-limiter';
+import { encryptToken } from '@/lib/crypto/token-encryption';
 
 /**
  * GET /api/hubspot/connect
@@ -164,9 +165,8 @@ export async function POST(request: NextRequest) {
 
     const orgId = ctx.orgId;
 
-    // TODO: Encrypt the token before storing
-    // For now, storing plain text (should use AES-256-GCM in production)
-    const encryptedToken = token;
+    // Encrypt the token before storing (AES-256-GCM)
+    const encryptedToken = encryptToken(token);
 
     // Save the connection
     const connection = await saveConnection(

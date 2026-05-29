@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '@/lib/db/supabase';
+import { encryptToken, decryptToken } from '@/lib/crypto/token-encryption';
 
 interface TokenRefreshResponse {
   access_token: string;
@@ -52,10 +53,14 @@ export async function getAccessToken(orgId: string): Promise<string> {
     const expiresAt = new Date(connection.token_expires_at);
     const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000);
 
+    // Decrypt tokens (supports both encrypted and legacy plaintext)
+    const decryptedAccessToken = decryptToken(connection.access_token);
+    const decryptedRefreshToken = decryptToken(connection.refresh_token);
+
     // Refresh if expiring within 5 minutes
     if (expiresAt < fiveMinutesFromNow) {
       console.log(`[getAccessToken] Token expiring soon for org ${orgId}, refreshing...`);
-      return await refreshAccessToken(orgId, connection.refresh_token);
+      return await refreshAccessToken(orgId, decryptedRefreshToken);
     }
 
     // Update last active timestamp
@@ -64,13 +69,13 @@ export async function getAccessToken(orgId: string): Promise<string> {
       .update({ last_active_at: new Date().toISOString() })
       .eq('org_id', orgId);
 
-    return connection.access_token;
+    return decryptedAccessToken;
   }
 
   // Fall back to legacy encrypted_token (PAT) if no OAuth tokens
   if (connection.encrypted_token) {
-    // TODO: Decrypt token if encryption is implemented
-    // For now, encrypted_token is stored as plain text
+    // Decrypt PAT token (supports both encrypted and legacy plaintext)
+    const decryptedPAT = decryptToken(connection.encrypted_token);
     console.warn(`[getAccessToken] Using legacy PAT for org ${orgId} - OAuth migration recommended`);
 
     await supabase
@@ -78,7 +83,7 @@ export async function getAccessToken(orgId: string): Promise<string> {
       .update({ last_active_at: new Date().toISOString() })
       .eq('org_id', orgId);
 
-    return connection.encrypted_token;
+    return decryptedPAT;
   }
 
   throw new Error('No valid access token found - please reconnect HubSpot');
@@ -134,13 +139,17 @@ async function refreshAccessToken(orgId: string, refreshToken: string): Promise<
     // Calculate new expiry
     const expiresAt = new Date(Date.now() + data.expires_in * 1000);
 
+    // Encrypt new tokens before storing
+    const encryptedAccessToken = encryptToken(data.access_token);
+    const encryptedRefreshToken = encryptToken(data.refresh_token);
+
     // Update connection with new tokens
     if (supabase) {
       const { error } = await supabase
         .from('hubspot_connections')
         .update({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
           token_expires_at: expiresAt.toISOString(),
           connection_status: 'active',
           last_active_at: new Date().toISOString(),

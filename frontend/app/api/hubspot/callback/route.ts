@@ -3,6 +3,7 @@ import { supabase } from '@/lib/db/supabase';
 import { upsertSchemaFieldMappings } from '@/lib/hubspot/repository';
 import { HubSpotClient } from '@/lib/hubspot';
 import { seedFieldMappings } from '@/lib/field-mappings/auto-configure';
+import { encryptToken } from '@/lib/crypto/token-encryption';
 
 // Force dynamic rendering for OAuth callback
 export const dynamic = 'force-dynamic';
@@ -134,13 +135,17 @@ export async function GET(request: NextRequest) {
 
     // Update existing connection with OAuth tokens
     if (existingConnection) {
+      // Encrypt tokens before storing
+      const encryptedAccessToken = encryptToken(access_token);
+      const encryptedRefreshToken = encryptToken(refresh_token);
+
       const { error: updateError } = await supabase
         .from('hubspot_connections')
         .update({
           portal_id: portalId,
           hub_id: hubId,
-          access_token,
-          refresh_token,
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
           token_expires_at: expiresAt.toISOString(),
           oauth_scopes: scopes,
           connection_status: 'active',
@@ -164,14 +169,18 @@ export async function GET(request: NextRequest) {
         connectionStatus: 'active',
       });
 
+      // Encrypt tokens before storing
+      const encryptedAccessToken = encryptToken(access_token);
+      const encryptedRefreshToken = encryptToken(refresh_token);
+
       const { error: insertError } = await supabase
         .from('hubspot_connections')
         .insert({
           org_id: stateRecord.org_id,
           portal_id: portalId,
           hub_id: hubId,
-          access_token,
-          refresh_token,
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
           token_expires_at: expiresAt.toISOString(),
           oauth_scopes: scopes,
           connection_status: 'active',
