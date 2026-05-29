@@ -6,9 +6,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { supabase } from '@/lib/db/supabase';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 
 /**
  * GET /api/settings/survivorship-rules
@@ -17,11 +17,15 @@ import { getAccessToken } from '@/lib/hubspot/get-access-token';
  * Also returns field options for the Add Rule modal.
  */
 export async function GET(request: NextRequest) {
-  const { userId, orgId } = await auth();
-
-  if (!userId || !orgId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Auth check
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  const orgId = ctx.orgId;
 
   if (!supabase) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
@@ -98,11 +102,15 @@ export async function GET(request: NextRequest) {
  * Create a new org-specific survivorship rule.
  */
 export async function POST(request: NextRequest) {
-  const { userId, orgId } = await auth();
-
-  if (!userId || !orgId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Auth check
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  const orgId = ctx.orgId;
 
   if (!supabase) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
