@@ -12,9 +12,7 @@ import { TrendChart } from './TrendChart';
 import { OnboardingWrapper } from './OnboardingWrapper';
 import { DashboardClient } from './DashboardClient';
 import { ComplianceAIOverview } from './ComplianceAIOverview';
-
-// Default org ID for development - in production this would come from session
-const DEFAULT_ORG_ID = process.env.DEFAULT_ORG_ID || 'demo-org';
+import { auth } from '@clerk/nextjs/server';
 
 // ─────────────────────────────────────────────────────────────
 // Data Fetching Functions
@@ -120,7 +118,10 @@ async function fetchQuarantineData(orgId: string) {
 // ─────────────────────────────────────────────────────────────
 
 async function StatCards() {
-  const scoreData = await fetchScore(DEFAULT_ORG_ID);
+  const { orgId } = await auth();
+  if (!orgId) return null;
+
+  const scoreData = await fetchScore(orgId);
   const connectionsData = await fetchConnections();
 
   // Fallback to mock data if API returns nothing
@@ -206,9 +207,12 @@ async function StatCards() {
 }
 
 async function HarmonyBarsSection() {
+  const { orgId } = await auth();
+  if (!orgId) return null;
+
   const [breakdownData, scoreData] = await Promise.all([
-    fetchBreakdown(DEFAULT_ORG_ID),
-    fetchScore(DEFAULT_ORG_ID),
+    fetchBreakdown(orgId),
+    fetchScore(orgId),
   ]);
 
   const total = scoreData?.total ?? 23100;
@@ -322,9 +326,12 @@ async function HarmonyBarsSection() {
 }
 
 async function TrendChartSection() {
+  const { orgId } = await auth();
+  if (!orgId) return null;
+
   const [trendData, scoreData] = await Promise.all([
-    fetchTrend(DEFAULT_ORG_ID),
-    fetchScore(DEFAULT_ORG_ID),
+    fetchTrend(orgId),
+    fetchScore(orgId),
   ]);
 
   const benchmark = scoreData?.benchmark?.average;
@@ -365,7 +372,10 @@ async function TrendChartSection() {
 }
 
 async function InsightsSection() {
-  const insightsData = await fetchInsights(DEFAULT_ORG_ID);
+  const { orgId } = await auth();
+  if (!orgId) return null;
+
+  const insightsData = await fetchInsights(orgId);
 
   // Transform API data to component format
   const insights = (insightsData?.insights || []).map((insight: {
@@ -402,6 +412,9 @@ async function InsightsSection() {
 }
 
 async function PortalsSection() {
+  const { orgId } = await auth();
+  if (!orgId) return null;
+
   const connectionsData = await fetchConnections();
 
   // Transform API data with health scores - fetch in parallel
@@ -416,7 +429,7 @@ async function PortalsSection() {
       let score = 70 + Math.floor(Math.random() * 25);
       if (conn.portalId) {
         try {
-          const scoreData = await fetchScore(`${DEFAULT_ORG_ID}-${conn.portalId}`);
+          const scoreData = await fetchScore(orgId);
           if (scoreData?.score) {
             score = Math.round(scoreData.score);
           }
@@ -511,11 +524,14 @@ async function PortalsSection() {
 // ─────────────────────────────────────────────────────────────
 
 async function ClientData() {
+  const { orgId } = await auth();
+  if (!orgId) return null;
+
   const [connectionsData, actionsData, dedupData, quarantineData] = await Promise.all([
     fetchConnections(),
-    fetchActions(DEFAULT_ORG_ID),
-    fetchDedupCounts(DEFAULT_ORG_ID),
-    fetchQuarantineData(DEFAULT_ORG_ID),
+    fetchActions(orgId),
+    fetchDedupCounts(orgId),
+    fetchQuarantineData(orgId),
   ]);
 
   // Transform connections to portal format with scores
@@ -525,7 +541,7 @@ async function ClientData() {
       let score = 75; // Default score
       if (conn.portalId) {
         try {
-          const scoreData = await fetchScore(`${DEFAULT_ORG_ID}-${conn.portalId}`);
+          const scoreData = await fetchScore(orgId);
           if (scoreData?.score) {
             score = Math.round(scoreData.score);
           }
