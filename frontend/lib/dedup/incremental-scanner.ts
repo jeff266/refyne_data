@@ -370,12 +370,83 @@ async function runFullScan(
   // Get domain exclusions
   const exclusions = await getDomainExclusionSet(orgId);
 
-  // Generate pairs (simplified - just evaluate all combinations from index)
-  // In a real implementation, this would use blocking keys
-  const pairs: Array<{ id: string; record_a_id: string; record_b_id: string; grade: PairGrade }> = [];
+  // Create company lookup map for fast access
+  const companyMap = new Map(companies.map((c) => [c.id, c]));
 
-  // For now, use the existing generateAndStorePairs logic
-  // We'll update this in Step 5
+  // Generate pairs using blocking keys
+  let newPairsFound = 0;
+  const processedPairs = new Set<string>();
+
+  console.log(`[incremental-scanner] Evaluating candidates for ${companies.length} companies...`);
+
+  for (let i = 0; i < companies.length; i++) {
+    const company = companies[i];
+
+    // Progress logging every 100 companies
+    if (i > 0 && i % 100 === 0) {
+      console.log(`[incremental-scanner] Progress: ${i}/${companies.length} companies evaluated, ${newPairsFound} pairs found`);
+    }
+
+    // Find candidates using blocking key index
+    const candidates = await findCandidatesFromIndex(orgId, portalId, company, exclusions);
+
+    for (const candidate of candidates) {
+      // Create deterministic pair key (lower ID first)
+      const pairKey = [company.id, candidate.hubspot_company_id].sort().join(':');
+
+      // Skip if we've already processed this pair
+      if (processedPairs.has(pairKey)) {
+        continue;
+      }
+      processedPairs.add(pairKey);
+
+      // Skip if pair already exists in database
+      if (await pairExists(orgId, company.id, candidate.hubspot_company_id)) {
+        continue;
+      }
+
+      // Get candidate's full company data
+      const candidateCompany = companyMap.get(candidate.hubspot_company_id);
+      if (!candidateCompany) {
+        continue; // Candidate not in current dataset
+      }
+
+      // Convert to CompanyProperties for evaluation
+      const companyA: CompanyProperties = {
+        name: company.properties?.name ?? null,
+        domain: company.properties?.domain ?? null,
+        phone: company.properties?.phone ?? null,
+        industry: company.properties?.industry ?? null,
+        linkedin_company_page: company.properties?.linkedin_company_page ?? null,
+      };
+
+      const companyB: CompanyProperties = {
+        name: candidateCompany.properties?.name ?? null,
+        domain: candidateCompany.properties?.domain ?? null,
+        phone: candidateCompany.properties?.phone ?? null,
+        industry: candidateCompany.properties?.industry ?? null,
+        linkedin_company_page: candidateCompany.properties?.linkedin_company_page ?? null,
+      };
+
+      // Evaluate pair
+      const evaluation = evaluateCompanyPair(companyA, companyB);
+
+      // Store if confidence meets threshold (Grade C or better)
+      if (evaluation.confidence >= CONFIDENCE_THRESHOLD) {
+        await storePair(
+          orgId,
+          portalId,
+          connectionId,
+          company.id,
+          candidate.hubspot_company_id,
+          evaluation
+        );
+        newPairsFound++;
+      }
+    }
+  }
+
+  console.log(`[incremental-scanner] Pair generation complete: ${newPairsFound} pairs found`);
 
   // Build clusters
   const allPairs = await getAllPendingPairs(orgId, portalId);
@@ -385,7 +456,7 @@ async function runFullScan(
   const cursor = companies.length > 0 ? getLatestModifiedDate(companies) : new Date();
   await completeScanRun(scanRun.id, {
     recordsScanned: companies.length,
-    newPairsFound: allPairs.length,
+    newPairsFound,
     newClustersFound: clustersFound,
     modifiedCursor: cursor,
   });
@@ -393,7 +464,7 @@ async function runFullScan(
   return {
     scanType: 'full',
     recordsScanned: companies.length,
-    pairsFound: allPairs.length,
+    pairsFound: newPairsFound,
     clustersFound,
     newClusterIds: clusterIds,
   };
