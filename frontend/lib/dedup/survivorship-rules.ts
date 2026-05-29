@@ -57,6 +57,36 @@ export async function loadRules(orgId: string): Promise<SurvivorshipRule[]> {
 }
 
 /**
+ * Load field-level source metadata from enrichment_field_sources table.
+ * Attaches source info to records as _refyne_source_{fieldKey} properties.
+ */
+export async function loadFieldSources(
+  orgId: string,
+  companyIds: string[]
+): Promise<Record<string, Record<string, string>>> {
+  if (!supabase || companyIds.length === 0) {
+    return {};
+  }
+
+  const { data } = await supabase
+    .from('enrichment_field_sources')
+    .select('hubspot_company_id, field_key, source')
+    .eq('org_id', orgId)
+    .in('hubspot_company_id', companyIds);
+
+  const sources: Record<string, Record<string, string>> = {};
+
+  for (const row of data ?? []) {
+    if (!sources[row.hubspot_company_id]) {
+      sources[row.hubspot_company_id] = {};
+    }
+    sources[row.hubspot_company_id][`_refyne_source_${row.field_key}`] = row.source;
+  }
+
+  return sources;
+}
+
+/**
  * Apply survivorship rules to determine field-level winners before merge.
  * Returns a map of fieldKey → winning value and which record it came from.
  */
@@ -113,6 +143,56 @@ export function applyRules(
 
         if (masterEmpty && dupNotEmpty) {
           winner = { value: dupVal, source: 'duplicate', rule: 'prefer_nonempty' };
+        }
+      }
+
+      if (rule.rule_type === 'most_recent') {
+        // Compare last modified timestamps on each record
+        const masterModified = new Date(
+          masterRecord['hs_lastmodifieddate'] ?? 0
+        ).getTime();
+        const dupModified = new Date(
+          duplicateRecord['hs_lastmodifieddate'] ?? 0
+        ).getTime();
+
+        // Only apply if field has a value on the more recently modified record
+        // and the field was modified more recently than the master's version
+        const fieldModifiedKey = `hs_property_${field}_updated_at`;
+        const masterFieldDate = masterRecord[fieldModifiedKey];
+        const dupFieldDate = duplicateRecord[fieldModifiedKey];
+
+        if (masterFieldDate && dupFieldDate) {
+          // Use field-level timestamps if available
+          if (new Date(dupFieldDate).getTime() > new Date(masterFieldDate).getTime() && dupVal) {
+            winner = { value: dupVal, source: 'duplicate', rule: 'most_recent' };
+          }
+        } else {
+          // Fall back to record-level modified date
+          if (dupModified > masterModified && dupVal) {
+            winner = { value: dupVal, source: 'duplicate', rule: 'most_recent' };
+          }
+        }
+      }
+
+      if (rule.rule_type === 'source_preference') {
+        const sourceRank: string[] = rule.rule_config.source_rank ?? [];
+
+        // Check field-level source metadata
+        // Stored as _refyne_source_{fieldKey} on enriched records
+        const masterSource = masterRecord[`_refyne_source_${field}`] ?? 'unknown';
+        const dupSource = duplicateRecord[`_refyne_source_${field}`] ?? 'unknown';
+
+        const masterRank = sourceRank.indexOf(masterSource);
+        const dupRank = sourceRank.indexOf(dupSource);
+
+        // Lower index = higher trust
+        // Only override if duplicate has a better source AND a non-empty value
+        if (
+          dupRank !== -1 &&
+          (masterRank === -1 || dupRank < masterRank) &&
+          dupVal
+        ) {
+          winner = { value: dupVal, source: 'duplicate', rule: 'source_preference' };
         }
       }
     }

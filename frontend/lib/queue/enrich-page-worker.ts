@@ -477,6 +477,42 @@ export async function processApplyJob(
       console.log(
         `[Apply Job] Wrote ${writeResults.length} companies, ${errors.length} errors`
       );
+
+      // Track field sources for survivorship rules
+      const fieldSourcesToWrite: Array<{
+        org_id: string;
+        hubspot_company_id: string;
+        field_key: string;
+        source: string;
+      }> = [];
+
+      for (const result of selectedResults) {
+        for (const field of result.fields) {
+          if (field.foundValue && field.provider) {
+            fieldSourcesToWrite.push({
+              org_id: orgId,
+              hubspot_company_id: result.hubspotCompanyId,
+              field_key: field.fieldKey,
+              source: field.provider.toLowerCase().replace(/\s+/g, '_'), // Normalize provider name
+            });
+          }
+        }
+      }
+
+      // Write field sources to database (upsert to handle re-enrichment)
+      if (fieldSourcesToWrite.length > 0 && supabase) {
+        const { error: sourcesError } = await supabase
+          .from('enrichment_field_sources')
+          .upsert(fieldSourcesToWrite, {
+            onConflict: 'org_id,hubspot_company_id,field_key',
+          });
+
+        if (sourcesError) {
+          console.error('[Apply Job] Failed to write field sources:', sourcesError);
+        } else {
+          console.log(`[Apply Job] Tracked ${fieldSourcesToWrite.length} field sources`);
+        }
+      }
     }
 
     // Clear preview cache
