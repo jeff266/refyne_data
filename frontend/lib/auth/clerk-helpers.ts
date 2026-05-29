@@ -21,10 +21,11 @@ export async function getOrgContext(): Promise<OrgContext> {
   const userEmail = sessionClaims?.email as string | undefined;
 
   // CRITICAL FIX: Clerk stores org in 'o' claim but doesn't populate orgId
-  // Read directly from session claims
+  // Read directly from session claims - 'o' is an object with {id, rol, slg}
   if (!orgId && sessionClaims?.o) {
-    orgId = sessionClaims.o as string;
-    // orgRole might also be in a claim, but we can look it up if needed
+    const orgClaim = sessionClaims.o as any;
+    orgId = orgClaim.id || orgClaim;
+    orgRole = orgRole || (orgClaim.rol ? `org:${orgClaim.rol}` : undefined);
     console.log('[getOrgContext] Extracted orgId from session claims:', orgId);
   }
 
