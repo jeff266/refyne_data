@@ -12,7 +12,7 @@ import { supabase, isSupabaseConfigured } from '../db/supabase';
 import { HubSpotClient } from '../hubspot/client';
 import { fetchAllCompanies, fetchModifiedSince, getLatestModifiedDate } from '../hubspot/fetch-companies';
 import { rebuildFullIndex, upsertIndexRecords, findCandidatesFromIndex } from './dedup-index';
-import { evaluateCompanyPair, type CompanyProperties } from './company-signals';
+import { evaluateCompanyPair, normalizeDomain, type CompanyProperties } from './company-signals';
 import { UnionFind } from './union-find';
 import { scheduleAutoMerges } from './auto-merge-scheduler';
 import type { HubSpotCompany } from '../hubspot/types';
@@ -392,6 +392,67 @@ async function runFullScan(
   // Create company lookup map for fast access
   const companyMap = new Map(companies.map((c) => [c.id, c]));
 
+  if (job) {
+    await job.updateProgress({
+      phase: 'progress',
+      message: 'Loading blocking key index...',
+      progress: 12,
+      pairsFound: 0,
+    });
+  }
+
+  // Fetch entire index ONCE instead of querying per company
+  // This eliminates 11,000+ sequential database queries
+  if (!supabase) {
+    throw new Error('Supabase not configured');
+  }
+
+  const { data: fullIndex, error: indexError } = await supabase
+    .from('company_dedup_index')
+    .select('hubspot_company_id, domain_normalized, phone_prefix, name_prefix, linkedin_id')
+    .eq('org_id', orgId)
+    .eq('portal_id', portalId);
+
+  if (indexError) {
+    throw new Error(`Failed to fetch index: ${indexError.message}`);
+  }
+
+  console.log(`[incremental-scanner] Loaded ${fullIndex?.length || 0} index records`);
+
+  // Build in-memory lookup maps for O(1) candidate finding
+  const domainMap = new Map<string, string[]>();
+  const phoneMap = new Map<string, string[]>();
+  const nameMap = new Map<string, string[]>();
+  const linkedinMap = new Map<string, string[]>();
+
+  for (const record of fullIndex || []) {
+    // Domain map
+    if (record.domain_normalized) {
+      const existing = domainMap.get(record.domain_normalized) || [];
+      domainMap.set(record.domain_normalized, [...existing, record.hubspot_company_id]);
+    }
+
+    // Phone map
+    if (record.phone_prefix) {
+      const existing = phoneMap.get(record.phone_prefix) || [];
+      phoneMap.set(record.phone_prefix, [...existing, record.hubspot_company_id]);
+    }
+
+    // Name map
+    if (record.name_prefix) {
+      const existing = nameMap.get(record.name_prefix) || [];
+      nameMap.set(record.name_prefix, [...existing, record.hubspot_company_id]);
+    }
+
+    // LinkedIn map
+    if (record.linkedin_id) {
+      const existing = linkedinMap.get(record.linkedin_id) || [];
+      linkedinMap.set(record.linkedin_id, [...existing, record.hubspot_company_id]);
+    }
+  }
+
+  console.log(`[incremental-scanner] Built in-memory maps: ${domainMap.size} domains, ${phoneMap.size} phones, ${nameMap.size} names, ${linkedinMap.size} linkedin`);
+
   // Generate pairs using blocking keys
   let newPairsFound = 0;
   const processedPairs = new Set<string>();
@@ -403,7 +464,7 @@ async function runFullScan(
 
     // Progress updates every 100 companies
     if (i > 0 && i % 100 === 0) {
-      const progressPercent = 10 + Math.floor((i / companies.length) * 80); // 10-90%
+      const progressPercent = 15 + Math.floor((i / companies.length) * 75); // 15-90%
       console.log(`[incremental-scanner] Progress: ${i}/${companies.length} companies evaluated, ${newPairsFound} pairs found`);
 
       if (job) {
@@ -416,12 +477,64 @@ async function runFullScan(
       }
     }
 
-    // Find candidates using blocking key index
-    const candidates = await findCandidatesFromIndex(orgId, portalId, company, exclusions);
+    // Find candidates using in-memory Map lookups (O(1) instead of DB queries)
+    const candidateIds = new Set<string>();
 
-    for (const candidate of candidates) {
+    // Extract blocking keys from company
+    const companyDomain = company.properties?.domain
+      ? normalizeDomain(company.properties.domain)
+      : null;
+    const companyPhone = company.properties?.phone
+      ? company.properties.phone.replace(/\D/g, '').slice(0, 7)
+      : null;
+    const companyName = company.properties?.name
+      ? company.properties.name.toLowerCase().replace(/[^\w\s]/g, '').trim().slice(0, 4)
+      : null;
+    const companyLinkedIn = company.properties?.linkedin_company_page
+      ? company.properties.linkedin_company_page.match(/linkedin\.com\/company\/([^\/\?#]+)/i)?.[1]?.toLowerCase()
+      : null;
+
+    // Skip excluded domains
+    if (companyDomain && exclusions.has(companyDomain)) {
+      continue;
+    }
+
+    // Domain matches (highest priority)
+    if (companyDomain) {
+      const matches = domainMap.get(companyDomain) || [];
+      matches.forEach(id => {
+        if (id !== company.id) candidateIds.add(id);
+      });
+    }
+
+    // LinkedIn matches
+    if (companyLinkedIn) {
+      const matches = linkedinMap.get(companyLinkedIn) || [];
+      matches.forEach(id => {
+        if (id !== company.id) candidateIds.add(id);
+      });
+    }
+
+    // Phone matches
+    if (companyPhone && companyPhone.length >= 7) {
+      const matches = phoneMap.get(companyPhone) || [];
+      matches.forEach(id => {
+        if (id !== company.id) candidateIds.add(id);
+      });
+    }
+
+    // Name prefix matches (lowest priority, most candidates)
+    if (companyName && companyName.length >= 4) {
+      const matches = nameMap.get(companyName) || [];
+      matches.forEach(id => {
+        if (id !== company.id) candidateIds.add(id);
+      });
+    }
+
+    // Process candidate pairs
+    for (const candidateId of Array.from(candidateIds)) {
       // Create deterministic pair key (lower ID first)
-      const pairKey = [company.id, candidate.hubspot_company_id].sort().join(':');
+      const pairKey = [company.id, candidateId].sort().join(':');
 
       // Skip if we've already processed this pair
       if (processedPairs.has(pairKey)) {
@@ -430,12 +543,12 @@ async function runFullScan(
       processedPairs.add(pairKey);
 
       // Skip if pair already exists in database
-      if (await pairExists(orgId, company.id, candidate.hubspot_company_id)) {
+      if (await pairExists(orgId, company.id, candidateId)) {
         continue;
       }
 
       // Get candidate's full company data
-      const candidateCompany = companyMap.get(candidate.hubspot_company_id);
+      const candidateCompany = companyMap.get(candidateId);
       if (!candidateCompany) {
         continue; // Candidate not in current dataset
       }
@@ -467,7 +580,7 @@ async function runFullScan(
           portalId,
           connectionId,
           company.id,
-          candidate.hubspot_company_id,
+          candidateId,
           evaluation
         );
         newPairsFound++;
