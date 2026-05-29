@@ -22,7 +22,7 @@ export async function GET() {
     // Get all active connections for this org
     const { data: connections, error } = await supabase
       .from('hubspot_connections')
-      .select('org_id, portal_id, portal_name, created_at, updated_at, connection_status')
+      .select('org_id, portal_id, friendly_name, created_at, updated_at, connection_status')
       .eq('org_id', ctx.orgId)
       .eq('connection_status', 'active');
 
@@ -50,7 +50,7 @@ export async function GET() {
         return {
           orgId: conn.org_id,
           portalId: conn.portal_id,
-          name: conn.portal_name || `Portal ${conn.portal_id}`,
+          name: conn.friendly_name || `Portal ${conn.portal_id}`,
           companyCount: count || 0,
           lastSync,
         };
