@@ -270,8 +270,38 @@ async function buildClusters(
 ): Promise<{ count: number; clusterIds: string[] }> {
   if (!supabase || pairs.length === 0) return { count: 0, clusterIds: [] };
 
-  // Clear existing clusters for this portal
-  await supabase.from('dedup_clusters').delete().eq('org_id', orgId).eq('portal_id', portalId);
+  // Clear existing clusters for this portal (handle FK constraints)
+  // Must delete in order: decisions → clear pair cluster_ids → clusters
+
+  // Step 1: Get cluster IDs to delete
+  const { data: clustersToDelete } = await supabase
+    .from('dedup_clusters')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('portal_id', portalId);
+
+  const clusterIdsToDelete = (clustersToDelete || []).map(c => c.id);
+
+  if (clusterIdsToDelete.length > 0) {
+    // Step 2: Delete decisions that reference these clusters
+    await supabase
+      .from('dedup_decisions')
+      .delete()
+      .in('cluster_id', clusterIdsToDelete);
+
+    // Step 3: Clear cluster_id from pairs
+    await supabase
+      .from('dedup_pairs')
+      .update({ cluster_id: null })
+      .in('cluster_id', clusterIdsToDelete);
+  }
+
+  // Step 4: Now safe to delete clusters
+  await supabase
+    .from('dedup_clusters')
+    .delete()
+    .eq('org_id', orgId)
+    .eq('portal_id', portalId);
 
   // Build Union-Find from pairs
   const uf = new UnionFind();
