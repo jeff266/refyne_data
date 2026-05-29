@@ -42,6 +42,12 @@ export interface DedupScanResult {
   pairsFound: number;
   clustersFound: number;
   newClusterIds: string[];
+  gradeBreakdown: {
+    A: number;
+    B: number;
+    C: number;
+    D: number;
+  };
 }
 
 interface ScanRun {
@@ -497,6 +503,7 @@ async function runFullScan(
   // Generate pairs using blocking keys
   let newPairsFound = 0;
   const processedPairs = new Set<string>();
+  const gradeCount = { A: 0, B: 0, C: 0, D: 0 };
 
   console.log(`[incremental-scanner] Evaluating candidates for ${companies.length} companies...`);
 
@@ -621,6 +628,7 @@ async function runFullScan(
           evaluation
         );
         newPairsFound++;
+        gradeCount[evaluation.grade]++;
       }
     }
   }
@@ -665,6 +673,7 @@ async function runFullScan(
     pairsFound: newPairsFound,
     clustersFound,
     newClusterIds: clusterIds,
+    gradeBreakdown: gradeCount,
   };
 }
 
@@ -699,6 +708,7 @@ async function runIncrementalScan(
       pairsFound: 0,
       clustersFound: 0,
       newClusterIds: [],
+      gradeBreakdown: { A: 0, B: 0, C: 0, D: 0 },
     };
   }
 
@@ -755,6 +765,7 @@ async function runIncrementalScan(
     pairsFound: newPairsFound,
     clustersFound,
     newClusterIds: clusterIds,
+    gradeBreakdown: { A: 0, B: 0, C: 0, D: 0 }, // TODO: Track grades in incremental scans
   };
 }
 

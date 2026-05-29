@@ -700,10 +700,10 @@ async function processScanJob(
       orgId,
       companiesScanned: result.recordsScanned,
       pairsDetected: result.pairsFound,
-      pairsGradeA: 0, // TODO: Track by grade in incremental scanner
-      pairsGradeB: 0,
-      pairsGradeC: 0,
-      pairsGradeD: 0,
+      pairsGradeA: result.gradeBreakdown.A,
+      pairsGradeB: result.gradeBreakdown.B,
+      pairsGradeC: result.gradeBreakdown.C,
+      pairsGradeD: result.gradeBreakdown.D,
       durationMs,
       completedAt: new Date().toISOString(),
     };
