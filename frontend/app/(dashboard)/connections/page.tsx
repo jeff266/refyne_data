@@ -141,7 +141,7 @@ function getSyncStatusVariant(
 }
 
 export default function ConnectionsPage() {
-  const { orgRole } = useAuth();
+  const { orgRole, orgId } = useAuth();
   const [hubspotConnections, setHubspotConnections] = useState<HubSpotConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -166,7 +166,7 @@ export default function ConnectionsPage() {
     fetchProviderConnections();
     handleOAuthCallback();
     handleProviderDeepLink();
-  }, []);
+  }, [orgId]); // Re-fetch when active org changes
 
   async function fetchHubSpotConnections() {
     try {
