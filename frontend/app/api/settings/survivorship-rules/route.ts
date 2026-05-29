@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { supabase } from '@/lib/db/supabase';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
 
 /**
  * GET /api/settings/survivorship-rules
@@ -42,22 +43,41 @@ export async function GET(request: NextRequest) {
       is_default: rule.org_id === '__default__',
     }));
 
-    // TODO: Fetch field options from HubSpot properties API
-    // For now, return a static list of common fields
-    const fieldOptions = [
-      { key: '*', label: 'All fields', type: 'text' },
-      { key: 'lifecyclestage', label: 'Lifecycle stage', type: 'enum' },
-      { key: 'domain', label: 'Domain', type: 'text' },
-      { key: 'phone', label: 'Phone', type: 'text' },
-      { key: 'industry', label: 'Industry', type: 'text' },
-      { key: 'annualrevenue', label: 'Annual revenue', type: 'number' },
-      { key: 'numberofemployees', label: 'Number of employees', type: 'number' },
-      { key: 'city', label: 'City', type: 'text' },
-      { key: 'state', label: 'State', type: 'text' },
-      { key: 'country', label: 'Country', type: 'text' },
-      { key: 'address', label: 'Address', type: 'text' },
-      { key: 'zip', label: 'ZIP code', type: 'text' },
-    ];
+    // Fetch field options from HubSpot properties API
+    let fieldOptions = [{ key: '*', label: 'All fields', type: 'text' }];
+
+    try {
+      const accessToken = await getAccessToken(orgId);
+
+      if (accessToken) {
+        const response = await fetch('https://api.hubapi.com/crm/v3/properties/companies', {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const hubspotFields = (data.results || [])
+            .filter((prop: any) => !prop.name.startsWith('hs_')) // Filter out internal HubSpot fields
+            .map((prop: any) => ({
+              key: prop.name,
+              label: prop.label || prop.name,
+              type: prop.type,
+            }))
+            .sort((a: any, b: any) => a.label.localeCompare(b.label)); // Sort alphabetically
+
+          fieldOptions = [
+            { key: '*', label: 'All fields', type: 'text' },
+            ...hubspotFields,
+          ];
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch HubSpot properties:', err);
+      // Fall back to basic list if HubSpot fetch fails
+    }
 
     return NextResponse.json({
       rules: enrichedRules,
