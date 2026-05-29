@@ -453,20 +453,16 @@ async function runFullScan(
 
   console.log(`[incremental-scanner] Built in-memory maps: ${domainMap.size} domains, ${phoneMap.size} phones, ${nameMap.size} names, ${linkedinMap.size} linkedin`);
 
-  // Fetch all existing pairs once to avoid repeated DB queries
-  const { data: existingPairs } = await supabase
+  // For full scans, clear old pairs to make scan idempotent
+  // (Incremental scans keep old pairs and only add new ones)
+  console.log('[incremental-scanner] Clearing old pairs for full scan...');
+  await supabase
     .from('dedup_pairs')
-    .select('record_a_id, record_b_id')
+    .delete()
     .eq('org_id', orgId)
     .eq('portal_id', portalId);
 
-  const existingPairSet = new Set<string>();
-  for (const pair of existingPairs || []) {
-    const pairKey = [pair.record_a_id, pair.record_b_id].sort().join(':');
-    existingPairSet.add(pairKey);
-  }
-
-  console.log(`[incremental-scanner] Loaded ${existingPairSet.size} existing pairs`);
+  console.log('[incremental-scanner] Old pairs cleared, starting fresh evaluation');
 
   // Generate pairs using blocking keys
   let newPairsFound = 0;
@@ -552,15 +548,11 @@ async function runFullScan(
       const pairKey = [company.id, candidateId].sort().join(':');
 
       // Skip if we've already processed this pair in this scan
+      // (prevents evaluating both A-B and B-A)
       if (processedPairs.has(pairKey)) {
         continue;
       }
       processedPairs.add(pairKey);
-
-      // Skip if pair already exists in database (in-memory check)
-      if (existingPairSet.has(pairKey)) {
-        continue;
-      }
 
       // Get candidate's full company data
       const candidateCompany = companyMap.get(candidateId);
