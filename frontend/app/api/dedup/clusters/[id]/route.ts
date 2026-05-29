@@ -141,7 +141,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Apply survivorship rules to determine which fields should be pre-selected
-    const survivorshipReasons: Record<string, { rule: string; source?: string }> = {};
+    const survivorshipReasons: Record<
+      string,
+      { rule: string; source?: string; value?: any; method?: string }
+    > = {};
 
     try {
       const rules = await loadRules(orgId);
