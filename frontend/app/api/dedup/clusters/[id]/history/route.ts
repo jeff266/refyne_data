@@ -49,11 +49,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     // Transform snapshots for easier consumption
     const enrichedHistory = (history || []).map((entry) => {
-      // Calculate field-level diff
+      // Calculate field-level diff with survivorship rule information
       const fieldDiff = calculateFieldDiff(
         entry.survivor_snapshot,
         entry.merged_snapshot,
-        entry.result_snapshot
+        entry.result_snapshot,
+        entry.survivorship_decisions || {}
       );
 
       return {
@@ -88,11 +89,13 @@ export async function GET(request: NextRequest, context: RouteContext) {
  * - Which fields changed
  * - Source of each field (survivor vs merged)
  * - Before/after values
+ * - Which survivorship rule was applied
  */
 function calculateFieldDiff(
   survivorSnapshot: any,
   mergedSnapshot: any,
-  resultSnapshot: any
+  resultSnapshot: any,
+  survivorshipDecisions: Record<string, { rule: string; source: string }>
 ) {
   const allFields = new Set([
     ...Object.keys(survivorSnapshot || {}),
@@ -122,12 +125,16 @@ function calculateFieldDiff(
       source = 'custom'; // User may have edited during merge
     }
 
+    // Get survivorship rule if available
+    const ruleInfo = survivorshipDecisions[field];
+
     diff[field] = {
       survivorValue,
       mergedValue,
       resultValue,
       source,
       changed: survivorValue !== mergedValue,
+      rule: ruleInfo?.rule || null,
     };
   }
 

@@ -113,6 +113,43 @@ function calculateRescuedFields(
   return { count: rescued.length, fieldKeys: rescued };
 }
 
+// Map rule types to human-readable text
+function getRuleDisplayText(
+  fieldKey: string,
+  survivorshipReasons: Record<string, { rule: string; source?: string }> | undefined
+): string {
+  if (!survivorshipReasons || !survivorshipReasons[fieldKey]) {
+    return '';
+  }
+
+  const { rule, source } = survivorshipReasons[fieldKey];
+
+  switch (rule) {
+    case 'most_recent':
+      return 'Most recent';
+    case 'source_preference':
+      if (source) {
+        // Capitalize and format source name
+        const formattedSource = source
+          .split('_')
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        return `Source: ${formattedSource}`;
+      }
+      return 'Source preference';
+    case 'never_downgrade':
+      return 'Never downgrade';
+    case 'prefer_nonempty':
+      return 'Filled empty';
+    case 'manual':
+      return 'Manual';
+    case 'default_master':
+      return ''; // Don't show anything for default master selection
+    default:
+      return '';
+  }
+}
+
 // Sortable field row component for drag-to-reorder
 function SortableFieldRow({
   field,
@@ -123,6 +160,7 @@ function SortableFieldRow({
   fieldSelections,
   mergeState,
   rescuedFieldKeys,
+  survivorshipReasons,
   onFieldSelectionChange,
   onRemoveField,
 }: {
@@ -134,6 +172,7 @@ function SortableFieldRow({
   fieldSelections: Record<string, string>;
   mergeState: MergeAnimationState;
   rescuedFieldKeys: string[];
+  survivorshipReasons?: Record<string, { rule: string; source?: string }>;
   onFieldSelectionChange: (field: string, recordId: string) => void;
   onRemoveField: (field: string) => void;
 }) {
@@ -260,6 +299,17 @@ function SortableFieldRow({
           </td>
         );
       })}
+      {/* Why column */}
+      <td
+        style={{
+          padding: '12px 16px',
+          fontSize: 11,
+          color: C.text3,
+          fontStyle: 'italic',
+        }}
+      >
+        {getRuleDisplayText(field, survivorshipReasons)}
+      </td>
     </tr>
   );
 }
@@ -1118,6 +1168,18 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                   </th>
                 );
               })}
+              {/* Why column header */}
+              <th
+                style={{
+                  textAlign: 'left',
+                  padding: '12px 16px',
+                  fontWeight: 500,
+                  color: C.text3,
+                  fontSize: 11,
+                }}
+              >
+                Why
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -1138,6 +1200,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                     fieldSelections={fieldSelections}
                     mergeState={mergeState}
                     rescuedFieldKeys={rescuedFieldKeys}
+                    survivorshipReasons={data?.survivorshipReasons}
                     onFieldSelectionChange={(field, recordId) =>
                       setFieldSelections((prev) => ({ ...prev, [field]: recordId }))
                     }

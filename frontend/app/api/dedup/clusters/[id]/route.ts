@@ -6,6 +6,7 @@ import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-featu
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { selectMaster, type HubSpotCompany } from '@/lib/dedup/select-master';
+import { loadRules, applyRules, loadFieldSources } from '@/lib/dedup/survivorship-rules';
 
 /**
  * GET /api/dedup/clusters/:id
@@ -139,11 +140,65 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       console.error('[GET /api/dedup/clusters/[id]] Failed to select master:', error);
     }
 
+    // Apply survivorship rules to determine which fields should be pre-selected
+    const survivorshipReasons: Record<string, { rule: string; source?: string }> = {};
+
+    try {
+      const rules = await loadRules(orgId);
+      const masterRecord = records.find((r) => r.id === suggestedMasterId);
+
+      if (masterRecord && rules.length > 0) {
+        // Load field sources for all records
+        const fieldSourcesMap = await loadFieldSources(
+          orgId,
+          records.map((r) => r.id)
+        );
+
+        // Attach field sources to records
+        for (const record of records) {
+          const sources = fieldSourcesMap[record.id] || {};
+          Object.assign(record.properties, sources);
+        }
+
+        // Apply rules against each duplicate record
+        for (const duplicate of records) {
+          if (duplicate.id === suggestedMasterId) continue;
+
+          const fieldWinners = applyRules(
+            masterRecord.properties,
+            duplicate.properties,
+            rules
+          );
+
+          // Extract reasons for fields where duplicate won
+          for (const [fieldKey, winner] of Object.entries(fieldWinners)) {
+            if (winner.source === 'duplicate' && winner.rule !== 'default_master') {
+              // Store the rule that caused this field to be selected from duplicate
+              survivorshipReasons[fieldKey] = { rule: winner.rule };
+
+              // For source_preference, include the winning source
+              if (winner.rule === 'source_preference') {
+                const sourceKey = `_refyne_source_${fieldKey}`;
+                const source = duplicate.properties[sourceKey] as string | undefined;
+                if (source) {
+                  survivorshipReasons[fieldKey].source = source;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[GET /api/dedup/clusters/[id]] Failed to apply survivorship rules:', error);
+      // Continue without survivorship reasons - not a critical error
+    }
+
     return NextResponse.json({
       cluster: clusterData,
       records,
       suggestedMasterId,
       signals: topPair?.signals_fired || [],
+      survivorshipReasons,
     });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/clusters/[id]' });

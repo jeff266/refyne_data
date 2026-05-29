@@ -135,6 +135,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
       // Apply survivorship rules to ALL record pairs in cluster
       const survivorshipSelections: Record<string, string> = {};
+      const survivorshipDecisions: Record<string, { rule: string; source: string }> = {};
 
       for (const recordId of recordsToMerge) {
         const masterSnapshot = preMergeSnapshots[masterId] || {};
@@ -146,9 +147,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           rules
         );
 
-        // Convert survivorship results to field selections
+        // Convert survivorship results to field selections and track decisions
         // (duplicate source = use duplicate's record ID, master source = use master ID)
         for (const [field, winner] of Object.entries(survivorshipResult)) {
+          // Track which rule was applied
+          survivorshipDecisions[field] = {
+            rule: winner.rule,
+            source: winner.source,
+          };
+
           if (winner.source === 'duplicate' && winner.rule !== 'default_master') {
             survivorshipSelections[field] = recordId;
           }
@@ -227,6 +234,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           merged_snapshot: preMergeSnapshots[recordId] || {},
           result_snapshot: postMergeSnapshot,
           field_selections: body.fieldSelections || null,
+          survivorship_decisions: survivorshipDecisions, // Store which rule was applied to each field
           confidence_score: clusterData.grade === 'A' ? 95 : clusterData.grade === 'B' ? 75 : 50,
           similarity_signals: similaritySignals,
         };

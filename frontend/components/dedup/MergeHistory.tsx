@@ -20,7 +20,30 @@ interface MergeHistoryEntry {
     resultValue: any;
     source: string;
     changed: boolean;
+    rule: string | null;
   }>;
+}
+
+// Map rule types to human-readable text
+function getRuleLabel(rule: string | null): string {
+  if (!rule) return '-';
+
+  switch (rule) {
+    case 'most_recent':
+      return 'Most recent';
+    case 'source_preference':
+      return 'Source preference';
+    case 'never_downgrade':
+      return 'Never downgrade';
+    case 'prefer_nonempty':
+      return 'Prefer nonempty';
+    case 'default_master':
+      return 'Master default';
+    case 'manual':
+      return 'Manual';
+    default:
+      return rule;
+  }
 }
 
 interface MergeHistoryProps {
@@ -182,7 +205,7 @@ export function MergeHistory({ clusterId }: MergeHistoryProps) {
                       <div
                         style={{
                           display: 'grid',
-                          gridTemplateColumns: '200px 1fr 1fr 1fr 80px',
+                          gridTemplateColumns: '200px 1fr 1fr 1fr 80px 120px',
                           gap: 12,
                           padding: '10px 16px',
                           background: C.hover,
@@ -199,6 +222,7 @@ export function MergeHistory({ clusterId }: MergeHistoryProps) {
                         <div>Before (Merged)</div>
                         <div>After (Result)</div>
                         <div>Source</div>
+                        <div>Rule</div>
                       </div>
 
                       {/* Table Rows */}
@@ -219,7 +243,7 @@ export function MergeHistory({ clusterId }: MergeHistoryProps) {
                             key={field}
                             style={{
                               display: 'grid',
-                              gridTemplateColumns: '200px 1fr 1fr 1fr 80px',
+                              gridTemplateColumns: '200px 1fr 1fr 1fr 80px 120px',
                               gap: 12,
                               padding: '12px 16px',
                               borderBottom: `1px solid ${C.border}`,
@@ -243,6 +267,7 @@ export function MergeHistory({ clusterId }: MergeHistoryProps) {
                               highlight={diff.resultValue !== diff.survivorValue}
                             />
                             <SourceBadge source={diff.source} />
+                            <RuleBadge rule={diff.rule} />
                           </div>
                         ))
                       )}
@@ -309,6 +334,35 @@ function SourceBadge({ source }: { source: string }) {
       }}
     >
       {source}
+    </div>
+  );
+}
+
+function RuleBadge({ rule }: { rule: string | null }) {
+  if (!rule) {
+    return (
+      <div
+        style={{
+          fontSize: 11,
+          color: C.text3,
+          fontStyle: 'italic',
+          textAlign: 'center',
+        }}
+      >
+        -
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        fontSize: 11,
+        color: C.text2,
+        textAlign: 'center',
+      }}
+    >
+      {getRuleLabel(rule)}
     </div>
   );
 }
