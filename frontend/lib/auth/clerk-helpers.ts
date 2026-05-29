@@ -12,16 +12,7 @@ export interface OrgContext {
 
 export async function getOrgContext(): Promise<OrgContext> {
   const authData = await auth();
-  const { orgId, orgRole, userId, sessionClaims } = authData;
-
-  // Debug logging
-  console.log('[getOrgContext] auth() returned:', {
-    hasOrgId: !!orgId,
-    hasUserId: !!userId,
-    hasSessionClaims: !!sessionClaims,
-    orgIdValue: orgId,
-    sessionClaimsKeys: sessionClaims ? Object.keys(sessionClaims) : [],
-  });
+  let { orgId, orgRole, userId, sessionClaims } = authData;
 
   if (!userId) {
     throw new Error('UNAUTHENTICATED');
@@ -29,7 +20,15 @@ export async function getOrgContext(): Promise<OrgContext> {
 
   const userEmail = sessionClaims?.email as string | undefined;
 
-  // If no active org, fall back to user's first org membership
+  // CRITICAL FIX: Clerk stores org in 'o' claim but doesn't populate orgId
+  // Read directly from session claims
+  if (!orgId && sessionClaims?.o) {
+    orgId = sessionClaims.o as string;
+    // orgRole might also be in a claim, but we can look it up if needed
+    console.log('[getOrgContext] Extracted orgId from session claims:', orgId);
+  }
+
+  // If still no active org, fall back to user's first org membership
   if (!orgId) {
     const client = await clerkClient();
     const userMemberships = await client.users.getOrganizationMembershipList({ userId });
