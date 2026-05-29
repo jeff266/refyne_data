@@ -44,6 +44,13 @@ export async function POST(request: NextRequest) {
       // No body or invalid JSON - use default
     }
 
+    if (!isSupabaseConfigured() || !supabase) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 503 }
+      );
+    }
+
     // Auto-detect first scan: always do full scan if no scans have ever run
     const { count } = await supabase
       .from('dedup_scan_runs')
@@ -55,13 +62,6 @@ export async function POST(request: NextRequest) {
 
     if (isFirstScan) {
       console.log(`[Dedup Scan API] First scan for org ${ctx.orgId}, forcing full scan`);
-    }
-
-    if (!isSupabaseConfigured() || !supabase) {
-      return NextResponse.json(
-        { error: 'Database not configured' },
-        { status: 503 }
-      );
     }
 
     // Get active HubSpot connection
