@@ -26,8 +26,8 @@ interface UnmappedProperty {
 
 interface Portal {
   id: string;
-  portal_id: string;
-  portal_name: string;
+  portalId: string;
+  friendlyName: string;
 }
 
 function policyColor(p: string) {
@@ -220,8 +220,8 @@ export default function MappingsPage() {
             >
               <option value="all">All portals</option>
               {portals.map((p) => (
-                <option key={p.id} value={p.portal_id}>
-                  {p.portal_name || `Portal ${p.portal_id}`}
+                <option key={p.id} value={p.portalId}>
+                  {p.friendlyName || `Portal ${p.portalId}`}
                 </option>
               ))}
             </select>
