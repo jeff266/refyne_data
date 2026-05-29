@@ -134,14 +134,13 @@ export async function getAutoMergeQueueStats(): Promise<{
   const queue = getAutoMergeQueue();
   if (!queue) return null;
 
-  const [waiting, active, completed, failed, delayed, paused] = await Promise.all([
+  const [waiting, active, completed, failed, delayed] = await Promise.all([
     queue.getWaitingCount(),
     queue.getActiveCount(),
     queue.getCompletedCount(),
     queue.getFailedCount(),
     queue.getDelayedCount(),
-    queue.getPausedCount(),
   ]);
 
-  return { waiting, active, completed, failed, delayed, paused };
+  return { waiting, active, completed, failed, delayed, paused: 0 };
 }
