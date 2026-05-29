@@ -453,6 +453,21 @@ async function runFullScan(
 
   console.log(`[incremental-scanner] Built in-memory maps: ${domainMap.size} domains, ${phoneMap.size} phones, ${nameMap.size} names, ${linkedinMap.size} linkedin`);
 
+  // Fetch all existing pairs once to avoid repeated DB queries
+  const { data: existingPairs } = await supabase
+    .from('dedup_pairs')
+    .select('record_a_id, record_b_id')
+    .eq('org_id', orgId)
+    .eq('portal_id', portalId);
+
+  const existingPairSet = new Set<string>();
+  for (const pair of existingPairs || []) {
+    const pairKey = [pair.record_a_id, pair.record_b_id].sort().join(':');
+    existingPairSet.add(pairKey);
+  }
+
+  console.log(`[incremental-scanner] Loaded ${existingPairSet.size} existing pairs`);
+
   // Generate pairs using blocking keys
   let newPairsFound = 0;
   const processedPairs = new Set<string>();
@@ -536,14 +551,14 @@ async function runFullScan(
       // Create deterministic pair key (lower ID first)
       const pairKey = [company.id, candidateId].sort().join(':');
 
-      // Skip if we've already processed this pair
+      // Skip if we've already processed this pair in this scan
       if (processedPairs.has(pairKey)) {
         continue;
       }
       processedPairs.add(pairKey);
 
-      // Skip if pair already exists in database
-      if (await pairExists(orgId, company.id, candidateId)) {
+      // Skip if pair already exists in database (in-memory check)
+      if (existingPairSet.has(pairKey)) {
         continue;
       }
 
