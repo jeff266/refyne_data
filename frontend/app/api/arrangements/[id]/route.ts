@@ -3,6 +3,7 @@ import { getOrgContext, authError, requireOperatorOrAbove } from '@/lib/auth/cle
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { transformArray } from '@/lib/utils/transform';
+import { cancelArrangementJobs } from '@/lib/queue/arrangement-queue';
 
 /**
  * GET /api/arrangements/:id
@@ -197,7 +198,14 @@ export async function DELETE(
       );
     }
 
-    // TODO: Cancel any BullMQ scheduled jobs for this arrangement
+    // Cancel any pending/active BullMQ jobs for this arrangement
+    const cancelResult = await cancelArrangementJobs(params.id);
+    if (cancelResult.cancelled > 0) {
+      console.log(`[Arrangement Delete] Cancelled ${cancelResult.cancelled} jobs for arrangement ${params.id}`);
+    } else if (cancelResult.reason) {
+      console.warn(`[Arrangement Delete] Failed to cancel jobs: ${cancelResult.reason}`);
+      // Don't fail the delete if job cancellation fails - log and continue
+    }
 
     return NextResponse.json({ success: true });
 

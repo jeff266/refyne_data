@@ -2660,3 +2660,59 @@ export async function stopArrangementWorker(): Promise<void> {
     arrangementQueue = null;
   }
 }
+
+/**
+ * Cancel all pending and active jobs for an arrangement.
+ * Called when an arrangement is deleted.
+ */
+export async function cancelArrangementJobs(arrangementId: string): Promise<{
+  cancelled: number;
+  reason?: string;
+}> {
+  const queue = getArrangementQueue();
+
+  if (!queue) {
+    return { cancelled: 0, reason: 'Queue not configured' };
+  }
+
+  try {
+    // Get all jobs (waiting, active, delayed) for this arrangement
+    const jobs = await queue.getJobs(['waiting', 'active', 'delayed', 'paused']);
+    
+    let cancelled = 0;
+
+    for (const job of jobs) {
+      // Check if job belongs to this arrangement
+      if (
+        job.data &&
+        typeof job.data === 'object' &&
+        'arrangementId' in job.data &&
+        job.data.arrangementId === arrangementId
+      ) {
+        await job.remove();
+        cancelled++;
+      }
+    }
+
+    // Also remove any repeatable jobs for this arrangement
+    // (for future when scheduling is implemented)
+    const repeatableJobs = await queue.getRepeatableJobs();
+    for (const repeatableJob of repeatableJobs) {
+      // Check if the key or id contains the arrangement ID
+      if (
+        repeatableJob.key.includes(arrangementId) ||
+        repeatableJob.id?.includes(arrangementId)
+      ) {
+        await queue.removeRepeatableByKey(repeatableJob.key);
+        cancelled++;
+      }
+    }
+
+    console.log(`[Arrangement Queue] Cancelled ${cancelled} jobs for arrangement ${arrangementId}`);
+    return { cancelled };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[Arrangement Queue] Error cancelling jobs:`, message);
+    return { cancelled: 0, reason: message };
+  }
+}

@@ -3,6 +3,8 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { randomUUID } from 'crypto';
+import { enqueueScan } from '@/lib/compliance/compliance-scanner';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
 
 /**
  * POST /api/onboarding/scan-trigger
@@ -58,9 +60,21 @@ export async function POST(request: NextRequest) {
       console.error('Failed to insert scan progress event:', eventError);
     }
 
-    // TODO: Enqueue BullMQ compliance scan job
-    // For now, we'll trigger it via HTTP call or direct function invocation
-    // This will be implemented when the compliance scanner is refactored
+    // Enqueue compliance scan job
+    try {
+      const accessToken = await getAccessToken(ctx.orgId);
+      const scanResult = await enqueueScan(ctx.orgId, accessToken, true);
+
+      if (!scanResult.queued) {
+        console.warn('[Onboarding Scan] Failed to enqueue scan:', scanResult.reason);
+        // Don't fail the request - scan will run on schedule
+      } else {
+        console.log('[Onboarding Scan] Enqueued compliance scan:', scanResult.jobId);
+      }
+    } catch (scanError) {
+      console.error('[Onboarding Scan] Error enqueueing scan:', scanError);
+      // Don't fail the request - scan will run on schedule
+    }
 
     return NextResponse.json({ runId });
   } catch (error) {

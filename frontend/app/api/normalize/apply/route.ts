@@ -4,6 +4,7 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { invalidateSummary } from '@/lib/ai/cache';
+import { enqueueNormalization } from '@/lib/queue/normalize-queue';
 
 interface SelectedChange {
   companyId: string;
@@ -148,7 +149,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Enqueue BullMQ job to process normalization asynchronously
+    // Enqueue normalization job
+    const enqueueResult = await enqueueNormalization({
+      runId: run.id,
+      orgId: ctx.orgId,
+      connectionId: connection.id,
+      objectType: 'company',
+      harmonyIds: body.harmonyIds || [],
+      scope: body.selectedChanges
+        ? { type: 'selected' as const, changes: body.selectedChanges }
+        : { type: 'all' as const },
+    });
+
+    if (!enqueueResult.queued) {
+      console.error('[Normalize Apply] Failed to enqueue job:', enqueueResult.reason);
+      // Update run status to failed
+      await supabase
+        .from('normalization_runs')
+        .update({ status: 'failed', error_message: enqueueResult.reason })
+        .eq('id', run.id);
+
+      return NextResponse.json(
+        { error: 'Failed to enqueue normalization job', reason: enqueueResult.reason },
+        { status: 500 }
+      );
+    }
+
+    console.log('[Normalize Apply] Enqueued normalization job:', enqueueResult.jobId);
 
     // Invalidate AI summary cache after normalization run starts
     await invalidateSummary(`ai:compliance:${ctx.orgId}:all`);
@@ -157,6 +184,7 @@ export async function POST(request: NextRequest) {
       runId: run.id,
       status: 'queued',
       applied: body.selectedChanges?.length || 'all',
+      jobId: enqueueResult.jobId,
     });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/normalize/apply' });
