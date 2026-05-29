@@ -184,6 +184,22 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
                   survivorshipReasons[fieldKey].source = source;
                 }
               }
+
+              // For specific_value, include the winning value
+              if (winner.rule === 'specific_value') {
+                survivorshipReasons[fieldKey].value = winner.value;
+              }
+
+              // For rollup, include the method used
+              if (winner.rule === 'rollup') {
+                const fieldRules = rules.filter(
+                  (r) => r.field_key === fieldKey || r.field_key === '*'
+                );
+                const rollupRule = fieldRules.find((r) => r.rule_type === 'rollup');
+                if (rollupRule) {
+                  survivorshipReasons[fieldKey].method = rollupRule.rule_config.method;
+                }
+              }
             }
           }
         }

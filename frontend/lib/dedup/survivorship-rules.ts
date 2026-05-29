@@ -195,6 +195,72 @@ export function applyRules(
           winner = { value: dupVal, source: 'duplicate', rule: 'source_preference' };
         }
       }
+
+      if (rule.rule_type === 'specific_value') {
+        const valueOrder: string[] = rule.rule_config.value_order ?? [];
+
+        const masterVal = String(masterRecord[field] ?? '').toLowerCase();
+        const dupVal = String(duplicateRecord[field] ?? '').toLowerCase();
+
+        const masterRank = valueOrder
+          .map((v) => v.toLowerCase())
+          .indexOf(masterVal);
+        const dupRank = valueOrder
+          .map((v) => v.toLowerCase())
+          .indexOf(dupVal);
+
+        // Lower index = higher priority
+        // If duplicate has higher priority value, it wins
+        if (
+          dupRank !== -1 &&
+          (masterRank === -1 || dupRank < masterRank) &&
+          duplicateRecord[field]
+        ) {
+          winner = {
+            value: duplicateRecord[field],
+            source: 'duplicate',
+            rule: 'specific_value',
+          };
+        }
+      }
+
+      if (rule.rule_type === 'rollup') {
+        const method: string = rule.rule_config.method ?? 'max';
+
+        const masterNum = parseFloat(String(masterRecord[field] ?? ''));
+        const dupNum = parseFloat(String(duplicateRecord[field] ?? ''));
+
+        const masterValid = !isNaN(masterNum);
+        const dupValid = !isNaN(dupNum);
+
+        if (!masterValid && dupValid) {
+          winner = { value: dupNum, source: 'duplicate', rule: 'rollup' };
+        } else if (masterValid && dupValid) {
+          let result: number;
+
+          switch (method) {
+            case 'max':
+              result = Math.max(masterNum, dupNum);
+              break;
+            case 'min':
+              result = Math.min(masterNum, dupNum);
+              break;
+            case 'sum':
+              result = masterNum + dupNum;
+              break;
+            case 'average':
+              result = (masterNum + dupNum) / 2;
+              break;
+            default:
+              result = masterNum;
+          }
+
+          const source =
+            result === dupNum && result !== masterNum ? 'duplicate' : 'master';
+
+          winner = { value: result, source, rule: 'rollup' };
+        }
+      }
     }
 
     result[field] = winner;

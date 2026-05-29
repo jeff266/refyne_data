@@ -32,6 +32,8 @@ interface OrderEditorProps {
   values: string[];
   onChange: (values: string[]) => void;
   fieldKey?: string; // Used to determine if we should show presets
+  topLabel?: string; // Label for highest priority item
+  bottomLabel?: string; // Label for lowest priority item
 }
 
 // Preset orders for common fields
@@ -51,11 +53,19 @@ function SortableValueItem({
   index,
   onRemove,
   canRemove,
+  isFirst,
+  isLast,
+  topLabel,
+  bottomLabel,
 }: {
   value: string;
   index: number;
   onRemove: () => void;
   canRemove: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  topLabel?: string;
+  bottomLabel?: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: value,
@@ -66,9 +76,6 @@ function SortableValueItem({
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
-
-  const isMostAdvanced = index === 0;
-  const isLeastAdvanced = index === 5; // Adjust based on list length
 
   return (
     <div
@@ -110,15 +117,15 @@ function SortableValueItem({
         {value}
       </div>
 
-      {/* Advancement indicator */}
-      {isMostAdvanced && (
+      {/* Priority indicator */}
+      {isFirst && topLabel && (
         <div style={{ fontSize: 11, color: C.text3 }}>
-          Most advanced
+          {topLabel}
         </div>
       )}
-      {isLeastAdvanced && (
+      {isLast && bottomLabel && (
         <div style={{ fontSize: 11, color: C.text3 }}>
-          Least advanced
+          {bottomLabel}
         </div>
       )}
 
@@ -149,7 +156,13 @@ function SortableValueItem({
   );
 }
 
-export function OrderEditor({ values, onChange, fieldKey }: OrderEditorProps) {
+export function OrderEditor({
+  values,
+  onChange,
+  fieldKey,
+  topLabel = 'Most advanced',
+  bottomLabel = 'Least advanced',
+}: OrderEditorProps) {
   const [newValue, setNewValue] = useState('');
 
   const sensors = useSensors(
@@ -197,6 +210,10 @@ export function OrderEditor({ values, onChange, fieldKey }: OrderEditorProps) {
               index={index}
               onRemove={() => handleRemoveValue(value)}
               canRemove={!isPreset} // Only allow removal for custom values
+              isFirst={index === 0}
+              isLast={index === values.length - 1}
+              topLabel={topLabel}
+              bottomLabel={bottomLabel}
             />
           ))}
         </SortableContext>

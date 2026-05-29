@@ -68,7 +68,14 @@ export async function GET(request: NextRequest) {
             .map((prop: any) => ({
               key: prop.name,
               label: prop.label || prop.name,
-              type: prop.type,
+              type:
+                prop.type === 'enumeration'
+                  ? 'enum'
+                  : prop.type === 'number'
+                  ? 'number'
+                  : prop.type === 'date' || prop.type === 'datetime'
+                  ? 'date'
+                  : 'text',
             }))
             .sort((a: any, b: any) => a.label.localeCompare(b.label)); // Sort alphabetically
 
@@ -134,6 +141,8 @@ export async function POST(request: NextRequest) {
       'never_downgrade',
       'prefer_nonempty',
       'tld_disqualifier',
+      'specific_value',
+      'rollup',
     ];
 
     if (!validRuleTypes.includes(rule_type)) {

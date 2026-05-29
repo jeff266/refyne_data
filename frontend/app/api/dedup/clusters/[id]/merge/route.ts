@@ -135,7 +135,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
       // Apply survivorship rules to ALL record pairs in cluster
       const survivorshipSelections: Record<string, string> = {};
-      const survivorshipDecisions: Record<string, { rule: string; source: string }> = {};
+      const survivorshipDecisions: Record<
+        string,
+        { rule: string; source: string; value?: any; method?: string }
+      > = {};
 
       for (const recordId of recordsToMerge) {
         const masterSnapshot = preMergeSnapshots[masterId] || {};
@@ -155,6 +158,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             rule: winner.rule,
             source: winner.source,
           };
+
+          // For specific_value, include the winning value
+          if (winner.rule === 'specific_value') {
+            survivorshipDecisions[field].value = winner.value;
+          }
+
+          // For rollup, include the method used
+          if (winner.rule === 'rollup') {
+            const fieldRules = rules.filter(
+              (r) => r.field_key === field || r.field_key === '*'
+            );
+            const rollupRule = fieldRules.find((r) => r.rule_type === 'rollup');
+            if (rollupRule) {
+              survivorshipDecisions[field].method = rollupRule.rule_config.method;
+            }
+          }
 
           if (winner.source === 'duplicate' && winner.rule !== 'default_master') {
             survivorshipSelections[field] = recordId;

@@ -9,7 +9,7 @@
  * 3. Configure rule
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { X } from 'lucide-react';
 import { SourceRankEditor } from './SourceRankEditor';
@@ -26,7 +26,13 @@ interface AddRuleModalProps {
   fieldOptions: Array<{ key: string; label: string; type: string }>;
 }
 
-type RuleType = 'most_recent' | 'source_preference' | 'never_downgrade' | 'prefer_nonempty';
+type RuleType =
+  | 'most_recent'
+  | 'source_preference'
+  | 'never_downgrade'
+  | 'prefer_nonempty'
+  | 'specific_value'
+  | 'rollup';
 
 const DEFAULT_SOURCE_RANK = [
   'graphiq',
@@ -49,13 +55,184 @@ const DEFAULT_LIFECYCLE_ORDER = [
   'Other',
 ];
 
+/**
+ * SpecificValueConfig - Step 3 configuration for specific_value rule type
+ */
+function SpecificValueConfig({
+  fieldKey,
+  fieldLabel,
+  valueOrder,
+  onChange,
+}: {
+  fieldKey: string;
+  fieldLabel: string;
+  valueOrder: string[];
+  onChange: (values: string[]) => void;
+}) {
+  const [options, setOptions] = useState<{ label: string; value: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    setError('');
+
+    fetch(`/api/hubspot/properties/${fieldKey}/options`)
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to fetch options');
+        return r.json();
+      })
+      .then((data) => {
+        if (data.options && data.options.length > 0) {
+          setOptions(data.options);
+          // Initialize value order with fetched options
+          onChange(data.options.map((o: any) => o.value));
+        } else {
+          setError('No options found for this field');
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch field options:', err);
+        setError('Failed to load field values from HubSpot');
+        setLoading(false);
+      });
+  }, [fieldKey]);
+
+  if (loading) {
+    return (
+      <div style={{ color: C.text3, fontSize: 13 }}>
+        Loading {fieldLabel} values from HubSpot...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ color: C.text3, fontSize: 13 }}>
+        {error}
+      </div>
+    );
+  }
+
+  // Map value order to option labels for display
+  const orderedItems = valueOrder
+    .map((value) => {
+      const option = options.find((o) => o.value === value);
+      return option ? option.label : value;
+    })
+    .filter(Boolean);
+
+  return (
+    <div>
+      <p style={{ color: C.text3, marginBottom: 16, fontSize: 13 }}>
+        Drag to set priority order. The highest value always survives a merge.
+      </p>
+      <OrderEditor
+        values={orderedItems}
+        onChange={(ordered) => {
+          // Map labels back to values
+          const order = ordered.map((label) => {
+            const option = options.find((o) => o.label === label);
+            return option ? option.value : label;
+          });
+          onChange(order);
+        }}
+        topLabel="Always keeps"
+        bottomLabel="Lowest priority"
+      />
+      <p style={{ color: C.text3, marginTop: 12, fontSize: 12 }}>
+        Values fetched from your HubSpot property settings.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * RollupConfig - Step 3 configuration for rollup rule type
+ */
+function RollupConfig({
+  fieldLabel,
+  method,
+  onChange,
+}: {
+  fieldLabel: string;
+  method: 'max' | 'min' | 'sum' | 'average';
+  onChange: (method: 'max' | 'min' | 'sum' | 'average') => void;
+}) {
+  const options = [
+    {
+      value: 'max' as const,
+      label: 'Keep highest value',
+      description: 'Recommended for revenue, headcount',
+    },
+    {
+      value: 'min' as const,
+      label: 'Keep lowest value',
+      description: 'Use when lower is more conservative',
+    },
+    {
+      value: 'sum' as const,
+      label: 'Sum all values',
+      description: 'Use for cumulative metrics only',
+    },
+    {
+      value: 'average' as const,
+      label: 'Average all values',
+      description: 'Use when both values are equally reliable',
+    },
+  ];
+
+  return (
+    <div>
+      <p style={{ color: C.text3, marginBottom: 16, fontSize: 13 }}>
+        For {fieldLabel}: how should values be combined when records are merged?
+      </p>
+      {options.map((opt) => (
+        <label
+          key={opt.value}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 12,
+            padding: '12px 16px',
+            marginBottom: 8,
+            background: method === opt.value ? C.indigoDim : C.surface,
+            border: `1px solid ${method === opt.value ? C.indigo : C.border}`,
+            cursor: 'pointer',
+          }}
+        >
+          <input
+            type="radio"
+            name="rollup_method"
+            value={opt.value}
+            checked={method === opt.value}
+            onChange={() => onChange(opt.value)}
+            style={{ marginTop: 2, cursor: 'pointer' }}
+          />
+          <div>
+            <div style={{ color: C.text, fontWeight: 500, fontSize: 13 }}>
+              {opt.label}
+            </div>
+            <div style={{ color: C.text3, fontSize: 12, marginTop: 2 }}>
+              {opt.description}
+            </div>
+          </div>
+        </label>
+      ))}
+    </div>
+  );
+}
+
 export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleModalProps) {
   const [step, setStep] = useState(1);
   const [fieldScope, setFieldScope] = useState<'all' | 'specific'>('specific');
   const [selectedField, setSelectedField] = useState('');
+  const [selectedFieldType, setSelectedFieldType] = useState<string>('text');
   const [selectedRuleType, setSelectedRuleType] = useState<RuleType | ''>('');
   const [sourceRank, setSourceRank] = useState<string[]>(DEFAULT_SOURCE_RANK);
   const [valueOrder, setValueOrder] = useState<string[]>(DEFAULT_LIFECYCLE_ORDER);
+  const [rollupMethod, setRollupMethod] = useState<'max' | 'min' | 'sum' | 'average'>('max');
   const [isSaving, setIsSaving] = useState(false);
 
   if (!isOpen) return null;
@@ -64,10 +241,18 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
     setStep(1);
     setFieldScope('specific');
     setSelectedField('');
+    setSelectedFieldType('text');
     setSelectedRuleType('');
     setSourceRank(DEFAULT_SOURCE_RANK);
     setValueOrder(DEFAULT_LIFECYCLE_ORDER);
+    setRollupMethod('max');
     onClose();
+  };
+
+  const handleFieldChange = (fieldKey: string) => {
+    setSelectedField(fieldKey);
+    const field = fieldOptions.find((f) => f.key === fieldKey);
+    setSelectedFieldType(field?.type || 'text');
   };
 
   const handleNext = () => {
@@ -106,6 +291,10 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
         ruleConfig = { source_rank: sourceRank };
       } else if (selectedRuleType === 'never_downgrade') {
         ruleConfig = { order: valueOrder.map((v) => v.toLowerCase()) };
+      } else if (selectedRuleType === 'specific_value') {
+        ruleConfig = { value_order: valueOrder };
+      } else if (selectedRuleType === 'rollup') {
+        ruleConfig = { method: rollupMethod };
       }
       // most_recent and prefer_nonempty have no config
 
@@ -237,7 +426,7 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                   <div style={{ fontSize: 13, color: C.text, marginBottom: 8 }}>Field</div>
                   <select
                     value={selectedField}
-                    onChange={(e) => setSelectedField(e.target.value)}
+                    onChange={(e) => handleFieldChange(e.target.value)}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
@@ -383,6 +572,66 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                     Best for: All fields (already a default)
                   </div>
                 </label>
+
+                {fieldScope === 'specific' && selectedFieldType === 'enum' && (
+                  <label
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                      padding: '16px',
+                      background: C.surface,
+                      border: `1px solid ${selectedRuleType === 'specific_value' ? C.indigo : C.border}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <input
+                        type="radio"
+                        checked={selectedRuleType === 'specific_value'}
+                        onChange={() => setSelectedRuleType('specific_value')}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Specific value wins</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: C.text3, paddingLeft: 28 }}>
+                      Always keep a particular value when it appears on either record
+                    </div>
+                    <div style={{ fontSize: 11, color: C.text3, paddingLeft: 28 }}>
+                      Best for: Customer Type, Lead Status, custom picklist fields
+                    </div>
+                  </label>
+                )}
+
+                {fieldScope === 'specific' && selectedFieldType === 'number' && (
+                  <label
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                      padding: '16px',
+                      background: C.surface,
+                      border: `1px solid ${selectedRuleType === 'rollup' ? C.indigo : C.border}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <input
+                        type="radio"
+                        checked={selectedRuleType === 'rollup'}
+                        onChange={() => setSelectedRuleType('rollup')}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Rollup</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: C.text3, paddingLeft: 28 }}>
+                      Combine values mathematically across duplicate records
+                    </div>
+                    <div style={{ fontSize: 11, color: C.text3, paddingLeft: 28 }}>
+                      Best for: Revenue, Employee count, numeric metrics
+                    </div>
+                  </label>
+                )}
               </div>
             </div>
           )}
@@ -418,7 +667,13 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                   <div style={{ fontSize: 14, color: C.text, marginBottom: 20 }}>
                     For {fieldScope === 'all' ? 'all fields' : selectedFieldLabel}: define the value order.
                   </div>
-                  <OrderEditor values={valueOrder} onChange={setValueOrder} fieldKey={selectedField} />
+                  <OrderEditor
+                    values={valueOrder}
+                    onChange={setValueOrder}
+                    fieldKey={selectedField}
+                    topLabel="Most advanced"
+                    bottomLabel="Least advanced"
+                  />
                 </div>
               )}
 
@@ -432,6 +687,33 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
                     {fieldScope === 'all' ? 'field' : selectedFieldLabel} and the duplicate has a value, the
                     duplicate's value will be kept.
                   </div>
+                </div>
+              )}
+
+              {selectedRuleType === 'specific_value' && (
+                <div>
+                  <div style={{ fontSize: 14, color: C.text, marginBottom: 20 }}>
+                    For {selectedFieldLabel}: which value should always win?
+                  </div>
+                  <SpecificValueConfig
+                    fieldKey={selectedField}
+                    fieldLabel={selectedFieldLabel}
+                    valueOrder={valueOrder}
+                    onChange={setValueOrder}
+                  />
+                </div>
+              )}
+
+              {selectedRuleType === 'rollup' && (
+                <div>
+                  <div style={{ fontSize: 14, color: C.text, marginBottom: 20 }}>
+                    For {selectedFieldLabel}: how should values be combined?
+                  </div>
+                  <RollupConfig
+                    fieldLabel={selectedFieldLabel}
+                    method={rollupMethod}
+                    onChange={setRollupMethod}
+                  />
                 </div>
               )}
             </div>

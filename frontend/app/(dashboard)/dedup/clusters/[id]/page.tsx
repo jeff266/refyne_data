@@ -116,13 +116,13 @@ function calculateRescuedFields(
 // Map rule types to human-readable text
 function getRuleDisplayText(
   fieldKey: string,
-  survivorshipReasons: Record<string, { rule: string; source?: string }> | undefined
+  survivorshipReasons: Record<string, { rule: string; source?: string; value?: any; method?: string }> | undefined
 ): string {
   if (!survivorshipReasons || !survivorshipReasons[fieldKey]) {
     return '';
   }
 
-  const { rule, source } = survivorshipReasons[fieldKey];
+  const { rule, source, value, method } = survivorshipReasons[fieldKey];
 
   switch (rule) {
     case 'most_recent':
@@ -141,6 +141,22 @@ function getRuleDisplayText(
       return 'Never downgrade';
     case 'prefer_nonempty':
       return 'Filled empty';
+    case 'specific_value':
+      if (value) {
+        return `Priority: ${value}`;
+      }
+      return 'Priority value';
+    case 'rollup':
+      if (method) {
+        const methodLabels: Record<string, string> = {
+          max: 'Highest value',
+          min: 'Lowest value',
+          sum: 'Summed',
+          average: 'Averaged',
+        };
+        return methodLabels[method] ?? 'Rollup';
+      }
+      return 'Rollup';
     case 'manual':
       return 'Manual';
     case 'default_master':
