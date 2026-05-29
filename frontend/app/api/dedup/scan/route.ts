@@ -44,6 +44,19 @@ export async function POST(request: NextRequest) {
       // No body or invalid JSON - use default
     }
 
+    // Auto-detect first scan: always do full scan if no scans have ever run
+    const { count } = await supabase
+      .from('dedup_scan_runs')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', ctx.orgId);
+
+    const isFirstScan = count === 0;
+    const shouldForceFullScan = forceFullScan || isFirstScan;
+
+    if (isFirstScan) {
+      console.log(`[Dedup Scan API] First scan for org ${ctx.orgId}, forcing full scan`);
+    }
+
     if (!isSupabaseConfigured() || !supabase) {
       return NextResponse.json(
         { error: 'Database not configured' },
@@ -83,7 +96,7 @@ export async function POST(request: NextRequest) {
       accessToken,
       connection.id,
       ctx.userId,
-      forceFullScan
+      shouldForceFullScan
     );
 
     if (!result.queued) {
@@ -93,13 +106,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[Dedup Scan API] Enqueued company dedup scan: jobId=${result.jobId}, forceFullScan=${forceFullScan}`);
+    console.log(`[Dedup Scan API] Enqueued company dedup scan: jobId=${result.jobId}, forceFullScan=${shouldForceFullScan}, isFirstScan=${isFirstScan}`);
 
     return NextResponse.json({
       queued: true,
       jobId: result.jobId,
       portalId: connection.portal_id,
-      scanType: forceFullScan ? 'full' : 'auto',
+      scanType: shouldForceFullScan ? 'full' : 'auto',
     });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/scan' });

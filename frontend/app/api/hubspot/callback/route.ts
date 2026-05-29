@@ -220,6 +220,31 @@ export async function GET(request: NextRequest) {
       // Don't fail the connection - auto-config is best-effort
     }
 
+    // Auto-trigger full dedup scan after first connection
+    try {
+      const scanResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/dedup/scan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-org-id': stateRecord.org_id,
+        },
+        body: JSON.stringify({ forceFullScan: true }),
+      });
+
+      if (scanResponse.ok) {
+        const scanResult = await scanResponse.json();
+        console.log(
+          `[OAuth callback] Auto-triggered full dedup scan: jobId=${scanResult.jobId}, scanType=${scanResult.scanType}`
+        );
+      } else {
+        const errorText = await scanResponse.text();
+        console.error('[OAuth callback] Auto-scan failed (non-fatal):', errorText);
+      }
+    } catch (autoScanError) {
+      console.error('[OAuth callback] Auto-scan failed (non-fatal):', autoScanError);
+      // Don't fail the connection - auto-scan is best-effort
+    }
+
     // Redirect to connections page with success, preserving org context
     const redirectUrl = new URL('/connections', process.env.NEXT_PUBLIC_APP_URL);
     redirectUrl.searchParams.set('connected', 'true');

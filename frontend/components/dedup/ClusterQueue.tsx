@@ -172,6 +172,147 @@ function RecordCountBadge({ count }: { count: number }) {
   );
 }
 
+function ScanButton({
+  onScan,
+  disabled
+}: {
+  onScan: (forceFullScan: boolean) => void;
+  disabled: boolean;
+}) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleIncremental = () => {
+    setShowDropdown(false);
+    onScan(false);
+  };
+
+  const handleFull = () => {
+    setShowDropdown(false);
+    onScan(true);
+  };
+
+  return (
+    <div style={{ position: 'relative' }} ref={dropdownRef}>
+      <div style={{ display: 'flex', gap: 0 }}>
+        <button
+          onClick={handleIncremental}
+          disabled={disabled}
+          style={{
+            padding: '8px 14px',
+            background: C.indigo,
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px 0 0 6px',
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.5 : 1,
+            fontFamily: F.sans,
+          }}
+        >
+          Run scan
+        </button>
+        <button
+          onClick={() => setShowDropdown(!showDropdown)}
+          disabled={disabled}
+          style={{
+            padding: '8px 8px',
+            background: C.indigo,
+            color: 'white',
+            border: 'none',
+            borderLeft: `1px solid rgba(255,255,255,0.2)`,
+            borderRadius: '0 6px 6px 0',
+            fontSize: 11,
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            opacity: disabled ? 0.5 : 1,
+            fontFamily: F.sans,
+          }}
+        >
+          ▼
+        </button>
+      </div>
+
+      {showDropdown && !disabled && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            marginTop: 4,
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: 8,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            minWidth: 280,
+            zIndex: 1000,
+            overflow: 'hidden',
+          }}
+        >
+          <button
+            onClick={handleIncremental}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: `1px solid ${C.border}`,
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontFamily: F.sans,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = C.hover)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
+            <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 4 }}>
+              Incremental scan
+            </div>
+            <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.4 }}>
+              Only process companies modified since last scan<br />
+              Faster · Runs automatically overnight
+            </div>
+          </button>
+          <button
+            onClick={handleFull}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              background: 'transparent',
+              border: 'none',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontFamily: F.sans,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = C.hover)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
+            <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 4 }}>
+              Full scan
+            </div>
+            <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.4 }}>
+              Reprocess all companies from scratch<br />
+              Use after connecting HubSpot or changing settings
+            </div>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface FiredSignal {
   tier: number;
   type: string;
@@ -464,13 +605,17 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
     }
   };
 
-  const handleRunScan = async () => {
+  const handleRunScan = async (forceFullScan: boolean = false) => {
     setScanLoading(true);
     setError(null);
     try {
       const res = await fetch('/api/dedup/scan', {
         method: 'POST',
-        headers: { 'x-org-id': orgId },
+        headers: {
+          'x-org-id': orgId,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ forceFullScan }),
       });
 
       if (!res.ok) {
@@ -479,7 +624,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
       }
 
       const data = await res.json();
-      console.log(`[Dedup] Scan enqueued: jobId=${data.jobId}`);
+      console.log(`[Dedup] Scan enqueued: jobId=${data.jobId}, scanType=${data.scanType}`);
 
       // Show scanning UI
       setActiveJobId(data.jobId);
@@ -606,9 +751,20 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
               )}
               {selectedIds.size === 0 && (
                 <>
-                  <PrimaryBtn onClick={handleRunScan} disabled={scanLoading || loading}>
-                    {scanLoading ? 'Scanning...' : 'Run scan'}
-                  </PrimaryBtn>
+                  {scanLoading ? (
+                    <div style={{
+                      padding: '8px 14px',
+                      background: C.hover,
+                      borderRadius: 6,
+                      fontSize: 13,
+                      color: C.text3,
+                      fontFamily: F.sans,
+                    }}>
+                      Scanning...
+                    </div>
+                  ) : (
+                    <ScanButton onScan={handleRunScan} disabled={loading} />
+                  )}
                   <GhostBtn onClick={fetchClusters} disabled={loading}>
                     <RefreshCw size={12} style={{ marginRight: 4 }} />
                     Refresh
