@@ -10,7 +10,7 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
  * POST /api/always-on/test-slack
  *
  * Sends a test message to the configured Slack webhook.
- * Auth: admin only (TODO: implement auth check)
+ * Auth: requires authentication
  */
 export async function POST(request: NextRequest) {
   // Add auth check

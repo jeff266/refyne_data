@@ -11,7 +11,7 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
  *
  * Sends a test digest email to the requesting user.
  * Uses last digest_payload if available, else synthetic data.
- * Auth: admin only (TODO: implement auth check)
+ * Auth: requires authentication
  */
 export async function POST(request: NextRequest) {
   // Add auth check

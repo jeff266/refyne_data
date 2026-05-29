@@ -8,7 +8,7 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
  * POST /api/always-on/trigger
  *
  * Manually triggers an Always On digest job.
- * Auth: admin only (TODO: implement auth check)
+ * Auth: requires authentication
  */
 export async function POST(request: NextRequest) {
   // Add auth check

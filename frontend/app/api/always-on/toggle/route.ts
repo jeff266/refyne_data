@@ -8,7 +8,7 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
  * POST /api/always-on/toggle
  *
  * Toggles Always On enabled state.
- * Auth: admin only (TODO: implement auth check)
+ * Auth: requires authentication
  */
 export async function POST(request: NextRequest) {
   // Add auth check
