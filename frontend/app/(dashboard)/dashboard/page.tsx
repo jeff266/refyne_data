@@ -124,16 +124,16 @@ async function StatCards() {
   const scoreData = await fetchScore(orgId);
   const connectionsData = await fetchConnections();
 
-  // Fallback to mock data if API returns nothing
-  const score = scoreData?.score ?? 82;
-  const total = scoreData?.total ?? 23100;
-  const trendDelta = scoreData?.trendDelta ?? 5;
+  // Use actual data or null/0 (no mock fallbacks)
+  const score = scoreData?.score ?? 0;
+  const total = scoreData?.total ?? 0;
+  const trendDelta = scoreData?.trendDelta ?? 0;
   const breakpoint = scoreData?.breakpoint || 'good';
   const benchmark = scoreData?.benchmark;
   const portalCount = connectionsData?.connections?.length ?? 0;
   const lastScanMinutes = scoreData?.lastComputedAt
     ? Math.floor((Date.now() - new Date(scoreData.lastComputedAt).getTime()) / 60000)
-    : 14;
+    : null;
 
   // Breakpoint label with color (Spec Step 7)
   // Excellent 90-100, Good 80-89, Needs attention 70-79, At risk 60-69, Critical <60
@@ -198,7 +198,7 @@ async function StatCards() {
       />
       <StatCard
         label="Last scan"
-        value={lastScanMinutes < 60 ? `${lastScanMinutes}m` : `${Math.floor(lastScanMinutes / 60)}h`}
+        value={lastScanMinutes !== null && lastScanMinutes < 60 ? `${lastScanMinutes}m` : lastScanMinutes !== null ? `${Math.floor(lastScanMinutes / 60)}h` : 'Never'}
         sub="auto-scan enabled"
         accent={C.text}
       />
