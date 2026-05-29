@@ -127,6 +127,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { field_key, rule_type, rule_config } = body;
 
+    console.log('[POST survivorship-rules] Request body:', JSON.stringify(body, null, 2));
+
     if (!field_key || !rule_type || !rule_config) {
       return NextResponse.json(
         { error: 'Missing required fields' },
@@ -164,13 +166,20 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error creating survivorship rule:', error);
+      return NextResponse.json(
+        { error: error.message || 'Database error creating rule' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error creating survivorship rule:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to create rule';
     return NextResponse.json(
-      { error: 'Failed to create rule' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
