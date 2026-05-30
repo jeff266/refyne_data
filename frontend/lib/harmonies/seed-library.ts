@@ -72,10 +72,16 @@ export async function seedHarmonyLibrary(): Promise<{
           output: t.expected,
         })) || [];
 
-      // All library harmonies are rules-based ('format' type)
-      // Lookup harmonies (with reference tables) are created separately via API
-      const transformType: 'lookup' | 'format' = 'format';
-      const referenceTable = null;
+      // Determine transform type based on harmony ID
+      // Some harmonies use reference table lookup, others use format rules
+      let transformType: 'lookup' | 'format' = 'format';
+      let referenceTable: string | null = null;
+
+      // Map specific harmonies to their reference tables
+      if (spec.id === 'company-industry') {
+        transformType = 'lookup';
+        referenceTable = 'industries';
+      }
 
       return {
         id: spec.id,
