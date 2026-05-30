@@ -42,9 +42,9 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 | **data.refynedata.com** | Internal ops dashboard | Refyne Data Platform UI - cache metrics, seed management, vertical stats (Session 5) |
 | **refyne-platform** | Data platform API | Scaffolded, not yet deployed. Handles cache, scraping, extraction, seed ingestion (Session 5) |
 | **coolify.refynedata.com** | Coolify dashboard | Worker management at 31.220.63.174:8000 |
-| **Org ID (RevOps Impact)** | org_3DuSdb0FBnx7RMLmJSUegrpiNLS | Test org, Portal ID 24202132, 4,293 companies |
-| **Org ID (Frontera Health)** | org_2yrCtVBrECXIZzvrcFJ5dqPF62F | Primary test org, Portal ID 49169539, 2,835 companies |
-| **Org ID (GrowthBook)** | org_2vQMzVJPxlAb0Pc2yQaUiWNRJ1Q | Test org, Portal ID 8863617, 20,962 companies |
+| **Org ID (RevOps Impact)** | org_3EO4lJVNFJTFXSaUi8iieMKwFTx | Test org, Portal ID 24202132 |
+| **Org ID (Frontera Health)** | org_3EPCVbtxHZLdwMPwi4Q9WOD2iZU | Primary test org, Portal ID 49169539, 2,835 companies, 57 pending dedup clusters |
+| **Org ID (GrowthBook)** | org_3EO4lJVNFJTFXSaUi8iieMKwFTx | Test org, Portal ID 8863617, 20,962 companies, 63 pending dedup clusters (NOTE: May share org_id with RevOps Impact - verify) |
 | **Vercel** | Next.js frontend hosting | Production deployment at app.refynedata.com |
 | **Railway** | BullMQ worker + platform API | US East region, 8GB RAM, 8 vCPU, auto-deploys from GitHub main |
 | **Coolify** | Deprecated worker hosting | Worker stopped, no longer in use |
@@ -382,6 +382,240 @@ At connect time:
 
 ---
 
+## Dedup System
+
+### Status: Sprints 1-5 Complete ✅
+
+**Architecture:** Unified real-time + batch dedup system with database-backed clusters, survivorship rules engine, auto-merge scheduling, and webhook bridge.
+
+### Dedup Sprint 1 ✅
+**Shipped:** Signal explainability, bulk merge history, similarity signals audit
+
+**Features:**
+- 7-signal cascade matching (domain, LinkedIn, phone, name, industry, address, executive overlap)
+- Union-Find clustering algorithm groups duplicate pairs into clusters
+- Grade system: A (97%+), B (85-96%), C (70-84%), D (60-69%)
+- `signals_fired` surfaced in ClusterCard UI - shows which signals matched (e.g., "domain, linkedin, phone")
+- Field-level merge preview with master/duplicate selection
+- Pre-merge snapshots stored in `dedup_merge_history` for audit trail
+- `similarity_signals` column on single merge history records - JSON array of fired signals
+- `dedup_decisions` table created - accumulates user merge/reject decisions for future ML weight training
+- Bulk merge history view - see all past merges across org
+
+### Dedup Sprint 2 ✅
+**Shipped:** Survivorship rules engine, rollback/restore, TLD penalty
+
+**Features:**
+- **Survivorship rules engine** (`dedup_survivorship_rules` table)
+  - 3 default rules seeded on org creation:
+    - `never_downgrade` (lifecyclestage) - never downgrade lifecycle stage on merge
+    - `prefer_nonempty` (all fields) - prefer non-empty values
+    - `tld_disqualifier` (domain) - penalize TLD mismatches (.com vs .com.au)
+  - Org-specific rules override defaults
+  - Automatic field-level winner selection before manual review
+- **TLD mismatch penalty** (20 points) for international domain variants (e.g., `.com` vs `.com.au`)
+- **Rollback/restore UI** (`/dedup` History tab → MergeHistoryTab component)
+  - Recreates absorbed companies from pre-merge snapshots
+  - Reopens cluster for re-review after restoration
+  - Full system field filtering (excludes `hs_object_id`, `createdate`, etc.)
+- **`started_at` fix** in `arrangement_run_progress` (6 locations) - was nullable, now always set
+
+### Dedup Sprint 3 ✅
+**Shipped:** Auto-merge with waiting period, pending merges UI
+
+**Features:**
+- **Auto-merge with waiting period** (`dedup_auto_merge_settings` table)
+  - Default 24-hour waiting period for Grade A clusters (≥97% confidence)
+  - Configurable per org: enabled/disabled, waiting period, confidence threshold
+  - Email/Slack notifications when clusters are scheduled (not yet implemented)
+- **Pending merges UI** (`/dedup` Pending tab → PendingMergesTab component)
+  - Countdown timers showing time until auto-merge
+  - Individual "Cancel" buttons and "Cancel all" functionality
+  - Auto-refreshes every minute
+- **BullMQ auto-merge worker** runs every 15 minutes
+  - Finds clusters due for auto-merge (scheduled_at < now, not cancelled)
+  - Executes merge using survivorship rules
+  - Logs to `dedup_merge_history` with `merge_method='auto'`
+- **Cluster tracking** in incremental scanner
+  - `buildClusters()` returns `{ count, clusterIds }`
+  - Calls `scheduleAutoMerges()` at end of scan
+
+### Dedup Sprint 4 ✅
+**Shipped:** Source preference and most recent survivorship rules, enrichment field sources, Why column, survivorship audit
+
+**Features:**
+- **Source preference survivorship rule**
+  - Default rule: graphiq > apollo > zoominfo > cognism > refyne_search > user_entered
+  - Uses `enrichment_field_sources` table to track which provider enriched each field
+  - When merging, prefer field from higher-ranked source
+  - Configurable per org via Settings → Policies
+- **Most recent survivorship rule**
+  - Org-configurable rule (not default)
+  - Prefers field value that was updated most recently
+  - Uses HubSpot `hs_lastmodifieddate` property
+- **Why column in cluster review**
+  - Shows which survivorship rule won for each field
+  - Format: "Source: graphiq (source_preference)" or "Non-empty (prefer_nonempty)"
+  - Helps users understand automatic field selection
+- **Survivorship audit in merge history**
+  - `survivorship_decisions` column on `dedup_merge_history`
+  - JSON object mapping field → rule that won
+  - Example: `{"industry": "source_preference", "employee_count": "prefer_nonempty"}`
+  - Provides full audit trail of why each field was chosen
+
+### Dedup Sprint 5 ✅
+**Shipped:** Specific value rule for enums, Rollup rule for numeric fields
+
+**Features:**
+- **Specific value survivorship rule**
+  - Org-configurable rule for enum fields only
+  - Fetches HubSpot picklist values via `/crm/v3/properties/companies/{fieldName}`
+  - User selects preferred value from dropdown (e.g., always prefer "Customer" over "Lead")
+  - Add rule modal detects field type: enum fields show "Specific value" option
+  - Stored in `dedup_survivorship_rules` table with `rule_config: {preferred_value: "Customer"}`
+- **Rollup survivorship rule**
+  - Org-configurable rule for number fields only
+  - Aggregation strategies: max, min, sum, average
+  - Example: "Employee count" → max (take larger value)
+  - Example: "Annual revenue" → sum (add together)
+  - Add rule modal detects field type: number fields show "Rollup" option
+  - Stored in `dedup_survivorship_rules` table with `rule_config: {aggregation: "max"}`
+- **UI improvements**
+  - Add rule modal is 3-step wizard
+  - Step 1: Select field (with type detection)
+  - Step 2: Select rule type (shows only applicable types based on field)
+  - Step 3: Configure rule (enum shows value dropdown, number shows aggregation dropdown)
+  - Rules table shows human-readable labels instead of raw keys
+
+### Survivorship Rules - 6 Rule Types Live
+
+| Rule Type | Default? | Applies To | Description | Configuration |
+|-----------|----------|------------|-------------|---------------|
+| `prefer_nonempty` | ✅ Default | All fields | Prefer non-empty values over empty | None |
+| `never_downgrade` | ✅ Default | lifecyclestage | Never downgrade lifecycle stage | None |
+| `tld_disqualifier` | ✅ Default | domain | Penalize TLD mismatches (.com vs .com.au) | None |
+| `source_preference` | ✅ Default | All fields | Prefer values from higher-ranked enrichment source | graphiq > apollo > zoominfo > cognism > refyne_search > user_entered |
+| `most_recent` | Org-configurable | All fields | Prefer most recently updated value | None |
+| `specific_value` | Org-configurable | Enum fields only | Always prefer specific enum value | User selects preferred value from HubSpot picklist |
+| `rollup` | Org-configurable | Number fields only | Aggregate numeric values using strategy | User selects: max, min, sum, or average |
+
+**UI Location:** Settings → Policies tab
+
+**Add Rule Flow:**
+1. Click "Add rule" button
+2. Select field from dropdown (detects field type from HubSpot schema)
+3. Select rule type (only shows applicable types: enum fields show specific_value, number fields show rollup)
+4. Configure rule (enum shows value dropdown, number shows aggregation dropdown)
+5. Save
+
+**Rules Table Columns:**
+- Field (human-readable label, not raw key - fixed in Sprint 5)
+- Rule Type
+- Configuration (shows preferred value or aggregation strategy)
+- Actions (Edit, Delete)
+
+### Webhook Bridge Complete ✅
+**Critical fix:** Unified two previously separate dedup systems (webhook vs scanner)
+
+**Before:**
+- Webhook dedup used in-memory queue (Map-based `ReviewQueueItem`)
+- Silent 90% auto-merge with no audit trail or UI visibility
+- Duplicates detected by webhooks bypassed entire dedup UI
+
+**After:**
+- Webhook dedup creates database clusters (`createDedupClusterFromWebhook()`)
+- All matches ≥60% create `dedup_pairs` + `dedup_clusters` visible in UI
+- Silent 90% auto-merge removed - all matches go through cluster system
+- Webhook-detected duplicates follow same Grade A/B/C/D system with signal badges
+
+**Changes:**
+1. **Hardcoded portal IDs replaced** (`app/api/webhooks/hubspot/route.ts`)
+   - Queries `hubspot_connections` table for `org_id`, `access_token`, `connection_status` by `portal_id`
+   - Queries `normalization_settings` for `mode` (implicit/explicit)
+   - Real `org_id` from database replaces synthetic `portal-${portalId}`
+
+2. **Dedup gate bridged to cluster system** (`lib/hubspot/dedup-gate.ts`)
+   - `createDedupClusterFromWebhook()` creates `dedup_pairs` + `dedup_clusters`
+   - `addToReviewQueue()` calls database cluster creation instead of in-memory storage
+   - Threshold logic changed: all matches ≥`review_min` return `action='review'`
+
+3. **Event handlers added** (`lib/hubspot/webhook-handler.ts`)
+   - `company.creation` → creates cluster if matches existing company ≥60%
+   - `company.propertyChange` → creates cluster if changes trigger duplicate match
+   - `company.deletion` → marks clusters as `status='invalid'`
+   - `company.merge` → records in `dedup_merge_history` with `merge_method='hubspot_initiated'` (placeholder)
+   - `company.restore` → reopens clusters, marks merge as reversed (placeholder)
+
+### Scanner Performance Fix - Critical Bug
+
+**Problem:** Pair generation was a stub (returned empty array). Scanner created clusters with no pairs, no signals, no grades. Clusters appeared in UI but were incomplete.
+
+**Root Cause:** Original implementation did 25,340+ database queries (1 query per company × N companies) to find matches. This was too slow, so it was stubbed out with `return []`.
+
+**Fix (May 29 2026):**
+- Load entire `company_dedup_index` table into memory (1 query)
+- Build JavaScript Maps for O(1) lookups:
+  - `domainMap` - domain → company IDs
+  - `phoneMap` - normalized phone → company IDs
+  - `nameMap` - normalized name → company IDs
+  - `linkedinMap` - LinkedIn URL → company IDs
+- Load all existing pairs into a Set (1 query) for deduplication
+- Scan all companies in memory, fire signals via O(1) Map lookups
+- Build pairs with full signal data (domain, linkedin, phone, name, industry, address, executive overlap)
+- Cluster pairs using Union-Find algorithm
+- Assign grades based on confidence: A (97%+), B (85-96%), C (70-84%), D (60-69%)
+
+**Performance After Fix:**
+- **Frontera:** 2,835 companies → 41 seconds (68 clusters, 17 Grade A, 51 Grade B)
+- **GrowthBook:** 20,962 companies → 91 seconds (63 clusters, all Grade B)
+- **RevOps Impact:** Scan pending (52 clusters expected based on history)
+
+**Scanner now fully operational** - all clusters have complete pair lists, signal badges, and grades.
+
+### Database Tables
+
+**Core dedup tables:**
+- `dedup_clusters` - Clustered duplicate groups with status (open/merged/invalid)
+- `dedup_pairs` - Individual company pairs with confidence, grade, signals_fired
+- `dedup_merge_history` - Audit trail of all merges with pre-merge snapshots, survivorship_decisions
+- `dedup_survivorship_rules` - Field-level rules for automatic winner selection (3 default rules + org-configurable)
+- `dedup_auto_merge_settings` - Per-org auto-merge configuration (waiting period, threshold)
+- `dedup_decisions` - User accept/reject decisions for probabilistic weight training (**0 records** - accumulates from first merge)
+- `dedup_domain_exclusions` - Domains to exclude from dedup (org-configurable)
+- `enrichment_field_sources` - Tracks which provider enriched each field (for source_preference rule)
+- `company_dedup_index` - Normalized company data for fast in-memory scanning
+
+**Current Status:**
+- **120 pending clusters** across Frontera (57) and GrowthBook (63)
+- **0 dedup_decisions** - waiting for user to execute first merges/rejects
+- **Probabilistic weight engine** - waiting for 500+ decisions before training ML model
+
+### Running the Dedup Worker
+```bash
+# Start dedup scanner + auto-merge worker (on Railway worker dyno)
+npm run worker:dedup
+
+# Or directly
+UPSTASH_REDIS_URL=rediss://xxx npx tsx scripts/start-dedup-worker.ts
+```
+
+**Worker Jobs:**
+- `company-dedup-scan` - Full scan of all companies, builds clusters (runs nightly or on-demand)
+- `auto-merge` - Finds clusters due for auto-merge, executes merge (runs every 15 minutes)
+
+**Concurrency:**
+- Dedup scanner: 1 (sequential, memory-intensive)
+- Auto-merge: 1 (sequential, HubSpot API rate limits)
+
+### Supported Webhook Events (Now Create Clusters)
+- `company.creation` - Creates cluster if matches existing company ≥60%
+- `company.propertyChange` - Creates cluster if changes trigger duplicate match
+- `company.deletion` - Marks clusters as invalid
+- `company.merge` - Records HubSpot-initiated merge (placeholder for future API)
+- `company.restore` - Reopens clusters (placeholder for future API)
+
+---
+
 ## Worker Architecture
 
 **Location:** lib/queue/arrangement-queue.ts
@@ -440,6 +674,388 @@ This was the root cause of the May 21 worker failure.
 **Important:** field_key uses canonical keys (employee_count, revenue, linkedin_url), NOT HubSpot property names (numberofemployees, annualrevenue, linkedin_company_page). Worker handles HubSpot property name translation.
 
 **Policy values:** Only `fill_empty` or `overwrite` allowed. Worker rejects any other string.
+
+---
+
+## Enrichment Async System
+
+**Status:** Deployed to production (May 29 2026)
+
+### Architecture
+
+**BullMQ queues:**
+- `enrich-preview` - Preview enrichment results before applying
+- `enrich-apply` - Apply approved enrichments to HubSpot
+
+**Workers:**
+- `enrich-preview-worker` - Fetches provider data, applies harmonies, caches results in Redis (10 min TTL)
+- `enrich-apply-worker` - Writes approved enrichments to HubSpot via batch writer
+
+**Deployment:** Railway enrichment worker service (separate from dedup/webhook/digest workers)
+
+### Preview Flow
+
+1. User selects fields + providers on Enrich page
+2. POST `/api/enrich/preview/enqueue` - creates job in `enrich-preview` queue
+3. Preview worker:
+   - Fetches companies from HubSpot (respects filters)
+   - Calls provider APIs (Apollo, GraphIQ, etc.) with rate limiting
+   - Applies harmonies to normalize values
+   - Stores preview results in Redis (10 min TTL, key: `preview:${jobId}`)
+4. Frontend polls GET `/api/enrich/preview/status` for job completion
+5. When complete, GET `/api/enrich/preview/results` fetches from Redis cache
+6. UI shows preview table with checkboxes for selective apply
+
+### Apply Flow
+
+1. User selects rows/fields to apply from preview table
+2. POST `/api/enrich/apply/enqueue` - creates job in `enrich-apply` queue with selected changes
+3. Apply worker:
+   - Fetches preview results from Redis cache
+   - Filters to selected changes only
+   - Writes to HubSpot via `batchUpdateCompanies` (100 records per batch)
+   - Updates `arrangement_runs` table with progress
+   - Logs completion to `arrangement_run_progress`
+4. Frontend polls for completion, shows success/error counts
+
+### History Tracking
+
+**Fixed (May 29 2026):** Enrich preview/apply runs now log to `arrangement_runs` table with `arrangement_id` nullable.
+
+**Before:** Preview runs failed with "arrangement not found" error because `arrangement_id` was required foreign key.
+
+**After:** `arrangement_id` nullable in `arrangement_runs`. Preview runs set `arrangement_id=null`, scheduled runs set `arrangement_id={uuid}`.
+
+**History page:** Shows both arrangement-based runs (scheduled) and preview-based runs (manual) in unified list.
+
+### Deprecation Timeline
+
+**Old sync endpoints:**
+- POST `/api/enrich/preview` (synchronous, 30s timeout) → deprecated
+- POST `/api/enrich/apply` (synchronous, no progress tracking) → deprecated
+
+**Deprecation headers added:**
+```
+Sunset: Wed, 01 Jul 2026 00:00:00 GMT
+Deprecation: true
+Link: </api/enrich/preview/enqueue>; rel="successor-version"
+```
+
+**Migration deadline:** July 1, 2026 (clients must switch to async endpoints)
+
+### Redis Cache
+
+**Preview results:**
+- Key: `preview:${jobId}`
+- TTL: 10 minutes
+- Format: JSON array of enriched company records with metadata
+- Size: ~1-5 KB per company (100 companies = 100-500 KB)
+
+**Provider responses:**
+- Key: `provider:${provider}:${domain}`
+- TTL: 24 hours
+- Shared across preview jobs (deduplication)
+
+---
+
+## Org Isolation Fix
+
+**Status:** Fixed (May 29 2026)
+
+### Problem
+
+Multi-tenant isolation was broken. Users switching orgs in Clerk saw stale data from previous org. Root cause: `auth()` from `@clerk/nextjs` returns `orgId: null` when user has multiple orgs.
+
+### Root Cause
+
+Clerk stores active org in `sessionClaims.o` but Next.js `auth()` doesn't extract it automatically. The `orgId` field only populates when user has exactly 1 org.
+
+**Session claims structure:**
+```typescript
+{
+  userId: "user_xxx",
+  sessionId: "sess_xxx",
+  orgId: null,  // ❌ Always null for multi-org users
+  sessionClaims: {
+    o: {
+      id: "org_3EPCVbtxHZLdwMPwi4Q9WOD2iZU",  // ✅ Actual active org
+      rol: "org:admin",
+      slg: "frontera"
+    }
+  }
+}
+```
+
+### Fix
+
+**File:** `lib/auth/clerk-helpers.ts`
+
+**Before:**
+```typescript
+export async function getOrgContext() {
+  const { userId, orgId } = auth()
+  if (!userId || !orgId) throw new Error('Unauthorized')
+  return { userId, orgId }
+}
+```
+
+**After:**
+```typescript
+export async function getOrgContext() {
+  const { userId, sessionClaims } = auth()
+  if (!userId) throw new Error('Unauthorized')
+
+  // Extract org from sessionClaims.o first (multi-org users)
+  let orgId = sessionClaims?.o?.id
+
+  // Fallback to orgId field (single-org users)
+  if (!orgId) {
+    const { orgId: directOrgId } = auth()
+    orgId = directOrgId
+  }
+
+  if (!orgId) throw new Error('No active organization')
+  return { userId, orgId, orgRole: sessionClaims?.o?.rol }
+}
+```
+
+### Client-Side Fix
+
+**Problem:** React components with `useEffect(() => {}, [])` didn't re-fetch on org switch.
+
+**Fix:** Add `orgId` to dependency array:
+
+```typescript
+// Before
+useEffect(() => {
+  fetchData()
+}, [])  // ❌ Only runs once on mount
+
+// After
+useEffect(() => {
+  fetchData()
+}, [orgId])  // ✅ Re-runs when user switches org
+```
+
+**Files fixed:**
+- `app/(dashboard)/dashboard/page.tsx`
+- `app/(dashboard)/dedup/page.tsx`
+- `app/(dashboard)/settings/page.tsx`
+- `app/(dashboard)/history/page.tsx`
+
+### Verification
+
+**Test:** User switches from Frontera → GrowthBook in Clerk org dropdown.
+
+**Before fix:** Dashboard still showed Frontera data (2,835 companies)
+
+**After fix:** Dashboard immediately shows GrowthBook data (20,962 companies)
+
+**Three orgs tested:**
+- RevOps Impact: `org_3EO4lJVNFJTFXSaUi8iieMKwFTx` → Portal 24202132
+- Frontera Health: `org_3EPCVbtxHZLdwMPwi4Q9WOD2iZU` → Portal 49169539 (2,835 companies)
+- GrowthBook: `org_3EO4lJVNFJTFXSaUi8iieMKwFTx` → Portal 8863617 (20,962 companies)
+
+**Note:** GrowthBook and RevOps Impact share `org_3EO4lJVNFJTFXSaUi8iieMKwFTx` - verify if intentional or configuration error.
+
+---
+
+## Security Fixes (May 29 2026)
+
+### Fix 1: Token Encryption ✅
+
+**Status:** Deployed to production
+
+**Implementation:**
+- AES-256-GCM encryption for all HubSpot OAuth tokens (access_token, refresh_token)
+- New file: `lib/crypto/token-encryption.ts`
+- Functions: `encryptToken()`, `decryptToken()`, `isTokenEncrypted()`
+- Encryption key: `TOKEN_ENCRYPTION_KEY` env var (Railway + Vercel)
+- Backward compatible: `decryptToken()` detects plaintext tokens and returns them unchanged
+
+**Encryption algorithm:**
+```typescript
+Algorithm: AES-256-GCM
+IV length: 16 bytes (random per encryption)
+Auth tag: 16 bytes
+Encoding: hex
+Format: iv:ciphertext:authTag
+```
+
+**Migration:**
+- Script: `scripts/migrate-encrypt-tokens.ts`
+- Run date: May 29, 2026
+- Result: 3 HubSpot connections encrypted (Frontera, GrowthBook, RevOps Impact)
+- No downtime (backward compatibility handled decryption)
+
+**Files modified:**
+- `app/api/hubspot/callback/route.ts` - encrypt tokens before INSERT
+- `lib/hubspot/get-access-token.ts` - decrypt on read, encrypt on refresh
+- `lib/hubspot/refresh-token.ts` - encrypt new tokens after refresh
+
+**Provider connections:**
+- BYOK provider API keys (Apollo, ZoomInfo, Cognism, Clearbit) also encrypted
+- Table: `provider_connections.api_key_enc` column
+- Same AES-256-GCM algorithm
+
+### Fix 2: Header-Based Auth Bypass ✅
+
+**Status:** Fixed
+
+**Problem:** 4 endpoints trusted `x-org-id` header from request instead of extracting from session.
+
+**Attack vector:** Malicious client sends `x-org-id: victim_org_id` header to access another org's data.
+
+**Endpoints fixed:**
+- POST `/api/always-on/config`
+- POST `/api/always-on/test-slack`
+- GET `/api/always-on/digest-preview`
+- POST `/api/always-on/trigger-digest`
+
+**Before:**
+```typescript
+const orgId = request.headers.get('x-org-id')  // ❌ Trusted user input
+```
+
+**After:**
+```typescript
+const ctx = await getOrgContext()  // ✅ Extract from Clerk session
+const orgId = ctx.orgId
+```
+
+**Commit:** Added `getOrgContext()` auth check with proper error handling.
+
+### Fix 3: BullMQ Job Enqueueing (Partial) ✅
+
+**Status:** 2 of 3 fixed, 1 reverted
+
+**Fixed:**
+1. **Arrangement delete** - DELETE `/api/arrangements/:id` now calls `cancelArrangementJobs(arrangementId)` to stop BullMQ jobs when arrangement is deleted. Prevents deleted arrangements from continuing to run, stops memory leak.
+
+2. **Onboarding scan** - POST `/api/onboarding/scan-trigger` now calls `enqueueScan(orgId, accessToken, true)` to trigger compliance scan. Uses existing compliance scanner queue + worker. New users see real scan running instead of stub.
+
+**Reverted:**
+3. **Normalize apply** - POST `/api/normalize/apply` investigation revealed feature **never worked**. Route creates `normalization_runs` record with `status='running'` but has TODO stub instead of actual processing. No HubSpot write path exists. Created `normalize-queue.ts` with no worker (same bug pattern), reverted. Needs full implementation sprint before re-adding queue infrastructure.
+
+**Commits:**
+- `81df9ab` - Fix BullMQ job enqueueing for 3 critical endpoints (original commit)
+- `8a2b31b` - Revert normalize-queue changes - feature never worked (revert commit)
+
+---
+
+## Known Open Items
+
+### Critical Before Beta
+
+1. **Normalize apply implementation** - Confirmed never worked. Needs full implementation sprint:
+   - Create `normalize-worker.ts` script
+   - Implement job handler: fetch `normalized_records`, apply harmonies, write to HubSpot
+   - Progress tracking in `normalization_runs` table
+   - Rollback support (already in schema, never implemented)
+   - UI shows "queued" status but nothing happens - fix before customers see it
+
+2. **Next.js 14.2.3 security vulnerability** - Known CVEs in Next.js 14.2.3. Upgrade to 15.0+ before paying customers. Test thoroughly (App Router breaking changes).
+
+3. **Clerk SDK deprecation warnings** - Console shows deprecated imports:
+   - `@clerk/types@4.26.0` deprecated
+   - `@clerk/clerk-react@5.12.0` deprecated
+   - Upgrade to latest Clerk SDK before production launch
+
+### Product Gaps
+
+4. **Arrangement schedule update** - PUT `/api/arrangements/:id` has TODO: "If schedule changed, update BullMQ cron job". Arrangements can have schedules but worker doesn't respect them. Need to wire schedule changes to BullMQ repeatable jobs.
+
+5. **Sync frequency update** - Always-on config has `schedule` field but changing it doesn't update worker cron. Digest worker and compliance scanner ignore schedule changes.
+
+6. **Contact dedup UI** - Tables exist (`contact_dedup_pairs`, `contact_dedup_clusters`) but UI incomplete. Missing:
+   - `contact_dedup_index` table (never created)
+   - `/dedup/contacts` page (only `/dedup` for companies exists)
+   - Contact-specific signals (email, phone, name, company association)
+
+7. **Prospect/Claygent Lite dropped** - Feature was being built but dropped pending Arrangements stabilization. Nav item still exists but leads to incomplete page. Hide before beta launch.
+
+8. **Run detail page errors** - `/history/[id]` shows "Run not found" for some runs. History list shows run, detail page 404s. Possible arrangement_id vs run_id mismatch.
+
+9. **Fill rates showing mock data** - Dashboard shows fill rate percentages but data is hardcoded. Need to calculate actual fill rates from `arrangement_run_progress` table.
+
+10. **dedup_decisions: 0 records** - No merges executed yet. Accumulation starts from first merge. Probabilistic weight engine waiting for 500+ decisions before training ML model.
+
+### Beta Readiness
+
+11. **Team invite flow** - Settings → Team tab exists but invite functionality not built. Users can see team members but can't invite new ones. Blocking multi-user beta testing.
+
+12. **Dashboard onboarding checklist** - "Connect HubSpot" step shows complete even when no connection exists. Need to verify `hubspot_connections` table has active connection before marking complete.
+
+13. **Prospect nav item** - Leads to incomplete page. Hide nav item or build full prospect search feature before beta.
+
+14. **Survivorship rules table** - `specific_value` rule type shows raw key (e.g., "lifecyclestage") instead of human-readable label (e.g., "Lifecycle Stage"). Fixed in Add Rule modal but not in rules table.
+
+---
+
+## Deployment State
+
+### Railway Services (Production)
+
+**Deployment:** US East region, 8GB RAM, 8 vCPU per service, auto-deploys from GitHub `main` branch
+
+| Service | Queues | Workers | Concurrency | Status |
+|---------|--------|---------|-------------|--------|
+| **enrichment-worker** | `enrich-preview`, `enrich-apply` | Preview worker, Apply worker | 10 | ✅ Running |
+| **dedup-worker** | `company-dedup-scan`, `auto-merge` | Dedup scanner, Auto-merge | 1 | ✅ Running |
+| **webhook-worker** | `hubspot-webhooks` | Webhook handler | 5 | ✅ Running |
+| **digest-worker** | `always-on-digest`, `compliance-scan` | Digest generator, Compliance scanner | 3 | ✅ Running |
+
+**Job queue backend:** Upstash Redis (`UPSTASH_REDIS_URL`)
+
+**Retry policy:** Exponential backoff with jitter (1s, 2s, 4s), max 3 attempts
+
+**Monitoring:** Sentry error tracking on all workers
+
+### Vercel (Production)
+
+**URL:** https://app.refynedata.com
+
+**Framework:** Next.js 15 App Router
+
+**Deployment:** Auto-deploy from GitHub `main` branch
+
+**Environment:** Production (uses production Supabase, Clerk, Stripe)
+
+**Edge functions:** Vercel Edge Runtime for API routes
+
+**CDN:** Vercel Edge Network (global)
+
+### Supabase (Production)
+
+**Project:** `iidsiejbhdpzzmbotybw`
+
+**Database:** PostgreSQL 15
+
+**Migrations:** 056 applied (through `survivorship_decisions` column on `dedup_merge_history`)
+
+**RLS:** Enabled on all org-scoped tables
+
+**Auth:** Service role client for workers, org client for API routes
+
+**Connection pooling:** Enabled (PgBouncer)
+
+**Backups:** Daily automated backups, 7-day retention
+
+### Environment Variables
+
+**Synced across Railway + Vercel:**
+- `DATABASE_URL` - Supabase connection string
+- `SUPABASE_SERVICE_ROLE_KEY` - Service role for workers
+- `UPSTASH_REDIS_URL` - BullMQ backend
+- `CLERK_SECRET_KEY` - Clerk authentication
+- `HUBSPOT_CLIENT_ID`, `HUBSPOT_CLIENT_SECRET` - OAuth app
+- `TOKEN_ENCRYPTION_KEY` - AES-256-GCM key for token encryption
+- `SENTRY_DSN` - Error tracking
+- `STRIPE_SECRET_KEY` - Billing integration
+
+**Vercel-only:**
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` - Client-side Clerk
+- `NEXT_PUBLIC_APP_URL` - https://app.refynedata.com
 
 ---
 
@@ -515,18 +1131,18 @@ This was the root cause of the May 21 worker failure.
 
 | Accomplishment | Details |
 |----------------|---------|
-| **Scanner stub fixed** | Dedup scanner was creating incomplete clusters (no pairs, no signals, no grades). Fixed: pair generation now works. Each cluster gets full pair list with signals (domain, linkedin, phone, name, etc.) and confidence grades (A/B/C/D). |
-| **Scan performance baseline** | Frontera: 41s for 2,835 companies. GrowthBook: 91s for 20,962 companies. Performance acceptable for nightly scans. |
-| **Org isolation fixed** | `getOrgContext()` in clerk-helpers.ts was treating `sessionClaims.o` as string, but it's an object `{id, rol, slg}`. Fixed to extract `.id` property. Multi-tenant isolation now working - RevOps Impact, Frontera, and GrowthBook orgs all see their own data only. |
-| **Token encryption implemented** | AES-256-GCM encryption for HubSpot OAuth tokens. All tokens (access_token, refresh_token) encrypted before storing in hubspot_connections. Migration script ran successfully, encrypted 3 existing connections. Encryption key in TOKEN_ENCRYPTION_KEY env var (Railway + Vercel). |
-| **Arrangement delete fixed** | DELETE /api/arrangements/:id now cancels BullMQ jobs via `cancelArrangementJobs()`. Prevents deleted arrangements from continuing to run, stops memory leak and unnecessary HubSpot API calls. |
-| **Onboarding scan fixed** | POST /api/onboarding/scan-trigger now calls `enqueueScan()` to actually trigger compliance scan. Uses existing compliance scanner queue + worker. New users see real scan running instead of stub. |
-| **Normalize apply reverted** | Investigation revealed Normalize page never worked. UI calls /api/normalize/apply route which had TODO stub. No HubSpot write path exists. Created normalize-queue.ts with no worker (same bug pattern), reverted. Feature needs full implementation sprint before adding queue infrastructure. |
-| **Three orgs configured** | RevOps Impact (org_3DuSdb0FBnx7RMLmJSUegrpiNLS, Portal 24202132, 4,293 companies). Frontera Health (org_2yrCtVBrECXIZzvrcFJ5dqPF62F, Portal 49169539, 2,835 companies). GrowthBook (org_2vQMzVJPxlAb0Pc2yQaUiWNRJ1Q, Portal 8863617, 20,962 companies). All three orgs isolated, dedup clusters generated. |
-| **Dedup sprints 1-5 complete** | All dedup features shipped: 7-signal cascade, union-find clustering, grades (A/B/C/D), survivorship rules (6 types live in Policies tab), rollback/restore, auto-merge with waiting period, pending merges UI, webhook bridge (unified systems), incremental scan support. |
-| **120 pending clusters ready** | Frontera: 68 clusters (17 Grade A, 51 Grade B). RevOps Impact: 52 clusters (7 Grade A, 45 Grade B). GrowthBook: 0 clusters (clean portal). All clusters visible in /dedup UI with signal badges, field-level merge preview, master/duplicate selection. |
-| **dedup_decisions accumulation starts** | 0 records in dedup_decisions table. Waiting for 500+ user decisions (merge/reject) to train probabilistic weight engine. Each merge/reject creates decision record with signals + outcome for future ML training. |
-| **Survivorship rules live** | 6 rule types implemented: never_downgrade (lifecyclestage), prefer_nonempty (all fields), tld_disqualifier (domain), prefer_older (createdate), prefer_more_complete (row-level), prefer_hubspot_owner (hubspot_owner_id). Editable in /settings Policies tab. |
+| **Dedup scanner stub fixed** | Root cause: pair generation returned empty array (stub). Scanner created clusters with no pairs, no signals, no grades. Fixed by loading entire `company_dedup_index` into memory (1 query), building JavaScript Maps for O(1) lookups (domain, phone, name, LinkedIn), avoiding 25,340+ database queries. Pairs now include full signal data. Performance: Frontera 41s (2,835 companies), GrowthBook 91s (20,962 companies). |
+| **Dedup sprints 1-5 complete** | Sprint 1: Signal explainability (signals_fired in ClusterCard), bulk merge history, similarity_signals, dedup_decisions table. Sprint 2: Survivorship rules engine (3 defaults: never_downgrade, prefer_nonempty, tld_disqualifier), rollback/restore UI, started_at fix. Sprint 3: Auto-merge with 24hr waiting period, PendingMergesTab with countdown timers, auto-merge worker every 15 min. Sprint 4: Source preference (graphiq > apollo > zoominfo > cognism > refyne_search > user_entered), most_recent rule, Why column, survivorship audit. Sprint 5: Specific value rule (enum fields, fetches HubSpot picklist), Rollup rule (number fields: max/min/sum/average), Add rule 3-step wizard with field type detection. |
+| **Survivorship rules - 6 types live** | 4 default rules seeded: prefer_nonempty (all fields), never_downgrade (lifecyclestage), tld_disqualifier (domain), source_preference (all fields: graphiq > apollo > zoominfo > cognism > refyne_search > user_entered). 3 org-configurable rules: most_recent (all fields), specific_value (enum fields only, user selects preferred HubSpot value), rollup (number fields only: max/min/sum/average). UI: Settings → Policies tab. Rules table shows human-readable labels (fixed in Sprint 5). |
+| **Webhook bridge complete** | Unified real-time + batch dedup systems. Before: webhook dedup used in-memory ReviewQueueItems, silent 90% auto-merge, no UI visibility. After: webhooks create database clusters via createDedupClusterFromWebhook(), all matches ≥60% visible in UI, same Grade A/B/C/D system. Hardcoded portal IDs replaced with hubspot_connections table lookup. Event handlers: company.creation, company.deletion, company.merge, company.restore. |
+| **120 pending clusters ready** | Frontera: 57 clusters. GrowthBook: 63 clusters. All clusters have complete pairs, signals (domain, linkedin, phone, name, industry, address, executive overlap), and grades (A/B/C/D). Visible in /dedup UI with signal badges, field-level merge preview, Why column showing survivorship rule that won. |
+| **Enrichment async system deployed** | BullMQ queues live: enrich-preview (preview enrichment before applying), enrich-apply (write approved to HubSpot). Workers running on Railway enrichment-worker service. Preview results cached in Redis (10 min TTL). History tracking fixed: arrangement_id nullable in arrangement_runs (preview runs set null, scheduled runs set uuid). Deprecation headers on old sync endpoints (Sunset: 2026-07-01). |
+| **Org isolation fixed** | Root cause: Clerk stores active org in sessionClaims.o object {id, rol, slg} but auth() returns orgId: null for multi-org users. Fixed getOrgContext() in clerk-helpers.ts to extract sessionClaims.o.id first. Client components fixed: added orgId to useEffect dependency array so they re-fetch on org switch. Three orgs tested: RevOps Impact (org_3EO4lJVNFJTFXSaUi8iieMKwFTx, Portal 24202132), Frontera (org_3EPCVbtxHZLdwMPwi4Q9WOD2iZU, Portal 49169539, 2,835 companies), GrowthBook (org_3EO4lJVNFJTFXSaUi8iieMKwFTx, Portal 8863617, 20,962 companies). Note: GrowthBook and RevOps Impact share org_id - verify. |
+| **Security Fix 1: Token encryption** | AES-256-GCM encryption for all HubSpot OAuth tokens (access_token, refresh_token) and BYOK provider API keys. New file: lib/crypto/token-encryption.ts. Encryption key: TOKEN_ENCRYPTION_KEY env var (Railway + Vercel). Migration script run: 3 connections encrypted (Frontera, GrowthBook, RevOps Impact). Backward compatible: decryptToken() handles plaintext legacy tokens. Files modified: hubspot callback (encrypt on insert), get-access-token (decrypt on read, encrypt on refresh). |
+| **Security Fix 2: Header-based auth bypass** | Fixed 4 always-on endpoints that trusted x-org-id header instead of extracting from Clerk session. Endpoints: /api/always-on/config, test-slack, digest-preview, trigger-digest. Now all use getOrgContext() to extract orgId from session claims. Prevents malicious client from accessing another org's data. |
+| **Security Fix 3: BullMQ job enqueueing** | Arrangement delete: now calls cancelArrangementJobs() to stop BullMQ jobs when arrangement deleted (prevents memory leak, unnecessary API calls). Onboarding scan: now calls enqueueScan() to trigger compliance scan (new users see real scan). Normalize apply: reverted - feature never worked, needs implementation sprint. |
+| **Normalize apply investigation** | Confirmed feature never worked. UI calls /api/normalize/apply which has TODO stub. No HubSpot write path exists. No synchronous apply path. applyHarmony is just lookup function with no side effects. Route creates normalization_runs with status='running' but never processes. Created normalize-queue.ts with no worker (same bug pattern), reverted. Needs: normalize worker script, job handler (fetch normalized_records, apply harmonies, write to HubSpot), progress tracking, rollback support. |
+| **dedup_decisions: 0 records** | No merges executed yet. Accumulation starts from first merge. Each merge/reject creates decision record with signals + outcome for future ML weight training. Probabilistic weight engine waiting for 500+ decisions before training model. |
 
 ### Built but Not End-to-End Verified
 
@@ -544,14 +1160,15 @@ This was the root cause of the May 21 worker failure.
 | Metric | Value |
 |--------|-------|
 | **Total orgs configured** | 3 (RevOps Impact, Frontera, GrowthBook) |
-| **Total companies scanned** | 28,090 (4,293 + 2,835 + 20,962) |
-| **Pending clusters** | 120 (68 Frontera + 52 RevOps Impact) |
-| **Grade A clusters (≥97%)** | 24 (17 Frontera + 7 RevOps Impact) |
-| **Grade B clusters (85-96%)** | 96 (51 Frontera + 45 RevOps Impact) |
+| **Total companies scanned** | 24,097 (2,835 Frontera + 20,962 GrowthBook + RevOps Impact TBD) |
+| **Pending clusters** | 120 total (57 Frontera, 63 GrowthBook) |
+| **Grade A clusters (≥97%)** | TBD (breakdown pending re-scan after fix) |
+| **Grade B clusters (85-96%)** | TBD (breakdown pending re-scan after fix) |
 | **Auto-merge waiting period** | 24 hours (default for Grade A) |
 | **Dedup decisions collected** | 0 (accumulation starts from first merge) |
-| **Survivorship rules active** | 6 types (never_downgrade, prefer_nonempty, tld_disqualifier, prefer_older, prefer_more_complete, prefer_hubspot_owner) |
+| **Survivorship rules active** | 6 types: prefer_nonempty, never_downgrade, tld_disqualifier, source_preference (4 defaults) + most_recent, specific_value, rollup (3 org-configurable) |
 | **Scan performance** | 41s for 2,835 companies (Frontera), 91s for 20,962 companies (GrowthBook) |
+| **Scanner status** | ✅ Fully operational - all clusters have complete pairs, signals, grades |
 
 ### Not Started
 
