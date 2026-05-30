@@ -187,7 +187,7 @@ export function RollbackConfirmModal({
                 marginBottom: 20,
               }}>
                 <p style={{ fontSize: 12, color: C.amber, margin: 0, lineHeight: 1.5 }}>
-                  This action cannot be undone. Original values will be restored to {preview.records_affected.toLocaleString()} records in HubSpot.
+                  This action cannot be undone. Original values will be restored to {(preview.records_affected ?? 0).toLocaleString()} records in HubSpot.
                 </p>
               </div>
 
@@ -197,7 +197,7 @@ export function RollbackConfirmModal({
                   Records Affected
                 </div>
                 <div style={{ fontSize: 24, color: C.text, fontWeight: 600, fontFamily: F.mono }}>
-                  {preview.records_affected.toLocaleString()}
+                  {(preview.records_affected ?? 0).toLocaleString()}
                 </div>
               </div>
 
@@ -218,7 +218,7 @@ export function RollbackConfirmModal({
                       border: `1px solid ${C.border}`,
                     }}>
                       <span style={{ fontSize: 11, fontFamily: F.mono, color: C.text }}>{field.field_name}</span>
-                      <span style={{ fontSize: 11, color: C.text2 }}>{field.count.toLocaleString()} changes</span>
+                      <span style={{ fontSize: 11, color: C.text2 }}>{(field.count ?? 0).toLocaleString()} changes</span>
                     </div>
                   ))}
                 </div>
@@ -323,7 +323,7 @@ export function RollbackConfirmModal({
             }}
           >
             {confirming && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
-            Rollback {preview ? preview.records_affected.toLocaleString() : ''} records
+            Rollback {preview ? (preview.records_affected ?? 0).toLocaleString() : '0'} records
           </button>
         </div>
       </div>
