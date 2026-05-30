@@ -155,6 +155,11 @@ export async function GET(request: NextRequest) {
       ...company.properties,
     }));
 
+    // Debug: Check what industry values we're working with
+    console.log('[Normalize Preview] Industry values:',
+      records.slice(0, 10).map(r => r.industry).filter(Boolean)
+    );
+
     // Run normalization preview
     const changes = await runNormalizationPreview(records, harmonies, ctx.orgId);
 
