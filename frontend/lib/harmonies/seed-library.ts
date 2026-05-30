@@ -72,16 +72,10 @@ export async function seedHarmonyLibrary(): Promise<{
           output: t.expected,
         })) || [];
 
-      // Detect transform type:
-      // - 'lookup' if harmony has sources (reference table join)
-      // - 'format' if harmony only has rules (transformations/expressions)
-      const hasReferenceSource = spec.sources && spec.sources.length > 0;
-      const transformType: 'lookup' | 'format' = hasReferenceSource ? 'lookup' : 'format';
-
-      // Extract reference table name from first source (if exists)
-      const referenceTable = hasReferenceSource && spec.sources[0]?.table
-        ? spec.sources[0].table
-        : null;
+      // All library harmonies are rules-based ('format' type)
+      // Lookup harmonies (with reference tables) are created separately via API
+      const transformType: 'lookup' | 'format' = 'format';
+      const referenceTable = null;
 
       return {
         id: spec.id,
