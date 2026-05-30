@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const harmonyIdsParam = searchParams.get('harmonyIds');
+    const companyIdsParam = searchParams.get('companyIds');
     const limit = Math.min(100, parseInt(searchParams.get('limit') || '50', 10));
 
     // Get HubSpot connection
@@ -139,13 +140,23 @@ export async function GET(request: NextRequest) {
     const fields = Array.from(new Set(harmonies.map((h) => h.field)));
     const properties = ['name', 'domain', ...fields];
 
-    // Fetch companies with limit
-    const companies: any[] = [];
-    for await (const batch of client.getAllCompanies(properties)) {
-      companies.push(...batch);
-      if (companies.length >= limit) break;
+    // Fetch companies - either specific IDs or paginated
+    let limitedCompanies: any[] = [];
+
+    if (companyIdsParam) {
+      // Fetch specific companies by ID
+      const companyIds = companyIdsParam.split(',').slice(0, limit);
+      console.log(`[Normalize Preview] Fetching ${companyIds.length} specific companies`);
+      limitedCompanies = await client.getCompaniesByIds(companyIds, properties);
+    } else {
+      // Fetch companies with pagination (existing behavior)
+      const companies: any[] = [];
+      for await (const batch of client.getAllCompanies(properties)) {
+        companies.push(...batch);
+        if (companies.length >= limit) break;
+      }
+      limitedCompanies = companies.slice(0, limit);
     }
-    const limitedCompanies = companies.slice(0, limit);
 
     console.log(`[Normalize Preview] Fetched ${limitedCompanies.length} companies`);
 

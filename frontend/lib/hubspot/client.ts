@@ -799,6 +799,51 @@ export class HubSpotClient {
   }
 
   /**
+   * Generic search companies with custom filter groups.
+   * Used for finding companies with specific field values or conditions.
+   *
+   * NOTE: Uses CRM Search API with separate rate limit (4 req/sec).
+   *
+   * @param filterGroups - Array of filter groups (OR between groups, AND within group)
+   * @param properties - Properties to return
+   * @param limit - Max results to return (default 100)
+   */
+  async searchCompanies(
+    filterGroups: Array<{
+      filters: Array<{
+        propertyName: string;
+        operator: string;
+        value?: string;
+      }>;
+    }>,
+    properties: readonly string[] = DEFAULT_COMPANY_PROPERTIES,
+    limit: number = 100
+  ): Promise<HubSpotCompany[]> {
+    const response = await this.request<{
+      results: Array<{
+        id: string;
+        properties: Record<string, string | null>;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>('/crm/v3/objects/companies/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        filterGroups,
+        properties: [...properties],
+        limit: Math.min(limit, 100), // Cap at 100 per HubSpot API limits
+      }),
+    }, true); // isSearchApi = true
+
+    return response.results.map(r => ({
+      id: r.id,
+      properties: r.properties,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+  }
+
+  /**
    * Batch update companies.
    * Updates existing records by ID in batches of 100.
    */

@@ -41,6 +41,14 @@ export default function NormalizePage() {
   const [active, setActive] = useState(['company-name','company-industry','phone-e164','linkedin-url']);
   const toggle = (id: string) => setActive(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id]);
 
+  // Source filter state
+  const [sourceType, setSourceType] = useState<'all' | 'issues' | 'list'>('issues');
+  const [selectedHarmonyFilters, setSelectedHarmonyFilters] = useState<Set<string>>(
+    new Set(['company-industry', 'phone-e164', 'company-name', 'linkedin-url'])
+  );
+  const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
+  const [countsLoading, setCountsLoading] = useState(true);
+
   // Tab state
   const [currentTab, setCurrentTab] = useState<TabMode>('preview');
 
@@ -75,6 +83,24 @@ export default function NormalizePage() {
   const [detailSlideOverOpen, setDetailSlideOverOpen] = useState(false);
   const [detailRunId, setDetailRunId] = useState<string | null>(null);
 
+  // Load issue counts on mount
+  useEffect(() => {
+    const loadCounts = async () => {
+      try {
+        const response = await fetch('/api/normalize/issue-counts');
+        if (response.ok) {
+          const data = await response.json();
+          setIssueCounts(data.counts || {});
+        }
+      } catch (error) {
+        console.error('Failed to load issue counts:', error);
+      } finally {
+        setCountsLoading(false);
+      }
+    };
+    loadCounts();
+  }, []);
+
   // Fetch runs when history is expanded
   useEffect(() => {
     if (historyExpanded) {
@@ -102,9 +128,32 @@ export default function NormalizePage() {
     setPreviewLoading(true);
 
     try {
-      // Pass active harmony IDs to API
+      let companyIds: string[] | undefined;
+
+      // Fetch company IDs with issues if source type is 'issues'
+      if (sourceType === 'issues' && selectedHarmonyFilters.size > 0) {
+        const harmonyFiltersParam = Array.from(selectedHarmonyFilters).join(',');
+        const issuesResponse = await fetch(`/api/normalize/companies-with-issues?harmonyIds=${harmonyFiltersParam}`);
+
+        if (!issuesResponse.ok) {
+          throw new Error('Failed to fetch companies with issues');
+        }
+
+        const issuesData = await issuesResponse.json();
+        companyIds = issuesData.companyIds;
+
+        if (!companyIds || companyIds.length === 0) {
+          setPreview([]);
+          addToast('success', 'No companies need normalization for selected harmonies');
+          setPreviewLoading(false);
+          return;
+        }
+      }
+
+      // Pass active harmony IDs and optional company IDs to preview API
       const harmonyIdsParam = `&harmonyIds=${active.join(',')}`;
-      const response = await fetch(`/api/normalize/preview?limit=50${harmonyIdsParam}`);
+      const companyIdsParam = companyIds ? `&companyIds=${companyIds.join(',')}` : '';
+      const response = await fetch(`/api/normalize/preview?limit=50${harmonyIdsParam}${companyIdsParam}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch preview');
@@ -355,6 +404,88 @@ export default function NormalizePage() {
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         {/* Harmonies sidebar */}
         <div style={{ width: 232, background: C.sidebar, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+          <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Source</div>
+          </div>
+
+          {/* Source selector */}
+          <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
+            {/* All companies option */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="source"
+                value="all"
+                checked={sourceType === 'all'}
+                onChange={(e) => setSourceType(e.target.value as 'all' | 'issues' | 'list')}
+                style={{ cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: 11, color: C.text2 }}>All companies</span>
+            </label>
+
+            {/* Companies with issues option */}
+            <label style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="source"
+                value="issues"
+                checked={sourceType === 'issues'}
+                onChange={(e) => setSourceType(e.target.value as 'all' | 'issues' | 'list')}
+                style={{ cursor: 'pointer', marginTop: 2 }}
+              />
+              <span style={{ fontSize: 11, color: C.text2 }}>Companies with issues</span>
+            </label>
+
+            {/* Harmony filter checkboxes (shown when "issues" selected) */}
+            {sourceType === 'issues' && (
+              <div style={{ marginLeft: 20, marginTop: 8, paddingLeft: 8, borderLeft: `2px solid ${C.border2}` }}>
+                {countsLoading ? (
+                  <div style={{ padding: '8px 0', fontSize: 10, color: C.text3 }}>Loading counts...</div>
+                ) : (
+                  list.map(harmonyId => {
+                    const count = issueCounts[harmonyId] || 0;
+                    const isChecked = selectedHarmonyFilters.has(harmonyId);
+
+                    return (
+                      <label
+                        key={harmonyId}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          marginBottom: 6,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const newSet = new Set(selectedHarmonyFilters);
+                            if (e.target.checked) {
+                              newSet.add(harmonyId);
+                            } else {
+                              newSet.delete(harmonyId);
+                            }
+                            setSelectedHarmonyFilters(newSet);
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <span style={{ fontSize: 10, fontFamily: F.mono, color: count > 0 ? C.text : C.text3 }}>
+                          {harmonyId}
+                        </span>
+                        <span style={{ fontSize: 9, color: count > 0 ? C.amber : C.text3, fontWeight: 500 }}>
+                          ({count})
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Harmonies list */}
           <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Harmonies</div>
           </div>
