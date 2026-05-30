@@ -51,7 +51,25 @@ export function startNormalizeWorker() {
     return null;
   }
 
+  console.log('[Normalize Worker] Creating Redis connection for worker...');
   const connection = createRedisConnection();
+
+  // Add worker-specific connection event handlers
+  connection.on('connect', () => {
+    console.log('[Normalize Worker] Worker connection established');
+  });
+
+  connection.on('ready', () => {
+    console.log('[Normalize Worker] Worker connection ready');
+  });
+
+  connection.on('error', (err) => {
+    console.error('[Normalize Worker] Worker connection error:', err.message);
+  });
+
+  connection.on('close', () => {
+    console.log('[Normalize Worker] Worker connection closed');
+  });
 
   const worker = new Worker<NormalizeJobData>(
     'normalize-apply',

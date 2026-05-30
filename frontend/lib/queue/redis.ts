@@ -44,9 +44,11 @@ export function createRedisConnection(): IORedis {
   if (redisUrl) {
     const redis = new IORedis(redisUrl, {
       maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-      // Upstash requires TLS
-      tls: redisUrl.startsWith('rediss://') ? {} : undefined,
+      // Upstash requires specific TLS config
+      tls: redisUrl.startsWith('rediss://') ? {
+        rejectUnauthorized: false, // Required for Upstash
+      } : undefined,
+      family: 4, // Force IPv4
       // Connection resilience for Railway
       retryStrategy(times) {
         const delay = Math.min(times * 50, 2000);
@@ -65,6 +67,10 @@ export function createRedisConnection(): IORedis {
       connectTimeout: 10000,
       // Enable offline queue
       enableOfflineQueue: true,
+      // Disable ready check - Upstash doesn't support INFO command
+      enableReadyCheck: false,
+      // Ensure proper connection handling
+      lazyConnect: false,
     });
 
     // Add error handlers to prevent crashes
