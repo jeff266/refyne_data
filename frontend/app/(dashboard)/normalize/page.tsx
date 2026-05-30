@@ -804,12 +804,12 @@ export default function NormalizePage() {
                             </button>
                           </td>
                           <td style={{ padding: '10px 24px', color: C.text2, fontSize: 11 }}>
-                            {new Date(run.created_at).toLocaleDateString('en-US', {
+                            {run.created_at ? new Date(run.created_at).toLocaleDateString('en-US', {
                               month: 'short',
                               day: 'numeric',
                               hour: 'numeric',
                               minute: '2-digit',
-                            })}
+                            }) : 'Pending'}
                           </td>
                           <td style={{ padding: '10px 24px', fontFamily: F.mono, color: C.text, fontSize: 11 }}>
                             {(run.records_changed ?? 0).toLocaleString()}

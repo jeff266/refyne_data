@@ -31,13 +31,13 @@ export async function GET(
   try {
     // Build query
     let query = supabase
-      .from('normalization_changes')
+      .from('normalization_run_progress')
       .select('*', { count: 'exact' })
       .eq('run_id', runId);
 
     // Apply field filter
     if (field && field !== 'all') {
-      query = query.eq('field_name', field);
+      query = query.eq('field_key', field);
     }
 
     // Apply search filter
@@ -49,7 +49,7 @@ export async function GET(
     // Apply pagination
     const offset = (page - 1) * limit;
     query = query
-      .order('created_at', { ascending: false })
+      .order('written_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
     const { data: changes, count, error } = await query;
