@@ -12,7 +12,7 @@ import { isRedisConfigured } from '../lib/queue/redis';
 
 async function main() {
   console.log('═'.repeat(60));
-  console.log('Normalize Apply Worker');
+  console.log('Normalize Apply Worker - Railway Deployment');
   console.log('═'.repeat(60));
 
   if (!isRedisConfigured()) {
