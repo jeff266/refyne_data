@@ -16,6 +16,7 @@ import { HubSpotClient } from '../hubspot/client';
 import { runNormalizationPreview } from '../harmonies/normalization-engine';
 import type { Harmony } from '../harmonies/normalization-engine';
 import type { HubSpotCompany } from '../hubspot/types';
+import { DEFAULT_FIELD_MAPPINGS } from '../hubspot/types';
 
 export interface NormalizeJobData {
   runId: string;
@@ -76,12 +77,9 @@ export function startNormalizeWorker() {
     async (job: Job<NormalizeJobData>) => {
       const { runId, orgId, portalId, harmonyIds, selectedChanges } = job.data;
 
-      // Strip object prefix from field keys for comparison (company.industry -> industry)
+      // Build set of selected changes using canonical field names
       const selectedSet = new Set(
-        selectedChanges.map((c) => {
-          const fieldKey = c.field.includes('.') ? c.field.split('.')[1] : c.field;
-          return `${c.companyId}:${fieldKey}`;
-        })
+        selectedChanges.map((c) => `${c.companyId}:${c.field}`)
       );
       const companyIds = Array.from(new Set(selectedChanges.map((c) => c.companyId)));
 
@@ -145,11 +143,26 @@ export function startNormalizeWorker() {
       const accessToken = await getAccessToken(orgId);
       const hubspot = new HubSpotClient(accessToken, portalId);
 
-      // Strip object prefix from field keys for HubSpot API (company.industry -> industry)
+      // Map canonical field names to HubSpot property names using field mappings
       const fieldKeys = Array.from(new Set(selectedChanges.map((c) => c.field)));
-      const properties = ['name', ...fieldKeys.map(f => f.includes('.') ? f.split('.')[1] : f)];
+      const fieldMappingLookup = new Map(
+        DEFAULT_FIELD_MAPPINGS.map(m => [m.canonicalField, m.hubspotProperty])
+      );
 
-      console.log(`[Normalize Worker] Properties to fetch:`, properties);
+      const properties = [
+        'name',
+        ...fieldKeys.map(f => {
+          // Try field mapping first
+          const hubspotProp = fieldMappingLookup.get(f);
+          if (hubspotProp) return hubspotProp;
+
+          // Fallback: strip object prefix (company.industry -> industry)
+          return f.includes('.') ? f.split('.')[1] : f;
+        })
+      ];
+
+      console.log(`[Normalize Worker] Canonical fields:`, fieldKeys);
+      console.log(`[Normalize Worker] HubSpot properties to fetch:`, properties);
 
       const companies = await hubspot.getCompaniesByIds(companyIds, properties);
 
@@ -206,10 +219,24 @@ export function startNormalizeWorker() {
 
       // Step 5: Group by company for batch update
       const byCompany = new Map<string, Record<string, string>>();
+      // Track mapping from HubSpot property -> canonical field for progress logging
+      const propToCanonical = new Map<string, Map<string, string>>();
+
       for (const change of toApply) {
         const existing = byCompany.get(change.hubspotRecordId) ?? {};
-        existing[change.field] = change.after;
+
+        // Map canonical field name to HubSpot property name
+        const hubspotProperty = fieldMappingLookup.get(change.field) ||
+          (change.field.includes('.') ? change.field.split('.')[1] : change.field);
+
+        existing[hubspotProperty] = change.after;
         byCompany.set(change.hubspotRecordId, existing);
+
+        // Track reverse mapping for progress logging
+        if (!propToCanonical.has(change.hubspotRecordId)) {
+          propToCanonical.set(change.hubspotRecordId, new Map());
+        }
+        propToCanonical.get(change.hubspotRecordId)!.set(hubspotProperty, change.field);
       }
 
       // Step 6: Write to HubSpot in batches of 100
@@ -236,14 +263,18 @@ export function startNormalizeWorker() {
           );
 
           for (const [companyId, properties] of batch) {
-            for (const [fieldKey, newValue] of Object.entries(properties)) {
+            for (const [hubspotProp, newValue] of Object.entries(properties)) {
+              // Get canonical field name from HubSpot property
+              const canonicalField = propToCanonical.get(companyId)?.get(hubspotProp) || hubspotProp;
+
               const original = toApply.find(
-                (c) => c.hubspotRecordId === companyId && c.field === fieldKey
+                (c) => c.hubspotRecordId === companyId && c.field === canonicalField
               );
+
               progressItems.push({
                 run_id: runId,
                 hubspot_company_id: companyId,
-                field_key: fieldKey,
+                field_key: canonicalField,
                 previous_value: original?.before ?? null,
                 new_value: newValue,
                 status: 'written',
