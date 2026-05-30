@@ -27,45 +27,54 @@ export async function GET(
       .from('normalization_runs')
       .select(`
         id,
-        created_at,
-        created_by_email,
+        started_at,
+        completed_at,
+        initiated_by,
+        records_processed,
         records_changed,
-        fields_changed,
-        status
+        records_failed,
+        harmonies_applied,
+        status,
+        error_message
       `)
       .eq('id', runId)
       .single();
 
     if (runError || !run) {
+      console.error('[normalize] /details query error:', runError);
       return NextResponse.json(
         { error: 'Run not found' },
         { status: 404 }
       );
     }
 
-    // Get harmonies applied in this run
-    const { data: harmonies, error: harmoniesError } = await supabase
-      .from('normalization_changes')
-      .select('harmony_id, harmony_name')
-      .eq('run_id', runId)
-      .not('harmony_id', 'is', null);
+    // Get list of field keys changed in this run
+    const { data: changesData, error: changesError } = await supabase
+      .from('normalization_run_progress')
+      .select('field_key')
+      .eq('run_id', runId);
 
-    if (harmoniesError) {
-      console.error('Failed to fetch harmonies:', harmoniesError);
+    if (changesError) {
+      console.error('[normalize] Failed to fetch field keys:', changesError);
     }
 
-    // Deduplicate harmonies
-    const uniqueHarmonies = Array.from(
-      new Map(
-        (harmonies || []).map((h: any) => [h.harmony_id, { id: h.harmony_id, name: h.harmony_name }])
-      ).values()
+    // Deduplicate field keys
+    const uniqueFields = Array.from(
+      new Set((changesData || []).map((c: any) => c.field_key))
     );
+
+    // Get harmonies from run metadata (already stored in harmonies_applied column)
+    const harmonies = (run.harmonies_applied || []).map((id: string) => ({
+      id,
+      name: id, // We don't store names separately, use ID as name
+    }));
 
     const transformedRun = transformKeys<Record<string, any>>(run);
 
     return NextResponse.json({
       ...transformedRun,
-      harmonies: uniqueHarmonies,
+      harmonies,
+      fieldsChanged: uniqueFields,
     });
 
   } catch (error) {

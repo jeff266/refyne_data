@@ -113,6 +113,7 @@ export function startNormalizeWorker() {
         await updateRunStatus(runId, 'completed', {
           records_processed: 0,
           records_changed: 0,
+          completed_at: new Date().toISOString(),
         });
         return { processed: 0, changed: 0 };
       }
@@ -159,6 +160,7 @@ export function startNormalizeWorker() {
         await updateRunStatus(runId, 'completed', {
           records_processed: 0,
           records_changed: 0,
+          completed_at: new Date().toISOString(),
         });
         return { processed: 0, changed: 0 };
       }
@@ -192,6 +194,7 @@ export function startNormalizeWorker() {
         await updateRunStatus(runId, 'completed', {
           records_processed: companyIds.length,
           records_changed: 0,
+          completed_at: new Date().toISOString(),
         });
         return { processed: companyIds.length, changed: 0 };
       }
