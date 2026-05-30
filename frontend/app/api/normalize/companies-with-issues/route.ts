@@ -164,61 +164,75 @@ export async function GET(request: NextRequest) {
           // Extract HubSpot property name
           const propertyName = extractPropertyName(harmony.field);
 
-          // Fetch companies with this field set
-          const companies = await hubspot.searchCompanies(
-            [
-              {
-                filters: [
-                  {
-                    propertyName,
-                    operator: 'HAS_PROPERTY',
-                  },
-                ],
-              },
-            ],
-            [propertyName],
-            100
-          );
+          // Fetch companies with this field set (wrapped in try/catch for HubSpot API errors)
+          try {
+            const companies = await hubspot.searchCompanies(
+              [
+                {
+                  filters: [
+                    {
+                      propertyName,
+                      operator: 'HAS_PROPERTY',
+                    },
+                  ],
+                },
+              ],
+              [propertyName],
+              100
+            );
 
-          // Add companies with non-canonical values
-          for (const company of companies) {
-            const value = company.properties[propertyName];
-            if (value && !canonicalValues.has(value.toLowerCase())) {
-              companyIdsWithIssues.add(company.id);
+            // Add companies with non-canonical values
+            for (const company of companies) {
+              const value = company.properties[propertyName];
+              if (value && !canonicalValues.has(value.toLowerCase())) {
+                companyIdsWithIssues.add(company.id);
+              }
             }
+          } catch (searchErr) {
+            console.warn(`[Companies with Issues] HubSpot search failed for ${harmony.id}:`, searchErr);
+            // Skip this harmony and continue with others
+            continue;
           }
         } else {
           // For format harmonies, fetch and validate
           // Extract HubSpot property name
           const propertyName = extractPropertyName(harmony.field);
 
-          const companies = await hubspot.searchCompanies(
-            [
-              {
-                filters: [
-                  {
-                    propertyName,
-                    operator: 'HAS_PROPERTY',
-                  },
-                ],
-              },
-            ],
-            [propertyName],
-            100
-          );
+          // Fetch companies with this field set (wrapped in try/catch for HubSpot API errors)
+          try {
+            const companies = await hubspot.searchCompanies(
+              [
+                {
+                  filters: [
+                    {
+                      propertyName,
+                      operator: 'HAS_PROPERTY',
+                    },
+                  ],
+                },
+              ],
+              [propertyName],
+              100
+            );
 
-          // Add companies with non-canonical format
-          for (const company of companies) {
-            const value = company.properties[propertyName];
-            if (value && !matchesCanonicalFormat(harmony.id, value)) {
-              companyIdsWithIssues.add(company.id);
+            // Add companies with non-canonical format
+            for (const company of companies) {
+              const value = company.properties[propertyName];
+              if (value && !matchesCanonicalFormat(harmony.id, value)) {
+                companyIdsWithIssues.add(company.id);
+              }
             }
+          } catch (searchErr) {
+            console.warn(`[Companies with Issues] HubSpot search failed for ${harmony.id}:`, searchErr);
+            // Skip this harmony and continue with others
+            continue;
           }
         }
 
         console.log(`[Companies with Issues] ${harmony.id}: ${companyIdsWithIssues.size} total issues so far`);
       } catch (err) {
         console.error(`[Companies with Issues] Failed to fetch issues for ${harmony.id}:`, err);
+        // Continue with next harmony
       }
     }
 

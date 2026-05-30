@@ -302,18 +302,21 @@ function applySmartTitleCase(name: string): string {
       if (/^[()\/\-&,.]$/.test(token)) return token;
       if (!token.trim()) return token;
 
-      // Rule 1: All-caps token 3 chars or fewer → preserve uppercase
-      if (/^[A-Z]{1,3}$/.test(token)) return token;
+      // Strip leading/trailing whitespace for checks but preserve in output
+      const trimmed = token.trim();
+
+      // Rule 1: All-caps token 3 chars or fewer → preserve uppercase (includes acronyms in parens)
+      if (/^[A-Z]{1,3}$/.test(trimmed)) return token;
 
       // Rule 2: All-caps 4-5 chars in mixed-case context → preserve
-      if (/^[A-Z]{4,5}$/.test(token) && hasMixedCaseContext(name)) return token;
+      if (/^[A-Z]{4,5}$/.test(trimmed) && hasMixedCaseContext(name)) return token;
 
       // Rule 3: Mixed-case brand token (camelCase/PascalCase brands)
-      if (/^[a-z].*[A-Z]/.test(token) || /^[A-Z][a-z]+[A-Z]/.test(token)) return token;
+      if (/^[a-z].*[A-Z]/.test(trimmed) || /^[A-Z][a-z]+[A-Z]/.test(trimmed)) return token;
 
       // Rule 4: Conjunctions lowercase unless first word
       const lower = token.toLowerCase();
-      if (index > 0 && conjunctions.has(lower)) return lower;
+      if (index > 0 && conjunctions.has(trimmed.toLowerCase())) return lower;
 
       // Rule 5: Standard title case
       return lower.charAt(0).toUpperCase() + lower.slice(1);
