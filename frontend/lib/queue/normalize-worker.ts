@@ -76,13 +76,18 @@ export function startNormalizeWorker() {
     async (job: Job<NormalizeJobData>) => {
       const { runId, orgId, portalId, harmonyIds, selectedChanges } = job.data;
 
+      // Strip object prefix from field keys for comparison (company.industry -> industry)
       const selectedSet = new Set(
-        selectedChanges.map((c) => `${c.companyId}:${c.field}`)
+        selectedChanges.map((c) => {
+          const fieldKey = c.field.includes('.') ? c.field.split('.')[1] : c.field;
+          return `${c.companyId}:${fieldKey}`;
+        })
       );
       const companyIds = Array.from(new Set(selectedChanges.map((c) => c.companyId)));
 
       console.log(`[Normalize Worker] Run ${runId}: Processing ${companyIds.length} companies, ${selectedChanges.length} changes`);
       console.log(`[Normalize Worker] Selected changes:`, selectedChanges.slice(0, 5));
+      console.log(`[Normalize Worker] Selected set (normalized):`, Array.from(selectedSet).slice(0, 5));
 
       await updateRunStatus(runId, 'processing');
       await job.updateProgress({ percentage: 5, stage: 'Fetching harmonies' });
@@ -138,8 +143,12 @@ export function startNormalizeWorker() {
       // Step 2: Fetch only the selected companies from HubSpot
       const accessToken = await getAccessToken(orgId);
       const hubspot = new HubSpotClient(accessToken, portalId);
+
+      // Strip object prefix from field keys for HubSpot API (company.industry -> industry)
       const fieldKeys = Array.from(new Set(selectedChanges.map((c) => c.field)));
-      const properties = ['name', ...fieldKeys];
+      const properties = ['name', ...fieldKeys.map(f => f.includes('.') ? f.split('.')[1] : f)];
+
+      console.log(`[Normalize Worker] Properties to fetch:`, properties);
 
       const companies = await hubspot.getCompaniesByIds(companyIds, properties);
 
