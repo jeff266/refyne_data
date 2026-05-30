@@ -10,6 +10,19 @@ import type { Harmony } from '../harmonies/normalization-engine';
 import { supabase } from '../db/supabase';
 
 /**
+ * Extract HubSpot property name from canonical field format.
+ * 'company.industry' → 'industry'
+ * 'person.title' → 'jobtitle' (if needed)
+ */
+function extractPropertyName(field: string): string {
+  // If field contains a dot, take the part after the last dot
+  if (field.includes('.')) {
+    return field.split('.').pop() || field;
+  }
+  return field;
+}
+
+/**
  * Count companies with issues for a specific harmony.
  * Handles both lookup and format harmonies.
  */
@@ -62,26 +75,29 @@ async function countLookupIssues(
       return 0;
     }
 
+    // Extract HubSpot property name from canonical field
+    const propertyName = extractPropertyName(harmony.field);
+
     // Fetch all companies with this field set
     const companies = await hubspot.searchCompanies(
       [
         {
           filters: [
             {
-              propertyName: harmony.field,
+              propertyName,
               operator: 'HAS_PROPERTY',
             },
           ],
         },
       ],
-      [harmony.field],
+      [propertyName],
       100
     );
 
     // Count companies with non-canonical values
     let issueCount = 0;
     for (const company of companies) {
-      const value = company.properties[harmony.field];
+      const value = company.properties[propertyName];
       if (value && !canonicalValues.has(value.toLowerCase())) {
         issueCount++;
       }
@@ -103,26 +119,29 @@ async function countFormatIssues(
   hubspot: HubSpotClient
 ): Promise<number> {
   try {
+    // Extract HubSpot property name from canonical field
+    const propertyName = extractPropertyName(harmony.field);
+
     // Fetch companies with this field set
     const companies = await hubspot.searchCompanies(
       [
         {
           filters: [
             {
-              propertyName: harmony.field,
+              propertyName,
               operator: 'HAS_PROPERTY',
             },
           ],
         },
       ],
-      [harmony.field],
+      [propertyName],
       100
     );
 
     // Count companies with non-canonical format
     let issueCount = 0;
     for (const company of companies) {
-      const value = company.properties[harmony.field];
+      const value = company.properties[propertyName];
       if (value && !matchesCanonicalFormat(harmony.id, value)) {
         issueCount++;
       }

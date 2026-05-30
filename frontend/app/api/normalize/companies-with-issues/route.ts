@@ -23,6 +23,17 @@ import { HubSpotClient } from '@/lib/hubspot/client';
 import { matchesCanonicalFormat } from '@/lib/normalize/issue-detector';
 import type { Harmony } from '@/lib/harmonies/normalization-engine';
 
+/**
+ * Extract HubSpot property name from canonical field format.
+ * 'company.industry' → 'industry'
+ */
+function extractPropertyName(field: string): string {
+  if (field.includes('.')) {
+    return field.split('.').pop() || field;
+  }
+  return field;
+}
+
 export async function GET(request: NextRequest) {
   // Auth check
   let ctx;
@@ -150,49 +161,55 @@ export async function GET(request: NextRequest) {
             continue;
           }
 
+          // Extract HubSpot property name
+          const propertyName = extractPropertyName(harmony.field);
+
           // Fetch companies with this field set
           const companies = await hubspot.searchCompanies(
             [
               {
                 filters: [
                   {
-                    propertyName: harmony.field,
+                    propertyName,
                     operator: 'HAS_PROPERTY',
                   },
                 ],
               },
             ],
-            [harmony.field],
+            [propertyName],
             100
           );
 
           // Add companies with non-canonical values
           for (const company of companies) {
-            const value = company.properties[harmony.field];
+            const value = company.properties[propertyName];
             if (value && !canonicalValues.has(value.toLowerCase())) {
               companyIdsWithIssues.add(company.id);
             }
           }
         } else {
           // For format harmonies, fetch and validate
+          // Extract HubSpot property name
+          const propertyName = extractPropertyName(harmony.field);
+
           const companies = await hubspot.searchCompanies(
             [
               {
                 filters: [
                   {
-                    propertyName: harmony.field,
+                    propertyName,
                     operator: 'HAS_PROPERTY',
                   },
                 ],
               },
             ],
-            [harmony.field],
+            [propertyName],
             100
           );
 
           // Add companies with non-canonical format
           for (const company of companies) {
-            const value = company.properties[harmony.field];
+            const value = company.properties[propertyName];
             if (value && !matchesCanonicalFormat(harmony.id, value)) {
               companyIdsWithIssues.add(company.id);
             }
