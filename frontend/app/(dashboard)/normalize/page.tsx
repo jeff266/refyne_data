@@ -221,7 +221,7 @@ export default function NormalizePage() {
 
       // If status changed to rolled_back, show success toast and stop polling
       if (data.status === 'rolled_back') {
-        addToast('success', `${data.records_changed.toLocaleString()} records reverted successfully`);
+        addToast('success', `${(data.records_changed ?? 0).toLocaleString()} records reverted successfully`);
         setPollingRunId(null);
       } else if (data.status === 'failed') {
         // Check for partial failure
@@ -812,7 +812,7 @@ export default function NormalizePage() {
                             })}
                           </td>
                           <td style={{ padding: '10px 24px', fontFamily: F.mono, color: C.text, fontSize: 11 }}>
-                            {run.records_changed.toLocaleString()}
+                            {(run.records_changed ?? 0).toLocaleString()}
                           </td>
                           <td style={{ padding: '10px 24px' }}>
                             {getStatusBadge(run.status)}
