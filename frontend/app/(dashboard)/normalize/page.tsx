@@ -58,6 +58,7 @@ export default function NormalizePage() {
   // Preview state
   const [preview, setPreview] = useState<PreviewRecord[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewLoadedAt, setPreviewLoadedAt] = useState<Date | null>(null);
 
   // Selection state
   const [selectedChanges, setSelectedChanges] = useState<Set<string>>(new Set());
@@ -120,6 +121,17 @@ export default function NormalizePage() {
     return () => clearInterval(interval);
   }, [pollingRunId]);
 
+  // Check for stale preview every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Trigger re-render to update staleness check
+      if (previewLoadedAt) {
+        setPreviewLoadedAt(new Date(previewLoadedAt));
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [previewLoadedAt]);
+
   const fetchPreview = async () => {
     if (active.length === 0) {
       addToast('error', 'Please enable at least one harmony');
@@ -162,6 +174,7 @@ export default function NormalizePage() {
 
       const data = await response.json();
       setPreview(data.preview || []);
+      setPreviewLoadedAt(new Date());
 
       // Show feedback based on results
       if (data.preview && data.preview.length > 0) {
@@ -298,6 +311,7 @@ export default function NormalizePage() {
 
   const handleDeselectAll = () => {
     setSelectedChanges(new Set());
+    setPreviewLoadedAt(null);
   };
 
   const handleApplyClick = () => {
@@ -335,6 +349,9 @@ export default function NormalizePage() {
 
       const data = await response.json();
       addToast('success', `Normalization run started (${data.runId.slice(0, 8)})`);
+
+      // Clear preview loaded timestamp
+      setPreviewLoadedAt(null);
 
       // Refresh preview
       fetchPreview();
@@ -399,6 +416,13 @@ export default function NormalizePage() {
   };
 
   const selectedRun = runs.find(r => r.id === selectedRunId);
+
+  // Calculate if preview is stale (> 5 minutes old)
+  const isStale = previewLoadedAt && (Date.now() - previewLoadedAt.getTime()) > 5 * 60 * 1000;
+
+  const handleLoadPreview = () => {
+    fetchPreview();
+  };
 
   return (
     <div style={{ display: 'flex', height: '100%', fontFamily: F.sans, flexDirection: 'column' }}>
@@ -652,20 +676,57 @@ export default function NormalizePage() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60 }}>
                     <Loader2 size={24} color={C.text3} style={{ animation: 'spin 1s linear infinite' }} />
                   </div>
-                ) : viewMode === 'by-company' ? (
-                  <ByCompanyView
-                    changes={preview}
-                    selectedChanges={selectedChanges}
-                    onToggle={handleToggleChange}
-                    onExclusionCreated={handleExclusionCreated}
-                  />
                 ) : (
-                  <ByFieldView
-                    changes={preview}
-                    selectedChanges={selectedChanges}
-                    onToggle={handleToggleChange}
-                    onExclusionCreated={handleExclusionCreated}
-                  />
+                  <>
+                    {/* Stale preview warning */}
+                    {previewLoadedAt && isStale && (
+                      <div style={{
+                        padding: '12px 16px',
+                        background: '#FEF3C7',
+                        border: '1px solid #F59E0B',
+                        borderRadius: 6,
+                        margin: '16px 24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}>
+                        <span style={{ fontSize: 13, color: '#92400E' }}>
+                          Preview data is over 5 minutes old. Reload preview before applying to avoid stale changes.
+                        </span>
+                        <button
+                          onClick={handleLoadPreview}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#F59E0B',
+                            border: 'none',
+                            borderRadius: 4,
+                            color: '#fff',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Reload now
+                        </button>
+                      </div>
+                    )}
+
+                    {viewMode === 'by-company' ? (
+                      <ByCompanyView
+                        changes={preview}
+                        selectedChanges={selectedChanges}
+                        onToggle={handleToggleChange}
+                        onExclusionCreated={handleExclusionCreated}
+                      />
+                    ) : (
+                      <ByFieldView
+                        changes={preview}
+                        selectedChanges={selectedChanges}
+                        onToggle={handleToggleChange}
+                        onExclusionCreated={handleExclusionCreated}
+                      />
+                    )}
+                  </>
                 )}
               </div>
 
