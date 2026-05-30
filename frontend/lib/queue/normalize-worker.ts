@@ -9,9 +9,10 @@
  */
 
 import { Worker, Job, Queue } from 'bullmq';
-import { redis } from './redis';
+import { createRedisConnection, isRedisConfigured } from './redis';
 import { supabase } from '../db/supabase';
-import { getHubSpotClient } from '../hubspot/client';
+import { getAccessToken } from '../hubspot/get-access-token';
+import { HubSpotClient } from '../hubspot/client';
 import { runNormalizationPreview } from '../harmonies/normalization-engine';
 import type { Harmony } from '../harmonies/normalization-engine';
 
@@ -25,7 +26,7 @@ export interface NormalizeJobData {
 }
 
 export const normalizeQueue = new Queue('normalize-apply', {
-  connection: redis,
+  connection: createRedisConnection(),
   defaultJobOptions: {
     attempts: 2,
     backoff: { type: 'fixed', delay: 5000 },
@@ -35,6 +36,13 @@ export const normalizeQueue = new Queue('normalize-apply', {
 });
 
 export function startNormalizeWorker() {
+  if (!isRedisConfigured()) {
+    console.error('Cannot start normalize worker - Redis not configured');
+    return null;
+  }
+
+  const connection = createRedisConnection();
+
   const worker = new Worker<NormalizeJobData>(
     'normalize-apply',
     async (job: Job<NormalizeJobData>) => {
@@ -86,7 +94,8 @@ export function startNormalizeWorker() {
       });
 
       // Step 2: Fetch only the selected companies from HubSpot
-      const hubspot = await getHubSpotClient(orgId);
+      const accessToken = await getAccessToken(orgId);
+      const hubspot = new HubSpotClient(accessToken, portalId);
       const fieldKeys = [...new Set(selectedChanges.map((c) => c.field))];
       const properties = ['name', ...fieldKeys];
 
@@ -227,7 +236,7 @@ export function startNormalizeWorker() {
 
       return { processed: companyIds.length, changed, failed };
     },
-    { connection: redis, concurrency: 3 }
+    { connection, concurrency: 3 }
   );
 
   worker.on('completed', (job) => {
