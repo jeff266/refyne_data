@@ -20,6 +20,7 @@
     "worker:arrangement": "npx tsx scripts/start-arrangement-worker.ts",
     "worker:enrichment": "npx tsx scripts/start-enrichment-worker.ts",
     "worker:dedup": "npx tsx scripts/start-dedup-worker.ts",
+    "worker:normalize": "npx tsx scripts/start-normalize-worker.ts",
     "cleanup:cache": "npx tsx scripts/cleanup-cache.ts"
   },
   "dependencies": {

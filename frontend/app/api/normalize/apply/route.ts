@@ -4,6 +4,7 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { invalidateSummary } from '@/lib/ai/cache';
+import { normalizeQueue } from '@/lib/queue/normalize-worker';
 
 interface SelectedChange {
   companyId: string;
@@ -148,13 +149,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Enqueue BullMQ job to process normalization asynchronously
+    // Enqueue the normalize job
+    const job = await normalizeQueue.add('normalize-apply', {
+      runId: run.id,
+      orgId: ctx.orgId,
+      portalId: connection.portal_id,
+      connectionId: connection.id,
+      harmonyIds: body.harmonyIds || [],
+      selectedChanges: body.selectedChanges ?? [],
+    });
+
+    console.log(`[Normalize Apply] Enqueued job ${job.id} for run ${run.id}`);
 
     // Invalidate AI summary cache after normalization run starts
     await invalidateSummary(`ai:compliance:${ctx.orgId}:all`);
 
     return NextResponse.json({
       runId: run.id,
+      jobId: job.id,
       status: 'queued',
       applied: body.selectedChanges?.length || 'all',
     });
