@@ -185,6 +185,9 @@ export default function NormalizePage() {
         addToast('success', 'No changes detected. All records match harmonies.');
       }
 
+      // Refresh issue counts after preview loads
+      fetchIssueCounts();
+
       // Auto-select all changes by default
       const allIds = new Set<string>(
         (data.preview || []).map((r: PreviewRecord) => `${r.hubspotCompanyId}:${r.field}`)
@@ -234,8 +237,10 @@ export default function NormalizePage() {
         run.id === runId ? { ...run, status: data.status } : run
       ));
 
-      // If status changed to rolled_back, show success toast and stop polling
-      if (data.status === 'rolled_back') {
+      // Stop polling when run reaches terminal state
+      if (data.status === 'completed') {
+        setPollingRunId(null);
+      } else if (data.status === 'rolled_back') {
         addToast('success', `${(data.records_changed ?? 0).toLocaleString()} records reverted successfully`);
         setPollingRunId(null);
       } else if (data.status === 'failed') {
