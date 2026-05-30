@@ -26,15 +26,24 @@ export interface NormalizeJobData {
   selectedChanges: Array<{ companyId: string; field: string }>;
 }
 
-export const normalizeQueue = new Queue('normalize-apply', {
-  connection: createRedisConnection(),
-  defaultJobOptions: {
-    attempts: 2,
-    backoff: { type: 'fixed', delay: 5000 },
-    removeOnComplete: 100,
-    removeOnFail: 50,
-  },
-});
+// Lazy-initialized queue - only created when accessed (API routes), not in worker process
+let _normalizeQueue: Queue<NormalizeJobData> | null = null;
+
+export function getNormalizeQueue(): Queue<NormalizeJobData> {
+  if (!_normalizeQueue) {
+    console.log('[Normalize Queue] Initializing queue with Redis connection');
+    _normalizeQueue = new Queue('normalize-apply', {
+      connection: createRedisConnection(),
+      defaultJobOptions: {
+        attempts: 2,
+        backoff: { type: 'fixed', delay: 5000 },
+        removeOnComplete: 100,
+        removeOnFail: 50,
+      },
+    });
+  }
+  return _normalizeQueue;
+}
 
 export function startNormalizeWorker() {
   if (!isRedisConfigured()) {

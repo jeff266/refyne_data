@@ -4,7 +4,7 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { invalidateSummary } from '@/lib/ai/cache';
-import { normalizeQueue } from '@/lib/queue/normalize-worker';
+import { getNormalizeQueue } from '@/lib/queue/normalize-worker';
 
 interface SelectedChange {
   companyId: string;
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Enqueue the normalize job
-    const job = await normalizeQueue.add('normalize-apply', {
+    const job = await getNormalizeQueue().add('normalize-apply', {
       runId: run.id,
       orgId: ctx.orgId,
       portalId: connection.portal_id,
