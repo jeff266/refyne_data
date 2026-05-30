@@ -15,6 +15,7 @@ import { getAccessToken } from '../hubspot/get-access-token';
 import { HubSpotClient } from '../hubspot/client';
 import { runNormalizationPreview } from '../harmonies/normalization-engine';
 import type { Harmony } from '../harmonies/normalization-engine';
+import type { HubSpotCompany } from '../hubspot/types';
 
 export interface NormalizeJobData {
   runId: string;
@@ -51,10 +52,14 @@ export function startNormalizeWorker() {
       const selectedSet = new Set(
         selectedChanges.map((c) => `${c.companyId}:${c.field}`)
       );
-      const companyIds = [...new Set(selectedChanges.map((c) => c.companyId))];
+      const companyIds = Array.from(new Set(selectedChanges.map((c) => c.companyId)));
 
       await updateRunStatus(runId, 'processing');
       await job.updateProgress({ percentage: 5, stage: 'Fetching harmonies' });
+
+      if (!supabase) {
+        throw new Error('Database not configured');
+      }
 
       // Step 1: Fetch harmonies
       const { data: harmoniesData } = await supabase
@@ -96,14 +101,10 @@ export function startNormalizeWorker() {
       // Step 2: Fetch only the selected companies from HubSpot
       const accessToken = await getAccessToken(orgId);
       const hubspot = new HubSpotClient(accessToken, portalId);
-      const fieldKeys = [...new Set(selectedChanges.map((c) => c.field))];
+      const fieldKeys = Array.from(new Set(selectedChanges.map((c) => c.field)));
       const properties = ['name', ...fieldKeys];
 
-      const { results: companies } = await hubspot.crm.companies.batchApi.read({
-        inputs: companyIds.map((id) => ({ id })),
-        properties,
-        propertiesWithHistory: [],
-      });
+      const companies = await hubspot.getCompaniesByIds(companyIds, properties);
 
       if (!companies || companies.length === 0) {
         await updateRunStatus(runId, 'completed', {
@@ -119,7 +120,7 @@ export function startNormalizeWorker() {
       });
 
       // Step 3: Re-run normalization preview on fetched companies
-      const records = companies.map((c) => ({ id: c.id, ...c.properties }));
+      const records = companies.map((c: HubSpotCompany) => ({ id: c.id, ...c.properties }));
       const allChanges = await runNormalizationPreview(records, harmonies, orgId);
 
       // Step 4: Filter to only what the user selected
@@ -171,9 +172,9 @@ export function startNormalizeWorker() {
         const batch = companyEntries.slice(i, i + batchSize);
 
         try {
-          await hubspot.crm.companies.batchApi.update({
-            inputs: batch.map(([id, properties]) => ({ id, properties })),
-          });
+          await hubspot.batchUpdateCompanies(
+            batch.map(([id, properties]) => ({ id, properties }))
+          );
 
           for (const [companyId, properties] of batch) {
             for (const [fieldKey, newValue] of Object.entries(properties)) {
@@ -207,7 +208,7 @@ export function startNormalizeWorker() {
       }
 
       // Step 7: Log to normalization_run_progress in bulk
-      if (progressItems.length > 0) {
+      if (progressItems.length > 0 && supabase) {
         await supabase
           .from('normalization_run_progress')
           .insert(progressItems)
@@ -260,6 +261,11 @@ async function updateRunStatus(
   status: string,
   extra: Record<string, any> = {}
 ) {
+  if (!supabase) {
+    console.warn('[Normalize Worker] Cannot update run status - database not configured');
+    return;
+  }
+
   await supabase
     .from('normalization_runs')
     .update({ status, ...extra })
