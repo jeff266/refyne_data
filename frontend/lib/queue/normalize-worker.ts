@@ -14,7 +14,7 @@ import { supabase } from '../db/supabase';
 import { getAccessToken } from '../hubspot/get-access-token';
 import { HubSpotClient } from '../hubspot/client';
 import { runNormalizationPreview } from '../harmonies/normalization-engine';
-import type { Harmony } from '../harmonies/normalization-engine';
+import type { Harmony, HubSpotRecord } from '../harmonies/normalization-engine';
 import type { HubSpotCompany } from '../hubspot/types';
 import { DEFAULT_FIELD_MAPPINGS } from '../hubspot/types';
 
@@ -184,8 +184,8 @@ export function startNormalizeWorker() {
       });
 
       // Step 3: Re-run normalization preview on fetched companies
-      const records = companies.map((c: HubSpotCompany) => {
-        const record: Record<string, any> = {
+      const records: HubSpotRecord[] = companies.map((c: HubSpotCompany) => {
+        const record: HubSpotRecord = {
           id: c.id,
           ...c.properties,
         };
