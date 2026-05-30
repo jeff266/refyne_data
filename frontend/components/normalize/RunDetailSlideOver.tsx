@@ -281,7 +281,7 @@ export function RunDetailSlideOver({
                       Records Changed
                     </div>
                     <div style={{ fontSize: 20, color: C.text, fontWeight: 600, fontFamily: F.mono }}>
-                      {details.records_changed.toLocaleString()}
+                      {(details.records_changed ?? 0).toLocaleString()}
                     </div>
                   </div>
                   <div>
@@ -289,7 +289,7 @@ export function RunDetailSlideOver({
                       Fields Changed
                     </div>
                     <div style={{ fontSize: 20, color: C.text, fontWeight: 600, fontFamily: F.mono }}>
-                      {details.fields_changed}
+                      {(details.fields_changed ?? 0).toLocaleString()}
                     </div>
                   </div>
                 </div>
