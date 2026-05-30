@@ -97,7 +97,7 @@ export function startNormalizeWorker() {
       const { data: harmoniesData, error: harmoniesError } = await supabase
         .from('harmonies')
         .select('*')
-        .eq('org_id', orgId)
+        .or(`org_id.is.null,org_id.eq.${orgId}`)
         .in('id', harmonyIds)
         .eq('is_active', true);
 
