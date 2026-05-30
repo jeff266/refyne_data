@@ -187,29 +187,55 @@ export function isE164Phone(value: string): boolean {
 }
 
 /**
- * Check if company name is in Title Case.
- * First letter of each word should be uppercase.
- * Handles common exceptions: LLC, Inc, Corp, Ltd
+ * Check if input has mixed-case context suggesting intentional branding.
+ * True if the string has both lowercase and uppercase letters.
+ */
+function hasMixedCaseContext(input: string): boolean {
+  return /[a-z]/.test(input) && /[A-Z]/.test(input);
+}
+
+/**
+ * Smart title case for company names.
+ * Handles parentheses, abbreviations, brands, and conjunctions.
+ */
+export function toSmartTitleCase(input: string): string {
+  const conjunctions = new Set([
+    'and', 'or', 'the', 'of', 'in', 'for', 'with', 'at', 'by', 'to', 'a', 'an'
+  ]);
+
+  return input
+    .trim()
+    .split(/(\s+|(?=[(/])|(?<=[)/]))/) // Split on spaces and around parens
+    .map((token, index) => {
+      // Preserve punctuation tokens
+      if (/^[()\/\-&,.]$/.test(token)) return token;
+      if (!token.trim()) return token;
+
+      // Rule 1: All-caps token 3 chars or fewer → preserve uppercase
+      if (/^[A-Z]{1,3}$/.test(token)) return token;
+
+      // Rule 2: All-caps 4-5 chars in mixed-case context → preserve
+      if (/^[A-Z]{4,5}$/.test(token) && hasMixedCaseContext(input)) return token;
+
+      // Rule 3: Mixed-case brand token (camelCase/PascalCase brands)
+      if (/^[a-z].*[A-Z]/.test(token) || /^[A-Z][a-z]+[A-Z]/.test(token)) return token;
+
+      // Rule 4: Conjunctions lowercase unless first word
+      const lower = token.toLowerCase();
+      if (index > 0 && conjunctions.has(lower)) return lower;
+
+      // Rule 5: Standard title case
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join('');
+}
+
+/**
+ * Check if company name is already in smart title case.
+ * Uses the same logic as toSmartTitleCase to determine if transformation is needed.
  */
 export function isTitleCase(value: string): boolean {
-  const words = value.split(/\s+/);
-
-  return words.every(word => {
-    // Handle common business suffixes that should be all caps
-    const allCapsWords = ['LLC', 'INC', 'CORP', 'LTD', 'LP', 'LLP', 'PC'];
-    if (allCapsWords.includes(word.toUpperCase())) {
-      return true;
-    }
-
-    // Handle lowercase connectors
-    const lowercaseWords = ['and', 'or', 'the', 'of', 'in', 'at', 'by', 'for'];
-    if (lowercaseWords.includes(word.toLowerCase())) {
-      return true;
-    }
-
-    // Check if first letter is uppercase
-    return /^[A-Z]/.test(word);
-  });
+  return toSmartTitleCase(value) === value;
 }
 
 /**

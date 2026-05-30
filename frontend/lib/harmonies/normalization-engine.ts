@@ -277,18 +277,48 @@ function normalizeLinkedInUrl(url: string): string | null {
     : `https://linkedin.com/in/${slug}`;
 }
 
+/**
+ * Check if input has mixed-case context suggesting intentional branding.
+ * True if the string has both lowercase and uppercase letters.
+ */
+function hasMixedCaseContext(input: string): boolean {
+  return /[a-z]/.test(input) && /[A-Z]/.test(input);
+}
+
+/**
+ * Smart title case for company names.
+ * Handles parentheses, abbreviations, brands, and conjunctions.
+ */
 function applySmartTitleCase(name: string): string {
-  // Smart title case for company names
-  const words = name.toLowerCase().split(' ');
-  const titleCased = words.map((word) => {
-    // Keep common acronyms uppercase
-    if (['llc', 'inc', 'corp', 'ltd', 'plc', 'lp', 'llp'].includes(word)) {
-      return word.toUpperCase();
-    }
-    // Capitalize first letter
-    return word.charAt(0).toUpperCase() + word.slice(1);
-  });
-  return titleCased.join(' ');
+  const conjunctions = new Set([
+    'and', 'or', 'the', 'of', 'in', 'for', 'with', 'at', 'by', 'to', 'a', 'an'
+  ]);
+
+  return name
+    .trim()
+    .split(/(\s+|(?=[(/])|(?<=[)/]))/) // Split on spaces and around parens
+    .map((token, index) => {
+      // Preserve punctuation tokens
+      if (/^[()\/\-&,.]$/.test(token)) return token;
+      if (!token.trim()) return token;
+
+      // Rule 1: All-caps token 3 chars or fewer → preserve uppercase
+      if (/^[A-Z]{1,3}$/.test(token)) return token;
+
+      // Rule 2: All-caps 4-5 chars in mixed-case context → preserve
+      if (/^[A-Z]{4,5}$/.test(token) && hasMixedCaseContext(name)) return token;
+
+      // Rule 3: Mixed-case brand token (camelCase/PascalCase brands)
+      if (/^[a-z].*[A-Z]/.test(token) || /^[A-Z][a-z]+[A-Z]/.test(token)) return token;
+
+      // Rule 4: Conjunctions lowercase unless first word
+      const lower = token.toLowerCase();
+      if (index > 0 && conjunctions.has(lower)) return lower;
+
+      // Rule 5: Standard title case
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join('');
 }
 
 const FORMAT_FUNCTIONS: Record<string, (value: string) => string | null> = {
