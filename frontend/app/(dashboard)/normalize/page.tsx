@@ -87,7 +87,8 @@ export default function NormalizePage() {
   useEffect(() => {
     const loadCounts = async () => {
       try {
-        const response = await fetch('/api/normalize/issue-counts');
+        // Add nocache parameter to force recalculation (skip Redis cache)
+        const response = await fetch('/api/normalize/issue-counts?nocache=1');
         if (response.ok) {
           const data = await response.json();
           setIssueCounts(data.counts || {});

@@ -28,7 +28,7 @@ import { createRedisConnection, isRedisConfigured } from '@/lib/queue/redis';
 
 const CACHE_TTL_SECONDS = 3600; // 1 hour
 
-export async function GET() {
+export async function GET(request: Request) {
   // Auth check
   let ctx;
   try {
@@ -44,6 +44,10 @@ export async function GET() {
         { status: 503 }
       );
     }
+
+    // Check for cache-busting parameter
+    const url = new URL(request.url);
+    const skipCache = url.searchParams.get('nocache') === '1';
 
     // Get HubSpot connection
     const { data: connection } = await supabase
@@ -61,10 +65,10 @@ export async function GET() {
       });
     }
 
-    // Check Redis cache first
+    // Check Redis cache first (unless nocache=1)
     const cacheKey = `normalize:counts:${ctx.orgId}:${connection.portal_id}`;
 
-    if (isRedisConfigured()) {
+    if (isRedisConfigured() && !skipCache) {
       try {
         const redis = createRedisConnection();
         const cached = await redis.get(cacheKey);
@@ -77,6 +81,10 @@ export async function GET() {
         console.warn('[Issue Counts] Redis cache read failed:', err);
         // Continue without cache
       }
+    }
+
+    if (skipCache) {
+      console.log(`[Issue Counts] Skipping cache (nocache=1)`);
     }
 
     // Get access token
