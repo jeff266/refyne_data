@@ -81,6 +81,9 @@ export function startNormalizeWorker() {
       );
       const companyIds = Array.from(new Set(selectedChanges.map((c) => c.companyId)));
 
+      console.log(`[Normalize Worker] Run ${runId}: Processing ${companyIds.length} companies, ${selectedChanges.length} changes`);
+      console.log(`[Normalize Worker] Selected changes:`, selectedChanges.slice(0, 5));
+
       await updateRunStatus(runId, 'processing');
       await job.updateProgress({ percentage: 5, stage: 'Fetching harmonies' });
 
@@ -133,7 +136,10 @@ export function startNormalizeWorker() {
 
       const companies = await hubspot.getCompaniesByIds(companyIds, properties);
 
+      console.log(`[Normalize Worker] Fetched ${companies?.length || 0} companies from HubSpot`);
+
       if (!companies || companies.length === 0) {
+        console.log(`[Normalize Worker] No companies fetched, exiting early`);
         await updateRunStatus(runId, 'completed', {
           records_processed: 0,
           records_changed: 0,
@@ -150,6 +156,10 @@ export function startNormalizeWorker() {
       const records = companies.map((c: HubSpotCompany) => ({ id: c.id, ...c.properties }));
       const allChanges = await runNormalizationPreview(records, harmonies, orgId);
 
+      console.log(`[Normalize Worker] Normalization found ${allChanges.length} total changes`);
+      console.log(`[Normalize Worker] First 3 changes:`, allChanges.slice(0, 3).map(c => `${c.hubspotRecordId}:${c.field}`));
+      console.log(`[Normalize Worker] Selected set:`, Array.from(selectedSet).slice(0, 3));
+
       // Step 4: Filter to only what the user selected
       const toApply = allChanges.filter(
         (c) =>
@@ -159,7 +169,10 @@ export function startNormalizeWorker() {
           c.matchType !== 'none'
       );
 
+      console.log(`[Normalize Worker] After filtering: ${toApply.length} changes to apply`);
+
       if (toApply.length === 0) {
+        console.log(`[Normalize Worker] No changes to apply after filtering, exiting`);
         await updateRunStatus(runId, 'completed', {
           records_processed: companyIds.length,
           records_changed: 0,
