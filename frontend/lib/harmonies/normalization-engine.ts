@@ -119,10 +119,12 @@ async function cacheLookups(
     confidence: result.confidence,
   }));
 
+  // Note: Database constraint uses lower(input_value), but Supabase upsert
+  // doesn't support function-based constraints. We rely on the cache lookup
+  // to handle case-insensitivity by lowercasing the search values.
   const { error } = await supabase
     .from('harmony_lookup_cache')
     .upsert(rows, {
-      onConflict: 'org_id,harmony_id,input_value',
       ignoreDuplicates: false,
     });
 
