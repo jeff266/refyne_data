@@ -77,12 +77,13 @@ async function getCachedLookups(
   if (values.length === 0) return new Map();
   if (!supabase) return new Map();
 
+  // Query cache - Supabase .in() doesn't support functions, so we fetch all for this harmony
+  // and filter in memory. This is acceptable since cache is scoped to org+harmony.
   const { data, error } = await supabase
     .from('harmony_lookup_cache')
     .select('input_value, canonical_value, match_type, confidence')
     .eq('org_id', orgId)
-    .eq('harmony_id', harmonyId)
-    .in('lower(input_value)', values.map((v) => v.toLowerCase()));
+    .eq('harmony_id', harmonyId);
 
   if (error) {
     console.warn('[Normalization Engine] Cache lookup failed:', error);
@@ -121,7 +122,7 @@ async function cacheLookups(
   const { error } = await supabase
     .from('harmony_lookup_cache')
     .upsert(rows, {
-      onConflict: 'org_id,harmony_id,lower(input_value)',
+      onConflict: 'org_id,harmony_id,input_value',
       ignoreDuplicates: false,
     });
 
