@@ -21,6 +21,8 @@ export interface HarmonyRow {
   is_preset: boolean;
   is_active: boolean;
   rule_count: number;
+  transform_type: 'lookup' | 'format';
+  reference_table?: string | null;
   yaml_content: string | null;
   examples?: Array<{ input: any; output: any }> | null;
   output_format?: string;
@@ -70,6 +72,17 @@ export async function seedHarmonyLibrary(): Promise<{
           output: t.expected,
         })) || [];
 
+      // Detect transform type:
+      // - 'lookup' if harmony has sources (reference table join)
+      // - 'format' if harmony only has rules (transformations/expressions)
+      const hasReferenceSource = spec.sources && spec.sources.length > 0;
+      const transformType: 'lookup' | 'format' = hasReferenceSource ? 'lookup' : 'format';
+
+      // Extract reference table name from first source (if exists)
+      const referenceTable = hasReferenceSource && spec.sources[0]?.table
+        ? spec.sources[0].table
+        : null;
+
       return {
         id: spec.id,
         org_id: null, // Preset harmonies have null org_id
@@ -81,6 +94,8 @@ export async function seedHarmonyLibrary(): Promise<{
         is_preset: true,
         is_active: spec.default_enabled !== false, // Default to active unless explicitly disabled
         rule_count: spec.rules?.length || 0,
+        transform_type: transformType,
+        reference_table: referenceTable,
         yaml_content: null, // Optional: could store full YAML here if needed
         examples: examples.length > 0 ? examples : null,
         output_format: 'default',
