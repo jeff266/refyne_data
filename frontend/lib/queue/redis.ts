@@ -42,12 +42,53 @@ export function createRedisConnection(): IORedis {
   const redisUrl = process.env.UPSTASH_REDIS_URL || process.env.REDIS_URL;
 
   if (redisUrl) {
-    return new IORedis(redisUrl, {
+    const redis = new IORedis(redisUrl, {
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
       // Upstash requires TLS
       tls: redisUrl.startsWith('rediss://') ? {} : undefined,
+      // Connection resilience for Railway
+      retryStrategy(times) {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
+      reconnectOnError(err) {
+        const targetError = 'READONLY';
+        if (err.message.includes(targetError)) {
+          return true;
+        }
+        return false;
+      },
+      // Keep connections alive
+      keepAlive: 30000,
+      // Longer connect timeout for Railway
+      connectTimeout: 10000,
+      // Enable offline queue
+      enableOfflineQueue: true,
     });
+
+    // Add error handlers to prevent crashes
+    redis.on('error', (err) => {
+      console.warn('[Redis] Connection error:', err.message);
+    });
+
+    redis.on('connect', () => {
+      console.log('[Redis] Connected successfully');
+    });
+
+    redis.on('ready', () => {
+      console.log('[Redis] Ready to accept commands');
+    });
+
+    redis.on('close', () => {
+      console.log('[Redis] Connection closed');
+    });
+
+    redis.on('reconnecting', () => {
+      console.log('[Redis] Reconnecting...');
+    });
+
+    return redis;
   }
 
   const options = getRedisOptions();
