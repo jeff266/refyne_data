@@ -92,20 +92,27 @@ export function startNormalizeWorker() {
       }
 
       // Step 1: Fetch harmonies
-      const { data: harmoniesData } = await supabase
+      console.log(`[Normalize Worker] Fetching harmonies for org ${orgId}, harmonyIds:`, harmonyIds);
+
+      const { data: harmoniesData, error: harmoniesError } = await supabase
         .from('harmonies')
         .select('*')
         .eq('org_id', orgId)
         .in('id', harmonyIds)
         .eq('is_active', true);
 
+      console.log(`[Normalize Worker] Harmonies query result: ${harmoniesData?.length || 0} found, error:`, harmoniesError);
+
       if (!harmoniesData || harmoniesData.length === 0) {
+        console.log(`[Normalize Worker] No harmonies found! Exiting early. Searched for:`, harmonyIds);
         await updateRunStatus(runId, 'completed', {
           records_processed: 0,
           records_changed: 0,
         });
         return { processed: 0, changed: 0 };
       }
+
+      console.log(`[Normalize Worker] Found ${harmoniesData.length} harmonies:`, harmoniesData.map(h => h.id));
 
       // Transform to Harmony type expected by normalization engine
       const harmonies: Harmony[] = harmoniesData.map((h: any) => ({
