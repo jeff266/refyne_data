@@ -149,7 +149,7 @@ export function startNormalizeWorker() {
         DEFAULT_FIELD_MAPPINGS.map(m => [m.canonicalField, m.hubspotProperty])
       );
 
-      const properties = [
+      const properties = [...new Set([
         'name',
         ...fieldKeys.map(f => {
           // Try field mapping first
@@ -159,7 +159,7 @@ export function startNormalizeWorker() {
           // Fallback: strip object prefix (company.industry -> industry)
           return f.includes('.') ? f.split('.')[1] : f;
         })
-      ];
+      ])];
 
       console.log(`[Normalize Worker] Canonical fields:`, fieldKeys);
       console.log(`[Normalize Worker] HubSpot properties to fetch:`, properties);
@@ -188,8 +188,15 @@ export function startNormalizeWorker() {
       const allChanges = await runNormalizationPreview(records, harmonies, orgId);
 
       console.log(`[Normalize Worker] Normalization found ${allChanges.length} total changes`);
-      console.log(`[Normalize Worker] First 3 changes:`, allChanges.slice(0, 3).map(c => `${c.hubspotRecordId}:${c.field}`));
-      console.log(`[Normalize Worker] Selected set:`, Array.from(selectedSet).slice(0, 3));
+      console.log('[Normalize Worker] Sample changes from preview:',
+        allChanges.slice(0, 3).map(c => ({
+          hubspotRecordId: c.hubspotRecordId,
+          field: c.field,
+          before: c.before,
+          after: c.after
+        }))
+      );
+      console.log('[Normalize Worker] Selected set contents:', [...selectedSet]);
 
       // Step 4: Filter to only what the user selected
       const toApply = allChanges.filter(
