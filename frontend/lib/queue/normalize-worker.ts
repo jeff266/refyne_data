@@ -184,7 +184,24 @@ export function startNormalizeWorker() {
       });
 
       // Step 3: Re-run normalization preview on fetched companies
-      const records = companies.map((c: HubSpotCompany) => ({ id: c.id, ...c.properties }));
+      const records = companies.map((c: HubSpotCompany) => {
+        const record: Record<string, any> = {
+          id: c.id,
+          ...c.properties,
+        };
+
+        // Add canonical field names so normalization engine can find them
+        for (const harmony of harmonies) {
+          const hubspotProperty = fieldMappingLookup.get(harmony.field) ||
+            (harmony.field.includes('.') ? harmony.field.split('.')[1] : harmony.field);
+
+          if (c.properties[hubspotProperty] !== undefined) {
+            record[harmony.field] = c.properties[hubspotProperty];
+          }
+        }
+
+        return record;
+      });
       const allChanges = await runNormalizationPreview(records, harmonies, orgId);
 
       console.log(`[Normalize Worker] Normalization found ${allChanges.length} total changes`);
