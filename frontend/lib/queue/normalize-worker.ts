@@ -10,7 +10,7 @@
 
 import { Worker, Job, Queue } from 'bullmq';
 import { redis } from './redis';
-import { supabaseAdmin } from '../db/admin-client';
+import { supabase } from '../db/supabase';
 import { getHubSpotClient } from '../hubspot/client';
 import { runNormalizationPreview } from '../harmonies/normalization-engine';
 import type { Harmony } from '../harmonies/normalization-engine';
@@ -49,7 +49,7 @@ export function startNormalizeWorker() {
       await job.updateProgress({ percentage: 5, stage: 'Fetching harmonies' });
 
       // Step 1: Fetch harmonies
-      const { data: harmoniesData } = await supabaseAdmin
+      const { data: harmoniesData } = await supabase
         .from('harmonies')
         .select('*')
         .eq('org_id', orgId)
@@ -199,7 +199,7 @@ export function startNormalizeWorker() {
 
       // Step 7: Log to normalization_run_progress in bulk
       if (progressItems.length > 0) {
-        await supabaseAdmin
+        await supabase
           .from('normalization_run_progress')
           .insert(progressItems)
           .then(({ error }) => {
@@ -251,7 +251,7 @@ async function updateRunStatus(
   status: string,
   extra: Record<string, any> = {}
 ) {
-  await supabaseAdmin
+  await supabase
     .from('normalization_runs')
     .update({ status, ...extra })
     .eq('id', runId);
