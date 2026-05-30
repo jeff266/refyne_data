@@ -136,8 +136,10 @@ export async function GET(request: NextRequest) {
     // Fetch HubSpot companies
     const client = new HubSpotClient(accessToken, connection.portal_id);
 
-    // Get fields from harmonies
-    const fields = Array.from(new Set(harmonies.map((h) => h.field)));
+    // Get fields from harmonies - extract HubSpot property names
+    // Convert 'company.industry' -> 'industry', 'person.title' -> 'title'
+    const extractPropertyName = (field: string) => field.includes('.') ? field.split('.').pop()! : field;
+    const fields = Array.from(new Set(harmonies.map((h) => extractPropertyName(h.field))));
     const properties = ['name', 'domain', ...fields];
 
     // Fetch companies - either specific IDs or paginated
@@ -160,11 +162,24 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Normalize Preview] Fetched ${limitedCompanies.length} companies`);
 
-    // Transform to HubSpotRecord format
-    const records: HubSpotRecord[] = limitedCompanies.map((company) => ({
-      id: company.id,
-      ...company.properties,
-    }));
+    // Transform to HubSpotRecord format and map properties to canonical field names
+    const records: HubSpotRecord[] = limitedCompanies.map((company) => {
+      const record: HubSpotRecord = {
+        id: company.id,
+        ...company.properties,
+      };
+
+      // Map HubSpot property names back to canonical field names
+      // e.g., if harmony.field is 'company.industry', copy company.properties.industry to record['company.industry']
+      for (const harmony of harmonies) {
+        const propertyName = extractPropertyName(harmony.field);
+        if (company.properties[propertyName] !== undefined) {
+          record[harmony.field] = company.properties[propertyName];
+        }
+      }
+
+      return record;
+    });
 
     // Debug: Check what industry values we're working with
     console.log('[Normalize Preview] Industry values:',
