@@ -113,6 +113,7 @@ function HarmonyRow({
   onToggleTest,
   expanded,
   onToggleExpand,
+  issueCount,
 }: {
   h: HarmonyItem;
   isRec?: boolean;
@@ -123,6 +124,7 @@ function HarmonyRow({
   onToggleTest: () => void;
   expanded: boolean;
   onToggleExpand: () => void;
+  issueCount?: number;
 }) {
   const [testInput, setTestInput] = useState('');
   const [testOutput, setTestOutput] = useState<{
@@ -200,7 +202,12 @@ function HarmonyRow({
               </div>
               <div style={{ fontSize: 10, fontFamily: F.mono, color: C.text3, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span>{h.fields[0]}</span>
-                {h.ruleCount && <span>• {h.ruleCount} rules</span>}
+                {issueCount !== undefined && issueCount > 0 && (
+                  <Chip color="amber">{issueCount} {issueCount === 1 ? 'issue' : 'issues'}</Chip>
+                )}
+                {issueCount === 0 && (
+                  <span style={{ color: C.green }}>✓ 0 issues</span>
+                )}
                 {h.recordsAffected !== undefined && <span>• {h.recordsAffected} records affected</span>}
               </div>
               {h.warning && (
@@ -364,6 +371,8 @@ export default function HarmoniesPage() {
   const [harmonies, setHarmonies] = useState<HarmonyItem[]>([]);
   const [enabledIds, setEnabledIds] = useState<Set<string>>(new Set());
   const [insights, setInsights] = useState<Map<string, ComplianceInsight>>(new Map());
+  const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
+  const [countsLoading, setCountsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [expandedTestId, setExpandedTestId] = useState<string | null>(null);
@@ -411,6 +420,24 @@ export default function HarmoniesPage() {
   useEffect(() => {
     fetchHarmonies();
   }, [fetchHarmonies]);
+
+  // Fetch issue counts on mount
+  useEffect(() => {
+    const loadIssueCounts = async () => {
+      try {
+        const response = await fetch('/api/normalize/issue-counts?nocache=1');
+        if (response.ok) {
+          const data = await response.json();
+          setIssueCounts(data.counts || {});
+        }
+      } catch (err) {
+        console.error('Failed to fetch issue counts:', err);
+      } finally {
+        setCountsLoading(false);
+      }
+    };
+    loadIssueCounts();
+  }, []);
 
   // Toggle harmony with optimistic update
   const toggle = async (id: string) => {
@@ -549,6 +576,7 @@ export default function HarmoniesPage() {
                 onToggleTest={() => setExpandedTestId(expandedTestId === h.id ? null : h.id)}
                 expanded={expandedHarmonyId === h.id}
                 onToggleExpand={() => setExpandedHarmonyId(expandedHarmonyId === h.id ? null : h.id)}
+                issueCount={issueCounts[h.id]}
               />
             ))}
           </Card>
@@ -569,6 +597,7 @@ export default function HarmoniesPage() {
                 onToggleTest={() => setExpandedTestId(expandedTestId === h.id ? null : h.id)}
                 expanded={expandedHarmonyId === h.id}
                 onToggleExpand={() => setExpandedHarmonyId(expandedHarmonyId === h.id ? null : h.id)}
+                issueCount={issueCounts[h.id]}
               />
             ))}
           </Card>
