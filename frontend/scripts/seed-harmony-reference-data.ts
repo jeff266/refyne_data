@@ -9,10 +9,21 @@
  *   npx tsx scripts/seed-harmony-reference-data.ts
  */
 
-import { supabase } from '../lib/db/supabase';
+import { config } from 'dotenv';
+import { resolve } from 'path';
+import { createClient } from '@supabase/supabase-js';
+
+// Load .env.local BEFORE importing anything else
+config({ path: resolve(process.cwd(), '.env.local') });
+
 import { INDUSTRY_SEED } from '../lib/harmonies/seed-data/industries';
 import { LEGAL_SUFFIX_SEED } from '../lib/harmonies/seed-data/legal-suffixes';
 import { COUNTRIES_SEED } from '../lib/harmonies/seed-data/countries';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 interface HarmonyReferenceRow {
   table_name: string;
