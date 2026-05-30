@@ -84,23 +84,25 @@ export default function NormalizePage() {
   const [detailSlideOverOpen, setDetailSlideOverOpen] = useState(false);
   const [detailRunId, setDetailRunId] = useState<string | null>(null);
 
+  // Fetch issue counts
+  const fetchIssueCounts = async () => {
+    try {
+      // Add nocache parameter to force recalculation (skip Redis cache)
+      const response = await fetch('/api/normalize/issue-counts?nocache=1');
+      if (response.ok) {
+        const data = await response.json();
+        setIssueCounts(data.counts || {});
+      }
+    } catch (error) {
+      console.error('Failed to load issue counts:', error);
+    } finally {
+      setCountsLoading(false);
+    }
+  };
+
   // Load issue counts on mount
   useEffect(() => {
-    const loadCounts = async () => {
-      try {
-        // Add nocache parameter to force recalculation (skip Redis cache)
-        const response = await fetch('/api/normalize/issue-counts?nocache=1');
-        if (response.ok) {
-          const data = await response.json();
-          setIssueCounts(data.counts || {});
-        }
-      } catch (error) {
-        console.error('Failed to load issue counts:', error);
-      } finally {
-        setCountsLoading(false);
-      }
-    };
-    loadCounts();
+    fetchIssueCounts();
   }, []);
 
   // Fetch runs when history is expanded
@@ -355,6 +357,9 @@ export default function NormalizePage() {
 
       // Refresh preview
       fetchPreview();
+
+      // Refresh issue counts
+      fetchIssueCounts();
 
       // Expand history and refresh runs
       setHistoryExpanded(true);
