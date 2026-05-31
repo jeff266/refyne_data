@@ -8,18 +8,33 @@
 import type { HubSpotClient } from '../hubspot/client';
 import type { Harmony } from '../harmonies/normalization-engine';
 import { supabase } from '../db/supabase';
+import { getFieldAssignments } from '../harmonies/field-assignments';
 
 /**
- * Extract HubSpot property name from canonical field format.
- * 'company.industry' → 'industry'
- * 'person.title' → 'jobtitle' (if needed)
+ * Get HubSpot property name for a harmony using field assignments.
+ * Falls back to extracting from canonical field if no assignment found.
  */
-function extractPropertyName(field: string): string {
-  // If field contains a dot, take the part after the last dot
-  if (field.includes('.')) {
-    return field.split('.').pop() || field;
+async function getHubSpotProperty(
+  harmony: Harmony,
+  orgId: string
+): Promise<string | null> {
+  // Try to get from field assignments first
+  try {
+    const assignments = await getFieldAssignments(orgId, harmony.objectType);
+    const assignment = assignments.find(a => a.harmonyId === harmony.id);
+
+    if (assignment) {
+      return assignment.hubspotProperty;
+    }
+  } catch (err) {
+    console.warn('[Issue Detector] Failed to get field assignment:', err);
   }
-  return field;
+
+  // Fallback: extract from canonical field (legacy behavior)
+  if (harmony.field.includes('.')) {
+    return harmony.field.split('.').pop() || null;
+  }
+  return harmony.field;
 }
 
 /**
@@ -34,7 +49,7 @@ export async function countIssues(
   if (harmony.transformType === 'lookup') {
     return countLookupIssues(harmony, hubspot, orgId);
   } else {
-    return countFormatIssues(harmony, hubspot);
+    return countFormatIssues(harmony, hubspot, orgId);
   }
 }
 
@@ -75,8 +90,12 @@ async function countLookupIssues(
       return 0;
     }
 
-    // Extract HubSpot property name from canonical field
-    const propertyName = extractPropertyName(harmony.field);
+    // Get HubSpot property name from field assignments
+    const propertyName = await getHubSpotProperty(harmony, orgId);
+    if (!propertyName) {
+      console.warn(`[Issue Detector] No property mapping found for harmony ${harmony.id}`);
+      return 0;
+    }
 
     // Fetch all companies with this field set
     const companies = await hubspot.searchCompanies(
@@ -116,11 +135,16 @@ async function countLookupIssues(
  */
 async function countFormatIssues(
   harmony: Harmony,
-  hubspot: HubSpotClient
+  hubspot: HubSpotClient,
+  orgId: string
 ): Promise<number> {
   try {
-    // Extract HubSpot property name from canonical field
-    const propertyName = extractPropertyName(harmony.field);
+    // Get HubSpot property name from field assignments
+    const propertyName = await getHubSpotProperty(harmony, orgId);
+    if (!propertyName) {
+      console.warn(`[Issue Detector] No property mapping found for harmony ${harmony.id}`);
+      return 0;
+    }
 
     // Fetch companies with this field set
     const companies = await hubspot.searchCompanies(
@@ -160,7 +184,8 @@ async function countFormatIssues(
  */
 export function matchesCanonicalFormat(harmonyId: string, value: string): boolean {
   switch (harmonyId) {
-    case 'phone-e164':
+    case 'phone': // Company phone harmony
+    case 'contact-phone-e164': // Contact phone harmony
       return isE164Phone(value);
 
     case 'company-name':

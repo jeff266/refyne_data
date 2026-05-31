@@ -100,11 +100,12 @@ export async function GET(request: Request) {
 
     const hubspot = new HubSpotClient(accessToken, connection.portal_id);
 
-    // Fetch active harmonies
+    // Fetch active harmonies (company only, since we count on companies)
     const { data: harmoniesData, error: harmoniesError } = await supabase
       .from('harmonies')
       .select('*')
       .eq('is_active', true)
+      .eq('object_type', 'company')
       .or(`org_id.is.null,org_id.eq.${ctx.orgId}`);
 
     if (harmoniesError) {
