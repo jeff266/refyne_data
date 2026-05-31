@@ -1,6 +1,6 @@
 # Refyne Context
 
-**Last updated:** 2026-05-29 (Session 6)
+**Last updated:** 2026-05-30 (Session 7 - Harmony Architecture Phase 1)
 **Status:** Active development
 **Product name:** TBD (Refyne is working name)
 
@@ -133,6 +133,24 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 2. **Railway for workers:** BullMQ workers on Railway (US East, 8GB RAM, 8 vCPU). Auto-deploys from GitHub main.
 3. **Supabase for database:** PostgreSQL with RLS. Service role client for workers, org client for user operations.
 4. **Upstash Redis for queue:** BullMQ backend. No self-hosted Redis.
+
+---
+
+## Harmony Architecture
+
+**HARMONY ARCHITECTURE - Phase 1 complete (May 30, 2026)**
+
+Added transform_function and transform_config columns to harmonies table. FORMAT_FUNCTIONS now keyed by harmony.transform_function (not harmony.id). Fallback to harmony.id for backward compatibility. 8 format harmonies seeded with transform_function values. Phone harmony now reads default_country_code from transform_config. New numeric_parse transform function added.
+
+**Current state:**
+- Format harmonies use data-driven transform functions (e164_phone, email_lowercase, linkedin_url, smart_title_case, numeric_parse)
+- Multiple harmonies can share same transform function (phone + contact-phone-e164 both use e164_phone)
+- Transform config enables customization without code changes (phone country code, extension stripping)
+- Backward compatible: harmonies without transform_function fall back to harmony.id lookup
+
+**Phase 2 next:** harmony_field_assignments table (separate harmony definition from field assignment per org)
+
+**Phase 3 next:** user-created harmony wizard UI (org-specific harmonies, custom reference tables, output format selection)
 
 ---
 
