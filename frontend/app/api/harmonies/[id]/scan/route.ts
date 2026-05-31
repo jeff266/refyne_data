@@ -4,6 +4,7 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { scanHubSpotField } from '@/lib/hubspot/harmony-field-scanner';
+import { getFieldAssignments } from '@/lib/harmonies/field-assignments';
 
 interface RouteContext {
   params: { id: string };
@@ -58,6 +59,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Failed to get access token' }, { status: 500 });
     }
 
+    // Get HubSpot property name from field assignments
+    const fieldAssignments = await getFieldAssignments(
+      ctx.orgId,
+      harmony.object_type as 'company' | 'contact' | 'deal'
+    );
+    const assignment = fieldAssignments.find(a => a.harmonyId === harmonyId);
+
+    if (!assignment) {
+      return NextResponse.json(
+        { error: 'No field assignment found for this harmony' },
+        { status: 400 }
+      );
+    }
+
+    const hubspotProperty = assignment.hubspotProperty;
+
     // Create scan job
     const { data: job, error: jobError } = await supabase
       .from('harmony_scan_jobs')
@@ -82,7 +99,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       portalId: connection.portal_id,
       accessToken,
       objectType: harmony.object_type === 'company' ? 'companies' : 'contacts',
-      fieldName: harmony.field,
+      fieldName: hubspotProperty, // Use HubSpot property from field assignments, not canonical field
     }).catch((err) => {
       console.error('[Scan Job] Background scan failed:', err);
       captureWithOrgContext(err, ctx.orgId, { jobId: job.id });
