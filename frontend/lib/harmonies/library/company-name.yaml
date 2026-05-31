@@ -9,7 +9,7 @@ category: business-entities
 author: revops-impact
 transformFunction: smart_title_case
 
-config:
+transformConfig:
   honorHyphenBoundary: true
   preserveDigitTokens: true
 

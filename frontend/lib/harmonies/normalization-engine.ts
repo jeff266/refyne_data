@@ -375,7 +375,8 @@ export function toSmartTitleCase(
 
   // Rule 0: Org exception → return exact stored value (case-insensitive match)
   if (config?.orgExceptions) {
-    for (const exception of config.orgExceptions) {
+    const exceptions = Array.from(config.orgExceptions);
+    for (const exception of exceptions) {
       if (exception.toLowerCase() === trimmed.toLowerCase()) {
         return exception;
       }
