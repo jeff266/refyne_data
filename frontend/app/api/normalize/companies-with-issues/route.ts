@@ -21,17 +21,34 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { HubSpotClient } from '@/lib/hubspot/client';
 import { matchesCanonicalFormat } from '@/lib/normalize/issue-detector';
+import { getFieldAssignments } from '@/lib/harmonies/field-assignments';
 import type { Harmony } from '@/lib/harmonies/normalization-engine';
 
 /**
- * Extract HubSpot property name from canonical field format.
- * 'company.industry' → 'industry'
+ * Get HubSpot property name for a harmony using field assignments.
+ * Falls back to extracting from canonical field if no assignment found.
  */
-function extractPropertyName(field: string): string {
-  if (field.includes('.')) {
-    return field.split('.').pop() || field;
+async function getHubSpotProperty(
+  harmony: Harmony,
+  orgId: string
+): Promise<string | null> {
+  // Try to get from field assignments first
+  try {
+    const assignments = await getFieldAssignments(orgId, harmony.objectType);
+    const assignment = assignments.find(a => a.harmonyId === harmony.id);
+
+    if (assignment) {
+      return assignment.hubspotProperty;
+    }
+  } catch (err) {
+    console.warn('[Companies with Issues] Failed to get field assignment:', err);
   }
-  return field;
+
+  // Fallback: extract from canonical field (legacy behavior)
+  if (harmony.field.includes('.')) {
+    return harmony.field.split('.').pop() || null;
+  }
+  return harmony.field;
 }
 
 export async function GET(request: NextRequest) {
@@ -161,8 +178,12 @@ export async function GET(request: NextRequest) {
             continue;
           }
 
-          // Extract HubSpot property name
-          const propertyName = extractPropertyName(harmony.field);
+          // Get HubSpot property name from field assignments
+          const propertyName = await getHubSpotProperty(harmony, ctx.orgId);
+          if (!propertyName) {
+            console.warn(`[Companies with Issues] No property mapping for ${harmony.id}`);
+            continue;
+          }
 
           // Fetch companies with this field set (wrapped in try/catch for HubSpot API errors)
           try {
@@ -195,8 +216,12 @@ export async function GET(request: NextRequest) {
           }
         } else {
           // For format harmonies, fetch and validate
-          // Extract HubSpot property name
-          const propertyName = extractPropertyName(harmony.field);
+          // Get HubSpot property name from field assignments
+          const propertyName = await getHubSpotProperty(harmony, ctx.orgId);
+          if (!propertyName) {
+            console.warn(`[Companies with Issues] No property mapping for ${harmony.id}`);
+            continue;
+          }
 
           // Fetch companies with this field set (wrapped in try/catch for HubSpot API errors)
           try {
