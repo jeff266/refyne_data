@@ -8,6 +8,7 @@ import { addToast } from '@/components/ui/toast';
 interface NormalizeExclusion {
   id: string;
   companyId: string;
+  companyName?: string;
   field: string | null;
   exclusionType: string;
   reason: string | null;
@@ -262,8 +263,8 @@ export function SkippedList() {
         <tbody>
           {exclusions.map((exclusion) => (
             <tr key={exclusion.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-              <td style={{ padding: '12px 24px', color: C.text2, fontSize: 12 }}>
-                {exclusion.companyId.slice(0, 12)}...
+              <td style={{ padding: '12px 24px', color: C.text, fontSize: 12 }}>
+                {exclusion.companyName || exclusion.companyId}
               </td>
               <td style={{ padding: '12px 24px', fontFamily: F.mono, color: C.text3, fontSize: 11 }}>
                 {exclusion.field || <em style={{ color: C.text3 }}>All fields</em>}

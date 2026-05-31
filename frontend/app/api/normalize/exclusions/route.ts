@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
+import { HubSpotClient } from '@/lib/hubspot/client';
 
 interface CreateExclusionRequest {
   companyId: string;
@@ -14,6 +16,7 @@ interface NormalizeExclusion {
   id: string;
   orgId: string;
   companyId: string;
+  companyName?: string; // Enriched from HubSpot
   field: string | null;
   exclusionType: string;
   reason: string | null;
@@ -166,6 +169,30 @@ export async function GET(request: NextRequest) {
       createdAt: ex.created_at,
       expiresAt: ex.expires_at,
     }));
+
+    // Enrich with company names from HubSpot
+    if (transformed.length > 0) {
+      try {
+        const accessToken = await getAccessToken(ctx.orgId);
+        const hubspot = new HubSpotClient(accessToken, ctx.portalId);
+
+        const companyIds = transformed.map(ex => ex.companyId);
+        const companies = await hubspot.getCompaniesByIds(companyIds, ['name']);
+
+        // Create map of company ID -> name
+        const companyNames = new Map(
+          companies.map(c => [c.id, c.properties.name])
+        );
+
+        // Add company names to transformed data
+        transformed.forEach(ex => {
+          ex.companyName = companyNames.get(ex.companyId) || ex.companyId;
+        });
+      } catch (error) {
+        console.error('Failed to enrich with company names:', error);
+        // Continue without names rather than failing
+      }
+    }
 
     return NextResponse.json({ exclusions: transformed });
   } catch (error) {
