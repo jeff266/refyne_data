@@ -5,6 +5,7 @@ import { OrganizationSwitcher } from '@clerk/nextjs';
 import { ChevronRight, Command, RefreshCw, Plus } from 'lucide-react';
 import { C, F, PAGE_META } from '@/lib/design-tokens';
 import { PrimaryBtn } from './PrimaryBtn';
+import { ObjectSwitcher } from './ObjectSwitcher';
 
 export function TopBar() {
   const pathname = usePathname();
@@ -57,6 +58,8 @@ export function TopBar() {
             },
           }}
         />
+        <ChevronRight size={12} color={C.text3} />
+        <ObjectSwitcher />
         <ChevronRight size={12} color={C.text3} />
         <span
           style={{
