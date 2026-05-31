@@ -7,10 +7,13 @@ import { PrimaryBtn } from '@/components/refyne';
 
 interface RunDetails {
   id: string;
-  created_at: string;
-  created_by_email: string | null;
-  records_changed: number;
-  fields_changed: number;
+  startedAt: string;
+  completedAt: string | null;
+  initiatedBy: string | null;
+  recordsChanged: number;
+  recordsProcessed: number;
+  recordsFailed: number;
+  fieldsChanged: string[];
   status: string;
   harmonies: Array<{
     id: string;
@@ -259,7 +262,7 @@ export function RunDetailSlideOver({
                       Initiated By
                     </div>
                     <div style={{ fontSize: 13, color: C.text }}>
-                      {details.created_by_email || 'Unknown'}
+                      {details.initiatedBy || 'Unknown'}
                     </div>
                   </div>
                   <div>
@@ -267,7 +270,7 @@ export function RunDetailSlideOver({
                       Date
                     </div>
                     <div style={{ fontSize: 13, color: C.text }}>
-                      {new Date(details.created_at).toLocaleString('en-US', {
+                      {new Date(details.startedAt).toLocaleString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
@@ -281,7 +284,7 @@ export function RunDetailSlideOver({
                       Records Changed
                     </div>
                     <div style={{ fontSize: 20, color: C.text, fontWeight: 600, fontFamily: F.mono }}>
-                      {(details.records_changed ?? 0).toLocaleString()}
+                      {(details.recordsChanged ?? 0).toLocaleString()}
                     </div>
                   </div>
                   <div>
@@ -289,7 +292,7 @@ export function RunDetailSlideOver({
                       Fields Changed
                     </div>
                     <div style={{ fontSize: 20, color: C.text, fontWeight: 600, fontFamily: F.mono }}>
-                      {(details.fields_changed ?? 0).toLocaleString()}
+                      {(details.fieldsChanged?.length ?? 0).toLocaleString()}
                     </div>
                   </div>
                 </div>
