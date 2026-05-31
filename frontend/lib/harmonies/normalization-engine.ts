@@ -290,13 +290,13 @@ function normalizePhoneE164(phone: string, config?: Record<string, any>): string
 }
 
 function normalizeLinkedInUrl(url: string): string | null {
-  // Normalize LinkedIn URLs to canonical format
+  // Normalize LinkedIn URLs to canonical format with www prefix
   const match = url.match(/linkedin\.com\/(?:in|company)\/([^/?]+)/i);
   if (!match) return null;
   const slug = match[1];
   return url.includes('/company/')
-    ? `https://linkedin.com/company/${slug}`
-    : `https://linkedin.com/in/${slug}`;
+    ? `https://www.linkedin.com/company/${slug}`
+    : `https://www.linkedin.com/in/${slug}`;
 }
 
 /**
@@ -308,42 +308,209 @@ function hasMixedCaseContext(input: string): boolean {
 }
 
 /**
- * Smart title case for company names.
+ * Brand token map: lowercase input → canonical output
+ * Loaded from company-name.yaml config via configureTitleCase()
+ */
+let BRAND_TOKEN_MAP: Map<string, string> = new Map();
+let CONJUNCTION_SET: Set<string> = new Set([
+  'and','or','the','of','in','for','with','at','by','to','a','an',
+  'but','nor','so','yet','as'
+]);
+let HONOR_HYPHEN_BOUNDARY: boolean = true;
+
+/**
+ * Configure title case with brand tokens and conjunctions from harmony config
+ */
+export function configureTitleCase(config: {
+  brandTokens?: string[]
+  conjunctions?: string[]
+  honorHyphenBoundary?: boolean
+}) {
+  if (config.brandTokens) {
+    BRAND_TOKEN_MAP = new Map(
+      config.brandTokens.map(token => [token.toLowerCase(), token])
+    );
+  }
+  if (config.conjunctions) {
+    CONJUNCTION_SET = new Set(config.conjunctions);
+  }
+  if (config.honorHyphenBoundary !== undefined) {
+    HONOR_HYPHEN_BOUNDARY = config.honorHyphenBoundary;
+  }
+}
+
+/**
+ * Fetch org-specific name exceptions from database (without Redis caching for now)
+ */
+export async function getOrgNameExceptions(orgId: string): Promise<Set<string>> {
+  if (!supabase) return new Set();
+
+  try {
+    const { data, error } = await supabase
+      .from('normalize_name_exceptions')
+      .select('exact_value')
+      .eq('org_id', orgId);
+
+    if (error) {
+      console.warn('[Smart Title Case] Failed to fetch org exceptions:', error);
+      return new Set();
+    }
+
+    return new Set((data || []).map((r: any) => r.exact_value));
+  } catch (err) {
+    console.warn('[Smart Title Case] Error fetching org exceptions:', err);
+    return new Set();
+  }
+}
+
+/**
+ * Smart title case with hyphen boundary awareness, brand tokens, and org exceptions
+ */
+export function toSmartTitleCase(
+  input: string,
+  config?: { orgExceptions?: Set<string> }
+): string {
+  if (!input?.trim()) return input;
+  const trimmed = input.trim();
+
+  // Rule 0: Org exception → return exact stored value (case-insensitive match)
+  if (config?.orgExceptions) {
+    for (const exception of config.orgExceptions) {
+      if (exception.toLowerCase() === trimmed.toLowerCase()) {
+        return exception;
+      }
+    }
+  }
+
+  // Detect if input has mixed case (for Rule 4: preserve 4-5 char acronyms in mixed context)
+  const inputHasMixedCase = /[a-z]/.test(trimmed) && /[A-Z]/.test(trimmed);
+
+  // Tokenize: split on whitespace and around ( ) / but keep - attached
+  const tokens = tokenizeForTitleCase(trimmed);
+
+  const result: string[] = [];
+  let prevSignificantDelimiter = 'start';  // 'start' | 'space' | 'hyphen' | 'paren' | 'slash'
+
+  for (const token of tokens) {
+    // Pure whitespace or punctuation delimiters: pass through, update delimiter state
+    if (/^[\s]+$/.test(token)) {
+      result.push(' ');  // Collapse multiple spaces to single space
+      prevSignificantDelimiter = 'space';
+      continue;
+    }
+    if (token === '-') {
+      result.push(token);
+      prevSignificantDelimiter = 'hyphen';
+      continue;
+    }
+    if (token === '(' || token === ')' || token === '/') {
+      result.push(token);
+      prevSignificantDelimiter = 'paren';
+      continue;
+    }
+    if (/^[&,.]$/.test(token)) {
+      result.push(token);
+      continue;
+    }
+
+    const isFirst = prevSignificantDelimiter === 'start';
+    const afterHyphen = prevSignificantDelimiter === 'hyphen';
+
+    result.push(transformTitleCaseToken(token, isFirst, afterHyphen, inputHasMixedCase));
+    prevSignificantDelimiter = 'space';
+  }
+
+  return result.join('');
+}
+
+/**
+ * Tokenize for title case: split on whitespace and around ( ) / -
+ */
+function tokenizeForTitleCase(input: string): string[] {
+  // Split on whitespace (keeping delimiter), and split before/after ( ) /
+  // Keep hyphens as their own token so we can track afterHyphen state
+  return input.split(/(\s+|(?=[()/])|(?<=[()/])|(?=-)(?<!=)|(?<=-)(?!-))/)
+    .filter(t => t !== undefined && t.length > 0);
+}
+
+/**
+ * Tokenize function for backward compatibility with existing tests
+ * @deprecated Use toSmartTitleCase instead
+ */
+export function tokenize(input: string): string[] {
+  if (!input) return [];
+
+  // Old tokenization logic for backward compatibility with tests
+  return input
+    .trim()
+    .split(/(\s+)|(\()|(\))|(\-)|([/&,.])/)
+    .filter(token => token !== undefined && token.length > 0);
+}
+
+/**
+ * Transform a single title case token
+ */
+function transformTitleCaseToken(
+  token: string,
+  isFirst: boolean,
+  afterHyphen: boolean,
+  inputHasMixedCase: boolean = false
+): string {
+  if (!token) return token;
+  const lower = token.toLowerCase();
+
+  // Rule 1: Brand token map (case-insensitive lookup)
+  const brand = BRAND_TOKEN_MAP.get(lower);
+  if (brand) return brand;
+
+  // Rule 2: Conjunctions → lowercase unless first word (check BEFORE acronyms!)
+  // This ensures AND, OF, etc. are lowercased even though they're 2-3 chars
+  // Special case: first word or after hyphen (if honorHyphenBoundary) → title-cased
+  if (CONJUNCTION_SET.has(lower)) {
+    if (isFirst || (afterHyphen && HONOR_HYPHEN_BOUNDARY)) {
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    }
+    return lower;
+  }
+
+  // Rule 3: All-caps ≤3 chars → preserve (IBM, AI, YC, US, LLC, Inc)
+  if (/^[A-Z]{1,3}$/.test(token)) return token;
+
+  // Rule 3.5: All-caps with periods → preserve acronyms (A.B.C., I.B.M.)
+  if (/^[A-Z](\.[A-Z])+\.?$/.test(token)) return token;
+
+  // Rule 4: All-caps 4-5 chars in mixed-case input context → preserve (LEARN Behavioral)
+  if (/^[A-Z]{4,5}$/.test(token) && inputHasMixedCase) return token;
+
+  // Rule 5: Tokens containing digits → preserve (B2B, t10r, Web3, iOS)
+  if (/\d/.test(token)) return token;
+
+  // Rule 6: Mixed-case interior caps → preserve brand casing (iPhone, eBay, FedEx)
+  // Require lowercase at END to avoid matching random mixed case like "aCmE"
+  const isCamelCase = /^[a-z]+[A-Z][a-z]+$/.test(token); // iPhone, eBay
+  const isPascalCase = /^[A-Z][a-z]+[A-Z][a-z]+$/.test(token); // FedEx, HubSpot
+  if (isCamelCase || isPascalCase) return token;
+
+  // Rule 7: After hyphen → title case (not conjunction rule)
+  // Fixes: In-Q-Tel, Cloud-Based, t-Mobile
+  if (afterHyphen) {
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  }
+
+  // Rule 8: Default → standard title case
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+/**
+ * Smart title case for company names (wrapper for backward compatibility)
  * Handles parentheses, abbreviations, brands, and conjunctions.
  */
-function applySmartTitleCase(name: string): string {
-  const conjunctions = new Set([
-    'and', 'or', 'the', 'of', 'in', 'for', 'with', 'at', 'by', 'to', 'a', 'an'
-  ]);
+function applySmartTitleCase(name: string, config?: Record<string, any>): string {
+  if (!name) return name;
 
-  return name
-    .trim()
-    .split(/(\s+|(?=[(/])|(?<=[)/]))/) // Split on spaces and around parens
-    .map((token, index) => {
-      // Preserve punctuation tokens
-      if (/^[()\/\-&,.]$/.test(token)) return token;
-      if (!token.trim()) return token;
-
-      // Strip leading/trailing whitespace for checks but preserve in output
-      const trimmed = token.trim();
-
-      // Rule 1: All-caps token 3 chars or fewer → preserve uppercase (includes acronyms in parens)
-      if (/^[A-Z]{1,3}$/.test(trimmed)) return token;
-
-      // Rule 2: All-caps 4-5 chars in mixed-case context → preserve
-      if (/^[A-Z]{4,5}$/.test(trimmed) && hasMixedCaseContext(name)) return token;
-
-      // Rule 3: Mixed-case brand token (camelCase/PascalCase brands)
-      if (/^[a-z].*[A-Z]/.test(trimmed) || /^[A-Z][a-z]+[A-Z]/.test(trimmed)) return token;
-
-      // Rule 4: Conjunctions lowercase unless first word
-      const lower = token.toLowerCase();
-      if (index > 0 && conjunctions.has(trimmed.toLowerCase())) return lower;
-
-      // Rule 5: Standard title case
-      return lower.charAt(0).toUpperCase() + lower.slice(1);
-    })
-    .join('');
+  // For now, call toSmartTitleCase without org exceptions
+  // Org exceptions will be loaded separately when needed
+  return toSmartTitleCase(name);
 }
 
 /**

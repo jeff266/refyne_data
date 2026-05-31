@@ -9,6 +9,96 @@ category: business-entities
 author: revops-impact
 transformFunction: smart_title_case
 
+config:
+  honorHyphenBoundary: true
+  preserveDigitTokens: true
+
+  conjunctions:
+    - and
+    - or
+    - the
+    - of
+    - in
+    - for
+    - with
+    - at
+    - by
+    - to
+    - a
+    - an
+    - but
+    - nor
+    - so
+    - yet
+    - as
+
+  brandTokens:
+    - iPhone
+    - iPad
+    - iMac
+    - iPod
+    - iCloud
+    - macOS
+    - iOS
+    - watchOS
+    - tvOS
+    - eBay
+    - eCommerce
+    - eLearning
+    - eHealth
+    - PayPal
+    - LinkedIn
+    - GitHub
+    - GitLab
+    - YouTube
+    - HubSpot
+    - Salesforce
+    - WordPress
+    - WooCommerce
+    - TypeScript
+    - JavaScript
+    - PostgreSQL
+    - MySQL
+    - MongoDB
+    - Redis
+    - OpenAI
+    - ChatGPT
+    - OAuth
+    - GraphQL
+    - DevOps
+    - DevSecOps
+    - FinTech
+    - HealthTech
+    - PropTech
+    - InsurTech
+    - LegalTech
+    - EdTech
+    - AdTech
+    - MarTech
+    - RegTech
+    - CleanTech
+    - MedTech
+    - GmbH
+    - GbR
+    - OHG
+    - KGaA
+    - SARL
+    - SAS
+    - EURL
+    - SpA
+    - Srl
+    - SrL
+    - Ltda
+    - Ltée
+    - ApS
+    - BV
+    - NV
+    - VOF
+    - VZW
+    - Pty
+    - KK
+    - ULC
+
 applies_to:
   fields:
     - company.name

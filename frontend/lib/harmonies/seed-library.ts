@@ -132,6 +132,22 @@ export async function seedHarmonyLibrary(): Promise<{
       console.error(`[Harmony Seeder] ⚠️  Seeded ${seededCount} harmonies with ${errors.length} errors`);
     }
 
+    // Load brand tokens from company-name harmony into configureTitleCase
+    try {
+      const { configureTitleCase } = await import('./normalization-engine');
+      const companyNameHarmony = harmonies.find(h => h.spec.id === 'company-name');
+
+      if (companyNameHarmony?.spec.config) {
+        configureTitleCase({
+          brandTokens: companyNameHarmony.spec.config.brandTokens ?? [],
+          conjunctions: companyNameHarmony.spec.config.conjunctions ?? [],
+        });
+        console.log(`[Harmony Seeder] ✅ Configured title case with ${companyNameHarmony.spec.config.brandTokens?.length ?? 0} brand tokens`);
+      }
+    } catch (err) {
+      console.warn('[Harmony Seeder] Failed to configure title case:', err);
+    }
+
     return {
       success: errors.length === 0,
       seededCount,
