@@ -173,21 +173,31 @@ export async function GET(request: NextRequest) {
     // Enrich with company names from HubSpot
     if (transformed.length > 0) {
       try {
-        const accessToken = await getAccessToken(ctx.orgId);
-        const hubspot = new HubSpotClient(accessToken, ctx.portalId);
+        // Get HubSpot connection to get portal ID
+        const { data: connection } = await supabase
+          .from('hubspot_connections')
+          .select('portal_id')
+          .eq('org_id', ctx.orgId)
+          .eq('connection_status', 'active')
+          .single();
 
-        const companyIds = transformed.map(ex => ex.companyId);
-        const companies = await hubspot.getCompaniesByIds(companyIds, ['name']);
+        if (connection) {
+          const accessToken = await getAccessToken(ctx.orgId);
+          const hubspot = new HubSpotClient(accessToken, connection.portal_id);
 
-        // Create map of company ID -> name
-        const companyNames = new Map(
-          companies.map(c => [c.id, c.properties.name])
-        );
+          const companyIds = transformed.map(ex => ex.companyId);
+          const companies = await hubspot.getCompaniesByIds(companyIds, ['name']);
 
-        // Add company names to transformed data
-        transformed.forEach(ex => {
-          ex.companyName = companyNames.get(ex.companyId) || ex.companyId;
-        });
+          // Create map of company ID -> name
+          const companyNames = new Map(
+            companies.map(c => [c.id, c.properties.name])
+          );
+
+          // Add company names to transformed data
+          transformed.forEach(ex => {
+            ex.companyName = companyNames.get(ex.companyId) || ex.companyId;
+          });
+        }
       } catch (error) {
         console.error('Failed to enrich with company names:', error);
         // Continue without names rather than failing
