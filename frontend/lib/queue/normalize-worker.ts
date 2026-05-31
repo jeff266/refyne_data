@@ -16,7 +16,7 @@ import { HubSpotClient } from '../hubspot/client';
 import { runNormalizationPreview } from '../harmonies/normalization-engine';
 import type { Harmony, HubSpotRecord } from '../harmonies/normalization-engine';
 import type { HubSpotCompany } from '../hubspot/types';
-import { DEFAULT_FIELD_MAPPINGS } from '../hubspot/types';
+import { getFieldAssignments, buildFieldMap } from '../harmonies/field-assignments';
 
 export interface NormalizeJobData {
   runId: string;
@@ -141,20 +141,21 @@ export function startNormalizeWorker() {
         stage: `Fetching ${companyIds.length} companies from HubSpot`,
       });
 
-      // Step 2: Fetch only the selected companies from HubSpot
+      // Step 2: Fetch field assignments (replaces DEFAULT_FIELD_MAPPINGS)
+      const fieldAssignments = await getFieldAssignments(orgId, 'company');
+      const fieldMappingLookup = buildFieldMap(fieldAssignments);
+
+      // Step 3: Fetch only the selected companies from HubSpot
       const accessToken = await getAccessToken(orgId);
       const hubspot = new HubSpotClient(accessToken, portalId);
 
-      // Map canonical field names to HubSpot property names using field mappings
+      // Build HubSpot properties to fetch from field assignments
       const fieldKeys = Array.from(new Set(selectedChanges.map((c) => c.field)));
-      const fieldMappingLookup = new Map(
-        DEFAULT_FIELD_MAPPINGS.map(m => [m.canonicalField, m.hubspotProperty])
-      );
-
       const properties = Array.from(new Set([
         'name',
+        'domain',
         ...fieldKeys.map(f => {
-          // Try field mapping first
+          // Use field mapping from assignments
           const hubspotProp = fieldMappingLookup.get(f);
           if (hubspotProp) return hubspotProp;
 
@@ -185,20 +186,18 @@ export function startNormalizeWorker() {
         stage: 'Re-running normalization engine',
       });
 
-      // Step 3: Re-run normalization preview on fetched companies
+      // Step 4: Re-run normalization preview on fetched companies
       const records: HubSpotRecord[] = companies.map((c: HubSpotCompany) => {
         const record: HubSpotRecord = {
           id: c.id,
           ...c.properties,
         };
 
-        // Add canonical field names so normalization engine can find them
-        for (const harmony of harmonies) {
-          const hubspotProperty = fieldMappingLookup.get(harmony.field) ||
-            (harmony.field.includes('.') ? harmony.field.split('.')[1] : harmony.field);
-
-          if (c.properties[hubspotProperty] !== undefined) {
-            record[harmony.field] = c.properties[hubspotProperty];
+        // Map HubSpot properties to canonical field names using field assignments
+        for (const assignment of fieldAssignments) {
+          const value = c.properties[assignment.hubspotProperty];
+          if (value !== undefined) {
+            record[assignment.canonicalField] = value;
           }
         }
 

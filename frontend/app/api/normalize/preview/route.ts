@@ -6,6 +6,7 @@ import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { HubSpotClient } from '@/lib/hubspot/client';
 import { runNormalizationPreview } from '@/lib/harmonies/normalization-engine';
 import type { Harmony, HubSpotRecord } from '@/lib/harmonies/normalization-engine';
+import { getFieldAssignments, buildFieldMap } from '@/lib/harmonies/field-assignments';
 
 interface PreviewRecord {
   company: string;
@@ -135,14 +136,28 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Fetch field assignments for this org (replaces DEFAULT_FIELD_MAPPINGS)
+    const fieldAssignments = await getFieldAssignments(ctx.orgId, 'company');
+    const fieldMap = buildFieldMap(fieldAssignments);
+
+    // Build reverse map: HubSpot property → canonical field
+    const reverseFieldMap = new Map<string, string>();
+    for (const assignment of fieldAssignments) {
+      reverseFieldMap.set(assignment.hubspotProperty, assignment.canonicalField);
+    }
+
+    // Get HubSpot properties to fetch from field assignments
+    const hubspotProperties = Array.from(
+      new Set([
+        'name',
+        'domain',
+        ...fieldAssignments.map((a) => a.hubspotProperty),
+      ])
+    );
+
     // Fetch HubSpot companies
     const client = new HubSpotClient(accessToken, connection.portal_id);
-
-    // Get fields from harmonies - extract HubSpot property names
-    // Convert 'company.industry' -> 'industry', 'person.title' -> 'title'
-    const extractPropertyName = (field: string) => field.includes('.') ? field.split('.').pop()! : field;
-    const fields = Array.from(new Set(harmonies.map((h) => extractPropertyName(h.field))));
-    const properties = ['name', 'domain', ...fields];
+    const properties = hubspotProperties;
 
     // Fetch companies - either specific IDs or paginated
     let limitedCompanies: any[] = [];
@@ -171,12 +186,11 @@ export async function GET(request: NextRequest) {
         ...company.properties,
       };
 
-      // Map HubSpot property names back to canonical field names
-      // e.g., if harmony.field is 'company.industry', copy company.properties.industry to record['company.industry']
-      for (const harmony of harmonies) {
-        const propertyName = extractPropertyName(harmony.field);
-        if (company.properties[propertyName] !== undefined) {
-          record[harmony.field] = company.properties[propertyName];
+      // Map HubSpot property names to canonical field names using field assignments
+      for (const assignment of fieldAssignments) {
+        const value = company.properties[assignment.hubspotProperty];
+        if (value !== undefined) {
+          record[assignment.canonicalField] = value;
         }
       }
 
