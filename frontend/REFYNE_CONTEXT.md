@@ -1,6 +1,6 @@
 # Refyne Context
 
-**Last updated:** 2026-05-30 (Session 7 - Harmony Architecture Phase 1)
+**Last updated:** 2026-05-30 (Session 7 - Harmony Architecture Phase 2)
 **Status:** Active development
 **Product name:** TBD (Refyne is working name)
 
@@ -142,13 +142,44 @@ Refyne is a four-stage data quality pipeline that sits between B2B data provider
 
 Added transform_function and transform_config columns to harmonies table. FORMAT_FUNCTIONS now keyed by harmony.transform_function (not harmony.id). Fallback to harmony.id for backward compatibility. 8 format harmonies seeded with transform_function values. Phone harmony now reads default_country_code from transform_config. New numeric_parse transform function added.
 
-**Current state:**
+**Phase 1 state:**
 - Format harmonies use data-driven transform functions (e164_phone, email_lowercase, linkedin_url, smart_title_case, numeric_parse)
 - Multiple harmonies can share same transform function (phone + contact-phone-e164 both use e164_phone)
 - Transform config enables customization without code changes (phone country code, extension stripping)
 - Backward compatible: harmonies without transform_function fall back to harmony.id lookup
 
-**Phase 2 next:** harmony_field_assignments table (separate harmony definition from field assignment per org)
+**HARMONY ARCHITECTURE - Phase 2 complete (May 30, 2026)**
+
+Created harmony_field_assignments table to separate harmony definition from field assignment per org. Replaces hardcoded DEFAULT_FIELD_MAPPINGS constant with database-driven assignments. Global defaults (org_id=null) can be overridden per org. Migration 059 applied with 18 global default assignments seeded.
+
+**Phase 2 implementation:**
+
+**Database:**
+- `harmony_field_assignments` table (migration 059)
+  - Maps harmony_id → canonical_field → hubspot_property per org
+  - Global defaults: org_id=null (18 rows seeded)
+  - Org overrides: org_id={uuid} takes precedence
+  - Unique constraint: COALESCE(org_id, '') + harmony_id + canonical_field
+  - Example: company-industry harmony → company.industry canonical → industry HubSpot property
+
+**Helper module:**
+- `lib/harmonies/field-assignments.ts`
+  - `getFieldAssignments(orgId, objectType)` - Fetches and merges global + org-specific assignments
+  - `buildFieldMap(assignments)` - Creates canonical→HubSpot property lookup map
+  - `buildReverseFieldMap(assignments)` - Creates HubSpot property→canonical field lookup map
+
+**API route:**
+- `GET /api/harmonies/field-assignments?objectType=company` - Returns merged assignments for org
+
+**Integration points:**
+- `app/api/normalize/preview/route.ts` - Uses field assignments to map HubSpot properties to canonical fields
+- `lib/queue/normalize-worker.ts` - Uses field assignments to map canonical fields back to HubSpot properties for writes
+- Both routes fetch field assignments, build field maps, and use for bidirectional mapping
+
+**Backward compatibility:**
+- DEFAULT_FIELD_MAPPINGS constant still exists (not deleted per spec)
+- Field assignments used in preview and normalize worker only
+- Other code paths unchanged
 
 **Phase 3 next:** user-created harmony wizard UI (org-specific harmonies, custom reference tables, output format selection)
 
@@ -156,7 +187,7 @@ Added transform_function and transform_config columns to harmonies table. FORMAT
 
 ## Database — Migrations Applied to Production
 
-**Total migrations:** 45 (as of 2026-05-22)
+**Total migrations:** 59 (as of 2026-05-30)
 
 ### Core Tables
 
@@ -210,6 +241,7 @@ Added transform_function and transform_config columns to harmonies table. FORMAT
 | 038 | `org_enrichment_settings` | org_id, write_behavior (always_review/review_first_run/always_auto_write) | Write behavior preferences per org |
 | 039 | `csv_import_sessions` | org_id, status, file_name, rows_total, rows_processed | CSV import tracking (spec written, not yet built) |
 | 039 | `csv_import_records` | session_id, row_number, record_data, status | CSV import record-level data (spec written, not yet built) |
+| 059 | `harmony_field_assignments` | org_id, harmony_id, canonical_field, hubspot_property, output_format, priority | Maps harmonies to fields per org, replaces DEFAULT_FIELD_MAPPINGS (18 global defaults seeded) |
 
 ### RLS Pattern
 
@@ -1049,7 +1081,7 @@ const orgId = ctx.orgId
 
 **Database:** PostgreSQL 15
 
-**Migrations:** 056 applied (through `survivorship_decisions` column on `dedup_merge_history`)
+**Migrations:** 059 applied (through `harmony_field_assignments` table)
 
 **RLS:** Enabled on all org-scoped tables
 
