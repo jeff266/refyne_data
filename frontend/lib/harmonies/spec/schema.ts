@@ -169,6 +169,14 @@ export const HarmonySpecSchema = z.object({
 
   // Optional: rule explanation template with {{oldValue}} and {{newValue}} placeholders
   ruleExplanation: z.string().optional(),
+
+  // Optional: transform function identifier for format harmonies
+  // Maps to FORMAT_FUNCTIONS in normalization engine (e.g., 'e164_phone', 'smart_title_case')
+  transformFunction: z.string().optional(),
+
+  // Optional: configuration object passed to transform function
+  // Example: { default_country_code: "1", strip_extensions: true }
+  transformConfig: z.record(z.string(), z.unknown()).optional(),
 });
 export type HarmonySpec = z.infer<typeof HarmonySpecSchema>;
 
