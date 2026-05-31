@@ -352,6 +352,20 @@ export function startNormalizeWorker() {
         completed_at: new Date().toISOString(),
       });
 
+      // Step 10: Invalidate issue counts cache (force recalculation on next load)
+      if (isRedisConfigured()) {
+        try {
+          const redis = createRedisConnection();
+          const objectType = 'company'; // TODO: Get from run metadata when supporting contacts/deals
+          const cacheKey = `normalize:counts:${orgId}:${portalId}:${objectType}`;
+          await redis.del(cacheKey);
+          console.log(`[Normalize Worker] Invalidated cache: ${cacheKey}`);
+        } catch (cacheErr) {
+          console.warn('[Normalize Worker] Failed to invalidate cache:', cacheErr);
+          // Non-fatal - continue
+        }
+      }
+
       await job.updateProgress({ percentage: 100, stage: 'Complete' });
 
       console.log(
