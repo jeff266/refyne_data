@@ -264,7 +264,13 @@ export function startNormalizeWorker() {
         propToCanonical.get(change.hubspotRecordId)!.set(hubspotProperty, change.field);
       }
 
-      // Step 6: Write to HubSpot in batches of 100
+      // Step 6: Build company name lookup for progress logging
+      const companyNameMap = new Map<string, string>();
+      for (const company of companies) {
+        companyNameMap.set(company.id, company.properties.name || company.id);
+      }
+
+      // Step 7: Write to HubSpot in batches of 100
       const companyEntries = Array.from(byCompany.entries());
       const batchSize = 100;
       let changed = 0;
@@ -272,6 +278,7 @@ export function startNormalizeWorker() {
       const progressItems: Array<{
         run_id: string;
         hubspot_company_id: string;
+        company_name: string;
         field_key: string;
         previous_value: string | null;
         new_value: string;
@@ -299,6 +306,7 @@ export function startNormalizeWorker() {
               progressItems.push({
                 run_id: runId,
                 hubspot_company_id: companyId,
+                company_name: companyNameMap.get(companyId) || companyId,
                 field_key: canonicalField,
                 previous_value: original?.before ?? null,
                 new_value: newValue,
@@ -322,7 +330,7 @@ export function startNormalizeWorker() {
         });
       }
 
-      // Step 7: Log to normalization_run_progress in bulk
+      // Step 8: Log to normalization_run_progress in bulk
       if (progressItems.length > 0 && supabase) {
         await supabase
           .from('normalization_run_progress')
@@ -336,7 +344,7 @@ export function startNormalizeWorker() {
           });
       }
 
-      // Step 8: Update run to completed
+      // Step 9: Update run to completed
       await updateRunStatus(runId, 'completed', {
         records_processed: companyIds.length,
         records_changed: changed,

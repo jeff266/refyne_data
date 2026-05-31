@@ -42,8 +42,8 @@ export async function GET(
 
     // Apply search filter
     if (search) {
-      // Search in hubspot_company_id only (company_name not stored in table)
-      query = query.ilike('hubspot_company_id', `%${search}%`);
+      // Search in company_name or hubspot_company_id
+      query = query.or(`company_name.ilike.%${search}%,hubspot_company_id.ilike.%${search}%`);
     }
 
     // Apply pagination
@@ -64,12 +64,12 @@ export async function GET(
       id: change.id,
       run_id: change.run_id,
       hubspot_company_id: change.hubspot_company_id,
+      company_name: change.company_name || change.hubspot_company_id, // Fall back to ID if name not available
       field_name: change.field_key,
       value_before: change.previous_value,
       value_after: change.new_value,
       status: change.status,
       written_at: change.written_at,
-      company_name: null, // Not stored in table, component will use hubspot_company_id as fallback
     }));
 
     return NextResponse.json({
