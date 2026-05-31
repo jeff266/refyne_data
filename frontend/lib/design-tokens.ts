@@ -42,23 +42,29 @@ export const F = {
 
 // Navigation configuration
 export const NAV = [
+  { group: 'OVERVIEW' },
   { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { divider: true },
-  { group: 'Data' },
-  // Hidden: Prospect is a future product. Quarantine is undefined scope.
-  // { id: 'prospect',    label: 'Prospect',      icon: 'Users' },
-  { id: 'enrich',      label: 'Enrich',        icon: 'Search' },
-  { id: 'history',     label: 'History',       icon: 'Clock' },
+  { group: 'CLEAN' },
   { id: 'normalize',   label: 'Normalize',     icon: 'ArrowUpDown' },
   { id: 'dedup',       label: 'Dedup',         icon: 'GitMerge' },
+  { divider: true },
+  { group: 'ENRICH' },
+  // Hidden: Prospect is a future product. Quarantine is undefined scope.
+  // { id: 'prospect',    label: 'Prospect',      icon: 'Users' },
+  { id: 'arrangements', label: 'Arrangements',  icon: 'Workflow' },
   // Hidden: Prospect is a future product. Quarantine is undefined scope.
   // { id: 'quarantine',  label: 'Quarantine',    icon: 'Shield' },
-  { id: 'arrangements', label: 'Arrangements',  icon: 'Workflow' },
   { divider: true },
-  { group: 'Config' },
+  { group: 'CONFIGURE' },
   { id: 'harmonies',   label: 'Harmonies',     icon: 'Sparkles' },
-  { id: 'mappings',    label: 'Field Mappings', icon: 'ArrowRightLeft' },
   { id: 'connections', label: 'Connections',   icon: 'Plug2' },
+  { id: 'mappings',    label: 'Field Mappings', icon: 'ArrowRightLeft' },
+  { divider: true },
+  { group: 'ACCOUNT' },
+  { id: 'history',     label: 'History',       icon: 'Clock' },
+  { id: 'settings',    label: 'Settings',      icon: 'Settings' },
+  { id: 'profile',     label: 'Profile',       icon: 'User' },
 ] as const;
 
 // Page metadata
@@ -66,16 +72,17 @@ export const PAGE_META: Record<string, { label: string; action: string | null }>
   dashboard:    { label: 'Dashboard',      action: null },
   // Hidden: Prospect is a future product. Quarantine is undefined scope.
   // prospect:     { label: 'Prospect',       action: null },
-  enrich:       { label: 'Enrich',         action: 'New search' },
-  history:      { label: 'History',        action: null },
   normalize:    { label: 'Normalize',      action: null },
   dedup:        { label: 'Dedup',          action: 'Run scan' },
   // Hidden: Prospect is a future product. Quarantine is undefined scope.
   // quarantine:   { label: 'Quarantine',     action: null },
   arrangements: { label: 'Arrangements',   action: 'New arrangement' },
   harmonies:    { label: 'Harmonies',      action: null },
-  mappings:     { label: 'Field Mappings', action: null },
   connections:  { label: 'Connections',    action: 'Add connection' },
+  mappings:     { label: 'Field Mappings', action: null },
+  history:      { label: 'History',        action: null },
+  settings:     { label: 'Settings',       action: null },
+  profile:      { label: 'Profile',        action: null },
 };
 
 export type NavItem =

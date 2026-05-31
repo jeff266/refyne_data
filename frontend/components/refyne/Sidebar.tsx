@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
 import {
   LayoutDashboard,
@@ -38,13 +38,20 @@ const ICONS: Record<string, React.ElementType> = {
   Users,
   Shield,
   Workflow,
+  Settings,
+  User,
 };
 
 export function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const currentPage = pathname.split('/')[1] || 'dashboard';
   const [showHelpMenu, setShowHelpMenu] = useState(false);
   const enrichRunContext = useEnrichRun();
+
+  // Preserve ?object= param across navigation
+  const objectType = searchParams.get('object');
+  const queryString = objectType ? `?object=${objectType}` : '';
 
   return (
     <div
@@ -108,13 +115,13 @@ export function Sidebar() {
               <div
                 key={i}
                 style={{
-                  padding: '8px 8px 4px',
+                  padding: '12px 16px 4px 16px',
                   fontSize: 10,
                   color: C.text3,
                   fontWeight: 600,
-                  letterSpacing: '0.06em',
+                  letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  fontFamily: F.sans,
+                  fontFamily: F.mono,
                 }}
               >
                 {item.group}
@@ -126,60 +133,34 @@ export function Sidebar() {
 
           const active = currentPage === item.id;
           const Icon = ICONS[item.icon];
-          const href = `/${item.id}`;
-          const isEnrich = item.id === 'enrich';
+          const href = `/${item.id}${queryString}`;
 
           return (
-            <div key={item.id}>
-              <Link
-                href={href}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 8px',
-                  borderRadius: 7,
-                  background: active ? 'rgba(99,102,241,0.12)' : 'transparent',
-                  color: active ? C.indigoLt : C.text2,
-                  fontSize: 13,
-                  fontWeight: active ? 500 : 400,
-                  textAlign: 'left',
-                  marginBottom: 1,
-                  border: `1px solid ${active ? C.indigoBrd : 'transparent'}`,
-                  transition: 'all 0.1s',
-                  letterSpacing: '-0.01em',
-                  textDecoration: 'none',
-                }}
-              >
-                {Icon && <Icon size={14} color={active ? C.indigoLt : C.text3} />}
-                {item.label}
-              </Link>
-
-              {/* Show running indicator below Enrich when active */}
-              {isEnrich && enrichRunContext.isRunning && (
-                <Link
-                  href="/enrich"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '4px 8px 4px 30px',
-                    fontSize: 11,
-                    color: C.indigo,
-                    textDecoration: 'none',
-                    borderRadius: 4,
-                    marginTop: 2,
-                    marginBottom: 4,
-                  }}
-                >
-                  <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} />
-                  <span>
-                    Running · {enrichRunContext.processed.toLocaleString()}/{enrichRunContext.total.toLocaleString()}
-                  </span>
-                </Link>
-              )}
-            </div>
+            <Link
+              key={item.id}
+              href={href}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 8px',
+                borderRadius: 7,
+                background: active ? 'rgba(99,102,241,0.12)' : 'transparent',
+                color: active ? C.indigoLt : C.text2,
+                fontSize: 13,
+                fontWeight: active ? 500 : 400,
+                textAlign: 'left',
+                marginBottom: 1,
+                border: `1px solid ${active ? C.indigoBrd : 'transparent'}`,
+                transition: 'all 0.1s',
+                letterSpacing: '-0.01em',
+                textDecoration: 'none',
+              }}
+            >
+              {Icon && <Icon size={14} color={active ? C.indigoLt : C.text3} />}
+              {item.label}
+            </Link>
           );
         })}
       </nav>
@@ -209,46 +190,6 @@ export function Sidebar() {
             }}
           />
         </div>
-        <Link
-          href="/profile"
-          style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '6px 8px',
-            borderRadius: 7,
-            color: currentPage === 'profile' ? C.indigoLt : C.text3,
-            fontSize: 13,
-            marginBottom: 1,
-            background: currentPage === 'profile' ? 'rgba(99,102,241,0.12)' : 'transparent',
-            border: `1px solid ${currentPage === 'profile' ? C.indigoBrd : 'transparent'}`,
-            textDecoration: 'none',
-          }}
-        >
-          <User size={14} />
-          Profile
-        </Link>
-        <Link
-          href="/settings"
-          style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '6px 8px',
-            borderRadius: 7,
-            color: currentPage === 'settings' ? C.indigoLt : C.text3,
-            fontSize: 13,
-            marginBottom: 1,
-            background: currentPage === 'settings' ? 'rgba(99,102,241,0.12)' : 'transparent',
-            border: `1px solid ${currentPage === 'settings' ? C.indigoBrd : 'transparent'}`,
-            textDecoration: 'none',
-          }}
-        >
-          <Settings size={14} />
-          Settings
-        </Link>
         <div>
           <button
             onClick={() => setShowHelpMenu(!showHelpMenu)}
@@ -283,7 +224,7 @@ export function Sidebar() {
           {showHelpMenu && (
             <div style={{ paddingLeft: 30, marginTop: 4, marginBottom: 4 }}>
               <Link
-                href="/privacy"
+                href={`/privacy${queryString}`}
                 style={{
                   display: 'block',
                   padding: '4px 8px',
@@ -296,7 +237,7 @@ export function Sidebar() {
                 Privacy Policy
               </Link>
               <Link
-                href="/security"
+                href={`/security${queryString}`}
                 style={{
                   display: 'block',
                   padding: '4px 8px',
@@ -309,7 +250,7 @@ export function Sidebar() {
                 Security
               </Link>
               <Link
-                href="/terms"
+                href={`/terms${queryString}`}
                 style={{
                   display: 'block',
                   padding: '4px 8px',
