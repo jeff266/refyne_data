@@ -48,6 +48,7 @@ export async function GET(request: Request) {
     // Check for cache-busting parameter
     const url = new URL(request.url);
     const skipCache = url.searchParams.get('nocache') === '1';
+    const objectType = (url.searchParams.get('objectType') ?? 'company') as 'company' | 'contact' | 'deal';
 
     // Get HubSpot connection
     const { data: connection } = await supabase
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
     }
 
     // Check Redis cache first (unless nocache=1)
-    const cacheKey = `normalize:counts:${ctx.orgId}:${connection.portal_id}`;
+    const cacheKey = `normalize:counts:${ctx.orgId}:${connection.portal_id}:${objectType}`;
 
     if (isRedisConfigured() && !skipCache) {
       try {
@@ -100,12 +101,12 @@ export async function GET(request: Request) {
 
     const hubspot = new HubSpotClient(accessToken, connection.portal_id);
 
-    // Fetch active harmonies (company only, since we count on companies)
+    // Fetch active harmonies for selected object type
     const { data: harmoniesData, error: harmoniesError } = await supabase
       .from('harmonies')
       .select('*')
       .eq('is_active', true)
-      .eq('object_type', 'company')
+      .eq('object_type', objectType)
       .or(`org_id.is.null,org_id.eq.${ctx.orgId}`);
 
     if (harmoniesError) {

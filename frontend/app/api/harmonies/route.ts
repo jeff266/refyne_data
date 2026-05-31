@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const objectType = searchParams.get('objectType') ?? 'company';
     const orgId = ctx.orgId;
 
     // Check if preset harmonies exist, if not, seed them
@@ -38,10 +40,11 @@ export async function GET(request: NextRequest) {
       await seedHarmonyLibrary();
     }
 
-    // Fetch all preset harmonies (org_id IS NULL) + org-specific harmonies
+    // Fetch all preset harmonies (org_id IS NULL) + org-specific harmonies for selected object type
     const { data: harmonies, error } = await supabase
       .from('harmonies')
       .select('*')
+      .eq('object_type', objectType)
       .or(`org_id.is.null,org_id.eq.${orgId}`)
       .order('object_type', { ascending: true })
       .order('name', { ascending: true });

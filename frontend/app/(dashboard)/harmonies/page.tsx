@@ -6,6 +6,7 @@ import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, Chip, PrimaryBtn, GhostBtn, Tooltip } from '@/components/refyne';
 import { ReferenceDataTable } from '@/components/harmonies/ReferenceDataTable';
 import { HarmonyWizard } from '@/components/harmonies/HarmonyWizard';
+import { useObjectType } from '@/hooks/useObjectType';
 
 interface HarmonyItem {
   id: string;
@@ -368,6 +369,7 @@ function getAlgorithmDescription(harmonyId: string): string {
 }
 
 export default function HarmoniesPage() {
+  const [objectType] = useObjectType();
   const [harmonies, setHarmonies] = useState<HarmonyItem[]>([]);
   const [enabledIds, setEnabledIds] = useState<Set<string>>(new Set());
   const [insights, setInsights] = useState<Map<string, ComplianceInsight>>(new Map());
@@ -384,7 +386,7 @@ export default function HarmoniesPage() {
   const fetchHarmonies = useCallback(async () => {
     try {
       const [harmoniesRes, insightsRes] = await Promise.all([
-        fetch('/api/harmonies'),
+        fetch(`/api/harmonies?objectType=${objectType}`),
         fetch('/api/compliance/insights')
       ]);
 
@@ -415,7 +417,7 @@ export default function HarmoniesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [objectType]);
 
   useEffect(() => {
     fetchHarmonies();

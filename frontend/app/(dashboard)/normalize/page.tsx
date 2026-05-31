@@ -10,10 +10,9 @@ import { ByCompanyView } from '@/components/normalize/ByCompanyView';
 import { ByFieldView } from '@/components/normalize/ByFieldView';
 import { SkippedList } from '@/components/normalize/SkippedList';
 import { addToast } from '@/components/ui/toast';
+import { useObjectType } from '@/hooks/useObjectType';
 
-// TODO: wire to API - GET /api/harmonies?objectType=company or similar
-// Only company harmonies - contact harmonies don't work on company normalize page
-const list = ['company-name','company-industry','phone','linkedin-url'];
+// Harmony list is now dynamic based on issue-counts API response
 
 interface PreviewRecord {
   company: string;
@@ -39,14 +38,13 @@ type ViewMode = 'by-company' | 'by-field';
 type TabMode = 'preview' | 'skipped';
 
 export default function NormalizePage() {
-  const [active, setActive] = useState(['company-name','company-industry','phone','linkedin-url']);
+  const [objectType] = useObjectType();
+  const [active, setActive] = useState<string[]>([]);
   const toggle = (id: string) => setActive(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id]);
 
   // Source filter state
   const [sourceType, setSourceType] = useState<'all' | 'issues' | 'list'>('issues');
-  const [selectedHarmonyFilters, setSelectedHarmonyFilters] = useState<Set<string>>(
-    new Set(['company-industry', 'phone', 'company-name', 'linkedin-url'])
-  );
+  const [selectedHarmonyFilters, setSelectedHarmonyFilters] = useState<Set<string>>(new Set());
   const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
   const [countsLoading, setCountsLoading] = useState(true);
 
@@ -89,10 +87,19 @@ export default function NormalizePage() {
   const fetchIssueCounts = async () => {
     try {
       // Add nocache parameter to force recalculation (skip Redis cache)
-      const response = await fetch('/api/normalize/issue-counts?nocache=1');
+      const response = await fetch(`/api/normalize/issue-counts?nocache=1&objectType=${objectType}`);
       if (response.ok) {
         const data = await response.json();
-        setIssueCounts(data.counts || {});
+        const counts = data.counts || {};
+        setIssueCounts(counts);
+
+        // Use harmony IDs from API response to populate the toggle list
+        const harmonyIds = Object.keys(counts);
+        if (harmonyIds.length > 0 && active.length === 0) {
+          // Initialize active state with all harmonies from API
+          setActive(harmonyIds);
+          setSelectedHarmonyFilters(new Set(harmonyIds));
+        }
       }
     } catch (error) {
       console.error('Failed to load issue counts:', error);
@@ -101,10 +108,11 @@ export default function NormalizePage() {
     }
   };
 
-  // Load issue counts on mount
+  // Load issue counts when component mounts or objectType changes
   useEffect(() => {
+    setCountsLoading(true);
     fetchIssueCounts();
-  }, []);
+  }, [objectType]);
 
   // Fetch runs when history is expanded
   useEffect(() => {
@@ -149,7 +157,7 @@ export default function NormalizePage() {
       // Fetch company IDs with issues if source type is 'issues'
       if (sourceType === 'issues' && selectedHarmonyFilters.size > 0) {
         const harmonyFiltersParam = Array.from(selectedHarmonyFilters).join(',');
-        const issuesResponse = await fetch(`/api/normalize/companies-with-issues?harmonyIds=${harmonyFiltersParam}`);
+        const issuesResponse = await fetch(`/api/normalize/companies-with-issues?harmonyIds=${harmonyFiltersParam}&objectType=${objectType}`);
 
         if (!issuesResponse.ok) {
           throw new Error('Failed to fetch companies with issues');
@@ -169,7 +177,7 @@ export default function NormalizePage() {
       // Pass active harmony IDs and optional company IDs to preview API
       const harmonyIdsParam = `&harmonyIds=${active.join(',')}`;
       const companyIdsParam = companyIds ? `&companyIds=${companyIds.join(',')}` : '';
-      const response = await fetch(`/api/normalize/preview?limit=50${harmonyIdsParam}${companyIdsParam}`);
+      const response = await fetch(`/api/normalize/preview?limit=50${harmonyIdsParam}${companyIdsParam}&objectType=${objectType}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch preview');
@@ -478,7 +486,7 @@ export default function NormalizePage() {
                 {countsLoading ? (
                   <div style={{ padding: '8px 0', fontSize: 10, color: C.text3 }}>Loading counts...</div>
                 ) : (
-                  list.map(harmonyId => {
+                  Object.keys(issueCounts).map(harmonyId => {
                     const count = issueCounts[harmonyId] || 0;
                     const isChecked = selectedHarmonyFilters.has(harmonyId);
 
@@ -526,7 +534,7 @@ export default function NormalizePage() {
             <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Harmonies</div>
           </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            {list.map(id => (
+            {Object.keys(issueCounts).map(id => (
               <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', borderBottom: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 11, fontFamily: F.mono, color: active.includes(id) ? C.text : C.text3 }}>{id}</span>
                 <Toggle on={active.includes(id)} onToggle={() => toggle(id)} />

@@ -8,6 +8,7 @@ import { Card, GhostBtn, PrimaryBtn } from '@/components/refyne';
 import { ScanningState } from './ScanningState';
 import type { DedupCluster, ClustersCounts } from '@/lib/dedup/cluster-types';
 import type { PairGrade } from '@/lib/dedup/types';
+import { useObjectType } from '@/hooks/useObjectType';
 
 // ─────────────────────────────────────────────────────────────
 // Constants
@@ -382,6 +383,7 @@ interface ClusterQueueProps {
 
 export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
   const router = useRouter();
+  const [objectType] = useObjectType();
 
   // Data state
   const [clusters, setClusters] = useState<DedupCluster[]>([]);
@@ -501,6 +503,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
       if (sizeFilter !== 'all') params.set('size', sizeFilter);
       params.set('page', String(page));
       params.set('per_page', String(perPage));
+      params.set('objectType', objectType);
 
       const res = await fetch(`/api/dedup/clusters?${params}`, {
         headers: { 'x-org-id': orgId },
@@ -543,7 +546,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
     } finally {
       setLoading(false);
     }
-  }, [orgId, gradeFilter, statusFilter, sizeFilter, page, perPage, view]);
+  }, [orgId, gradeFilter, statusFilter, sizeFilter, page, perPage, view, objectType]);
 
   useEffect(() => {
     fetchClusters();

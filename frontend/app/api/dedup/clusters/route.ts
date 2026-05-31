@@ -53,12 +53,14 @@ export async function GET(request: NextRequest) {
     const size = searchParams.get('size') || 'all';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const perPage = Math.min(200, Math.max(1, parseInt(searchParams.get('per_page') || '50', 10)));
+    const objectType = searchParams.get('objectType') ?? 'company';
 
     // Build base query
     let query = supabase
       .from('dedup_clusters')
       .select('*', { count: 'exact' })
-      .eq('org_id', orgId);
+      .eq('org_id', orgId)
+      .eq('object_type', objectType);
 
     // Apply grade filter
     if (grade !== 'all') {

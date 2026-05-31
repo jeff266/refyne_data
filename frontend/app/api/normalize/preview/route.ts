@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
     const harmonyIdsParam = searchParams.get('harmonyIds');
     const companyIdsParam = searchParams.get('companyIds');
     const limit = Math.min(100, parseInt(searchParams.get('limit') || '50', 10));
+    const objectType = (searchParams.get('objectType') ?? 'company') as 'company' | 'contact' | 'deal';
 
     // Get HubSpot connection
     const { data: connection } = await supabase
@@ -73,12 +74,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ preview: [], summary: { total: 0, fuzzy: 0, phonetic: 0 } });
     }
 
-    // Fetch active harmonies (company only, since we fetch companies)
+    // Fetch active harmonies for selected object type
     let harmonyQuery = supabase
       .from('harmonies')
       .select('*')
       .eq('is_active', true)
-      .eq('object_type', 'company')
+      .eq('object_type', objectType)
       .or(`org_id.is.null,org_id.eq.${ctx.orgId}`);
 
     if (harmonyIdsParam) {
@@ -138,7 +139,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Fetch field assignments for this org (replaces DEFAULT_FIELD_MAPPINGS)
-    const fieldAssignments = await getFieldAssignments(ctx.orgId, 'company');
+    const fieldAssignments = await getFieldAssignments(ctx.orgId, objectType);
     const fieldMap = buildFieldMap(fieldAssignments);
 
     // Build reverse map: HubSpot property → canonical field
