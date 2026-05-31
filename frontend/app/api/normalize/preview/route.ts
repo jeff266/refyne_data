@@ -73,11 +73,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ preview: [], summary: { total: 0, fuzzy: 0, phonetic: 0 } });
     }
 
-    // Fetch active harmonies
+    // Fetch active harmonies (company only, since we fetch companies)
     let harmonyQuery = supabase
       .from('harmonies')
       .select('*')
       .eq('is_active', true)
+      .eq('object_type', 'company')
       .or(`org_id.is.null,org_id.eq.${ctx.orgId}`);
 
     if (harmonyIdsParam) {

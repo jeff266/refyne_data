@@ -11,8 +11,9 @@ import { ByFieldView } from '@/components/normalize/ByFieldView';
 import { SkippedList } from '@/components/normalize/SkippedList';
 import { addToast } from '@/components/ui/toast';
 
-// TODO: wire to API - GET /api/harmonies or similar
-const list = ['company-name','company-industry','phone-e164','linkedin-url','person-title','person-name'];
+// TODO: wire to API - GET /api/harmonies?objectType=company or similar
+// Only company harmonies - contact harmonies don't work on company normalize page
+const list = ['company-name','company-industry','phone','linkedin-url'];
 
 interface PreviewRecord {
   company: string;
@@ -38,13 +39,13 @@ type ViewMode = 'by-company' | 'by-field';
 type TabMode = 'preview' | 'skipped';
 
 export default function NormalizePage() {
-  const [active, setActive] = useState(['company-name','company-industry','phone-e164','linkedin-url']);
+  const [active, setActive] = useState(['company-name','company-industry','phone','linkedin-url']);
   const toggle = (id: string) => setActive(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id]);
 
   // Source filter state
   const [sourceType, setSourceType] = useState<'all' | 'issues' | 'list'>('issues');
   const [selectedHarmonyFilters, setSelectedHarmonyFilters] = useState<Set<string>>(
-    new Set(['company-industry', 'phone-e164', 'company-name', 'linkedin-url'])
+    new Set(['company-industry', 'phone', 'company-name', 'linkedin-url'])
   );
   const [issueCounts, setIssueCounts] = useState<Record<string, number>>({});
   const [countsLoading, setCountsLoading] = useState(true);
