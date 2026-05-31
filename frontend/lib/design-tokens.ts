@@ -45,12 +45,14 @@ export const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { divider: true },
   { group: 'Data' },
-  { id: 'prospect',    label: 'Prospect',      icon: 'Users' },
+  // Hidden: Prospect is a future product. Quarantine is undefined scope.
+  // { id: 'prospect',    label: 'Prospect',      icon: 'Users' },
   { id: 'enrich',      label: 'Enrich',        icon: 'Search' },
   { id: 'history',     label: 'History',       icon: 'Clock' },
   { id: 'normalize',   label: 'Normalize',     icon: 'ArrowUpDown' },
   { id: 'dedup',       label: 'Dedup',         icon: 'GitMerge' },
-  { id: 'quarantine',  label: 'Quarantine',    icon: 'Shield' },
+  // Hidden: Prospect is a future product. Quarantine is undefined scope.
+  // { id: 'quarantine',  label: 'Quarantine',    icon: 'Shield' },
   { id: 'arrangements', label: 'Arrangements',  icon: 'Workflow' },
   { divider: true },
   { group: 'Config' },
@@ -62,12 +64,14 @@ export const NAV = [
 // Page metadata
 export const PAGE_META: Record<string, { label: string; action: string | null }> = {
   dashboard:    { label: 'Dashboard',      action: null },
-  prospect:     { label: 'Prospect',       action: null },
+  // Hidden: Prospect is a future product. Quarantine is undefined scope.
+  // prospect:     { label: 'Prospect',       action: null },
   enrich:       { label: 'Enrich',         action: 'New search' },
   history:      { label: 'History',        action: null },
   normalize:    { label: 'Normalize',      action: null },
   dedup:        { label: 'Dedup',          action: 'Run scan' },
-  quarantine:   { label: 'Quarantine',     action: null },
+  // Hidden: Prospect is a future product. Quarantine is undefined scope.
+  // quarantine:   { label: 'Quarantine',     action: null },
   arrangements: { label: 'Arrangements',   action: 'New arrangement' },
   harmonies:    { label: 'Harmonies',      action: null },
   mappings:     { label: 'Field Mappings', action: null },
