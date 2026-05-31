@@ -29,13 +29,23 @@ export async function GET(
   }
 
   try {
-    // Build query
+    // Build query with column aliases to match component expectations
+    // Note: company_name not stored in table, component will use hubspot_company_id as fallback
     let query = supabase
       .from('normalization_run_progress')
-      .select('*', { count: 'exact' })
+      .select(`
+        id,
+        run_id,
+        hubspot_company_id,
+        field_key as field_name,
+        previous_value as value_before,
+        new_value as value_after,
+        status,
+        written_at
+      `, { count: 'exact' })
       .eq('run_id', runId);
 
-    // Apply field filter
+    // Apply field filter (use actual column name, not alias)
     if (field && field !== 'all') {
       query = query.eq('field_key', field);
     }
