@@ -7,6 +7,7 @@ name: LinkedIn URL Normalizer
 description: Normalizes LinkedIn URLs, extracts company/person identifiers, and standardizes URL format
 category: social
 author: revops-impact
+transformFunction: linkedin_url
 
 applies_to:
   fields:

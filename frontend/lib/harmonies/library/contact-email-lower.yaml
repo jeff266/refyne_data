@@ -7,6 +7,7 @@ name: Contact Email Lowercase Normalizer
 description: Normalizes contact email addresses to lowercase for consistency
 category: contact-fields
 author: revops-impact
+transformFunction: email_lowercase
 
 applies_to:
   fields:

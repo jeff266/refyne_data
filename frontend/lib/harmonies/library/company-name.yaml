@@ -7,6 +7,7 @@ name: Company Name Normalizer
 description: Normalizes company names by cleaning whitespace, title-casing, and normalizing legal suffixes to canonical forms (Corp., Inc., LLC, etc.)
 category: business-entities
 author: revops-impact
+transformFunction: smart_title_case
 
 applies_to:
   fields:

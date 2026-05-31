@@ -22,6 +22,8 @@ export interface HarmonyRow {
   is_active: boolean;
   rule_count: number;
   transform_type: 'lookup' | 'format';
+  transform_function?: string | null;
+  transform_config?: Record<string, any> | null;
   reference_table?: string | null;
   yaml_content: string | null;
   examples?: Array<{ input: any; output: any }> | null;
@@ -95,6 +97,8 @@ export async function seedHarmonyLibrary(): Promise<{
         is_active: spec.default_enabled !== false, // Default to active unless explicitly disabled
         rule_count: spec.rules?.length || 0,
         transform_type: transformType,
+        transform_function: spec.transformFunction || null,
+        transform_config: spec.transformConfig || null,
         reference_table: referenceTable,
         yaml_content: null, // Optional: could store full YAML here if needed
         examples: examples.length > 0 ? examples : null,

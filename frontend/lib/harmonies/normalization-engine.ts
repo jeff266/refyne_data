@@ -25,6 +25,8 @@ export interface Harmony {
   field: string;
   objectType: 'company' | 'contact';
   transformType: 'lookup' | 'format';
+  transformFunction?: string | null;
+  transformConfig?: Record<string, any>;
   referenceTable?: string;
   fuzzyThreshold?: number;
   phoneticEnabled?: boolean;
@@ -259,14 +261,31 @@ export async function applyLookupHarmony(
 
 // ── Format Harmony (Algorithmic) ───────────────────────────────────
 
-function normalizePhoneE164(phone: string): string | null {
-  // Simple E.164 normalization - strips non-digits, adds +1 for US
-  const digits = phone.replace(/\D/g, '');
+function normalizePhoneE164(phone: string, config?: Record<string, any>): string | null {
+  // E.164 normalization with configurable default country code
+  const defaultCountryCode = config?.default_country_code || '1';
+  const stripExtensions = config?.strip_extensions ?? true;
+
+  // Remove extension if enabled
+  let cleaned = phone;
+  if (stripExtensions) {
+    // Remove common extension patterns (x123, ext 123, #123)
+    cleaned = phone.replace(/\s*(x|ext\.?|extension|#)\s*\d+$/i, '');
+  }
+
+  const digits = cleaned.replace(/\D/g, '');
+
+  // 10-digit number → add country code
   if (digits.length === 10) {
-    return `+1${digits}`;
-  } else if (digits.length === 11 && digits[0] === '1') {
+    return `+${defaultCountryCode}${digits}`;
+  }
+
+  // 11-digit number starting with country code
+  if (digits.length === 11 && digits[0] === defaultCountryCode[0]) {
     return `+${digits}`;
   }
+
+  // Already formatted or invalid
   return null;
 }
 
@@ -327,29 +346,74 @@ function applySmartTitleCase(name: string): string {
     .join('');
 }
 
-const FORMAT_FUNCTIONS: Record<string, (value: string) => string | null> = {
-  'phone-e164': normalizePhoneE164,
-  'email-lowercase': (v) => v.toLowerCase().trim(),
-  'linkedin-url': normalizeLinkedInUrl,
-  'company-name': applySmartTitleCase,
+/**
+ * Parse numeric values from strings (employees, revenue, etc.)
+ * Handles formats like "50-100", "$1.5M", "100k employees"
+ */
+function normalizeNumeric(value: string, config?: Record<string, any>): string | null {
+  // Remove currency symbols, commas, and whitespace
+  const cleaned = value.replace(/[$,\s]/g, '');
+
+  // Handle range formats (take midpoint)
+  const rangeMatch = cleaned.match(/^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/);
+  if (rangeMatch) {
+    const low = parseFloat(rangeMatch[1]);
+    const high = parseFloat(rangeMatch[2]);
+    return String(Math.round((low + high) / 2));
+  }
+
+  // Handle K/M/B suffixes
+  const suffixMatch = cleaned.match(/^(\d+(?:\.\d+)?)(k|m|b)$/i);
+  if (suffixMatch) {
+    const num = parseFloat(suffixMatch[1]);
+    const suffix = suffixMatch[2].toLowerCase();
+    const multiplier = suffix === 'k' ? 1000 : suffix === 'm' ? 1000000 : 1000000000;
+    return String(Math.round(num * multiplier));
+  }
+
+  // Handle plain numbers
+  const numMatch = cleaned.match(/^(\d+(?:\.\d+)?)$/);
+  if (numMatch) {
+    return String(Math.round(parseFloat(numMatch[1])));
+  }
+
+  return null;
+}
+
+type FormatFn = (value: string, config?: Record<string, any>) => string | null;
+
+const FORMAT_FUNCTIONS: Record<string, FormatFn> = {
+  'e164_phone': normalizePhoneE164,
+  'email_lowercase': (v) => v.toLowerCase().trim(),
+  'linkedin_url': normalizeLinkedInUrl,
+  'smart_title_case': applySmartTitleCase,
+  'numeric_parse': normalizeNumeric,
 };
 
 export async function applyFormatHarmony(
   records: HubSpotRecord[],
   harmony: Harmony
 ): Promise<NormalizationResult[]> {
-  const formatFn = FORMAT_FUNCTIONS[harmony.id];
+  // Look up format function using transform_function (data-driven)
+  // Fallback to harmony.id for backward compatibility during transition
+  const functionKey = harmony.transformFunction || harmony.id;
+  const formatFn = FORMAT_FUNCTIONS[functionKey];
+
   if (!formatFn) {
-    throw new Error(`No format function for harmony ${harmony.id}`);
+    throw new Error(
+      `No format function for harmony ${harmony.id}. ` +
+      `Tried transform_function='${harmony.transformFunction}' and harmony.id='${harmony.id}'`
+    );
   }
 
   const changes: NormalizationResult[] = [];
+  const config = harmony.transformConfig || {};
 
   for (const record of records) {
     const raw = record[harmony.field];
     if (!raw) continue;
 
-    const formatted = formatFn(raw);
+    const formatted = formatFn(raw, config);
     if (!formatted || formatted === raw) continue;
 
     changes.push({

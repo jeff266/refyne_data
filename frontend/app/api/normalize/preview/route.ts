@@ -123,6 +123,8 @@ export async function GET(request: NextRequest) {
         field: h.field,
         objectType: h.object_type as 'company' | 'contact',
         transformType: h.transform_type || 'lookup',
+        transformFunction: h.transform_function,
+        transformConfig: h.transform_config || {},
         referenceTable: h.reference_table,
         fuzzyThreshold: h.fuzzy_threshold || 0.8,
         phoneticEnabled: h.phonetic_enabled || false,

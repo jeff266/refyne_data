@@ -7,6 +7,7 @@ name: Company Revenue Parser
 description: Parses revenue from various formats like "$15M", "15,000,000", "15 million" into numeric values
 category: firmographics
 author: revops-impact
+transformFunction: numeric_parse
 
 applies_to:
   fields:

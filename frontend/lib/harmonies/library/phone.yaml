@@ -7,6 +7,10 @@ name: Phone Number Formatter
 description: Formats phone numbers to standard formats. US format +1 (XXX) XXX-XXXX, with international detection
 category: contact-fields
 author: revops-impact
+transformFunction: e164_phone
+transformConfig:
+  default_country_code: "1"
+  strip_extensions: true
 
 applies_to:
   fields:
