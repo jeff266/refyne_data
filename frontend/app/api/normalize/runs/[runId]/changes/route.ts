@@ -29,31 +29,21 @@ export async function GET(
   }
 
   try {
-    // Build query with column aliases to match component expectations
-    // Note: company_name not stored in table, component will use hubspot_company_id as fallback
+    // Build query
     let query = supabase
       .from('normalization_run_progress')
-      .select(`
-        id,
-        run_id,
-        hubspot_company_id,
-        field_key as field_name,
-        previous_value as value_before,
-        new_value as value_after,
-        status,
-        written_at
-      `, { count: 'exact' })
+      .select('*', { count: 'exact' })
       .eq('run_id', runId);
 
-    // Apply field filter (use actual column name, not alias)
+    // Apply field filter
     if (field && field !== 'all') {
       query = query.eq('field_key', field);
     }
 
     // Apply search filter
     if (search) {
-      // Search in company_name or hubspot_company_id
-      query = query.or(`company_name.ilike.%${search}%,hubspot_company_id.ilike.%${search}%`);
+      // Search in hubspot_company_id only (company_name not stored in table)
+      query = query.ilike('hubspot_company_id', `%${search}%`);
     }
 
     // Apply pagination
@@ -68,8 +58,22 @@ export async function GET(
       throw error;
     }
 
+    // Transform column names to match component expectations
+    // field_key → field_name, previous_value → value_before, new_value → value_after
+    const transformedChanges = (changes || []).map((change: any) => ({
+      id: change.id,
+      run_id: change.run_id,
+      hubspot_company_id: change.hubspot_company_id,
+      field_name: change.field_key,
+      value_before: change.previous_value,
+      value_after: change.new_value,
+      status: change.status,
+      written_at: change.written_at,
+      company_name: null, // Not stored in table, component will use hubspot_company_id as fallback
+    }));
+
     return NextResponse.json({
-      changes: transformArray(changes || []),
+      changes: transformedChanges,
       total: count || 0,
       page,
       limit,
