@@ -127,6 +127,124 @@ tests:
     input: "ACCOUNT MANAGER"
     expected: "Account Manager"
 
+referenceData:
+  - input: Chief Executive Officer
+    canonical: CEO
+  - input: ceo
+    canonical: CEO
+  - input: Chief Technology Officer
+    canonical: CTO
+  - input: cto
+    canonical: CTO
+  - input: Chief Financial Officer
+    canonical: CFO
+  - input: cfo
+    canonical: CFO
+  - input: Chief Operating Officer
+    canonical: COO
+  - input: coo
+    canonical: COO
+  - input: Chief Marketing Officer
+    canonical: CMO
+  - input: cmo
+    canonical: CMO
+  - input: Chief Revenue Officer
+    canonical: CRO
+  - input: cro
+    canonical: CRO
+  - input: Chief Product Officer
+    canonical: CPO
+  - input: cpo
+    canonical: CPO
+  - input: Chief People Officer
+    canonical: CPO
+  - input: Vice President
+    canonical: VP
+  - input: VP of Sales
+    canonical: VP Sales
+  - input: Vice President of Sales
+    canonical: VP Sales
+  - input: VP of Marketing
+    canonical: VP Marketing
+  - input: Vice President of Marketing
+    canonical: VP Marketing
+  - input: VP of Engineering
+    canonical: VP Engineering
+  - input: Vice President of Engineering
+    canonical: VP Engineering
+  - input: VP of Product
+    canonical: VP Product
+  - input: Vice President of Product
+    canonical: VP Product
+  - input: Director of Sales
+    canonical: Director of Sales
+  - input: Director of Marketing
+    canonical: Director of Marketing
+  - input: Director of Engineering
+    canonical: Director of Engineering
+  - input: Senior Director
+    canonical: Senior Director
+  - input: Managing Director
+    canonical: Managing Director
+  - input: Account Executive
+    canonical: Account Executive
+  - input: AE
+    canonical: Account Executive
+  - input: Senior Account Executive
+    canonical: Senior Account Executive
+  - input: Sales Development Representative
+    canonical: SDR
+  - input: SDR
+    canonical: SDR
+  - input: Business Development Representative
+    canonical: BDR
+  - input: BDR
+    canonical: BDR
+  - input: Customer Success Manager
+    canonical: Customer Success Manager
+  - input: CSM
+    canonical: Customer Success Manager
+  - input: Account Manager
+    canonical: Account Manager
+  - input: AM
+    canonical: Account Manager
+  - input: Product Manager
+    canonical: Product Manager
+  - input: PM
+    canonical: Product Manager
+  - input: Senior Product Manager
+    canonical: Senior Product Manager
+  - input: Software Engineer
+    canonical: Software Engineer
+  - input: Senior Software Engineer
+    canonical: Senior Software Engineer
+  - input: Staff Engineer
+    canonical: Staff Engineer
+  - input: Principal Engineer
+    canonical: Principal Engineer
+  - input: Engineering Manager
+    canonical: Engineering Manager
+  - input: Marketing Manager
+    canonical: Marketing Manager
+  - input: Demand Generation Manager
+    canonical: Demand Generation Manager
+  - input: Revenue Operations Manager
+    canonical: Revenue Operations Manager
+  - input: RevOps Manager
+    canonical: Revenue Operations Manager
+  - input: Sales Operations Manager
+    canonical: Sales Operations Manager
+  - input: Founder
+    canonical: Founder
+  - input: Co-Founder
+    canonical: Co-Founder
+  - input: President
+    canonical: President
+  - input: Partner
+    canonical: Partner
+  - input: Managing Partner
+    canonical: Managing Partner
+
 on_error: fail-silent-log
 default_enabled: true
 tags:

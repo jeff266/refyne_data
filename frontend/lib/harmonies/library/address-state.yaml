@@ -276,6 +276,120 @@ tests:
       name: "Oregon"
       abbreviation: "OR"
 
+referenceData:
+  - input: Alabama
+    canonical: AL
+  - input: Alaska
+    canonical: AK
+  - input: Arizona
+    canonical: AZ
+  - input: Arkansas
+    canonical: AR
+  - input: California
+    canonical: CA
+  - input: Cal
+    canonical: CA
+  - input: Calif
+    canonical: CA
+  - input: Colorado
+    canonical: CO
+  - input: Connecticut
+    canonical: CT
+  - input: Delaware
+    canonical: DE
+  - input: Florida
+    canonical: FL
+  - input: Georgia
+    canonical: GA
+  - input: Hawaii
+    canonical: HI
+  - input: Idaho
+    canonical: ID
+  - input: Illinois
+    canonical: IL
+  - input: Indiana
+    canonical: IN
+  - input: Iowa
+    canonical: IA
+  - input: Kansas
+    canonical: KS
+  - input: Kentucky
+    canonical: KY
+  - input: Louisiana
+    canonical: LA
+  - input: Maine
+    canonical: ME
+  - input: Maryland
+    canonical: MD
+  - input: Massachusetts
+    canonical: MA
+  - input: Mass
+    canonical: MA
+  - input: Michigan
+    canonical: MI
+  - input: Minnesota
+    canonical: MN
+  - input: Mississippi
+    canonical: MS
+  - input: Missouri
+    canonical: MO
+  - input: Montana
+    canonical: MT
+  - input: Nebraska
+    canonical: NE
+  - input: Nevada
+    canonical: NV
+  - input: New Hampshire
+    canonical: NH
+  - input: New Jersey
+    canonical: NJ
+  - input: New Mexico
+    canonical: NM
+  - input: New York
+    canonical: NY
+  - input: North Carolina
+    canonical: NC
+  - input: North Dakota
+    canonical: ND
+  - input: Ohio
+    canonical: OH
+  - input: Oklahoma
+    canonical: OK
+  - input: Oregon
+    canonical: OR
+  - input: Pennsylvania
+    canonical: PA
+  - input: Rhode Island
+    canonical: RI
+  - input: South Carolina
+    canonical: SC
+  - input: South Dakota
+    canonical: SD
+  - input: Tennessee
+    canonical: TN
+  - input: Texas
+    canonical: TX
+  - input: Utah
+    canonical: UT
+  - input: Vermont
+    canonical: VT
+  - input: Virginia
+    canonical: VA
+  - input: Washington
+    canonical: WA
+  - input: West Virginia
+    canonical: WV
+  - input: Wisconsin
+    canonical: WI
+  - input: Wyoming
+    canonical: WY
+  - input: District of Columbia
+    canonical: DC
+  - input: Washington DC
+    canonical: DC
+  - input: Puerto Rico
+    canonical: PR
+
 on_error: fail-silent-log
 default_enabled: true
 tags:

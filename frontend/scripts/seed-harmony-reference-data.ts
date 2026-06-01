@@ -19,6 +19,9 @@ config({ path: resolve(process.cwd(), '.env.local') });
 import { INDUSTRY_SEED } from '../lib/harmonies/seed-data/industries';
 import { LEGAL_SUFFIX_SEED } from '../lib/harmonies/seed-data/legal-suffixes';
 import { COUNTRIES_SEED } from '../lib/harmonies/seed-data/countries';
+import { readFileSync, readdirSync } from 'fs';
+import { join } from 'path';
+import * as yaml from 'yaml';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -89,6 +92,34 @@ async function seedReferenceData() {
       org_id: null,
       is_active: true,
     });
+  }
+
+  // ── Load referenceData from YAML files ────────────────────────
+  console.log('[Reference Data Seeder] Loading referenceData from YAML harmony files...');
+  const libraryDir = join(process.cwd(), 'lib', 'harmonies', 'library');
+  const yamlFiles = readdirSync(libraryDir).filter(f => f.endsWith('.yaml'));
+
+  for (const file of yamlFiles) {
+    const filePath = join(libraryDir, file);
+    const content = readFileSync(filePath, 'utf-8');
+    const parsed = yaml.parse(content);
+
+    if (parsed.referenceData && parsed.referenceData.length > 0 && parsed.reference_table) {
+      console.log(`[Reference Data Seeder]   Loading ${parsed.referenceData.length} rows from ${file} (${parsed.reference_table})...`);
+
+      for (const row of parsed.referenceData) {
+        allRows.push({
+          table_name: parsed.reference_table,
+          input_value: row.input,
+          canonical_value: row.canonical,
+          language: 'en',
+          source: 'refyne',
+          fuzzy_eligible: true,
+          org_id: null,
+          is_active: true,
+        });
+      }
+    }
   }
 
   console.log(`[Reference Data Seeder] Total rows to insert: ${allRows.length}`);
