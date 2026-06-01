@@ -152,21 +152,21 @@ export default function NormalizePage() {
     setPreviewLoading(true);
 
     try {
-      let companyIds: string[] | undefined;
+      let recordIds: string[] | undefined;
 
-      // Fetch company IDs with issues if source type is 'issues'
+      // Fetch record IDs with issues if source type is 'issues'
       if (sourceType === 'issues' && selectedHarmonyFilters.size > 0) {
         const harmonyFiltersParam = Array.from(selectedHarmonyFilters).join(',');
         const issuesResponse = await fetch(`/api/normalize/companies-with-issues?harmonyIds=${harmonyFiltersParam}&objectType=${objectType}`);
 
         if (!issuesResponse.ok) {
-          throw new Error('Failed to fetch companies with issues');
+          throw new Error(`Failed to fetch ${objectType === 'contact' ? 'contacts' : 'companies'} with issues`);
         }
 
         const issuesData = await issuesResponse.json();
-        companyIds = issuesData.companyIds;
+        recordIds = issuesData.companyIds; // API still returns 'companyIds' field name for backward compatibility
 
-        if (!companyIds || companyIds.length === 0) {
+        if (!recordIds || recordIds.length === 0) {
           setPreview([]);
           addToast('success', `No ${objectType === 'contact' ? 'contacts' : 'companies'} need normalization for selected harmonies`);
           setPreviewLoading(false);
@@ -174,10 +174,10 @@ export default function NormalizePage() {
         }
       }
 
-      // Pass active harmony IDs and optional company IDs to preview API
+      // Pass active harmony IDs and optional record IDs to preview API
       const harmonyIdsParam = `&harmonyIds=${active.join(',')}`;
-      const companyIdsParam = companyIds ? `&companyIds=${companyIds.join(',')}` : '';
-      const response = await fetch(`/api/normalize/preview?limit=50${harmonyIdsParam}${companyIdsParam}&objectType=${objectType}`);
+      const recordIdsParam = recordIds ? `&companyIds=${recordIds.join(',')}` : '';
+      const response = await fetch(`/api/normalize/preview?limit=50${harmonyIdsParam}${recordIdsParam}&objectType=${objectType}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch preview');
@@ -457,7 +457,7 @@ export default function NormalizePage() {
 
           {/* Source selector */}
           <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
-            {/* All companies option */}
+            {/* All records option */}
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer' }}>
               <input
                 type="radio"
