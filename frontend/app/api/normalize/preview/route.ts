@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
       orgSettings = result.data;
       console.log(`[Normalize Preview] Org settings query: ${Date.now() - settingsStart}ms, found: ${orgSettings?.length || 0}`);
 
-      if (result.error) {
+      if ('error' in result && result.error) {
         console.error('[Normalize Preview] Org settings error:', result.error);
         throw result.error;
       }
