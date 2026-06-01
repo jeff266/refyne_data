@@ -34,6 +34,12 @@ function policyColor(p: string) {
   return p === 'always_overwrite' ? C.amber : p === 'never_overwrite' ? C.text3 : C.green;
 }
 
+interface Harmony {
+  id: string;
+  name: string;
+  object_type: string;
+}
+
 export default function MappingsPage() {
   const [mappings, setMappings] = useState<FieldMapping[]>([]);
   const [unmappedProps, setUnmappedProps] = useState<UnmappedProperty[]>([]);
@@ -45,6 +51,17 @@ export default function MappingsPage() {
   const [objectFilter, setObjectFilter] = useState<string>('company');
   const [portalFilter, setPortalFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+
+  // Add mapping form
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [harmonies, setHarmonies] = useState<Harmony[]>([]);
+  const [formData, setFormData] = useState({
+    harmonyId: '',
+    canonicalField: '',
+    hubspotProperty: '',
+    outputFormat: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -90,6 +107,64 @@ export default function MappingsPage() {
       setLoading(false);
     }
   }
+
+  async function fetchHarmonies() {
+    try {
+      const res = await fetch(`/api/harmonies?objectType=${objectFilter}`);
+      if (res.ok) {
+        const data = await res.json();
+        setHarmonies(data.harmonies || []);
+      }
+    } catch (err) {
+      console.error('Error fetching harmonies:', err);
+    }
+  }
+
+  async function handleAddMapping(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const res = await fetch('/api/harmonies/field-assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          harmonyId: formData.harmonyId,
+          objectType: objectFilter,
+          canonicalField: formData.canonicalField,
+          hubspotProperty: formData.hubspotProperty,
+          outputFormat: formData.outputFormat || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to create mapping');
+      }
+
+      // Refresh mappings and close form
+      await fetchData();
+      setShowAddModal(false);
+      setFormData({
+        harmonyId: '',
+        canonicalField: '',
+        hubspotProperty: '',
+        outputFormat: '',
+      });
+    } catch (err) {
+      console.error('Error creating mapping:', err);
+      alert(err instanceof Error ? err.message : 'Failed to create mapping');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Fetch harmonies when modal opens
+  useEffect(() => {
+    if (showAddModal) {
+      fetchHarmonies();
+    }
+  }, [showAddModal, objectFilter]);
 
   // Filter mappings by type
   const systemMappings = mappings.filter((m) => m.is_system);
@@ -408,10 +483,69 @@ export default function MappingsPage() {
             >
               Custom Mappings
             </span>
-            <PrimaryBtn>
+            <PrimaryBtn onClick={() => setShowAddModal(!showAddModal)}>
               <Plus size={12} /> Add mapping
             </PrimaryBtn>
           </div>
+
+          {/* Add mapping form */}
+          {showAddModal && (
+            <form onSubmit={handleAddMapping} style={{ padding: 20, borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: C.text3, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Harmony
+                </label>
+                <select
+                  required
+                  value={formData.harmonyId}
+                  onChange={(e) => setFormData({ ...formData, harmonyId: e.target.value })}
+                  style={{ width: '100%', padding: '8px 12px', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, fontFamily: F.sans }}
+                >
+                  <option value="">Select a harmony...</option>
+                  {harmonies.map((h) => (
+                    <option key={h.id} value={h.id}>{h.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: C.text3, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Canonical Field
+                </label>
+                <input
+                  required
+                  type="text"
+                  placeholder="e.g. contact.firstname"
+                  value={formData.canonicalField}
+                  onChange={(e) => setFormData({ ...formData, canonicalField: e.target.value })}
+                  style={{ width: '100%', padding: '8px 12px', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, fontFamily: F.mono }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: C.text3, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  HubSpot Property
+                </label>
+                <input
+                  required
+                  type="text"
+                  placeholder="e.g. firstname"
+                  value={formData.hubspotProperty}
+                  onChange={(e) => setFormData({ ...formData, hubspotProperty: e.target.value })}
+                  style={{ width: '100%', padding: '8px 12px', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, fontFamily: F.mono }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <PrimaryBtn type="submit" disabled={submitting}>
+                  {submitting ? <><Loader2 size={12} className="animate-spin" /> Creating...</> : 'Create mapping'}
+                </PrimaryBtn>
+                <GhostBtn type="button" onClick={() => setShowAddModal(false)}>
+                  Cancel
+                </GhostBtn>
+              </div>
+            </form>
+          )}
           {customMappings.length === 0 ? (
             <div
               style={{

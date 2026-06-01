@@ -12,7 +12,7 @@ const OBJECT_OPTIONS: {
   icon: any;
 }[] = [
   { id: 'company', label: 'Companies', available: true, icon: Building2 },
-  { id: 'contact', label: 'Contacts', available: false, icon: Users },
+  { id: 'contact', label: 'Contacts', available: true, icon: Users },
   { id: 'deal', label: 'Deals', available: false, icon: DollarSign },
 ];
 
