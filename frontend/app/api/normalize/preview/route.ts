@@ -65,6 +65,14 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, parseInt(searchParams.get('limit') || '50', 10));
     const objectType = (searchParams.get('objectType') ?? 'company') as 'company' | 'contact' | 'deal';
 
+    // Deals not yet supported
+    if (objectType === 'deal') {
+      return NextResponse.json(
+        { error: 'Deals are not yet supported', preview: [], summary: { total: 0, fuzzy: 0, phonetic: 0 } },
+        { status: 400 }
+      );
+    }
+
     console.log('[Normalize Preview] Request params:', {
       orgId: ctx.orgId,
       objectType,

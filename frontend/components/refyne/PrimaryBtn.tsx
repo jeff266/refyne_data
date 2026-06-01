@@ -8,11 +8,13 @@ interface PrimaryBtnProps {
   onClick?: MouseEventHandler<HTMLButtonElement>;
   small?: boolean;
   disabled?: boolean;
+  type?: 'button' | 'submit' | 'reset';
 }
 
-export function PrimaryBtn({ children, onClick, small, disabled }: PrimaryBtnProps) {
+export function PrimaryBtn({ children, onClick, small, disabled, type = 'button' }: PrimaryBtnProps) {
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       style={{

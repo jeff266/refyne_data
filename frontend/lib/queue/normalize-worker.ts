@@ -266,10 +266,11 @@ export function startNormalizeWorker() {
         propToCanonical.get(change.hubspotRecordId)!.set(hubspotProperty, change.field);
       }
 
-      // Step 6: Build company name lookup for progress logging
-      const companyNameMap = new Map<string, string>();
-      for (const company of companies) {
-        companyNameMap.set(company.id, company.properties.name || company.id);
+      // Step 6: Build record name lookup for progress logging
+      const displayField = objectType === 'company' ? 'name' : 'email';
+      const recordNameMap = new Map<string, string>();
+      for (const record of records) {
+        recordNameMap.set(record.id, record.properties[displayField] || record.id);
       }
 
       // Step 7: Write to HubSpot in batches of 100
@@ -309,7 +310,7 @@ export function startNormalizeWorker() {
               progressItems.push({
                 run_id: runId,
                 hubspot_company_id: companyId,
-                company_name: companyNameMap.get(companyId) || companyId,
+                company_name: recordNameMap.get(companyId) || companyId,
                 field_key: canonicalField,
                 previous_value: original?.before ?? null,
                 new_value: newValue,

@@ -8,11 +8,13 @@ interface GhostBtnProps {
   onClick?: MouseEventHandler<HTMLButtonElement>;
   disabled?: boolean;
   style?: CSSProperties;
+  type?: 'button' | 'submit' | 'reset';
 }
 
-export function GhostBtn({ children, onClick, disabled, style }: GhostBtnProps) {
+export function GhostBtn({ children, onClick, disabled, style, type = 'button' }: GhostBtnProps) {
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       style={{
