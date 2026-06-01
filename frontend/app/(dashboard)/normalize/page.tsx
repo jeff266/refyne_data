@@ -241,20 +241,20 @@ export default function NormalizePage() {
 
       const data = await response.json();
 
-      // Update run in the list with all fields
+      // Update run in the list with all fields (data.run is the actual run object)
       setRuns(prev => prev.map(run =>
-        run.id === runId ? { ...run, ...data } : run
+        run.id === runId ? { ...run, ...data.run } : run
       ));
 
       // Stop polling when run reaches terminal state
-      if (data.status === 'completed') {
+      if (data.run.status === 'completed') {
         setPollingRunId(null);
-      } else if (data.status === 'rolled_back') {
-        addToast('success', `${(data.records_changed ?? 0).toLocaleString()} records reverted successfully`);
+      } else if (data.run.status === 'rolled_back') {
+        addToast('success', `${(data.run.records_changed ?? 0).toLocaleString()} records reverted successfully`);
         setPollingRunId(null);
-      } else if (data.status === 'failed') {
+      } else if (data.run.status === 'failed') {
         // Check for partial failure
-        const failedCount = data.rollback_error ? JSON.parse(data.rollback_error).length : 0;
+        const failedCount = data.run.rollback_error ? JSON.parse(data.run.rollback_error).length : 0;
         if (failedCount > 0) {
           addToast('error', `Rollback partially failed. ${failedCount} records failed. Check Sentry for details.`);
         } else {
