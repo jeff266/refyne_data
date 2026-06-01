@@ -258,60 +258,61 @@ export async function GET(request: NextRequest) {
     const client = new HubSpotClient(accessToken, connection.portal_id);
     const properties = hubspotProperties;
 
-    // Fetch companies - either specific IDs or paginated
-    let limitedCompanies: any[] = [];
+    // Fetch records - either specific IDs or paginated
+    let limitedRecords: any[] = [];
 
     try {
       const fetchStart = Date.now();
       if (companyIdsParam) {
-        // Fetch specific companies by ID
-        const companyIds = companyIdsParam.split(',').slice(0, limit);
-        console.log(`[Normalize Preview] Fetching ${companyIds.length} specific companies by ID`);
-        limitedCompanies = await client.getCompaniesByIds(companyIds, properties);
+        // Fetch specific records by ID
+        const recordIds = companyIdsParam.split(',').slice(0, limit);
+        console.log(`[Normalize Preview] Fetching ${recordIds.length} specific ${objectType} records by ID`);
+        limitedRecords = await client.getRecordsByIds(objectType, recordIds, properties);
       } else {
-        // Fetch companies with pagination (existing behavior)
-        console.log(`[Normalize Preview] Fetching companies via pagination, limit: ${limit}`);
-        const companies: any[] = [];
+        // Fetch records with pagination
+        console.log(`[Normalize Preview] Fetching ${objectType} records via pagination, limit: ${limit}`);
+        const records: any[] = [];
         let batchCount = 0;
-        for await (const batch of client.getAllCompanies(properties)) {
+        for await (const batch of client.getAllRecords(objectType, properties)) {
           batchCount++;
-          console.log(`[Normalize Preview] Batch ${batchCount}: fetched ${batch.length} companies, total so far: ${companies.length + batch.length}`);
-          companies.push(...batch);
-          if (companies.length >= limit) {
+          console.log(`[Normalize Preview] Batch ${batchCount}: fetched ${batch.length} ${objectType} records, total so far: ${records.length + batch.length}`);
+          records.push(...batch);
+          if (records.length >= limit) {
             console.log(`[Normalize Preview] Reached limit ${limit}, breaking out of pagination`);
             break;
           }
         }
-        limitedCompanies = companies.slice(0, limit);
+        limitedRecords = records.slice(0, limit);
       }
 
-      console.log(`[Normalize Preview] HubSpot company fetch: ${Date.now() - fetchStart}ms, fetched: ${limitedCompanies.length} companies`);
+      console.log(`[Normalize Preview] HubSpot ${objectType} fetch: ${Date.now() - fetchStart}ms, fetched: ${limitedRecords.length} records`);
     } catch (fetchError) {
-      console.error('[Normalize Preview] Failed to fetch companies from HubSpot:', fetchError);
+      console.error(`[Normalize Preview] Failed to fetch ${objectType} records from HubSpot:`, fetchError);
       console.error('[Normalize Preview] Fetch error details:', {
         message: fetchError instanceof Error ? fetchError.message : String(fetchError),
         stack: fetchError instanceof Error ? fetchError.stack : undefined,
         portalId: connection.portal_id,
         propertiesCount: properties.length,
+        objectType,
       });
-      captureWithOrgContext(fetchError, ctx.orgId, { route: '/api/normalize/preview', step: 'fetch_companies', portalId: connection.portal_id });
+      captureWithOrgContext(fetchError, ctx.orgId, { route: '/api/normalize/preview', step: `fetch_${objectType}`, portalId: connection.portal_id });
       return NextResponse.json({
-        error: 'Failed to fetch companies from HubSpot',
+        error: `Failed to fetch ${objectType} records from HubSpot`,
         details: fetchError instanceof Error ? fetchError.message : String(fetchError)
       }, { status: 500 });
     }
 
     // Transform to HubSpotRecord format and map properties to canonical field names
     const recordStart = Date.now();
-    const records: HubSpotRecord[] = limitedCompanies.map((company) => {
+    const records: HubSpotRecord[] = limitedRecords.map((rawRecord) => {
       const record: HubSpotRecord = {
-        id: company.id,
-        ...company.properties,
+        id: rawRecord.id,
+        ...rawRecord.properties,
       };
 
       // Map HubSpot property names to canonical field names using field assignments
       for (const assignment of fieldAssignments) {
-        const value = company.properties[assignment.hubspotProperty];
+        const value = rawRecord.properties[assignment.hubspotProperty];
         if (value !== undefined) {
           record[assignment.canonicalField] = value;
         }
@@ -395,10 +396,11 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Build company name lookup
-    const companyNames: Record<string, string> = {};
-    limitedCompanies.forEach((company) => {
-      companyNames[company.id] = company.properties.name || company.id;
+    // Build record display name lookup
+    const recordNames: Record<string, string> = {};
+    const displayField = objectType === 'company' ? 'name' : 'email';
+    limitedRecords.forEach((record) => {
+      recordNames[record.id] = record.properties[displayField] || record.id;
     });
 
     // Transform to preview format and filter exclusions
@@ -409,7 +411,7 @@ export async function GET(request: NextRequest) {
         return true;
       })
       .map((change) => ({
-        company: companyNames[change.hubspotRecordId] || change.hubspotRecordId,
+        company: recordNames[change.hubspotRecordId] || change.hubspotRecordId,
         field: change.field,
         before: change.before,
         beforeDisplay: change.beforeDisplay,

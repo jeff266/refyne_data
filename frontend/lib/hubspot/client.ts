@@ -110,6 +110,29 @@ const EXPORT_COMPANY_PROPERTIES = [
 ] as const;
 
 /**
+ * HubSpot object type configuration for unified adapter pattern.
+ * Maps object types to their API endpoints and display fields.
+ */
+export const HUBSPOT_OBJECT_CONFIG = {
+  company: {
+    objectType: 'company',
+    pluralType: 'companies',
+    readEndpoint: '/crm/v3/objects/companies/batch/read',
+    updateEndpoint: '/crm/v3/objects/companies/batch/update',
+    listEndpoint: '/crm/v3/objects/companies',
+    displayField: 'name',
+  },
+  contact: {
+    objectType: 'contact',
+    pluralType: 'contacts',
+    readEndpoint: '/crm/v3/objects/contacts/batch/read',
+    updateEndpoint: '/crm/v3/objects/contacts/batch/update',
+    listEndpoint: '/crm/v3/objects/contacts',
+    displayField: 'email',
+  },
+} as const;
+
+/**
  * Parse CSV export file content from HubSpot Export API.
  * HubSpot exports use CSV format with header row.
  *
@@ -879,6 +902,288 @@ export class HubSpotClient {
             properties: Record<string, string | null>;
           }>;
         }>('/crm/v3/objects/companies/batch/update', {
+          method: 'POST',
+          body: JSON.stringify({
+            inputs: batch.map(r => ({
+              id: r.id,
+              properties: this.cleanProperties(r.properties),
+            })),
+          }),
+        });
+
+        results.push(...response.results);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        batch.forEach((_, idx) => {
+          errors.push({ index: i + idx, error: msg });
+        });
+      }
+    }
+
+    return { results, errors };
+  }
+
+  /**
+   * Get all contacts from portal with pagination.
+   * Mirrors getAllCompanies for contact object type.
+   */
+  async *getAllContacts(
+    properties: readonly string[]
+  ): AsyncGenerator<HubSpotCompany[]> {
+    let after: string | undefined;
+
+    do {
+      const queryParams = new URLSearchParams({
+        limit: '100',
+        properties: [...properties].join(','),
+      });
+
+      if (after) {
+        queryParams.set('after', after);
+      }
+
+      const response = await this.request<HubSpotPaginatedResponse<{
+        id: string;
+        properties: Record<string, string | null>;
+        createdAt: string;
+        updatedAt: string;
+      }>>(`/crm/v3/objects/contacts?${queryParams}`);
+
+      yield response.results.map(r => ({
+        id: r.id,
+        properties: r.properties,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      }));
+
+      after = response.paging?.next?.after;
+    } while (after);
+  }
+
+  /**
+   * Batch read contacts by IDs.
+   * Mirrors getCompaniesByIds for contact object type.
+   */
+  async getContactsByIds(
+    ids: string[],
+    properties: readonly string[]
+  ): Promise<HubSpotCompany[]> {
+    if (ids.length === 0) return [];
+
+    const batches: HubSpotCompany[] = [];
+
+    for (let i = 0; i < ids.length; i += 100) {
+      const batchIds = ids.slice(i, i + 100);
+
+      const requestBody = {
+        inputs: batchIds.map(id => ({ id })),
+        properties: [...properties],
+      };
+
+      const response = await this.request<{
+        results: Array<{
+          id: string;
+          properties: Record<string, string | null>;
+          createdAt: string;
+          updatedAt: string;
+        }>;
+      }>('/crm/v3/objects/contacts/batch/read', {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+      });
+
+      batches.push(
+        ...response.results.map(r => ({
+          id: r.id,
+          properties: r.properties,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+        }))
+      );
+    }
+
+    return batches;
+  }
+
+  /**
+   * Batch update contacts.
+   * Mirrors batchUpdateCompanies for contact object type.
+   */
+  async batchUpdateContacts(
+    records: Array<{
+      id: string;
+      properties: Record<string, string | number | null>;
+    }>
+  ): Promise<{
+    results: Array<{
+      id: string;
+      properties: Record<string, string | null>;
+    }>;
+    errors: Array<{
+      index: number;
+      error: string;
+    }>;
+  }> {
+    const results: Array<{
+      id: string;
+      properties: Record<string, string | null>;
+    }> = [];
+    const errors: Array<{ index: number; error: string }> = [];
+
+    for (let i = 0; i < records.length; i += 100) {
+      const batch = records.slice(i, i + 100);
+
+      try {
+        const response = await this.request<{
+          results: Array<{
+            id: string;
+            properties: Record<string, string | null>;
+          }>;
+        }>('/crm/v3/objects/contacts/batch/update', {
+          method: 'POST',
+          body: JSON.stringify({
+            inputs: batch.map(r => ({
+              id: r.id,
+              properties: this.cleanProperties(r.properties),
+            })),
+          }),
+        });
+
+        results.push(...response.results);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        batch.forEach((_, idx) => {
+          errors.push({ index: i + idx, error: msg });
+        });
+      }
+    }
+
+    return { results, errors };
+  }
+
+  /**
+   * Generic method to get all records of any object type with pagination.
+   * Uses HUBSPOT_OBJECT_CONFIG to determine the correct endpoint.
+   */
+  async *getAllRecords(
+    objectType: 'company' | 'contact',
+    properties: readonly string[]
+  ): AsyncGenerator<HubSpotCompany[]> {
+    const config = HUBSPOT_OBJECT_CONFIG[objectType];
+    let after: string | undefined;
+
+    do {
+      const queryParams = new URLSearchParams({
+        limit: '100',
+        properties: [...properties].join(','),
+      });
+
+      if (after) {
+        queryParams.set('after', after);
+      }
+
+      const response = await this.request<HubSpotPaginatedResponse<{
+        id: string;
+        properties: Record<string, string | null>;
+        createdAt: string;
+        updatedAt: string;
+      }>>(`${config.listEndpoint}?${queryParams}`);
+
+      yield response.results.map(r => ({
+        id: r.id,
+        properties: r.properties,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      }));
+
+      after = response.paging?.next?.after;
+    } while (after);
+  }
+
+  /**
+   * Generic method to batch read records by IDs for any object type.
+   * Uses HUBSPOT_OBJECT_CONFIG to determine the correct endpoint.
+   */
+  async getRecordsByIds(
+    objectType: 'company' | 'contact',
+    ids: string[],
+    properties: readonly string[]
+  ): Promise<HubSpotCompany[]> {
+    if (ids.length === 0) return [];
+
+    const config = HUBSPOT_OBJECT_CONFIG[objectType];
+    const batches: HubSpotCompany[] = [];
+
+    for (let i = 0; i < ids.length; i += 100) {
+      const batchIds = ids.slice(i, i + 100);
+
+      const requestBody = {
+        inputs: batchIds.map(id => ({ id })),
+        properties: [...properties],
+      };
+
+      const response = await this.request<{
+        results: Array<{
+          id: string;
+          properties: Record<string, string | null>;
+          createdAt: string;
+          updatedAt: string;
+        }>;
+      }>(config.readEndpoint, {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+      });
+
+      batches.push(
+        ...response.results.map(r => ({
+          id: r.id,
+          properties: r.properties,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+        }))
+      );
+    }
+
+    return batches;
+  }
+
+  /**
+   * Generic method to batch update records for any object type.
+   * Uses HUBSPOT_OBJECT_CONFIG to determine the correct endpoint.
+   */
+  async batchUpdateRecords(
+    objectType: 'company' | 'contact',
+    records: Array<{
+      id: string;
+      properties: Record<string, string | number | null>;
+    }>
+  ): Promise<{
+    results: Array<{
+      id: string;
+      properties: Record<string, string | null>;
+    }>;
+    errors: Array<{
+      index: number;
+      error: string;
+    }>;
+  }> {
+    const config = HUBSPOT_OBJECT_CONFIG[objectType];
+    const results: Array<{
+      id: string;
+      properties: Record<string, string | null>;
+    }> = [];
+    const errors: Array<{ index: number; error: string }> = [];
+
+    for (let i = 0; i < records.length; i += 100) {
+      const batch = records.slice(i, i + 100);
+
+      try {
+        const response = await this.request<{
+          results: Array<{
+            id: string;
+            properties: Record<string, string | null>;
+          }>;
+        }>(config.updateEndpoint, {
           method: 'POST',
           body: JSON.stringify({
             inputs: batch.map(r => ({

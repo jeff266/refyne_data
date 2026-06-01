@@ -14,6 +14,7 @@ interface SelectedChange {
 interface ApplyRequest {
   harmonyIds?: string[];
   selectedChanges?: SelectedChange[];
+  objectType?: 'company' | 'contact';
 }
 
 /**
@@ -157,6 +158,7 @@ export async function POST(request: NextRequest) {
       connectionId: connection.id,
       harmonyIds: body.harmonyIds || [],
       selectedChanges: body.selectedChanges ?? [],
+      objectType: body.objectType ?? 'company',
     });
 
     console.log(`[Normalize Apply] Enqueued job ${job.id} for run ${run.id}`);

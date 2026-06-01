@@ -25,6 +25,7 @@ export interface NormalizeJobData {
   connectionId: string;
   harmonyIds: string[];
   selectedChanges: Array<{ companyId: string; field: string }>;
+  objectType?: 'company' | 'contact';  // Optional for backward compatibility, defaults to 'company'
 }
 
 // Lazy-initialized queue - only created when accessed (API routes), not in worker process
@@ -167,12 +168,13 @@ export function startNormalizeWorker() {
       console.log(`[Normalize Worker] Canonical fields:`, fieldKeys);
       console.log(`[Normalize Worker] HubSpot properties to fetch:`, properties);
 
-      const companies = await hubspot.getCompaniesByIds(companyIds, properties);
+      const objectType = job.data.objectType ?? 'company';
+      const records = await hubspot.getRecordsByIds(objectType, companyIds, properties);
 
-      console.log(`[Normalize Worker] Fetched ${companies?.length || 0} companies from HubSpot`);
+      console.log(`[Normalize Worker] Fetched ${records?.length || 0} ${objectType} records from HubSpot`);
 
-      if (!companies || companies.length === 0) {
-        console.log(`[Normalize Worker] No companies fetched, exiting early`);
+      if (!records || records.length === 0) {
+        console.log(`[Normalize Worker] No ${objectType} records fetched, exiting early`);
         await updateRunStatus(runId, 'completed', {
           records_processed: 0,
           records_changed: 0,
@@ -186,8 +188,8 @@ export function startNormalizeWorker() {
         stage: 'Re-running normalization engine',
       });
 
-      // Step 4: Re-run normalization preview on fetched companies
-      const records: HubSpotRecord[] = companies.map((c: HubSpotCompany) => {
+      // Step 4: Re-run normalization preview on fetched records
+      const hubspotRecords: HubSpotRecord[] = records.map((c: HubSpotCompany) => {
         const record: HubSpotRecord = {
           id: c.id,
           ...c.properties,
@@ -203,7 +205,7 @@ export function startNormalizeWorker() {
 
         return record;
       });
-      const allChanges = await runNormalizationPreview(records, harmonies, orgId);
+      const allChanges = await runNormalizationPreview(hubspotRecords, harmonies, orgId);
 
       console.log(`[Normalize Worker] Normalization found ${allChanges.length} total changes`);
       console.log('[Normalize Worker] Sample changes from preview:',
@@ -290,7 +292,8 @@ export function startNormalizeWorker() {
         const batch = companyEntries.slice(i, i + batchSize);
 
         try {
-          await hubspot.batchUpdateCompanies(
+          await hubspot.batchUpdateRecords(
+            objectType,
             batch.map(([id, properties]) => ({ id, properties }))
           );
 
