@@ -139,7 +139,25 @@ export async function GET(request: NextRequest) {
     });
 
     // Fetch field assignments for this org (replaces DEFAULT_FIELD_MAPPINGS)
-    const fieldAssignments = await getFieldAssignments(ctx.orgId, objectType);
+    let fieldAssignments;
+    try {
+      fieldAssignments = await getFieldAssignments(ctx.orgId, objectType);
+      console.log(`[Normalize Preview] Field assignments found: ${fieldAssignments.length}`);
+
+      if (fieldAssignments.length === 0) {
+        console.warn(`[Normalize Preview] No field assignments found for org ${ctx.orgId} and objectType ${objectType}`);
+        return NextResponse.json({
+          preview: [],
+          summary: { total: 0, fuzzy: 0, phonetic: 0 },
+          error: `No field assignments configured for ${objectType}. Please configure field mappings first.`
+        }, { status: 400 });
+      }
+    } catch (assignmentError) {
+      console.error('[Normalize Preview] Failed to fetch field assignments:', assignmentError);
+      captureWithOrgContext(assignmentError, ctx.orgId, { route: '/api/normalize/preview', step: 'field_assignments' });
+      return NextResponse.json({ error: 'Failed to fetch field assignments' }, { status: 500 });
+    }
+
     const fieldMap = buildFieldMap(fieldAssignments);
 
     // Build reverse map: HubSpot property → canonical field
@@ -164,22 +182,28 @@ export async function GET(request: NextRequest) {
     // Fetch companies - either specific IDs or paginated
     let limitedCompanies: any[] = [];
 
-    if (companyIdsParam) {
-      // Fetch specific companies by ID
-      const companyIds = companyIdsParam.split(',').slice(0, limit);
-      console.log(`[Normalize Preview] Fetching ${companyIds.length} specific companies`);
-      limitedCompanies = await client.getCompaniesByIds(companyIds, properties);
-    } else {
-      // Fetch companies with pagination (existing behavior)
-      const companies: any[] = [];
-      for await (const batch of client.getAllCompanies(properties)) {
-        companies.push(...batch);
-        if (companies.length >= limit) break;
+    try {
+      if (companyIdsParam) {
+        // Fetch specific companies by ID
+        const companyIds = companyIdsParam.split(',').slice(0, limit);
+        console.log(`[Normalize Preview] Fetching ${companyIds.length} specific companies`);
+        limitedCompanies = await client.getCompaniesByIds(companyIds, properties);
+      } else {
+        // Fetch companies with pagination (existing behavior)
+        const companies: any[] = [];
+        for await (const batch of client.getAllCompanies(properties)) {
+          companies.push(...batch);
+          if (companies.length >= limit) break;
+        }
+        limitedCompanies = companies.slice(0, limit);
       }
-      limitedCompanies = companies.slice(0, limit);
-    }
 
-    console.log(`[Normalize Preview] Fetched ${limitedCompanies.length} companies`);
+      console.log(`[Normalize Preview] Fetched ${limitedCompanies.length} companies`);
+    } catch (fetchError) {
+      console.error('[Normalize Preview] Failed to fetch companies from HubSpot:', fetchError);
+      captureWithOrgContext(fetchError, ctx.orgId, { route: '/api/normalize/preview', step: 'fetch_companies' });
+      return NextResponse.json({ error: 'Failed to fetch companies from HubSpot' }, { status: 500 });
+    }
 
     // Transform to HubSpotRecord format and map properties to canonical field names
     const records: HubSpotRecord[] = limitedCompanies.map((company) => {
@@ -205,9 +229,30 @@ export async function GET(request: NextRequest) {
     );
 
     // Run normalization preview
-    const changes = await runNormalizationPreview(records, harmonies, ctx.orgId);
-
-    console.log(`[Normalize Preview] Generated ${changes.length} changes`);
+    let changes;
+    try {
+      console.log(`[Normalize Preview] Running normalization with ${harmonies.length} harmonies on ${records.length} records`);
+      changes = await runNormalizationPreview(records, harmonies, ctx.orgId);
+      console.log(`[Normalize Preview] Generated ${changes.length} changes`);
+    } catch (normError) {
+      console.error('[Normalize Preview] Normalization engine error:', normError);
+      console.error('[Normalize Preview] Error details:', {
+        message: normError instanceof Error ? normError.message : String(normError),
+        stack: normError instanceof Error ? normError.stack : undefined,
+        harmonies: harmonies.map(h => ({ id: h.id, field: h.field, transformType: h.transformType })),
+        recordCount: records.length
+      });
+      captureWithOrgContext(normError, ctx.orgId, {
+        route: '/api/normalize/preview',
+        step: 'run_normalization',
+        harmonies: harmonies.map(h => h.id),
+        recordCount: records.length
+      });
+      return NextResponse.json({
+        error: 'Normalization engine failed',
+        details: normError instanceof Error ? normError.message : String(normError)
+      }, { status: 500 });
+    }
 
     // Fetch active exclusions
     const { data: exclusions } = await supabase
@@ -267,10 +312,22 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ preview, summary });
   } catch (error) {
-    captureWithOrgContext(error, ctx.orgId, { route: '/api/normalize/preview' });
-    console.error('[Normalize Preview] Error:', error);
+    console.error('[Normalize Preview] Unexpected error:', error);
+    console.error('[Normalize Preview] Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      orgId: ctx?.orgId,
+      objectType: new URL(request.url).searchParams.get('objectType') ?? 'company'
+    });
+    captureWithOrgContext(error, ctx?.orgId || 'unknown', {
+      route: '/api/normalize/preview',
+      step: 'unexpected_error'
+    });
     return NextResponse.json(
-      { error: 'Failed to get preview' },
+      {
+        error: 'Failed to get preview',
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }
