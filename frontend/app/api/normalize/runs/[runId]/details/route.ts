@@ -6,7 +6,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
-import { transformKeys } from '@/lib/utils/transform';
 
 export async function GET(
   request: NextRequest,
@@ -69,10 +68,8 @@ export async function GET(
       name: id, // We don't store names separately, use ID as name
     }));
 
-    const transformedRun = transformKeys<Record<string, any>>(run);
-
     return NextResponse.json({
-      ...transformedRun,
+      ...run,
       harmonies,
       fieldsChanged: uniqueFields,
     });

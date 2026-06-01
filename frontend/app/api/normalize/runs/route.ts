@@ -3,7 +3,6 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { checkOrgRateLimit, rateLimitErrorResponse } from '@/lib/hubspot/org-rate-limiter';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
-import { transformArray } from '@/lib/utils/transform';
 
 interface NormalizationRun {
   id: string;
@@ -137,7 +136,7 @@ export async function GET(request: NextRequest) {
     }
 
     const response: RunsListResponse = {
-      runs: transformArray(runs || []) as NormalizationRun[],
+      runs: (runs || []) as NormalizationRun[],
       total: count || 0,
       page,
       perPage,

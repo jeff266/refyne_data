@@ -7,12 +7,12 @@ import { PrimaryBtn } from '@/components/refyne';
 
 interface RunDetails {
   id: string;
-  startedAt: string;
-  completedAt: string | null;
-  initiatedBy: string | null;
-  recordsChanged: number;
-  recordsProcessed: number;
-  recordsFailed: number;
+  started_at: string;
+  completed_at: string | null;
+  initiated_by: string | null;
+  records_changed: number;
+  records_processed: number;
+  records_failed: number;
   fieldsChanged: string[];
   status: string;
   harmonies: Array<{
@@ -262,7 +262,7 @@ export function RunDetailSlideOver({
                       Initiated By
                     </div>
                     <div style={{ fontSize: 13, color: C.text }}>
-                      {details.initiatedBy || 'Unknown'}
+                      {details.initiated_by || 'Unknown'}
                     </div>
                   </div>
                   <div>
@@ -270,7 +270,7 @@ export function RunDetailSlideOver({
                       Date
                     </div>
                     <div style={{ fontSize: 13, color: C.text }}>
-                      {new Date(details.startedAt).toLocaleString('en-US', {
+                      {new Date(details.started_at).toLocaleString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
@@ -284,7 +284,7 @@ export function RunDetailSlideOver({
                       Records Changed
                     </div>
                     <div style={{ fontSize: 20, color: C.text, fontWeight: 600, fontFamily: F.mono }}>
-                      {(details.recordsChanged ?? 0).toLocaleString()}
+                      {(details.records_changed ?? 0).toLocaleString()}
                     </div>
                   </div>
                   <div>
