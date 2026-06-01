@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
         org_id: ctx.orgId,
         connection_id: connection.id,
         initiated_by: ctx.userId,
-        object_type: 'company',
+        object_type: body.objectType ?? 'company',
         status: 'running',
         scope: body.selectedChanges
           ? { type: 'selected', changes: body.selectedChanges }
