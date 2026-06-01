@@ -137,24 +137,28 @@ export function startNormalizeWorker() {
         isPreset: h.is_preset || false,
       }));
 
+      // Get objectType early so we can use it for field assignments
+      const objectType = job.data.objectType ?? 'company';
+
       await job.updateProgress({
         percentage: 15,
-        stage: `Fetching ${companyIds.length} companies from HubSpot`,
+        stage: `Fetching ${companyIds.length} ${objectType} records from HubSpot`,
       });
 
       // Step 2: Fetch field assignments (replaces DEFAULT_FIELD_MAPPINGS)
-      const fieldAssignments = await getFieldAssignments(orgId, 'company');
+      const fieldAssignments = await getFieldAssignments(orgId, objectType);
       const fieldMappingLookup = buildFieldMap(fieldAssignments);
 
-      // Step 3: Fetch only the selected companies from HubSpot
+      // Step 3: Fetch only the selected records from HubSpot
       const accessToken = await getAccessToken(orgId);
       const hubspot = new HubSpotClient(accessToken, portalId);
 
       // Build HubSpot properties to fetch from field assignments
       const fieldKeys = Array.from(new Set(selectedChanges.map((c) => c.field)));
+      const displayField = objectType === 'company' ? 'name' : 'email';
       const properties = Array.from(new Set([
-        'name',
-        'domain',
+        displayField,
+        objectType === 'company' ? 'domain' : undefined,
         ...fieldKeys.map(f => {
           // Use field mapping from assignments
           const hubspotProp = fieldMappingLookup.get(f);
@@ -163,12 +167,12 @@ export function startNormalizeWorker() {
           // Fallback: strip object prefix (company.industry -> industry)
           return f.includes('.') ? f.split('.')[1] : f;
         })
-      ]));
+      ].filter(Boolean) as string[]));
 
+      console.log(`[Normalize Worker] Object type: ${objectType}`);
       console.log(`[Normalize Worker] Canonical fields:`, fieldKeys);
       console.log(`[Normalize Worker] HubSpot properties to fetch:`, properties);
 
-      const objectType = job.data.objectType ?? 'company';
       const records = await hubspot.getRecordsByIds(objectType, companyIds, properties);
 
       console.log(`[Normalize Worker] Fetched ${records?.length || 0} ${objectType} records from HubSpot`);
