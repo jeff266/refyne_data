@@ -271,7 +271,6 @@ export function startNormalizeWorker() {
       }
 
       // Step 6: Build record name lookup for progress logging
-      const displayField = objectType === 'company' ? 'name' : 'email';
       const recordNameMap = new Map<string, string>();
       for (const record of records) {
         recordNameMap.set(record.id, record.properties[displayField] || record.id);
