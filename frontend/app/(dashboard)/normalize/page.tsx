@@ -144,8 +144,13 @@ export default function NormalizePage() {
   }, [previewLoadedAt]);
 
   const fetchPreview = async () => {
-    if (active.length === 0) {
-      addToast('error', 'Please enable at least one harmony');
+    // Determine which harmonies to run based on source type
+    const harmoniesToRun = sourceType === 'issues' && selectedHarmonyFilters.size > 0
+      ? Array.from(selectedHarmonyFilters)
+      : active;
+
+    if (harmoniesToRun.length === 0) {
+      addToast('error', sourceType === 'issues' ? 'Please select at least one harmony filter' : 'Please enable at least one harmony');
       return;
     }
 
@@ -174,8 +179,8 @@ export default function NormalizePage() {
         }
       }
 
-      // Pass active harmony IDs and optional record IDs to preview API
-      const harmonyIdsParam = `&harmonyIds=${active.join(',')}`;
+      // Pass selected harmony IDs (from source filter if using 'issues', otherwise all active) and optional record IDs to preview API
+      const harmonyIdsParam = `&harmonyIds=${harmoniesToRun.join(',')}`;
       const recordIdsParam = recordIds ? `&companyIds=${recordIds.join(',')}` : '';
       const response = await fetch(`/api/normalize/preview?limit=50${harmonyIdsParam}${recordIdsParam}&objectType=${objectType}`);
 
@@ -343,6 +348,11 @@ export default function NormalizePage() {
     setConfirmModalOpen(false);
 
     try {
+      // Determine which harmonies were used in the preview based on source type
+      const harmoniesToApply = sourceType === 'issues' && selectedHarmonyFilters.size > 0
+        ? Array.from(selectedHarmonyFilters)
+        : active;
+
       // Convert selectedChanges to array of objects
       const selectedChangesArray = Array.from(selectedChanges).map(id => {
         const [companyId, field] = id.split(':');
@@ -353,7 +363,7 @@ export default function NormalizePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          harmonyIds: active,
+          harmonyIds: harmoniesToApply,
           selectedChanges: selectedChangesArray,
           objectType,
         }),
