@@ -241,9 +241,9 @@ export default function NormalizePage() {
 
       const data = await response.json();
 
-      // Update run in the list
+      // Update run in the list with all fields
       setRuns(prev => prev.map(run =>
-        run.id === runId ? { ...run, status: data.status } : run
+        run.id === runId ? { ...run, ...data } : run
       ));
 
       // Stop polling when run reaches terminal state
@@ -365,6 +365,9 @@ export default function NormalizePage() {
 
       const data = await response.json();
       addToast('success', `Normalization run started (${data.runId.slice(0, 8)})`);
+
+      // Start polling for run status
+      setPollingRunId(data.runId);
 
       // Clear preview loaded timestamp
       setPreviewLoadedAt(null);
