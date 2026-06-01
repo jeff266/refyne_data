@@ -1,0 +1,81 @@
+# Company Domain Normalizer
+# Extracts and normalizes domains from URLs
+
+id: company-domain
+version: 1.0.0
+name: Company Domain Normalizer
+description: Extracts domain from URLs, removes www prefix, and lowercases for consistent company domain matching
+category: business-entities
+author: revops-impact
+transform_type: format
+transform_function: url_canonical
+
+applies_to:
+  fields:
+    - company.domain
+    - company.website
+  entity: company
+
+ruleExplanation: "Normalizing domain from '{{oldValue}}' to '{{newValue}}' (extract domain, remove www)"
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Return null for empty strings
+    when: value = ""
+    transform: "null"
+
+  - id: extract-normalize-domain
+    description: Extract domain from URL, remove www, lowercase
+    transform: $extract_domain(value)
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string returns null
+    input: ""
+    expected: null
+
+  - name: Extracts domain from full URL
+    input: "https://www.example.com/about"
+    expected: "example.com"
+
+  - name: Removes www prefix
+    input: "www.acme.io"
+    expected: "acme.io"
+
+  - name: Lowercases domain
+    input: "HTTPS://WWW.GOOGLE.COM"
+    expected: "google.com"
+
+  - name: Handles subdomain correctly
+    input: "https://app.hubspot.com/settings"
+    expected: "app.hubspot.com"
+
+  - name: Handles co.uk TLD
+    input: "https://www.bbc.co.uk/news"
+    expected: "bbc.co.uk"
+
+  - name: Plain domain without protocol
+    input: "salesforce.com"
+    expected: "salesforce.com"
+
+  - name: Domain with port
+    input: "http://localhost:3000/api"
+    expected: "localhost"
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - company
+  - domain
+  - url
+  - normalization

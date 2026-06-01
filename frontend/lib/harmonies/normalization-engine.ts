@@ -556,6 +556,14 @@ const FORMAT_FUNCTIONS: Record<string, FormatFn> = {
   'linkedin_url': normalizeLinkedInUrl,
   'smart_title_case': applySmartTitleCase,
   'numeric_parse': normalizeNumeric,
+  'url_canonical': (v: string) => {
+    try {
+      const url = new URL(v.startsWith('http') ? v : `https://${v}`);
+      return url.toString();
+    } catch {
+      return null;
+    }
+  },
 };
 
 export async function applyFormatHarmony(

@@ -1,0 +1,285 @@
+# US State Normalizer
+# Maps US state names and abbreviations to canonical forms
+
+id: address-state
+version: 1.0.0
+name: US State Normalizer
+description: Maps US state variations ("CA", "California", "Calif.") to canonical form with abbreviations. Includes territories.
+category: geography
+author: revops-impact
+transform_type: lookup
+reference_table: us_states
+
+applies_to:
+  fields:
+    - company.hq_state
+    - person.state
+  entity: company
+
+ruleExplanation: "Normalizing state from '{{oldValue}}' to '{{newValue}}' (US state standardization)"
+
+# Output format options for structured output
+output_formats:
+  - key: abbreviation
+    label: Abbreviation (CA)
+    default: true
+  - key: name
+    label: Full name (California)
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: '""'
+
+  - id: map-california
+    description: Map California variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "ca" or $lower = "calif" or $lower = "calif." or $lower = "california"
+      )
+    transform: '{"name": "California", "abbreviation": "CA"}'
+
+  - id: map-texas
+    description: Map Texas variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "tx" or $lower = "tex" or $lower = "tex." or $lower = "texas"
+      )
+    transform: '{"name": "Texas", "abbreviation": "TX"}'
+
+  - id: map-new-york
+    description: Map New York variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "ny" or $lower = "n.y." or $lower = "new york"
+      )
+    transform: '{"name": "New York", "abbreviation": "NY"}'
+
+  - id: map-florida
+    description: Map Florida variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "fl" or $lower = "fla" or $lower = "fla." or $lower = "florida"
+      )
+    transform: '{"name": "Florida", "abbreviation": "FL"}'
+
+  - id: map-illinois
+    description: Map Illinois variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "il" or $lower = "ill" or $lower = "ill." or $lower = "illinois"
+      )
+    transform: '{"name": "Illinois", "abbreviation": "IL"}'
+
+  - id: map-pennsylvania
+    description: Map Pennsylvania variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "pa" or $lower = "penn" or $lower = "penn." or $lower = "pennsylvania"
+      )
+    transform: '{"name": "Pennsylvania", "abbreviation": "PA"}'
+
+  - id: map-ohio
+    description: Map Ohio variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "oh" or $lower = "ohio"
+      )
+    transform: '{"name": "Ohio", "abbreviation": "OH"}'
+
+  - id: map-georgia
+    description: Map Georgia variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "ga" or $lower = "georgia"
+      )
+    transform: '{"name": "Georgia", "abbreviation": "GA"}'
+
+  - id: map-massachusetts
+    description: Map Massachusetts variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "ma" or $lower = "mass" or $lower = "mass." or $lower = "massachusetts"
+      )
+    transform: '{"name": "Massachusetts", "abbreviation": "MA"}'
+
+  - id: map-washington
+    description: Map Washington variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "wa" or $lower = "wash" or $lower = "wash." or $lower = "washington"
+      )
+    transform: '{"name": "Washington", "abbreviation": "WA"}'
+
+  - id: map-colorado
+    description: Map Colorado variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "co" or $lower = "colo" or $lower = "colo." or $lower = "colorado"
+      )
+    transform: '{"name": "Colorado", "abbreviation": "CO"}'
+
+  - id: map-puerto-rico
+    description: Map Puerto Rico (territory)
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "pr" or $lower = "puerto rico"
+      )
+    transform: '{"name": "Puerto Rico", "abbreviation": "PR", "territory": true}'
+
+  - id: map-virgin-islands
+    description: Map Virgin Islands (territory)
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "vi" or $contains($lower, "virgin islands")
+      )
+    transform: '{"name": "U.S. Virgin Islands", "abbreviation": "VI", "territory": true}'
+
+  - id: map-guam
+    description: Map Guam (territory)
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "gu" or $lower = "guam"
+      )
+    transform: '{"name": "Guam", "abbreviation": "GU", "territory": true}'
+
+  - id: map-dc
+    description: Map District of Columbia
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "dc" or $lower = "d.c." or $contains($lower, "district of columbia") or $contains($lower, "washington dc") or $contains($lower, "washington, dc")
+      )
+    transform: '{"name": "District of Columbia", "abbreviation": "DC"}'
+
+  - id: lookup-two-letter
+    description: Lookup standard two-letter abbreviations
+    when: $length($trim(value)) = 2
+    transform: |
+      (
+        $upper := $uppercase($trim(value));
+        $states := {
+          "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
+          "CT": "Connecticut", "DE": "Delaware", "HI": "Hawaii", "ID": "Idaho",
+          "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky",
+          "LA": "Louisiana", "ME": "Maine", "MD": "Maryland", "MI": "Michigan",
+          "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri", "MT": "Montana",
+          "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey",
+          "NM": "New Mexico", "NC": "North Carolina", "ND": "North Dakota",
+          "OK": "Oklahoma", "OR": "Oregon", "RI": "Rhode Island", "SC": "South Carolina",
+          "SD": "South Dakota", "TN": "Tennessee", "UT": "Utah", "VT": "Vermont",
+          "VA": "Virginia", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming"
+        };
+        $name := $lookup($states, $upper);
+        $name ? {"name": $name, "abbreviation": $upper} : {"name": $upper, "abbreviation": $upper, "unknown": true}
+      )
+
+  - id: default-titlecase
+    description: Default - return as title case with unknown flag
+    transform: |
+      {
+        "name": $normalize_case($clean_whitespace(value), "title"),
+        "abbreviation": null,
+        "unknown": true
+      }
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string passes through
+    input: ""
+    expected: ""
+
+  - name: Maps CA to California
+    input: "CA"
+    expected:
+      name: "California"
+      abbreviation: "CA"
+
+  - name: Maps California full name
+    input: "California"
+    expected:
+      name: "California"
+      abbreviation: "CA"
+
+  - name: Maps Calif. abbreviation
+    input: "Calif."
+    expected:
+      name: "California"
+      abbreviation: "CA"
+
+  - name: Maps TX to Texas
+    input: "TX"
+    expected:
+      name: "Texas"
+      abbreviation: "TX"
+
+  - name: Maps NY to New York
+    input: "NY"
+    expected:
+      name: "New York"
+      abbreviation: "NY"
+
+  - name: Maps PR to Puerto Rico (territory)
+    input: "PR"
+    expected:
+      name: "Puerto Rico"
+      abbreviation: "PR"
+      territory: true
+
+  - name: Maps DC
+    input: "DC"
+    expected:
+      name: "District of Columbia"
+      abbreviation: "DC"
+
+  - name: Maps Washington DC
+    input: "Washington, DC"
+    expected:
+      name: "District of Columbia"
+      abbreviation: "DC"
+
+  - name: Handles unknown abbreviation
+    input: "ZZ"
+    expected:
+      name: "ZZ"
+      abbreviation: "ZZ"
+      unknown: true
+
+  - name: Maps full state name via lookup
+    input: "OR"
+    expected:
+      name: "Oregon"
+      abbreviation: "OR"
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - state
+  - geography
+  - us
+  - normalization

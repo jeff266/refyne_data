@@ -29,17 +29,25 @@ import type { ValidatedHarmony } from '../spec/schema';
 const LIBRARY_DIR = __dirname;
 
 // List of expected YAML files
-// Note: 9 harmonies were intentionally deleted (commit 7e5b175) due to missing transform_function
 const EXPECTED_YAML_FILES = [
   'company-name.yaml',
+  'company-domain.yaml',
   'company-revenue.yaml',
   'company-employees.yaml',
   'company-industry.yaml',
+  'person-name.yaml',
+  'person-title.yaml',
   'phone.yaml',
   'email.yaml',
+  'address-country.yaml',
+  'address-state.yaml',
   'linkedin-url.yaml',
+  'contact-name-case.yaml',
   'contact-phone-e164.yaml',
+  'contact-title-standard.yaml',
   'contact-email-lower.yaml',
+  'contact-location.yaml',
+  'website-social-media.yaml',
 ];
 
 describe('Harmony Library', () => {
@@ -196,9 +204,9 @@ describe('Harmony Library', () => {
     });
 
     it('should get harmony by ID', () => {
-      const harmony = getHarmonyById('company-industry');
+      const harmony = getHarmonyById('company-domain');
       expect(harmony).toBeDefined();
-      expect(harmony?.spec.id).toBe('company-industry');
+      expect(harmony?.spec.id).toBe('company-domain');
     });
 
     it('should return undefined for unknown ID', () => {
@@ -227,8 +235,8 @@ describe('Harmony Library', () => {
       const businessEntities = getHarmoniesByCategory('business-entities');
       expect(businessEntities.length).toBeGreaterThan(0);
 
-      // Note: geography category harmonies (address-country, address-state) were deleted
-      // Test only business-entities category which still has harmonies
+      const geography = getHarmoniesByCategory('geography');
+      expect(geography.length).toBeGreaterThan(0);
     });
 
     it('should provide library summary', () => {
@@ -248,6 +256,16 @@ describe('Harmony Library', () => {
   describe('Individual Harmony Validations', () => {
     beforeAll(() => {
       ensureInitialized();
+    });
+
+    it('company-domain should extract domain correctly', async () => {
+      const harmony = getHarmonyById('company-domain');
+      expect(harmony).toBeDefined();
+
+      if (harmony) {
+        const results = await runHarmonyTests(harmony);
+        expect(results.allPassed).toBe(true);
+      }
     });
 
     it('company-revenue should parse various formats', async () => {
@@ -280,6 +298,26 @@ describe('Harmony Library', () => {
       }
     });
 
+    it('person-name should handle various name formats', async () => {
+      const harmony = getHarmonyById('person-name');
+      expect(harmony).toBeDefined();
+
+      if (harmony) {
+        const results = await runHarmonyTests(harmony);
+        expect(results.allPassed).toBe(true);
+      }
+    });
+
+    it('person-title should normalize and categorize titles', async () => {
+      const harmony = getHarmonyById('person-title');
+      expect(harmony).toBeDefined();
+
+      if (harmony) {
+        const results = await runHarmonyTests(harmony);
+        expect(results.allPassed).toBe(true);
+      }
+    });
+
     it('phone should format US numbers correctly', async () => {
       const harmony = getHarmonyById('phone');
       expect(harmony).toBeDefined();
@@ -292,6 +330,26 @@ describe('Harmony Library', () => {
 
     it('email should normalize and validate emails', async () => {
       const harmony = getHarmonyById('email');
+      expect(harmony).toBeDefined();
+
+      if (harmony) {
+        const results = await runHarmonyTests(harmony);
+        expect(results.allPassed).toBe(true);
+      }
+    });
+
+    it('address-country should map country variations', async () => {
+      const harmony = getHarmonyById('address-country');
+      expect(harmony).toBeDefined();
+
+      if (harmony) {
+        const results = await runHarmonyTests(harmony);
+        expect(results.allPassed).toBe(true);
+      }
+    });
+
+    it('address-state should map US state variations', async () => {
+      const harmony = getHarmonyById('address-state');
       expect(harmony).toBeDefined();
 
       if (harmony) {

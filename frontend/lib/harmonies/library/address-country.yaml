@@ -1,0 +1,312 @@
+# Country Normalizer
+# Maps country names and codes to canonical forms
+
+id: address-country
+version: 1.0.0
+name: Country Normalizer
+description: Maps country variations ("US", "USA", "United States", "U.S.A.") to canonical form with ISO codes
+category: geography
+author: revops-impact
+transform_type: lookup
+reference_table: countries
+
+applies_to:
+  fields:
+    - company.hq_country
+    - person.country
+  entity: company
+
+ruleExplanation: "Normalizing country from '{{oldValue}}' to '{{newValue}}' (ISO code standardization)"
+
+sources: []
+
+rules:
+  - id: null-passthrough
+    description: Pass through null values unchanged
+    when: value = null
+    transform: "null"
+
+  - id: empty-passthrough
+    description: Pass through empty strings unchanged
+    when: value = ""
+    transform: '""'
+
+  - id: map-united-states
+    description: Map United States variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "us" or
+        $lower = "usa" or
+        $lower = "u.s." or
+        $lower = "u.s.a." or
+        $lower = "united states" or
+        $lower = "united states of america" or
+        $lower = "america"
+      )
+    transform: |
+      {
+        "name": "United States",
+        "iso2": "US",
+        "iso3": "USA"
+      }
+
+  - id: map-united-kingdom
+    description: Map United Kingdom variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "uk" or
+        $lower = "u.k." or
+        $lower = "gb" or
+        $lower = "gbr" or
+        $lower = "united kingdom" or
+        $lower = "great britain" or
+        $lower = "britain" or
+        $lower = "england"
+      )
+    transform: |
+      {
+        "name": "United Kingdom",
+        "iso2": "GB",
+        "iso3": "GBR"
+      }
+
+  - id: map-canada
+    description: Map Canada variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "ca" or
+        $lower = "can" or
+        $lower = "canada"
+      )
+    transform: |
+      {
+        "name": "Canada",
+        "iso2": "CA",
+        "iso3": "CAN"
+      }
+
+  - id: map-germany
+    description: Map Germany variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "de" or
+        $lower = "deu" or
+        $lower = "germany" or
+        $lower = "deutschland"
+      )
+    transform: |
+      {
+        "name": "Germany",
+        "iso2": "DE",
+        "iso3": "DEU"
+      }
+
+  - id: map-france
+    description: Map France variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "fr" or
+        $lower = "fra" or
+        $lower = "france"
+      )
+    transform: |
+      {
+        "name": "France",
+        "iso2": "FR",
+        "iso3": "FRA"
+      }
+
+  - id: map-australia
+    description: Map Australia variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "au" or
+        $lower = "aus" or
+        $lower = "australia"
+      )
+    transform: |
+      {
+        "name": "Australia",
+        "iso2": "AU",
+        "iso3": "AUS"
+      }
+
+  - id: map-japan
+    description: Map Japan variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "jp" or
+        $lower = "jpn" or
+        $lower = "japan"
+      )
+    transform: |
+      {
+        "name": "Japan",
+        "iso2": "JP",
+        "iso3": "JPN"
+      }
+
+  - id: map-china
+    description: Map China variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "cn" or
+        $lower = "chn" or
+        $lower = "china" or
+        $lower = "prc"
+      )
+    transform: |
+      {
+        "name": "China",
+        "iso2": "CN",
+        "iso3": "CHN"
+      }
+
+  - id: map-india
+    description: Map India variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "in" or
+        $lower = "ind" or
+        $lower = "india"
+      )
+    transform: |
+      {
+        "name": "India",
+        "iso2": "IN",
+        "iso3": "IND"
+      }
+
+  - id: map-brazil
+    description: Map Brazil variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "br" or
+        $lower = "bra" or
+        $lower = "brazil" or
+        $lower = "brasil"
+      )
+    transform: |
+      {
+        "name": "Brazil",
+        "iso2": "BR",
+        "iso3": "BRA"
+      }
+
+  - id: map-netherlands
+    description: Map Netherlands variations
+    when: |
+      (
+        $lower := $lowercase($trim(value));
+        $lower = "nl" or
+        $lower = "nld" or
+        $lower = "netherlands" or
+        $lower = "holland"
+      )
+    transform: |
+      {
+        "name": "Netherlands",
+        "iso2": "NL",
+        "iso3": "NLD"
+      }
+
+  - id: default-titlecase
+    description: Default - return as title case with unknown flag
+    transform: |
+      {
+        "name": $normalize_case($clean_whitespace(value), "title"),
+        "iso2": null,
+        "iso3": null,
+        "unknown": true
+      }
+
+tests:
+  - name: Null input passes through
+    input: null
+    expected: null
+
+  - name: Empty string passes through
+    input: ""
+    expected: ""
+
+  - name: Maps US
+    input: "US"
+    expected:
+      name: "United States"
+      iso2: "US"
+      iso3: "USA"
+
+  - name: Maps USA
+    input: "USA"
+    expected:
+      name: "United States"
+      iso2: "US"
+      iso3: "USA"
+
+  - name: Maps United States
+    input: "United States"
+    expected:
+      name: "United States"
+      iso2: "US"
+      iso3: "USA"
+
+  - name: Maps U.S.A.
+    input: "U.S.A."
+    expected:
+      name: "United States"
+      iso2: "US"
+      iso3: "USA"
+
+  - name: Maps UK
+    input: "UK"
+    expected:
+      name: "United Kingdom"
+      iso2: "GB"
+      iso3: "GBR"
+
+  - name: Maps England to UK
+    input: "England"
+    expected:
+      name: "United Kingdom"
+      iso2: "GB"
+      iso3: "GBR"
+
+  - name: Maps Germany
+    input: "Deutschland"
+    expected:
+      name: "Germany"
+      iso2: "DE"
+      iso3: "DEU"
+
+  - name: Maps Holland to Netherlands
+    input: "Holland"
+    expected:
+      name: "Netherlands"
+      iso2: "NL"
+      iso3: "NLD"
+
+  - name: Handles unknown country
+    input: "Wakanda"
+    expected:
+      name: "Wakanda"
+      iso2: null
+      iso3: null
+      unknown: true
+
+on_error: fail-silent-log
+default_enabled: true
+tags:
+  - country
+  - geography
+  - iso
+  - normalization
