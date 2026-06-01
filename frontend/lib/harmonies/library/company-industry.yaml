@@ -7,6 +7,8 @@ name: Company Industry Taxonomy Mapper
 description: Maps various industry strings to a canonical taxonomy, handles SIC/NAICS codes
 category: industry
 author: revops-impact
+transformType: lookup
+referenceTable: industries
 
 applies_to:
   fields:
