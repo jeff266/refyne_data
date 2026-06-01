@@ -316,6 +316,12 @@ function normalizePhoneE164(phone: string, config?: Record<string, any>): string
 
   const digits = cleaned.replace(/\D/g, '');
 
+  // Check if already in E.164 format (starts with + and has 7-15 digits)
+  // If so, return cleaned version without spaces/dashes
+  if (cleaned.trim().startsWith('+') && digits.length >= 7 && digits.length <= 15) {
+    return `+${digits}`;
+  }
+
   // 10-digit number → add country code
   if (digits.length === 10) {
     return `+${defaultCountryCode}${digits}`;
@@ -326,7 +332,7 @@ function normalizePhoneE164(phone: string, config?: Record<string, any>): string
     return `+${digits}`;
   }
 
-  // Already formatted or invalid
+  // Invalid length or format
   return null;
 }
 
