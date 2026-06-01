@@ -867,6 +867,48 @@ export class HubSpotClient {
   }
 
   /**
+   * Generic search records method.
+   * Searches for companies or contacts using filter groups.
+   */
+  async searchRecords(
+    objectType: 'company' | 'contact',
+    filterGroups: Array<{
+      filters: Array<{
+        propertyName: string;
+        operator: string;
+        value?: string;
+      }>;
+    }>,
+    properties: readonly string[],
+    limit: number = 100
+  ): Promise<HubSpotCompany[]> {
+    const config = HUBSPOT_OBJECT_CONFIG[objectType];
+
+    const response = await this.request<{
+      results: Array<{
+        id: string;
+        properties: Record<string, string | null>;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>(`/crm/v3/objects/${config.pluralType}/search`, {
+      method: 'POST',
+      body: JSON.stringify({
+        filterGroups,
+        properties: [...properties],
+        limit: Math.min(limit, 100), // Cap at 100 per HubSpot API limits
+      }),
+    }, true); // isSearchApi = true
+
+    return response.results.map(r => ({
+      id: r.id,
+      properties: r.properties,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+  }
+
+  /**
    * Batch update companies.
    * Updates existing records by ID in batches of 100.
    */

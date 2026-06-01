@@ -168,7 +168,7 @@ export default function NormalizePage() {
 
         if (!companyIds || companyIds.length === 0) {
           setPreview([]);
-          addToast('success', 'No companies need normalization for selected harmonies');
+          addToast('success', `No ${objectType === 'contact' ? 'contacts' : 'companies'} need normalization for selected harmonies`);
           setPreviewLoading(false);
           return;
         }
@@ -467,10 +467,10 @@ export default function NormalizePage() {
                 onChange={(e) => setSourceType(e.target.value as 'all' | 'issues' | 'list')}
                 style={{ cursor: 'pointer' }}
               />
-              <span style={{ fontSize: 11, color: C.text2 }}>All companies</span>
+              <span style={{ fontSize: 11, color: C.text2 }}>All {objectType === 'contact' ? 'contacts' : 'companies'}</span>
             </label>
 
-            {/* Companies with issues option */}
+            {/* Records with issues option */}
             <label style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 4, cursor: 'pointer' }}>
               <input
                 type="radio"
@@ -480,7 +480,7 @@ export default function NormalizePage() {
                 onChange={(e) => setSourceType(e.target.value as 'all' | 'issues' | 'list')}
                 style={{ cursor: 'pointer', marginTop: 2 }}
               />
-              <span style={{ fontSize: 11, color: C.text2 }}>Companies with issues</span>
+              <span style={{ fontSize: 11, color: C.text2 }}>{objectType === 'contact' ? 'Contacts' : 'Companies'} with issues</span>
             </label>
 
             {/* Harmony filter checkboxes (shown when "issues" selected) */}
