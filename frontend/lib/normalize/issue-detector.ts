@@ -1,7 +1,7 @@
 /**
  * Normalize Issue Detector
  *
- * Counts companies with non-canonical values for each harmony field.
+ * Counts records (companies or contacts) with non-canonical values for each harmony field.
  * Supports both lookup harmonies (reference table) and format harmonies (validation rules).
  */
 
@@ -38,7 +38,7 @@ async function getHubSpotProperty(
 }
 
 /**
- * Count companies with issues for a specific harmony.
+ * Count records with issues for a specific harmony.
  * Handles both lookup and format harmonies.
  */
 export async function countIssues(
@@ -55,7 +55,7 @@ export async function countIssues(
 
 /**
  * Count issues for lookup harmonies.
- * Fetches canonical values from reference table, then counts companies with non-canonical values.
+ * Fetches canonical values from reference table, then counts records with non-canonical values.
  */
 async function countLookupIssues(
   harmony: Harmony,
@@ -97,8 +97,9 @@ async function countLookupIssues(
       return 0;
     }
 
-    // Fetch all companies with this field set
-    const companies = await hubspot.searchCompanies(
+    // Fetch all records with this field set
+    const records = await hubspot.searchRecords(
+      harmony.objectType,
       [
         {
           filters: [
@@ -113,10 +114,10 @@ async function countLookupIssues(
       100
     );
 
-    // Count companies with non-canonical values
+    // Count records with non-canonical values
     let issueCount = 0;
-    for (const company of companies) {
-      const value = company.properties[propertyName];
+    for (const record of records) {
+      const value = record.properties[propertyName];
       if (value && !canonicalValues.has(value.toLowerCase())) {
         issueCount++;
       }
@@ -131,7 +132,7 @@ async function countLookupIssues(
 
 /**
  * Count issues for format harmonies.
- * Fetches companies with field set, then validates each against format rules.
+ * Fetches records with field set, then validates each against format rules.
  */
 async function countFormatIssues(
   harmony: Harmony,
@@ -146,8 +147,9 @@ async function countFormatIssues(
       return 0;
     }
 
-    // Fetch companies with this field set
-    const companies = await hubspot.searchCompanies(
+    // Fetch records with this field set
+    const records = await hubspot.searchRecords(
+      harmony.objectType,
       [
         {
           filters: [
@@ -162,10 +164,10 @@ async function countFormatIssues(
       100
     );
 
-    // Count companies with non-canonical format
+    // Count records with non-canonical format
     let issueCount = 0;
-    for (const company of companies) {
-      const value = company.properties[propertyName];
+    for (const record of records) {
+      const value = record.properties[propertyName];
       if (value && !matchesCanonicalFormat(harmony.id, value)) {
         issueCount++;
       }
@@ -259,7 +261,7 @@ export function toSmartTitleCase(input: string): string {
 }
 
 /**
- * Check if company name is already in smart title case.
+ * Check if value is already in smart title case.
  * Uses the same logic as toSmartTitleCase to determine if transformation is needed.
  */
 export function isTitleCase(value: string): boolean {
