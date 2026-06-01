@@ -7,8 +7,7 @@ name: Company Domain Normalizer
 description: Extracts domain from URLs, removes www prefix, and lowercases for consistent company domain matching
 category: business-entities
 author: revops-impact
-transform_type: format
-transform_function: url_canonical
+transformFunction: url_canonical
 
 applies_to:
   fields:
