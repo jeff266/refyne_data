@@ -21,7 +21,11 @@
     "worker:enrichment": "npx tsx scripts/start-enrichment-worker.ts",
     "worker:dedup": "npx tsx scripts/start-dedup-worker.ts",
     "worker:normalize": "npx tsx scripts/start-normalize-worker.ts",
-    "cleanup:cache": "npx tsx scripts/cleanup-cache.ts"
+    "cleanup:cache": "npx tsx scripts/cleanup-cache.ts",
+    "dummy:create": "npx tsx --env-file=.env.local scripts/create-dummy-companies.ts",
+    "dummy:delete": "npx tsx --env-file=.env.local scripts/delete-dummy-companies.ts",
+    "dummy:benchmark": "npx tsx --env-file=.env.local scripts/run-normalize-benchmark.ts",
+    "dummy:benchmark:direct": "npx tsx --env-file=.env.local scripts/run-normalize-benchmark-direct.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.97.0",

@@ -231,6 +231,7 @@ export function ByFieldView({ changes, selectedChanges, onToggle, onExclusionCre
                         companyId={change.hubspotCompanyId}
                         companyName={change.company}
                         field={change.field}
+                        currentValue={change.before}
                         onExclusionCreated={onExclusionCreated}
                       />
                     </div>

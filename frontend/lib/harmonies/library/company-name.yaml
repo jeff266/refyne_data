@@ -98,6 +98,95 @@ transformConfig:
     - Pty
     - KK
     - ULC
+    # Intentional lowercase brands
+    - dbt
+    - mParticle
+    # Mixed case brands
+    - DeepL
+    - GoCardless
+    - SurveyMonkey
+    - DocuSign
+    - RingCentral
+    - ZoomInfo
+    - DoorDash
+    - DraftKings
+    - StubHub
+    - TaskRabbit
+    - WoW
+    - TikTok
+    - WhatsApp
+    - FaceTime
+    - AirDrop
+    - AirPlay
+    - FaceBook
+    - Snowflake
+    - Databricks
+    - Cloudflare
+    - Stripe
+    - Twilio
+    - Zendesk
+    - Intercom
+    - Marketo
+    - Outreach
+    - Gong
+    - Figma
+    - Notion
+    - Airtable
+    - Webflow
+    - Zapier
+    - Calendly
+    - Loom
+    - Miro
+    - Canva
+    - Klaviyo
+    - Attio
+    - Apollo
+    - Salesloft
+    - SalesLoft
+    - Mixpanel
+    - Amplitude
+    - Segment
+    - Braze
+    - Iterable
+    - SendGrid
+    - Mailchimp
+    - ActiveCampaign
+    - Typeform
+    - Hotjar
+    - FullStory
+    - Optimizely
+    - LaunchDarkly
+    - PagerDuty
+    - DataDog
+    - Datadog
+    - NewRelic
+    - Splunk
+    - Supabase
+    - PlanetScale
+    - CockroachDB
+    - SingleStore
+    - ClickHouse
+    - Pinecone
+    - Weaviate
+    - LangChain
+    - LangSmith
+    - AnthropicAI
+    - RunwayML
+    - MidJourney
+    - StableDiffusion
+    - ElevenLabs
+    - AssemblyAI
+    - DeepMind
+    - Mistral
+    - Perplexity
+    - Cohere
+    - Replicate
+    - Hugging Face
+    - FireCrawl
+    - LlamaIndex
+    - AutoGPT
+    - CrewAI
+    - MultiOn
 
 applies_to:
   fields:

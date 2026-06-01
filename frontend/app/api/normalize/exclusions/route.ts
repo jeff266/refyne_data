@@ -10,6 +10,8 @@ interface CreateExclusionRequest {
   field?: string; // If omitted, excludes entire company
   exclusionType: 'skip_once' | 'snooze_7d' | 'snooze_30d' | 'permanent';
   reason?: string;
+  preserveName?: boolean; // If true, also add to normalize_name_exceptions
+  originalValue?: string; // The current value to preserve (for company.name)
 }
 
 interface NormalizeExclusion {
@@ -92,6 +94,38 @@ export async function POST(request: NextRequest) {
         { error: 'Failed to create exclusion' },
         { status: 500 }
       );
+    }
+
+    // NEW: If skipping a company.name change and user opted to preserve
+    if (body.field === 'company.name' && body.preserveName && body.originalValue) {
+      try {
+        await supabase
+          .from('normalize_name_exceptions')
+          .upsert({
+            org_id: ctx.orgId,
+            exact_value: body.originalValue,
+            reason: 'user_skipped',
+            created_by: ctx.userId
+          }, { onConflict: 'org_id,exact_value' });
+
+        // Invalidate cache (import redis utilities)
+        try {
+          const { isRedisConfigured, createRedisConnection } = await import('@/lib/queue/redis');
+          if (isRedisConfigured()) {
+            const redis = createRedisConnection();
+            await redis.del(`${ctx.orgId}:name-exceptions`);
+            await redis.quit();
+          }
+        } catch (cacheError) {
+          // Ignore cache errors
+          console.warn('Cache invalidation failed:', cacheError);
+        }
+
+        console.log(`[NameException] Preserved via skip: "${body.originalValue}"`);
+      } catch (preserveError) {
+        // Log but don't fail the whole request
+        console.error('Failed to preserve name exception:', preserveError);
+      }
     }
 
     // Transform to camelCase

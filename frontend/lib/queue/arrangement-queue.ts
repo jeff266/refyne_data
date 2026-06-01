@@ -2557,6 +2557,14 @@ async function writeReviewSessionToHubSpot(
   let written = 0;
   let failed = 0;
 
+  // Build name exception map (companyId -> enriched name) for auto-seeding
+  const nameExceptions = new Map<string, string>();
+  for (const value of pendingValues) {
+    if (value.hubspot_property === 'name' && value.hubspot_value) {
+      nameExceptions.set(value.hubspot_company_id, String(value.hubspot_value));
+    }
+  }
+
   // Write in batches of 100
   const BATCH_SIZE = 100;
   for (let i = 0; i < recordsToWrite.length; i += BATCH_SIZE) {
@@ -2573,6 +2581,15 @@ async function writeReviewSessionToHubSpot(
         JSON.stringify(errors.slice(0, 3), null, 2)
       );
     }
+
+    // Auto-seed name exceptions for successfully written companies
+    for (const result of results) {
+      const enrichedName = nameExceptions.get(result.id);
+      if (enrichedName) {
+        // Fire and forget - never block on exception seeding
+        maybeAddNameException(orgId, enrichedName).catch(() => {});
+      }
+    }
   }
 
   // Update review session status
@@ -2587,6 +2604,64 @@ async function writeReviewSessionToHubSpot(
   console.log(`[WriteSession] Wrote ${written} records to HubSpot (${failed} failed)`);
 
   return { written, skipped: 0, failed };
+}
+
+/**
+ * Auto-seed name exceptions from enrichment.
+ * If enriched name differs from title case, preserve it as an exception.
+ */
+async function maybeAddNameException(
+  orgId: string,
+  enrichedName: string
+): Promise<void> {
+  try {
+    // Import title case function
+    const { toSmartTitleCase } = await import('../harmonies/normalization-engine');
+
+    // Only add exception if enriched name differs from title case
+    const titleCased = toSmartTitleCase(enrichedName);
+    if (titleCased === enrichedName) {
+      return; // Title case already correct, no exception needed
+    }
+
+    // Check if supabase is available
+    if (!supabase) {
+      console.warn('[NameException] Supabase not available, skipping exception');
+      return;
+    }
+
+    // Upsert to exceptions table
+    const { error } = await supabase
+      .from('normalize_name_exceptions')
+      .upsert({
+        org_id: orgId,
+        exact_value: enrichedName,
+        reason: 'enriched_from_provider',
+        created_by: 'system'
+      }, { onConflict: 'org_id,exact_value' });
+
+    if (error) {
+      console.warn('[NameException] Failed to add exception:', error.message);
+      return;
+    }
+
+    // Invalidate cache if redis is available
+    if (isRedisConfigured()) {
+      const redis = createRedisConnection();
+      try {
+        await redis.del(`${orgId}:name-exceptions`);
+      } catch (err) {
+        // Ignore cache invalidation errors
+      } finally {
+        await redis.quit();
+      }
+    }
+
+    console.log(`[NameException] Added: "${enrichedName}" (differs from title case: "${titleCased}")`);
+  } catch (err) {
+    // Never throw - this should never block an enrichment write
+    console.warn('[NameException] Unexpected error:', err instanceof Error ? err.message : 'Unknown error');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────

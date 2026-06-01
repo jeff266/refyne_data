@@ -7,18 +7,21 @@ interface SkipDropdownProps {
   companyId: string;
   companyName: string;
   field: string;
+  currentValue?: string; // The current value (before normalization) for name preservation
   onExclusionCreated: () => void;
 }
 
 type ExclusionType = 'skip_once' | 'snooze_7d' | 'snooze_30d' | 'permanent';
 
-export function SkipDropdown({ companyId, companyName, field, onExclusionCreated }: SkipDropdownProps) {
+export function SkipDropdown({ companyId, companyName, field, currentValue, onExclusionCreated }: SkipDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isReasonModalOpen, setIsReasonModalOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function handleExclude(exclusionType: ExclusionType, fieldLevel: boolean) {
+  const isCompanyNameField = field === 'company.name';
+
+  async function handleExclude(exclusionType: ExclusionType, fieldLevel: boolean, preserveName: boolean = false) {
     if (exclusionType === 'permanent') {
       // Show reason modal for permanent exclusions
       setIsReasonModalOpen(true);
@@ -35,6 +38,8 @@ export function SkipDropdown({ companyId, companyName, field, onExclusionCreated
           companyId,
           field: fieldLevel ? field : undefined,
           exclusionType,
+          preserveName: preserveName && isCompanyNameField,
+          originalValue: preserveName ? currentValue : undefined,
         }),
       });
 
@@ -126,7 +131,7 @@ export function SkipDropdown({ companyId, companyName, field, onExclusionCreated
               }}
             >
               <button
-                onClick={() => handleExclude('skip_once', true)}
+                onClick={() => handleExclude('skip_once', true, false)}
                 style={{
                   width: '100%',
                   padding: '8px 12px',
@@ -145,6 +150,29 @@ export function SkipDropdown({ companyId, companyName, field, onExclusionCreated
                   Don't apply this change now
                 </div>
               </button>
+
+              {isCompanyNameField && currentValue && (
+                <button
+                  onClick={() => handleExclude('skip_once', true, true)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: 6,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    color: C.text,
+                    fontSize: 13,
+                    fontFamily: F.sans,
+                  }}
+                >
+                  Always preserve &quot;{currentValue.length > 25 ? currentValue.substring(0, 25) + '...' : currentValue}&quot;
+                  <div style={{ fontSize: 11, color: C.text3, marginTop: 2 }}>
+                    Skip now and never auto-normalize this name
+                  </div>
+                </button>
+              )}
 
               <button
                 onClick={() => handleExclude('snooze_7d', true)}
