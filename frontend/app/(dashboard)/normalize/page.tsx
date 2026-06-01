@@ -355,6 +355,7 @@ export default function NormalizePage() {
         body: JSON.stringify({
           harmonyIds: active,
           selectedChanges: selectedChangesArray,
+          objectType,
         }),
       });
 
