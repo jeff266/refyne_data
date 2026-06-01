@@ -225,9 +225,10 @@ export async function GET(request: NextRequest) {
             continue;
           }
 
-          // Fetch companies with this field set (wrapped in try/catch for HubSpot API errors)
+          // Fetch records with this field set (wrapped in try/catch for HubSpot API errors)
           try {
-            const companies = await hubspot.searchCompanies(
+            const records = await hubspot.searchRecords(
+              objectType,
               [
                 {
                   filters: [
@@ -242,11 +243,11 @@ export async function GET(request: NextRequest) {
               100
             );
 
-            // Add companies with non-canonical format
-            for (const company of companies) {
-              const value = company.properties[propertyName];
+            // Add records with non-canonical format
+            for (const record of records) {
+              const value = record.properties[propertyName];
               if (value && !matchesCanonicalFormat(harmony.id, value)) {
-                companyIdsWithIssues.add(company.id);
+                companyIdsWithIssues.add(record.id);
               }
             }
           } catch (searchErr) {
