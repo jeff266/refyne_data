@@ -11,6 +11,7 @@
 
 import { supabase } from '@/lib/db/supabase';
 import { extractHarmonyOutput, getEffectiveOutputFormat } from './output';
+import { getFieldAssignments } from './field-assignments';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -143,6 +144,39 @@ async function getDisplayLabel(field: string, value: string): Promise<string> {
   return value;
 }
 
+// ── Field Assignment Helper ────────────────────────────────────────
+
+/**
+ * Get HubSpot property name for a harmony using field assignments.
+ * Falls back to extracting from canonical field if no assignment found.
+ */
+async function getHubSpotProperty(
+  harmony: Harmony,
+  orgId: string
+): Promise<string | null> {
+  // Try to get from field assignments first
+  try {
+    const assignments = await getFieldAssignments(orgId, harmony.objectType);
+
+    // Match on both harmonyId AND canonical field
+    const assignment = assignments.find(
+      a => a.harmonyId === harmony.id && a.canonicalField === harmony.field
+    );
+
+    if (assignment) {
+      return assignment.hubspotProperty;
+    }
+  } catch (err) {
+    console.warn('[Normalization Engine] Failed to get field assignment:', err);
+  }
+
+  // Fallback: extract from canonical field (legacy behavior)
+  if (harmony.field.includes('.')) {
+    return harmony.field.split('.').pop() || null;
+  }
+  return harmony.field;
+}
+
 // ── Lookup Harmony (Reference Table JOIN) ──────────────────────────
 
 export async function applyLookupHarmony(
@@ -158,11 +192,18 @@ export async function applyLookupHarmony(
     throw new Error('Supabase client not configured');
   }
 
+  // Get HubSpot property name from field assignments
+  const hubspotProperty = await getHubSpotProperty(harmony, orgId);
+  if (!hubspotProperty) {
+    console.warn(`[Normalization Engine] No property mapping for harmony ${harmony.id}`);
+    return [];
+  }
+
   // 1. Collect unique non-empty field values
   const uniqueValues = Array.from(
     new Set(
       records
-        .map((r) => r[harmony.field])
+        .map((r) => r[hubspotProperty])
         .filter((v) => v && typeof v === 'string' && v.trim().length > 0)
     )
   );
@@ -213,7 +254,7 @@ export async function applyLookupHarmony(
   const changes: NormalizationResult[] = [];
 
   for (const record of records) {
-    const raw = record[harmony.field];
+    const raw = record[hubspotProperty];
     if (!raw) continue;
 
     const result = allMappings.get(raw.toLowerCase().trim());
@@ -568,7 +609,8 @@ const FORMAT_FUNCTIONS: Record<string, FormatFn> = {
 
 export async function applyFormatHarmony(
   records: HubSpotRecord[],
-  harmony: Harmony
+  harmony: Harmony,
+  orgId: string
 ): Promise<NormalizationResult[]> {
   // Look up format function using transform_function (data-driven)
   // Fallback to harmony.id for backward compatibility during transition
@@ -582,11 +624,18 @@ export async function applyFormatHarmony(
     );
   }
 
+  // Get HubSpot property name from field assignments
+  const hubspotProperty = await getHubSpotProperty(harmony, orgId);
+  if (!hubspotProperty) {
+    console.warn(`[Normalization Engine] No property mapping for harmony ${harmony.id}`);
+    return [];
+  }
+
   const changes: NormalizationResult[] = [];
   const config = harmony.transformConfig || {};
 
   for (const record of records) {
-    const raw = record[harmony.field];
+    const raw = record[hubspotProperty];
     if (!raw) continue;
 
     const formatted = formatFn(raw, config);
@@ -621,7 +670,7 @@ export async function runNormalizationPreview(
     const changes =
       harmony.transformType === 'lookup'
         ? await applyLookupHarmony(records, harmony, orgId)
-        : await applyFormatHarmony(records, harmony);
+        : await applyFormatHarmony(records, harmony, orgId);
 
     allChanges.push(...changes);
   }
