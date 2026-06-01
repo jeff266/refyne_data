@@ -170,6 +170,15 @@ export const HarmonySpecSchema = z.object({
   // Optional: rule explanation template with {{oldValue}} and {{newValue}} placeholders
   ruleExplanation: z.string().optional(),
 
+  // Optional: transform type for harmonies ('lookup' or 'format')
+  // - lookup: Uses reference table for value mapping
+  // - format: Uses transform function for value transformation
+  transformType: z.enum(['lookup', 'format']).optional(),
+
+  // Optional: reference table name for lookup harmonies
+  // Maps to reference data tables (e.g., 'countries', 'industries', 'contact_titles')
+  referenceTable: z.string().optional(),
+
   // Optional: transform function identifier for format harmonies
   // Maps to FORMAT_FUNCTIONS in normalization engine (e.g., 'e164_phone', 'smart_title_case')
   transformFunction: z.string().optional(),

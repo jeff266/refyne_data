@@ -74,16 +74,9 @@ export async function seedHarmonyLibrary(): Promise<{
           output: t.expected,
         })) || [];
 
-      // Determine transform type based on harmony ID
-      // Some harmonies use reference table lookup, others use format rules
-      let transformType: 'lookup' | 'format' = 'format';
-      let referenceTable: string | null = null;
-
-      // Map specific harmonies to their reference tables
-      if (spec.id === 'company-industry') {
-        transformType = 'lookup';
-        referenceTable = 'industries';
-      }
+      // Read transform type and reference table from YAML spec
+      const transformType = spec.transformType || 'format';
+      const referenceTable = spec.referenceTable || null;
 
       return {
         id: spec.id,
