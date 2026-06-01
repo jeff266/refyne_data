@@ -354,7 +354,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch active exclusions
-    let exclusions;
+    let exclusions: Array<{
+      company_id: string;
+      field: string | null;
+      exclusion_type: string;
+      expires_at: string | null;
+    }> | null;
     try {
       const exclusionsStart = Date.now();
       const result = await supabase
