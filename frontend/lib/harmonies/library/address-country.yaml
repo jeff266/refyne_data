@@ -7,8 +7,8 @@ name: Country Normalizer
 description: Maps country variations ("US", "USA", "United States", "U.S.A.") to canonical form with ISO codes
 category: geography
 author: revops-impact
-transform_type: lookup
-reference_table: countries
+transformType: lookup
+referenceTable: countries
 
 applies_to:
   fields:

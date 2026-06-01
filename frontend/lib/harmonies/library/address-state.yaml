@@ -7,8 +7,8 @@ name: US State Normalizer
 description: Maps US state variations ("CA", "California", "Calif.") to canonical form with abbreviations. Includes territories.
 category: geography
 author: revops-impact
-transform_type: lookup
-reference_table: us_states
+transformType: lookup
+referenceTable: us_states
 
 applies_to:
   fields:

@@ -7,9 +7,9 @@ name: Person Title Normalizer
 description: Normalizes job titles ("CEO" vs "Chief Executive Officer"), maps to seniority levels, and cleans formatting
 category: contact-fields
 author: revops-impact
-transform_type: lookup
-reference_table: contact_titles
-object_type: contact
+transformType: lookup
+referenceTable: contact_titles
+objectType: contact
 
 applies_to:
   fields:

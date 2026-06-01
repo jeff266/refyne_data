@@ -7,9 +7,9 @@ name: Contact Location Normalizer
 description: Normalizes contact location fields to title case for consistency
 category: contact-fields
 author: revops-impact
-transform_type: lookup
-reference_table: countries
-object_type: contact
+transformType: lookup
+referenceTable: countries
+objectType: contact
 
 applies_to:
   fields:

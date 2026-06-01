@@ -7,8 +7,8 @@ name: Website Social Media Domain Flag
 description: Compliance flag for records using social media or directory domains as their primary website (indicates incomplete or low-quality data)
 category: custom
 author: revops-impact
-transform_type: format
-transform_function: url_canonical
+transformType: format
+transformFunction: url_canonical
 
 applies_to:
   fields:

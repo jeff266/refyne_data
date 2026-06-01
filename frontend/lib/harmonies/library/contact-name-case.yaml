@@ -7,9 +7,9 @@ name: Contact Name Case Normalizer
 description: Normalizes contact first and last names to title case for consistency
 category: contact-fields
 author: revops-impact
-transform_type: format
-transform_function: smart_title_case
-object_type: contact
+transformType: format
+transformFunction: smart_title_case
+objectType: contact
 
 applies_to:
   fields:
