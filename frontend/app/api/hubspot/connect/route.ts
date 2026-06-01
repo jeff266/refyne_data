@@ -101,6 +101,10 @@ export async function GET() {
       'crm.objects.companies.write',
       'crm.schemas.companies.read',
       'crm.schemas.companies.write',  // NEW: schema sync with write access
+      // Contact permissions (required for contacts normalization)
+      'crm.objects.contacts.read',
+      'crm.objects.contacts.write',
+      'crm.schemas.contacts.read',
       // Export API for streaming (CRITICAL - enables memory-efficient processing)
       'crm.export',
       // Lists and owners
