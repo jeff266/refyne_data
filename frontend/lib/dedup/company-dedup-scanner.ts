@@ -123,7 +123,7 @@ export async function enqueueCompanyDedupScan(
     return { queued: false, reason: 'Database not configured' };
   }
 
-  const jobId = `company-dedup:${orgId}:${Date.now()}`;
+  const jobId = `dedup-${objectType}:${orgId}:${Date.now()}`;
 
   try {
     const job = await queue.add(

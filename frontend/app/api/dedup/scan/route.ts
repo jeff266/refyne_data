@@ -40,8 +40,10 @@ export async function POST(request: NextRequest) {
     let objectType: 'company' | 'contact' | 'deal' = 'company';
     try {
       const body = await request.json();
+      console.log(`[Dedup Scan API] Raw body received: ${JSON.stringify(body)}`);
       forceFullScan = body.forceFullScan === true;
       objectType = body.objectType || 'company';
+      console.log(`[Dedup Scan API] Parsed: forceFullScan=${forceFullScan}, objectType=${objectType}`);
     } catch {
       // No body or invalid JSON - use defaults
     }
