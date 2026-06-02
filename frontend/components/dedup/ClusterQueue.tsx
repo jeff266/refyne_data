@@ -526,12 +526,25 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
       setCounts(data.counts);
       setTotal(data.total);
 
-      // If expanded view, fetch company names
-      if (view === 'expanded' && data.clusters.length > 0) {
-        const allRecordIds = new Set<string>();
-        data.clusters.forEach((c: DedupCluster) =>
-          c.recordIds.forEach((id: string) => allRecordIds.add(id))
-        );
+      // Fetch record data for both compact and expanded views
+      // Compact: fetch first record from each cluster (for display names)
+      // Expanded: fetch all records (for full comparison table)
+      if (data.clusters.length > 0) {
+        const recordIds = new Set<string>();
+
+        if (view === 'expanded') {
+          // Expanded: fetch all records
+          data.clusters.forEach((c: DedupCluster) =>
+            c.recordIds.forEach((id: string) => recordIds.add(id))
+          );
+        } else {
+          // Compact: fetch first record from each cluster
+          data.clusters.forEach((c: DedupCluster) => {
+            if (c.recordIds.length > 0) {
+              recordIds.add(c.recordIds[0]);
+            }
+          });
+        }
 
         // Fetch record data (names for companies, or contact info for contacts)
         const batchEndpoint =
@@ -545,7 +558,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
             'Content-Type': 'application/json',
             'x-org-id': orgId,
           },
-          body: JSON.stringify({ ids: Array.from(allRecordIds) }),
+          body: JSON.stringify({ ids: Array.from(recordIds) }),
         });
 
         if (namesRes.ok) {
@@ -1131,7 +1144,22 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                           }}
                         >
                           {(() => {
-                            // Apply title case to cluster name as fallback
+                            // Try to get the first record's name from fetched data
+                            const firstRecord = companyData[cluster.recordIds[0]];
+
+                            if (objectType === 'contact' && firstRecord) {
+                              // For contacts: show firstname lastname or email
+                              const firstname = (firstRecord as any).firstname || '';
+                              const lastname = (firstRecord as any).lastname || '';
+                              const fullName = `${firstname} ${lastname}`.trim();
+                              if (fullName) return fullName;
+                              if ((firstRecord as any).email) return (firstRecord as any).email;
+                            } else if (firstRecord?.name) {
+                              // For companies: show company name
+                              return firstRecord.name;
+                            }
+
+                            // Fallback: use cluster name or ID
                             if (cluster.clusterName) {
                               return cluster.clusterName
                                 .split(' ')
