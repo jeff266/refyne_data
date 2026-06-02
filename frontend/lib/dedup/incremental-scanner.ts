@@ -437,8 +437,8 @@ async function runFullScan(
   // Get domain exclusions
   const exclusions = await getDomainExclusionSet(orgId);
 
-  // Create company lookup map for fast access
-  const companyMap = new Map(companies.map((c) => [c.id, c]));
+  // Create record lookup map for fast access
+  const companyMap = new Map(records.map((c) => [c.id, c]));
 
   if (job) {
     await job.updateProgress({
@@ -517,20 +517,20 @@ async function runFullScan(
   const processedPairs = new Set<string>();
   const gradeCount = { A: 0, B: 0, C: 0, D: 0 };
 
-  console.log(`[incremental-scanner] Evaluating candidates for ${companies.length} companies...`);
+  console.log(`[incremental-scanner] Evaluating candidates for ${records.length} ${objectLabel}...`);
 
-  for (let i = 0; i < companies.length; i++) {
-    const company = companies[i];
+  for (let i = 0; i < records.length; i++) {
+    const company = records[i];
 
-    // Progress updates every 100 companies
+    // Progress updates every 100 records
     if (i > 0 && i % 100 === 0) {
-      const progressPercent = 15 + Math.floor((i / companies.length) * 75); // 15-90%
-      console.log(`[incremental-scanner] Progress: ${i}/${companies.length} companies evaluated, ${newPairsFound} pairs found`);
+      const progressPercent = 15 + Math.floor((i / records.length) * 75); // 15-90%
+      console.log(`[incremental-scanner] Progress: ${i}/${records.length} ${objectLabel} evaluated, ${newPairsFound} pairs found`);
 
       if (job) {
         await job.updateProgress({
           phase: 'progress',
-          message: `Evaluated ${i}/${companies.length} companies...`,
+          message: `Evaluated ${i}/${records.length} ${objectLabel}...`,
           progress: progressPercent,
           pairsFound: newPairsFound,
         });
@@ -671,9 +671,9 @@ async function runFullScan(
   }
 
   // Update scan run
-  const cursor = companies.length > 0 ? getLatestModifiedDate(companies) : new Date();
+  const cursor = records.length > 0 ? getLatestModifiedDate(records) : new Date();
   await completeScanRun(scanRun.id, {
-    recordsScanned: companies.length,
+    recordsScanned: records.length,
     newPairsFound,
     newClustersFound: clustersFound,
     modifiedCursor: cursor,
@@ -681,7 +681,7 @@ async function runFullScan(
 
   return {
     scanType: 'full',
-    recordsScanned: companies.length,
+    recordsScanned: records.length,
     pairsFound: newPairsFound,
     clustersFound,
     newClusterIds: clusterIds,
