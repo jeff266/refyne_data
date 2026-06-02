@@ -385,6 +385,8 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
   const router = useRouter();
   const [objectType] = useObjectType();
 
+  console.log(`[ClusterQueue] Rendered with objectType: ${objectType}`);
+
   // Data state
   const [clusters, setClusters] = useState<DedupCluster[]>([]);
   const [counts, setCounts] = useState<ClustersCounts>({
@@ -505,6 +507,8 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
       params.set('per_page', String(perPage));
       params.set('objectType', objectType);
 
+      console.log(`[ClusterQueue] Fetching clusters with objectType: ${objectType}, URL: /api/dedup/clusters?${params}`);
+
       const res = await fetch(`/api/dedup/clusters?${params}`, {
         headers: { 'x-org-id': orgId },
       });
@@ -515,6 +519,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
       }
 
       const data = await res.json();
+      console.log(`[ClusterQueue] Received ${data.clusters?.length || 0} clusters, total: ${data.total}, objectType requested: ${objectType}`);
       setClusters(data.clusters);
       setCounts(data.counts);
       setTotal(data.total);
