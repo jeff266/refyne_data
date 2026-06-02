@@ -32,6 +32,18 @@ const FULL_SCAN_DAY = 0;
  */
 const CONFIDENCE_THRESHOLD = 65;
 
+/**
+ * Domains to exclude from dedup matching.
+ * These are generic/reference domains that appear in company data but shouldn't be used as signals.
+ */
+const EXCLUDED_DOMAINS = [
+  'hhs.gov', 'cms.gov', 'cdc.gov', 'nih.gov', 'medicare.gov',
+  'medicaid.gov', 'va.gov', 'samhsa.gov', // healthcare gov agencies
+  'google.com', 'microsoft.com', 'apple.com', 'amazon.com', // big tech
+  'linkedin.com', 'facebook.com', 'twitter.com', // social
+  'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', // email providers
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -758,8 +770,8 @@ async function runFullScan(
   const linkedinMap = new Map<string, string[]>();
 
   for (const record of fullIndex || []) {
-    // Domain map
-    if (record.domain_normalized) {
+    // Domain map (skip excluded domains)
+    if (record.domain_normalized && !EXCLUDED_DOMAINS.includes(record.domain_normalized)) {
       const existing = domainMap.get(record.domain_normalized) || [];
       domainMap.set(record.domain_normalized, [...existing, record.hubspot_company_id]);
     }
@@ -843,8 +855,8 @@ async function runFullScan(
       continue;
     }
 
-    // Domain matches (highest priority)
-    if (companyDomain) {
+    // Domain matches (highest priority) - skip excluded domains
+    if (companyDomain && !EXCLUDED_DOMAINS.includes(companyDomain)) {
       const matches = domainMap.get(companyDomain) || [];
       matches.forEach(id => {
         if (id !== company.id) candidateIds.add(id);
