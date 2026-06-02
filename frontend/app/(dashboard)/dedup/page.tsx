@@ -21,6 +21,7 @@ type DedupTab = 'queue' | 'pending' | 'history' | 'settings';
 export default function DedupPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [objectType] = useObjectType();
   const [tab, setTab] = useState<DedupTab>('queue');
   const hasTrackedVisit = useRef(false);
   const [showMergeBanner, setShowMergeBanner] = useState(false);
@@ -45,12 +46,13 @@ export default function DedupPage() {
       // Auto-dismiss after 6 seconds
       const timer = setTimeout(() => {
         setShowMergeBanner(false);
-        router.replace('/dedup');
+        const url = objectType === 'contact' ? '/dedup?object=contact' : '/dedup';
+        router.replace(url);
       }, 6000);
 
       return () => clearTimeout(timer);
     }
-  }, [searchParams, router]);
+  }, [searchParams, router, objectType]);
 
   // Track page visit for onboarding
   useEffect(() => {
@@ -67,7 +69,8 @@ export default function DedupPage() {
 
   const handleDismissBanner = () => {
     setShowMergeBanner(false);
-    router.replace('/dedup');
+    const url = objectType === 'contact' ? '/dedup?object=contact' : '/dedup';
+    router.replace(url);
   };
 
   const dedupSteps = [
