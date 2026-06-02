@@ -152,8 +152,8 @@ export async function GET(request: NextRequest) {
 
     // Get counts for sidebar
     const [gradeCountsResult, statusCountsResult] = await Promise.all([
-      supabase.from('dedup_clusters').select('grade').eq('org_id', orgId),
-      supabase.from('dedup_clusters').select('status').eq('org_id', orgId),
+      supabase.from('dedup_clusters').select('grade').eq('org_id', orgId).eq('object_type', objectType),
+      supabase.from('dedup_clusters').select('status').eq('org_id', orgId).eq('object_type', objectType),
     ]);
 
     // Aggregate counts
