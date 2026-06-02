@@ -612,7 +612,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
     setScanLoading(true);
     setError(null);
     try {
-      console.log(`[ClusterQueue] handleRunScan: objectType=${objectType}, URL=${window.location.href}`);
+      console.log(`[ClusterQueue] handleRunScan START: objectType=${objectType}, URL=${window.location.href}, currentActiveJobId=${activeJobId}`);
       const res = await fetch('/api/dedup/scan', {
         method: 'POST',
         headers: {
@@ -624,15 +624,19 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
 
       if (!res.ok) {
         const data = await res.json();
+        console.error(`[ClusterQueue] Scan API error: ${data.error}`);
         throw new Error(data.error || 'Failed to start scan');
       }
 
       const data = await res.json();
-      console.log(`[Dedup] Scan enqueued: jobId=${data.jobId}, scanType=${data.scanType}`);
+      console.log(`[ClusterQueue] Scan enqueued: jobId=${data.jobId}, scanType=${data.scanType}, queued=${data.queued}`);
 
       // Show scanning UI
+      console.log(`[ClusterQueue] Setting activeJobId to: ${data.jobId}`);
       setActiveJobId(data.jobId);
+      console.log(`[ClusterQueue] activeJobId set complete (state update queued)`);
     } catch (err) {
+      console.error(`[ClusterQueue] Scan failed:`, err);
       setError(err instanceof Error ? err.message : 'Failed to start scan');
     } finally {
       setScanLoading(false);
@@ -640,9 +644,15 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
   };
 
   const handleScanComplete = () => {
+    console.log(`[ClusterQueue] handleScanComplete called - clearing activeJobId`);
     setActiveJobId(null);
     fetchClusters();
   };
+
+  // Track activeJobId changes
+  useEffect(() => {
+    console.log(`[ClusterQueue] activeJobId changed to: ${activeJobId}, objectType=${objectType}`);
+  }, [activeJobId, objectType]);
 
   // ─────────────────────────────────────────────────────────────
   // Computed values

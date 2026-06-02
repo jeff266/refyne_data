@@ -48,37 +48,55 @@ export function ScanningState({ jobId, orgId, onComplete }: ScanningStateProps) 
   });
   const [showComplete, setShowComplete] = useState(false);
 
+  // Log component mount
+  useEffect(() => {
+    console.log(`[ScanningState] Component mounted with jobId: ${jobId}, orgId: ${orgId}`);
+    return () => {
+      console.log(`[ScanningState] Component unmounting for jobId: ${jobId}`);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
     let autoTransitionTimeout: NodeJS.Timeout | null = null;
 
     const pollProgress = async () => {
       try {
+        console.log(`[ScanningState] Polling progress for jobId: ${jobId}`);
         const res = await fetch(`/api/dedup/scan-progress?jobId=${jobId}`, {
           headers: { 'x-org-id': orgId },
         });
 
+        console.log(`[ScanningState] Poll response: status=${res.status}, ok=${res.ok}`);
+
         if (res.ok) {
           const data = await res.json();
+          console.log(`[ScanningState] Progress data:`, data);
           setProgress(data);
 
           // If scan is complete, show completion state for 2 seconds then transition
           if (data.completed && data.phase === 'completed') {
+            console.log(`[ScanningState] Scan completed, showing completion state for 2s`);
             setShowComplete(true);
             if (intervalId) clearInterval(intervalId);
 
             autoTransitionTimeout = setTimeout(() => {
+              console.log(`[ScanningState] Calling onComplete after 2s delay`);
               onComplete();
             }, 2000);
           }
 
           // If scan failed, show error and stop polling
           if (data.phase === 'failed') {
+            console.log(`[ScanningState] Scan failed: ${data.error}`);
             if (intervalId) clearInterval(intervalId);
           }
+        } else {
+          const errorData = await res.json().catch(() => ({}));
+          console.error(`[ScanningState] Poll failed: status=${res.status}, error=`, errorData);
         }
       } catch (error) {
-        console.error('Failed to fetch scan progress:', error);
+        console.error('[ScanningState] Failed to fetch scan progress:', error);
       }
     };
 
