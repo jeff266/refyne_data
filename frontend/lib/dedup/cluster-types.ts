@@ -21,6 +21,7 @@ export interface DedupCluster {
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  objectType: 'company' | 'contact' | 'deal';
   clusterName?: string; // Company name from first record
 }
 
@@ -38,6 +39,7 @@ export interface DedupClusterRow {
   resolved_at: string | null;
   created_at: string;
   updated_at: string;
+  object_type: 'company' | 'contact' | 'deal';
 }
 
 export interface ClusterWithRecords {
@@ -82,5 +84,6 @@ export function rowToCluster(row: DedupClusterRow): DedupCluster {
     resolvedAt: row.resolved_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    objectType: row.object_type,
   };
 }

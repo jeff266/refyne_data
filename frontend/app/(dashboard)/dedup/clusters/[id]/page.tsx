@@ -34,7 +34,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-const FIELD_LABELS: Record<string, string> = {
+const COMPANY_FIELD_LABELS: Record<string, string> = {
   name: 'Company Name',
   domain: 'Domain',
   phone: 'Phone',
@@ -48,7 +48,21 @@ const FIELD_LABELS: Record<string, string> = {
   type: 'Company Type',
 };
 
-const DEFAULT_FIELDS = [
+const CONTACT_FIELD_LABELS: Record<string, string> = {
+  firstname: 'First Name',
+  lastname: 'Last Name',
+  email: 'Email',
+  phone: 'Phone',
+  mobilephone: 'Mobile Phone',
+  company: 'Company',
+  jobtitle: 'Job Title',
+  city: 'City',
+  state: 'State',
+  country: 'Country',
+  lifecyclestage: 'Lifecycle Stage',
+};
+
+const DEFAULT_COMPANY_FIELDS = [
   'name',
   'domain',
   'phone',
@@ -60,6 +74,20 @@ const DEFAULT_FIELDS = [
   'linkedin_company_page',
   'lifecyclestage',
   'type',
+];
+
+const DEFAULT_CONTACT_FIELDS = [
+  'firstname',
+  'lastname',
+  'email',
+  'phone',
+  'mobilephone',
+  'company',
+  'jobtitle',
+  'city',
+  'state',
+  'country',
+  'lifecyclestage',
 ];
 
 // Animation state machine
@@ -81,21 +109,25 @@ interface HubSpotProperty {
 // Calculate which fields will be rescued (master empty, non-master has value)
 function calculateRescuedFields(
   masterRecord: HubSpotCompany,
-  nonMasterRecords: HubSpotCompany[]
+  nonMasterRecords: HubSpotCompany[],
+  objectType: 'company' | 'contact' | 'deal'
 ): { count: number; fieldKeys: string[] } {
   const rescued: string[] = [];
 
-  const fieldsToCheck = [
-    'phone',
-    'linkedin_company_page',
-    'website',
-    'industry',
-    'city',
-    'state',
-    'country',
-    'address',
-    'type',
-  ];
+  const fieldsToCheck =
+    objectType === 'contact'
+      ? ['phone', 'mobilephone', 'email', 'company', 'jobtitle', 'city', 'state', 'country']
+      : [
+          'phone',
+          'linkedin_company_page',
+          'website',
+          'industry',
+          'city',
+          'state',
+          'country',
+          'address',
+          'type',
+        ];
 
   fieldsToCheck.forEach((field) => {
     const masterVal = masterRecord.properties[field];
@@ -205,7 +237,8 @@ function SortableFieldRow({
   const isRescuedField =
     (mergeState === 'highlighting' || mergeState === 'complete') && rescuedFieldKeys.includes(field);
 
-  const isDefaultField = DEFAULT_FIELDS.includes(field);
+  const isDefaultField =
+    DEFAULT_COMPANY_FIELDS.includes(field) || DEFAULT_CONTACT_FIELDS.includes(field);
 
   return (
     <tr
@@ -563,7 +596,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
   const [fieldSelections, setFieldSelections] = useState<Record<string, string>>({});
 
   // Field configuration state
-  const [fieldsToDisplay, setFieldsToDisplay] = useState<string[]>(DEFAULT_FIELDS);
+  const [fieldsToDisplay, setFieldsToDisplay] = useState<string[]>([]);
   const [availableProperties, setAvailableProperties] = useState<HubSpotProperty[]>([]);
   const [loadingFields, setLoadingFields] = useState(true);
 
@@ -599,11 +632,11 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
 
         if (res.ok) {
           const data = await res.json();
-          setFieldsToDisplay(data.fields || DEFAULT_FIELDS);
+          setFieldsToDisplay(data.fields || []);
         }
       } catch (err) {
         console.error('Failed to load dedup fields:', err);
-        setFieldsToDisplay(DEFAULT_FIELDS);
+        setFieldsToDisplay([]);
       } finally {
         setLoadingFields(false);
       }
@@ -670,6 +703,16 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         const clusterData = await res.json();
         setData(clusterData);
 
+        // Determine object type and use appropriate defaults
+        const objectType = clusterData.cluster.objectType || 'company';
+        const defaultFields =
+          objectType === 'contact' ? DEFAULT_CONTACT_FIELDS : DEFAULT_COMPANY_FIELDS;
+
+        // If no fields configured, use defaults
+        if (fieldsToDisplay.length === 0) {
+          setFieldsToDisplay(defaultFields);
+        }
+
         // Auto-select master and fields
         setMasterId(clusterData.suggestedMasterId);
 
@@ -681,13 +724,15 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         );
 
         if (master) {
-          const autoSelections = autoSelectFields(fieldsToDisplay, master, others);
+          const fieldsForSelection = fieldsToDisplay.length > 0 ? fieldsToDisplay : defaultFields;
+          const autoSelections = autoSelectFields(fieldsForSelection, master, others);
           setFieldSelections(autoSelections);
         }
 
-        // Fetch HubSpot property definitions
+        // Fetch HubSpot property definitions based on object type
         try {
-          const propsRes = await fetch('/api/hubspot/properties/companies');
+          const hubspotObjectType = objectType === 'contact' ? 'contacts' : 'companies';
+          const propsRes = await fetch(`/api/hubspot/properties/${hubspotObjectType}`);
           if (propsRes.ok) {
             const propsData = await propsRes.json();
             const labelMap: Record<string, string> = {};
@@ -738,7 +783,11 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
     if (!masterRecord) return;
 
     // Calculate rescued fields before merge
-    const { count: rescuedCount, fieldKeys } = calculateRescuedFields(masterRecord, nonMasterRecords);
+    const { count: rescuedCount, fieldKeys } = calculateRescuedFields(
+      masterRecord,
+      nonMasterRecords,
+      data.cluster.objectType || 'company'
+    );
     setRescuedFieldKeys(fieldKeys);
 
     // Check for reduced motion preference
@@ -768,8 +817,21 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
 
       // Prepare toast data
       const recordsConsolidated = data.cluster.recordIds.length - excludedRecords.size;
+
+      // Get display name based on object type
+      const objectType = data.cluster.objectType || 'company';
+      const getRecordDisplayName = (record: HubSpotCompany) => {
+        if (objectType === 'contact') {
+          const firstname = record.properties.firstname || '';
+          const lastname = record.properties.lastname || '';
+          const fullName = `${firstname} ${lastname}`.trim();
+          return fullName || record.properties.email || `Contact ${record.id}`;
+        }
+        return record.properties.name || `Company ${record.id}`;
+      };
+
       setMergeToastData({
-        masterName: masterRecord.properties.name || 'Unknown Company',
+        masterName: getRecordDisplayName(masterRecord),
         recordsConsolidated,
         fieldsRescued: rescuedCount,
       });
@@ -779,7 +841,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         setTimeout(() => {
           router.push(
             `/dedup?merged=true&rescued=${rescuedCount}&name=${encodeURIComponent(
-              masterRecord.properties.name || 'Unknown Company'
+              getRecordDisplayName(masterRecord)
             )}`
           );
         }, 800);
@@ -798,7 +860,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
       setTimeout(() => {
         router.push(
           `/dedup?merged=true&rescued=${rescuedCount}&name=${encodeURIComponent(
-            masterRecord.properties.name || 'Unknown Company'
+            getRecordDisplayName(masterRecord)
           )}`
         );
       }, 1400);
@@ -920,6 +982,10 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
 
   const { cluster, records } = data;
   const visibleRecords = records.filter((r) => !excludedRecords.has(r.id));
+  const objectType = cluster.objectType || 'company';
+  const FIELD_LABELS = objectType === 'contact' ? CONTACT_FIELD_LABELS : COMPANY_FIELD_LABELS;
+  const recordTypeLabel = objectType === 'contact' ? 'contact' : 'company';
+  const recordTypeLabelPlural = objectType === 'contact' ? 'contacts' : 'companies';
 
   // Available fields for picker (not already displayed)
   const availableFieldsForPicker = availableProperties.filter(
@@ -979,7 +1045,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
           Review Cluster
         </h1>
         <p style={{ fontSize: 14, color: C.text3 }}>
-          {cluster.recordIds.length} duplicate companies
+          {cluster.recordIds.length} duplicate {recordTypeLabelPlural}
         </p>
       </div>
 
@@ -1042,11 +1108,23 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
             opacity: mergeState !== 'idle' ? 0.6 : 1,
           }}
         >
-          {visibleRecords.map((record) => (
-            <option key={record.id} value={record.id}>
-              {record.properties.name || record.id} (ID: {record.id})
-            </option>
-          ))}
+          {visibleRecords.map((record) => {
+            const displayName =
+              objectType === 'contact'
+                ? (() => {
+                    const firstname = record.properties.firstname || '';
+                    const lastname = record.properties.lastname || '';
+                    const fullName = `${firstname} ${lastname}`.trim();
+                    return fullName || record.properties.email || record.id;
+                  })()
+                : record.properties.name || record.id;
+
+            return (
+              <option key={record.id} value={record.id}>
+                {displayName} (ID: {record.id})
+              </option>
+            );
+          })}
         </select>
       </Card>
 
@@ -1114,7 +1192,15 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                       }}
                     >
                       <div>
-                        {record.properties.name || record.id}
+                        {(() => {
+                          if (objectType === 'contact') {
+                            const firstname = record.properties.firstname || '';
+                            const lastname = record.properties.lastname || '';
+                            const fullName = `${firstname} ${lastname}`.trim();
+                            return fullName || record.properties.email || record.id;
+                          }
+                          return record.properties.name || record.id;
+                        })()}
                         {isMaster && (
                           <span
                             style={{
@@ -1131,11 +1217,20 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                       </div>
                       {!isMaster && (
                         <button
-                          onClick={() =>
-                            handleExcludeRecord(record.id, record.properties.name || record.id)
-                          }
+                          onClick={() => {
+                            const displayName =
+                              objectType === 'contact'
+                                ? (() => {
+                                    const firstname = record.properties.firstname || '';
+                                    const lastname = record.properties.lastname || '';
+                                    const fullName = `${firstname} ${lastname}`.trim();
+                                    return fullName || record.properties.email || record.id;
+                                  })()
+                                : record.properties.name || record.id;
+                            handleExcludeRecord(record.id, displayName);
+                          }}
                           disabled={excludingRecordId === record.id || mergeState !== 'idle'}
-                          title="Mark this record as not a duplicate. It will remain in HubSpot as a separate company."
+                          title={`Mark this record as not a duplicate. It will remain in HubSpot as a separate ${recordTypeLabel}.`}
                           style={{
                             padding: '4px 8px',
                             fontSize: 10,

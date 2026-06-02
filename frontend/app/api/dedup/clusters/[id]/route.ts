@@ -57,6 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     const clusterData = rowToCluster(cluster as DedupClusterRow);
+    const objectType = clusterData.objectType;
 
     // Fetch signals from highest-confidence pair
     const { data: topPair } = await supabase
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .limit(1)
       .single();
 
-    // Fetch full company details from HubSpot
+    // Fetch full record details from HubSpot
     const records: HubSpotCompany[] = [];
 
     try {
@@ -77,27 +78,48 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         return NextResponse.json({ error: 'HubSpot not connected' }, { status: 400 });
       }
 
-      // Properties to fetch for review
-      const properties = [
-        'name',
-        'domain',
-        'phone',
-        'industry',
-        'city',
-        'state',
-        'country',
-        'address',
-        'linkedin_company_page',
-        'hubspot_owner_id',
-        'createdate',
-        'hs_lastmodifieddate',
-        'num_associated_contacts',
-        'num_associated_deals',
-        'lifecyclestage',
-        'type',
-      ];
+      // Properties to fetch based on object type
+      const properties =
+        objectType === 'contact'
+          ? [
+              'firstname',
+              'lastname',
+              'email',
+              'phone',
+              'mobilephone',
+              'company',
+              'jobtitle',
+              'city',
+              'state',
+              'country',
+              'hubspot_owner_id',
+              'createdate',
+              'hs_lastmodifieddate',
+              'lifecyclestage',
+            ]
+          : [
+              'name',
+              'domain',
+              'phone',
+              'industry',
+              'city',
+              'state',
+              'country',
+              'address',
+              'linkedin_company_page',
+              'hubspot_owner_id',
+              'createdate',
+              'hs_lastmodifieddate',
+              'num_associated_contacts',
+              'num_associated_deals',
+              'lifecyclestage',
+              'type',
+            ];
 
-      // Fetch all companies in parallel (batches of 100 per HubSpot API limit)
+      // Determine HubSpot object type endpoint
+      const hubspotObjectType = objectType === 'contact' ? 'contacts' : 'companies';
+
+      // Fetch all records in parallel (batches of 100 per HubSpot API limit)
       const recordIds = clusterData.recordIds;
       const batchSize = 100;
 
@@ -107,7 +129,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         const responses = await Promise.all(
           batch.map((recordId) =>
             fetch(
-              `https://api.hubapi.com/crm/v3/objects/companies/${recordId}?properties=${properties.join(
+              `https://api.hubapi.com/crm/v3/objects/${hubspotObjectType}/${recordId}?properties=${properties.join(
                 ','
               )}`,
               {
@@ -129,7 +151,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       }
     } catch (error) {
       console.error('[GET /api/dedup/clusters/[id]] Failed to fetch HubSpot data:', error);
-      return NextResponse.json({ error: 'Failed to fetch company data' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to fetch record data' }, { status: 500 });
     }
 
     // Select suggested master

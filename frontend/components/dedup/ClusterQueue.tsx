@@ -281,7 +281,7 @@ function ScanButton({
               Incremental scan
             </div>
             <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.4 }}>
-              Only process companies modified since last scan<br />
+              Only process {recordTypeLabelPlural} modified since last scan<br />
               Faster · Runs automatically overnight
             </div>
           </button>
@@ -304,7 +304,7 @@ function ScanButton({
               Full scan
             </div>
             <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.4 }}>
-              Reprocess all companies from scratch<br />
+              Reprocess all {recordTypeLabelPlural} from scratch<br />
               Use after connecting HubSpot or changing settings
             </div>
           </button>
@@ -531,8 +531,13 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
           c.recordIds.forEach((id: string) => allRecordIds.add(id))
         );
 
-        // Fetch company names
-        const namesRes = await fetch('/api/hubspot/companies/batch-names', {
+        // Fetch record data (names for companies, or contact info for contacts)
+        const batchEndpoint =
+          objectType === 'contact'
+            ? '/api/hubspot/contacts/batch-names'
+            : '/api/hubspot/companies/batch-names';
+
+        const namesRes = await fetch(batchEndpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -543,7 +548,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
 
         if (namesRes.ok) {
           const namesData = await namesRes.json();
-          setCompanyData(namesData.companies);
+          setCompanyData(namesData.companies || namesData.contacts || {});
         }
       }
     } catch (err) {
@@ -666,6 +671,10 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
   const totalGradeCount =
     counts.byGrade.A + counts.byGrade.B + counts.byGrade.C + counts.byGrade.D;
   const gradeAClusters = clusters.filter((c) => c.grade === 'A' && c.status === 'pending');
+
+  // Object type labels
+  const recordTypeLabel = objectType === 'contact' ? 'contact' : 'company';
+  const recordTypeLabelPlural = objectType === 'contact' ? 'contacts' : 'companies';
 
   // ─────────────────────────────────────────────────────────────
   // Render
@@ -968,16 +977,16 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                         >
                           {/* Header row */}
                           <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, textTransform: 'uppercase' }}>
-                            Company Name
+                            {objectType === 'contact' ? 'Name' : 'Company Name'}
                           </div>
                           <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, textTransform: 'uppercase' }}>
-                            Domain
+                            {objectType === 'contact' ? 'Email' : 'Domain'}
                           </div>
                           <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, textTransform: 'uppercase' }}>
                             Phone
                           </div>
                           <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, textTransform: 'uppercase' }}>
-                            Website
+                            {objectType === 'contact' ? 'Company' : 'Website'}
                           </div>
                           <div style={{ fontSize: 9, color: C.text3, fontWeight: 600, textTransform: 'uppercase' }}>
                             Lifecycle Stage
@@ -1024,7 +1033,14 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                                         fontWeight: isMaster ? 600 : 400,
                                       }}
                                     >
-                                      {record.name || '—'}
+                                      {objectType === 'contact'
+                                        ? (() => {
+                                            const firstname = (record as any).firstname || '';
+                                            const lastname = (record as any).lastname || '';
+                                            const fullName = `${firstname} ${lastname}`.trim();
+                                            return fullName || '—';
+                                          })()
+                                        : record.name || '—'}
                                     </span>
                                   </div>
                                   <div
@@ -1037,7 +1053,9 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                                       color: C.text2,
                                     }}
                                   >
-                                    {record.domain || '—'}
+                                    {objectType === 'contact'
+                                      ? (record as any).email || '—'
+                                      : record.domain || '—'}
                                   </div>
                                   <div
                                     style={{
@@ -1061,7 +1079,9 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                                       color: C.text2,
                                     }}
                                   >
-                                    {record.website || '—'}
+                                    {objectType === 'contact'
+                                      ? (record as any).company || '—'
+                                      : record.website || '—'}
                                   </div>
                                   <div
                                     style={{
@@ -1122,7 +1142,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                         {/* Signal badges */}
                         <SignalBadges signals={(cluster as any).signals || []} />
                         <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>
-                          {cluster.recordIds.length} companies
+                          {cluster.recordIds.length} {recordTypeLabelPlural}
                         </div>
                       </>
                     )}
