@@ -129,7 +129,7 @@ export async function classifyJobTitleBatch(
   titles: string[]
 ): Promise<Map<string, JobClassification>> {
   const results = new Map<string, JobClassification>();
-  const uniqueTitles = [...new Set(titles.filter(Boolean))];
+  const uniqueTitles = Array.from(new Set(titles.filter(Boolean)));
 
   // Check cache for all titles at once
   const { data: cached } = await supabaseAdmin
@@ -162,10 +162,10 @@ export async function classifyJobTitleBatch(
   }
 
   // Add cached results
-  for (const [title, classification] of cachedMap) {
+  cachedMap.forEach((classification, title) => {
     const originalTitle = uniqueTitles.find((t) => t.toLowerCase() === title);
     if (originalTitle) results.set(originalTitle, classification);
-  }
+  });
 
   return results;
 }

@@ -37,6 +37,7 @@ interface RunStats {
   updated_count: number;
   skipped_count: number;
   error_count: number;
+  error_message?: string;
 }
 
 const JOB_LEVELS = ['C-Suite', 'VP', 'Director', 'Manager', 'IC', 'Founder', 'Other'];
