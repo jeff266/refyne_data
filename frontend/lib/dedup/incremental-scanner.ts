@@ -447,6 +447,7 @@ async function runContactFullScan(
   connectionId: string,
   scanRun: ScanRun,
   records: any[],
+  client: HubSpotClient,
   job?: any
 ): Promise<DedupScanResult> {
   console.log(`[contact-dedup] Starting contact dedup scan with ${records.length} contacts`);
@@ -464,6 +465,29 @@ async function runContactFullScan(
 
   console.log('[contact-dedup] Old pairs cleared, building signal maps...');
 
+  // ─── Step 0: Build Org Phones Set (exclude from contact phone matching) ──
+  // Fetch all company phones to identify shared org lines vs personal numbers
+  console.log('[contact-dedup] Fetching company phones to build org phone exclusion set...');
+  const orgPhones = new Set<string>();
+
+  try {
+    for await (const batch of client.getAllCompanies(['phone'])) {
+      for (const company of batch) {
+        const phone = company.properties?.phone;
+        if (phone && isValidPhone(phone)) {
+          const normalized = phone.replace(/\D/g, '');
+          if (normalized.length >= 10) {
+            orgPhones.add(normalized);
+          }
+        }
+      }
+    }
+    console.log(`[contact-dedup] Built org phone exclusion set: ${orgPhones.size} company phones`);
+  } catch (error) {
+    console.error('[contact-dedup] Failed to fetch company phones:', error);
+    // Continue without org phone filtering if fetch fails
+  }
+
   // ─── Signal 1: Email Map (Grade A) ───────────────────────────────────────
   const emailMap = new Map<string, string>();  // normalized email → contact ID
 
@@ -476,18 +500,26 @@ async function runContactFullScan(
     }
   }
 
-  // ─── Signal 2: Phone Map (Grade A) ───────────────────────────────────────
+  // ─── Signal 2: Phone Map (Grade B for phone, Grade A for mobilephone) ────
+  // Note: We exclude org phones from the phone field, but keep mobilephone
   const phoneMap = new Map<string, string>();  // normalized phone → contact ID
 
   for (const contact of records) {
-    // Check both phone and mobilephone fields
-    const phones = [
-      contact.properties?.phone,
-      contact.properties?.mobilephone
-    ].filter(p => p && isValidPhone(p));
-
-    for (const phone of phones) {
+    // Phone field: Skip if it's an org phone (shared line, not personal)
+    const phone = contact.properties?.phone;
+    if (phone && isValidPhone(phone)) {
       const normalized = phone.replace(/\D/g, '');
+      if (normalized.length >= 10 && !orgPhones.has(normalized)) {
+        if (!phoneMap.has(normalized)) {
+          phoneMap.set(normalized, contact.id);
+        }
+      }
+    }
+
+    // Mobile phone: Always include (personal by nature)
+    const mobilephone = contact.properties?.mobilephone;
+    if (mobilephone && isValidPhone(mobilephone)) {
+      const normalized = mobilephone.replace(/\D/g, '');
       if (normalized.length >= 10) {
         if (!phoneMap.has(normalized)) {
           phoneMap.set(normalized, contact.id);
@@ -545,15 +577,30 @@ async function runContactFullScan(
     }
   }
 
-  // Phone matches (Grade A, confidence 1.0)
+  // Phone matches (Grade B for phone field, Grade A for mobilephone)
   for (const contact of records) {
-    const phones = [
-      contact.properties?.phone,
-      contact.properties?.mobilephone
-    ].filter(p => p && isValidPhone(p));
-
-    for (const phone of phones) {
+    // Check phone field (skip org phones)
+    const phone = contact.properties?.phone;
+    if (phone && isValidPhone(phone)) {
       const normalized = phone.replace(/\D/g, '');
+      if (normalized.length >= 10 && !orgPhones.has(normalized)) {
+        const existingId = phoneMap.get(normalized);
+        if (existingId && existingId !== contact.id) {
+          pairs.push({
+            id1: existingId,
+            id2: contact.id,
+            signal: 'phone',
+            confidence: 80,  // Grade B for office phone
+            grade: 'B'
+          });
+        }
+      }
+    }
+
+    // Check mobilephone field (always personal, Grade A)
+    const mobilephone = contact.properties?.mobilephone;
+    if (mobilephone && isValidPhone(mobilephone)) {
+      const normalized = mobilephone.replace(/\D/g, '');
       if (normalized.length >= 10) {
         const existingId = phoneMap.get(normalized);
         if (existingId && existingId !== contact.id) {
@@ -561,7 +608,7 @@ async function runContactFullScan(
             id1: existingId,
             id2: contact.id,
             signal: 'phone',
-            confidence: 100,
+            confidence: 100,  // Grade A for mobile phone
             grade: 'A'
           });
         }
@@ -756,7 +803,7 @@ async function runFullScan(
     // ═══════════════════════════════════════════════════════════════════════════
     // CONTACT DEDUP: Multi-signal graded matching
     // ═══════════════════════════════════════════════════════════════════════════
-    return await runContactFullScan(orgId, portalId, connectionId, scanRun, records, job);
+    return await runContactFullScan(orgId, portalId, connectionId, scanRun, records, client, job);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
