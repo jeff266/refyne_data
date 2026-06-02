@@ -196,7 +196,8 @@ async function storePair(
     grade: PairGrade;
     nameSimilarity: number | null;
     signalsFired: any[];
-  }
+  },
+  objectType: 'company' | 'contact' | 'deal' = 'company'
 ): Promise<{ id: string }> {
   if (!supabase) {
     throw new Error('Supabase not configured');
@@ -209,6 +210,7 @@ async function storePair(
         org_id: orgId,
         portal_id: portalId,
         connection_id: connectionId,
+        object_type: objectType,
         record_a_id: idA,
         record_b_id: idB,
         confidence: evaluation.confidence,
@@ -279,15 +281,16 @@ async function buildClusters(
 ): Promise<{ count: number; clusterIds: string[] }> {
   if (!supabase || pairs.length === 0) return { count: 0, clusterIds: [] };
 
-  // Clear existing clusters for this portal (handle FK constraints)
+  // Clear existing clusters for this portal AND object type (handle FK constraints)
   // Must delete in order: decisions → clear pair cluster_ids → clusters
 
-  // Step 1: Get cluster IDs to delete
+  // Step 1: Get cluster IDs to delete (filtered by object_type)
   const { data: clustersToDelete } = await supabase
     .from('dedup_clusters')
     .select('id')
     .eq('org_id', orgId)
-    .eq('portal_id', portalId);
+    .eq('portal_id', portalId)
+    .eq('object_type', objectType);
 
   const clusterIdsToDelete = (clustersToDelete || []).map(c => c.id);
 
@@ -305,12 +308,13 @@ async function buildClusters(
       .in('cluster_id', clusterIdsToDelete);
   }
 
-  // Step 4: Now safe to delete clusters
+  // Step 4: Now safe to delete clusters (filtered by object_type)
   await supabase
     .from('dedup_clusters')
     .delete()
     .eq('org_id', orgId)
-    .eq('portal_id', portalId);
+    .eq('portal_id', portalId)
+    .eq('object_type', objectType);
 
   // Build Union-Find from pairs
   const uf = new UnionFind();
@@ -602,12 +606,14 @@ async function runContactFullScan(
       portal_id: portalId,
       connection_id: connectionId,
       object_type: 'contact',
-      company_id_1: pair.id1,
-      company_id_2: pair.id2,
+      record_a_id: pair.id1,  // ✅ Fixed: use record_a_id not company_id_1
+      record_b_id: pair.id2,  // ✅ Fixed: use record_b_id not company_id_2
       confidence: pair.confidence,
       grade: pair.grade,
       signals: [{ signal: pair.signal, fired: true, points: pair.confidence }],
-      created_at: new Date().toISOString(),
+      status: 'pending',
+      detected_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     });
 
     gradeCount[pair.grade]++;
@@ -915,7 +921,8 @@ async function runFullScan(
           connectionId,
           company.id,
           candidateId,
-          evaluation
+          evaluation,
+          objectType
         );
         newPairsFound++;
         gradeCount[evaluation.grade]++;
