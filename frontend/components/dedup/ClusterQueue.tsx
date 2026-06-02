@@ -175,10 +175,12 @@ function RecordCountBadge({ count }: { count: number }) {
 
 function ScanButton({
   onScan,
-  disabled
+  disabled,
+  recordTypeLabelPlural
 }: {
   onScan: (forceFullScan: boolean) => void;
   disabled: boolean;
+  recordTypeLabelPlural: string;
 }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
@@ -791,7 +793,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                       Scanning...
                     </div>
                   ) : (
-                    <ScanButton onScan={handleRunScan} disabled={loading} />
+                    <ScanButton onScan={handleRunScan} disabled={loading} recordTypeLabelPlural={recordTypeLabelPlural} />
                   )}
                   <GhostBtn onClick={fetchClusters} disabled={loading}>
                     <RefreshCw size={12} style={{ marginRight: 4 }} />
