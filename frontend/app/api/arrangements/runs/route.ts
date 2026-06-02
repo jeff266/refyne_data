@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     const fetchEnrichmentRuns = async () => {
       if (runType === 'segmentation') return [];
 
-      let query = supabase
+      let query = supabase!
         .from('arrangement_runs')
         .select('*, arrangements(name)')
         .eq('org_id', ctx.orgId)
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     const fetchSegmentationRuns = async () => {
       if (runType === 'enrichment') return [];
 
-      let query = supabase
+      let query = supabase!
         .from('job_segmentation_runs')
         .select('*')
         .eq('org_id', ctx.orgId)
