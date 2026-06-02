@@ -612,6 +612,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
     setScanLoading(true);
     setError(null);
     try {
+      console.log(`[ClusterQueue] handleRunScan: objectType=${objectType}, URL=${window.location.href}`);
       const res = await fetch('/api/dedup/scan', {
         method: 'POST',
         headers: {

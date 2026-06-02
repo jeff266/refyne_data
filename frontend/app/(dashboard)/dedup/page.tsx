@@ -6,6 +6,7 @@ import { Settings, Check, X, History, Clock } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { HowItWorksStrip } from '@/components/refyne';
 import { DedupSettings, ClusterQueue, MergeHistoryTab, PendingMergesTab } from '@/components/dedup';
+import { useObjectType, type ObjectType } from '@/hooks/useObjectType';
 
 // ─────────────────────────────────────────────────────────────
 // Tab type
