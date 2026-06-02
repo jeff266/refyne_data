@@ -606,11 +606,11 @@ async function runContactFullScan(
       portal_id: portalId,
       connection_id: connectionId,
       object_type: 'contact',
-      record_a_id: pair.id1,  // ✅ Fixed: use record_a_id not company_id_1
-      record_b_id: pair.id2,  // ✅ Fixed: use record_b_id not company_id_2
+      record_a_id: pair.id1,
+      record_b_id: pair.id2,
       confidence: pair.confidence,
       grade: pair.grade,
-      signals: [{ signal: pair.signal, fired: true, points: pair.confidence }],
+      signals_fired: [{ signal: pair.signal, fired: true, points: pair.confidence }],
       status: 'pending',
       detected_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
