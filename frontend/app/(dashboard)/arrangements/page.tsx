@@ -26,6 +26,26 @@ interface Arrangement {
   created_at: string;
 }
 
+interface Run {
+  id: string;
+  type: 'enrichment' | 'segmentation';
+  name: string;
+  status: 'pending' | 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  started_at?: string;
+  created_at: string;
+  completed_at?: string;
+  total_records?: number;
+  records_processed?: number;
+  processed_count?: number;
+  updated_count?: number;
+  skipped_count?: number;
+  error_count?: number;
+  level_field?: string;
+  function_field?: string;
+}
+
+type Tab = 'arrangements' | 'history';
+
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -51,8 +71,11 @@ export default function ArrangementsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { orgRole } = useAuth();
+  const [activeTab, setActiveTab] = useState<Tab>('arrangements');
   const [arrangements, setArrangements] = useState<Arrangement[]>([]);
+  const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
+  const [runsLoading, setRunsLoading] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [arrangementToDelete, setArrangementToDelete] = useState<Arrangement | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -65,6 +88,12 @@ export default function ArrangementsPage() {
   useEffect(() => {
     fetchArrangements();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchRuns();
+    }
+  }, [activeTab]);
 
   // Handle highlight from query param
   useEffect(() => {
@@ -101,6 +130,21 @@ export default function ArrangementsPage() {
       addToast('error', 'Failed to load arrangements');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRuns = async () => {
+    setRunsLoading(true);
+    try {
+      const response = await fetch('/api/arrangements/runs?per_page=50');
+      if (!response.ok) throw new Error('Failed to fetch runs');
+      const data = await response.json();
+      setRuns(data.runs);
+    } catch (error) {
+      console.error('Failed to fetch runs:', error);
+      addToast('error', 'Failed to load run history');
+    } finally {
+      setRunsLoading(false);
     }
   };
 
@@ -260,7 +304,7 @@ export default function ArrangementsPage() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
-          marginBottom: 32,
+          marginBottom: 24,
         }}
       >
         <div>
@@ -277,14 +321,60 @@ export default function ArrangementsPage() {
         )}
       </div>
 
-      {/* Arrangements list */}
+      {/* Tabs */}
       <div
         style={{
-          display: 'grid',
-          gap: 16,
+          display: 'flex',
+          gap: 0,
+          borderBottom: `1px solid ${C.border}`,
+          marginBottom: 24,
         }}
       >
-        {arrangements.map((arr) => {
+        <button
+          onClick={() => setActiveTab('arrangements')}
+          style={{
+            padding: '12px 16px',
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: 'pointer',
+            background: 'transparent',
+            border: 'none',
+            color: activeTab === 'arrangements' ? C.text : C.text2,
+            borderBottom: `2px solid ${activeTab === 'arrangements' ? C.indigo : 'transparent'}`,
+            marginBottom: '-1px',
+            fontFamily: F.sans,
+          }}
+        >
+          Arrangements
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          style={{
+            padding: '12px 16px',
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: 'pointer',
+            background: 'transparent',
+            border: 'none',
+            color: activeTab === 'history' ? C.text : C.text2,
+            borderBottom: `2px solid ${activeTab === 'history' ? C.indigo : 'transparent'}`,
+            marginBottom: '-1px',
+            fontFamily: F.sans,
+          }}
+        >
+          History
+        </button>
+      </div>
+
+      {/* Arrangements tab content */}
+      {activeTab === 'arrangements' && (
+        <div
+          style={{
+            display: 'grid',
+            gap: 16,
+          }}
+        >
+          {arrangements.map((arr) => {
           const steps = arr.enrichment_steps || [];
           const providerNames = steps
             .sort((a, b) => a.order - b.order)
@@ -444,7 +534,149 @@ export default function ArrangementsPage() {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
+
+      {/* History tab content */}
+      {activeTab === 'history' && (
+        <div>
+          {runsLoading ? (
+            <div style={{ padding: 32, textAlign: 'center', color: C.text2 }}>
+              Loading run history...
+            </div>
+          ) : runs.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: C.text3 }}>
+              No runs yet
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {/* Table header */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '140px 1.5fr 120px 100px 120px 120px 100px',
+                  padding: '8px 16px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: C.text3,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 6,
+                }}
+              >
+                <div>Type</div>
+                <div>Name</div>
+                <div>Status</div>
+                <div>Records</div>
+                <div>Started</div>
+                <div>Duration</div>
+                <div></div>
+              </div>
+
+              {/* Runs */}
+              {runs.map((run) => {
+                const startedAt = run.started_at || run.created_at;
+                const date = new Date(startedAt);
+                const statusColor =
+                  run.status === 'completed'
+                    ? C.green
+                    : run.status === 'running'
+                    ? C.indigo
+                    : run.status === 'failed'
+                    ? C.red
+                    : C.text3;
+
+                let duration = 0;
+                if (run.completed_at && startedAt) {
+                  duration = Math.round(
+                    (new Date(run.completed_at).getTime() - new Date(startedAt).getTime()) / 1000
+                  );
+                }
+
+                const recordsCount =
+                  run.type === 'segmentation'
+                    ? run.processed_count || 0
+                    : run.records_processed || 0;
+
+                return (
+                  <div
+                    key={run.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '140px 1.5fr 120px 100px 120px 120px 100px',
+                      padding: '12px 16px',
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 6,
+                      fontSize: 13,
+                      color: C.text2,
+                      alignItems: 'center',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = C.hover;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = C.surface;
+                    }}
+                  >
+                    <div>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: '3px 8px',
+                          borderRadius: 4,
+                          background:
+                            run.type === 'enrichment'
+                              ? 'rgba(55,138,221,0.1)'
+                              : 'rgba(139,92,246,0.1)',
+                          color: run.type === 'enrichment' ? C.indigo : '#8B5CF6',
+                          fontWeight: 500,
+                        }}
+                      >
+                        {run.type === 'enrichment' ? 'Enrichment' : 'Segmentation'}
+                      </span>
+                    </div>
+                    <div style={{ color: C.text, fontWeight: 500 }}>{run.name}</div>
+                    <div style={{ color: statusColor }}>
+                      {run.status.charAt(0).toUpperCase() + run.status.slice(1)}
+                    </div>
+                    <div>{recordsCount.toLocaleString()}</div>
+                    <div>
+                      {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at{' '}
+                      {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                    </div>
+                    <div>
+                      {duration > 0 ? formatDuration(duration) : run.status === 'running' ? 'Running...' : '—'}
+                    </div>
+                    <div>
+                      {run.type === 'enrichment' && (
+                        <button
+                          onClick={() => router.push(`/arrangements/runs/${run.id}`)}
+                          style={{
+                            fontSize: 12,
+                            color: C.indigo,
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            padding: 0,
+                            fontFamily: F.sans,
+                          }}
+                        >
+                          View →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Delete confirmation modal */}
       {deleteModalOpen && arrangementToDelete && (
