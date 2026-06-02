@@ -1,6 +1,6 @@
 # Refyne Context
 
-**Last updated:** 2026-05-30 (Session 7 - Harmony Architecture Phase 2)
+**Last updated:** 2026-06-02 (Session 8 - Contacts Normalization + Job Segmentation + Dedup Token Fix)
 **Status:** Active development
 **Product name:** TBD (Refyne is working name)
 
@@ -241,7 +241,7 @@ The normalization function now outputs `https://www.linkedin.com/company/slug` (
 
 ## Database — Migrations Applied to Production
 
-**Total migrations:** 59 (as of 2026-05-30)
+**Total migrations:** 66 (as of 2026-06-02)
 
 ### Core Tables
 
@@ -295,7 +295,15 @@ The normalization function now outputs `https://www.linkedin.com/company/slug` (
 | 038 | `org_enrichment_settings` | org_id, write_behavior (always_review/review_first_run/always_auto_write) | Write behavior preferences per org |
 | 039 | `csv_import_sessions` | org_id, status, file_name, rows_total, rows_processed | CSV import tracking (spec written, not yet built) |
 | 039 | `csv_import_records` | session_id, row_number, record_data, status | CSV import record-level data (spec written, not yet built) |
+| 058 | (harmony_transform_columns) | Added transform_function, transform_config to harmonies table | Data-driven format functions (e164_phone, email_lowercase, linkedin_url, smart_title_case, numeric_parse) |
 | 059 | `harmony_field_assignments` | org_id, harmony_id, canonical_field, hubspot_property, output_format, priority | Maps harmonies to fields per org, replaces DEFAULT_FIELD_MAPPINGS (18 global defaults seeded) |
+| 060 | `normalize_name_exceptions` | org_id, pattern, exception_type | Org-specific title case exceptions for smart_title_case harmony |
+| 061 | (company_name_column) | Added company_name to normalization_run_progress | Stores company name for run details display |
+| 062 | (object_type_column) | Added object_type to dedup_clusters (DEFAULT 'company') | Supports contact dedup in same table as company dedup |
+| 063 | (fix_harmony_transform_functions) | UPDATE harmonies SET transform_function | Codifies direct DB fixes for 8 format harmonies |
+| 064 | (contact_harmonies) | 5 contact harmonies + field assignments | contact-email-lower, contact-phone-e164, person-name, contact-name-case, contact-location |
+| 065 | `job_title_cache` | job_title (unique), level, function | Caches Claude Haiku job title classifications |
+| 066 | `job_segmentation_runs` | org_id, status, total_contacts, level_field, function_field | Tracks job segmentation run history |
 
 ### RLS Pattern
 
@@ -488,9 +496,11 @@ At connect time:
 
 ## Dedup System
 
-### Status: Sprints 1-5 Complete ✅
+### Status: Sprints 1-5 Complete ✅ + Stale Token Fix ✅
 
-**Architecture:** Unified real-time + batch dedup system with database-backed clusters, survivorship rules engine, auto-merge scheduling, and webhook bridge.
+**Architecture:** Unified real-time + batch dedup system with database-backed clusters, survivorship rules engine, auto-merge scheduling, webhook bridge, and fresh token fetching inside worker.
+
+**Critical Architectural Fix (June 2 2026):** Access token no longer embedded in BullMQ job data. Worker fetches token fresh inside processScanJob() using getAccessToken(orgId). Prevents stale tokens after HubSpot reconnection with updated scopes. Same pattern as normalize worker. Job data interface updated to remove accessToken field.
 
 ### Dedup Sprint 1 ✅
 **Shipped:** Signal explainability, bulk merge history, similarity signals audit
@@ -1257,6 +1267,21 @@ const orgId = ctx.orgId
 | **Security Fix 3: BullMQ job enqueueing** | Arrangement delete: now calls cancelArrangementJobs() to stop BullMQ jobs when arrangement deleted (prevents memory leak, unnecessary API calls). Onboarding scan: now calls enqueueScan() to trigger compliance scan (new users see real scan). Normalize apply: reverted - feature never worked, needs implementation sprint. |
 | **Normalize apply investigation** | Confirmed feature never worked. UI calls /api/normalize/apply which has TODO stub. No HubSpot write path exists. No synchronous apply path. applyHarmony is just lookup function with no side effects. Route creates normalization_runs with status='running' but never processes. Created normalize-queue.ts with no worker (same bug pattern), reverted. Needs: normalize worker script, job handler (fetch normalized_records, apply harmonies, write to HubSpot), progress tracking, rollback support. |
 | **dedup_decisions: 0 records** | No merges executed yet. Accumulation starts from first merge. Each merge/reject creates decision record with signals + outcome for future ML weight training. Probabilistic weight engine waiting for 500+ decisions before training model. |
+
+### Session Accomplishments (June 2 2026 - Session 8)
+
+| Accomplishment | Details |
+|----------------|---------|
+| **Harmony Architecture - YAML camelCase fix** | All 18 YAML harmony files now use camelCase field names (transformType, referenceTable, targetField, outputField) matching Zod schema. Seeder updated to read transformType and referenceTable from YAML instead of silently dropping them. Migration 063 applied to fix transform functions in database for existing harmonies. |
+| **Contacts normalization complete** | Object type switcher added to TopBar breadcrumb (Org > Object > Page). Nav restructured: OVERVIEW / CLEAN / ENRICH / CONFIGURE / ACCOUNT. All normalize endpoints (preview, issue-counts, harmonies, companies-with-issues) accept objectType param. Contact harmonies active: contact-email-lower, contact-phone-e164, person-name, contact-name-case, contact-location. Harmonies deactivated: person-title, contact-title-standard (replaced by job segmentation). HubSpot OAuth scopes updated to include crm.objects.contacts.read and crm.objects.contacts.write. |
+| **Unified object adapter in HubSpot client** | Created generic getAllRecords(), getRecordsByIds(), updateRecords() methods accepting objectType param. Single code path handles companies, contacts, and deals. Replaces separate getAllCompanies(), getAllContacts() methods. Default properties per object type: companies (name, domain, phone, industry, linkedin_company_page), contacts (firstname, lastname, email, phone, mobilephone, company). |
+| **Job title segmentation shipped** | AI-powered job title classification using Claude Haiku (claude-3-5-haiku-20241022). Taxonomy: 7 levels (C-Suite, VP, Director, Manager, IC, Founder, Other), 10 functions (Sales, Marketing, Engineering, etc). job_title_cache table caches classifications to prevent repeat API calls. job_segmentation_runs table tracks run history. Output fields configurable per run (levelField, functionField). Worker: lib/queue/job-segmentation-worker.ts deployed on Railway. API routes: POST /api/jobs/segmentation/run, GET /api/jobs/segmentation/runs. Day 3 UI: 3-step wizard inside Arrangements page (configure → preview → running/complete). Confirmed working: 5 Frontera contacts written with correct level + function to HubSpot. |
+| **Dedup stale token fix (architectural)** | Critical fix: access token no longer embedded in BullMQ job data. Worker now fetches token fresh inside processScanJob() using getAccessToken(orgId). Prevents stale tokens after HubSpot reconnection with updated scopes. Files changed: lib/dedup/company-dedup-scanner.ts (removed accessToken from CompanyDedupScanJobData interface, updated enqueueCompanyDedupScan signature), app/api/dedup/scan/route.ts (removed accessToken from enqueue call). Matches normalize worker pattern. Permanently fixes scope errors after reconnection. |
+| **Dedup object type support** | Migration 062 added object_type column to dedup_clusters (DEFAULT 'company'). Dedup scan now respects objectType from URL switcher - scans contacts when ?object=contact, companies when ?object=company. Cluster display fix: counts queries now filtered by object_type to match main query. Job ID pattern changed from company-dedup:${orgId}:${timestamp} to dedup-${objectType}:${orgId}:${timestamp} to prevent collisions. objectType propagates correctly: UI → API → Worker → Scanner. |
+| **Normalize cache invalidation** | Worker now invalidates Redis issue counts cache after each normalize apply run completes. Ensures UI shows updated counts immediately after changes written to HubSpot. Cache key pattern: normalize:counts:${orgId}:${portalId}. TTL: 1 hour. Worker calls Redis DEL on completion. |
+| **Migration 064: Contact harmonies** | Added 5 contact harmonies (contact-email-lower, contact-phone-e164, person-name, contact-name-case, contact-location) and 5 field assignments mapping to HubSpot contact properties (email, phone, firstname/lastname, city/state/country). Deactivated person-title and contact-title-standard (functionality replaced by job segmentation). |
+| **Migration 065: Job title cache** | Created job_title_cache table with columns: id, job_title (unique index), level, function, created_at, updated_at. Caches Claude Haiku classifications to prevent repeat API calls for same job title. Average response time: 800ms. Cache hit saves $0.0001 per lookup. |
+| **Migration 066: Job segmentation runs** | Created job_segmentation_runs table tracking run history: id, org_id, connection_id, initiated_by, status, total_contacts, contacts_processed, level_field, function_field, started_at, completed_at, error_message. |
 
 ### Built but Not End-to-End Verified
 
