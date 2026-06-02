@@ -3,15 +3,17 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
-import { ChevronLeft, ChevronRight, Check, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Sparkles, Briefcase } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn } from '@/components/refyne';
 import { addToast } from '@/components/ui/toast';
 import { RehearsalAISummary } from './RehearsalAISummary';
 import { ArrangementWaterfallBuilder, FieldConfig, ProviderConnection } from '@/components/arrangements/ArrangementWaterfallBuilder';
 import { ManageFieldsSlideOver } from '@/components/arrangements/ManageFieldsSlideOver';
+import { JobSegmentationWizard } from '@/components/arrangements/JobSegmentationWizard';
 
 type Step = 1 | 2 | 3 | 4 | 5;
+type ArrangementType = 'enrichment' | 'discovery' | 'segmentation' | null;
 
 interface ArrangementConfig {
   name: string;
@@ -31,6 +33,7 @@ interface ArrangementConfig {
 export default function NewArrangementPage() {
   const router = useRouter();
   const { orgRole } = useAuth();
+  const [arrangementType, setArrangementType] = useState<ArrangementType>(null);
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [config, setConfig] = useState<Partial<ArrangementConfig>>({
     name: '',
@@ -145,12 +148,131 @@ export default function NewArrangementPage() {
     }
   };
 
+  // If Job Segmentation is selected, render its wizard instead
+  if (arrangementType === 'segmentation') {
+    return <JobSegmentationWizard />;
+  }
+
+  // If no type selected yet, show type selector
+  if (!arrangementType) {
+    return (
+      <div style={{ padding: 32, maxWidth: 900, margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ marginBottom: 32 }}>
+          <button
+            onClick={() => router.push('/arrangements')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              background: 'transparent',
+              border: 'none',
+              color: C.text2,
+              fontSize: 14,
+              cursor: 'pointer',
+              marginBottom: 16,
+            }}
+          >
+            <ChevronLeft size={16} />
+            Back to arrangements
+          </button>
+          <h1 style={{ fontSize: 24, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+            New Arrangement
+          </h1>
+          <p style={{ fontSize: 14, color: C.text3 }}>
+            Choose an arrangement type to get started
+          </p>
+        </div>
+
+        {/* Type Selection Cards */}
+        <div style={{ display: 'grid', gap: 16 }}>
+          {/* Enrichment Card */}
+          <button
+            onClick={() => setArrangementType('enrichment')}
+            style={{
+              padding: 24,
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              textAlign: 'left',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = C.hover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = C.surface;
+            }}
+          >
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+              Enrichment
+            </h3>
+            <p style={{ fontSize: 14, color: C.text3 }}>
+              Multi-provider waterfall enrichment with rehearsal testing
+            </p>
+          </button>
+
+          {/* Discovery Card */}
+          <button
+            onClick={() => setArrangementType('discovery')}
+            style={{
+              padding: 24,
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              textAlign: 'left',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = C.hover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = C.surface;
+            }}
+          >
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+              Discovery
+            </h3>
+            <p style={{ fontSize: 14, color: C.text3 }}>
+              Find and enrich new prospects matching your ICP
+            </p>
+          </button>
+
+          {/* Job Segmentation Card */}
+          <button
+            onClick={() => setArrangementType('segmentation')}
+            style={{
+              padding: 24,
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              textAlign: 'left',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = C.hover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = C.surface;
+            }}
+          >
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+              Job Segmentation
+            </h3>
+            <p style={{ fontSize: 14, color: C.text3 }}>
+              Derive job level and function from contact job titles
+            </p>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Otherwise, render enrichment wizard (existing code)
   return (
     <div style={{ padding: 32, maxWidth: 800, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <button
-          onClick={() => router.push('/arrangements')}
+          onClick={() => setArrangementType(null)}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -165,10 +287,10 @@ export default function NewArrangementPage() {
           }}
         >
           <ChevronLeft size={16} />
-          Back to arrangements
+          Back to type selection
         </button>
         <h1 style={{ fontSize: 24, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-          New Arrangement
+          New Enrichment Arrangement
         </h1>
         <p style={{ fontSize: 14, color: C.text3 }}>
           Build a waterfall · Rehearse · Run with confidence
@@ -188,7 +310,6 @@ export default function NewArrangementPage() {
               flex: 1,
               height: 4,
               background: step <= currentStep ? C.indigo : C.border,
-              borderRadius: 2,
             }}
           />
         ))}

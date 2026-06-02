@@ -1854,6 +1854,37 @@ export class HubSpotClient {
   }
 
   /**
+   * Ensures a contact property exists in HubSpot. Creates it if missing.
+   * Used by job segmentation to create refyne_job_level and refyne_job_function.
+   */
+  async ensureContactProperty(property: {
+    name: string;
+    label: string;
+    type: string;
+    fieldType: string;
+    groupName: string;
+    options?: Array<{ label: string; value: string; displayOrder: number; hidden: boolean }>;
+  }): Promise<void> {
+    try {
+      await this.request(`/crm/v3/properties/contacts/${property.name}`);
+      // Property exists, no action needed
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      const is404 = errorMsg.includes('No property named') || errorMsg.includes('404');
+
+      if (is404) {
+        // Property doesn't exist, create it
+        await this.request('/crm/v3/properties/contacts', {
+          method: 'POST',
+          body: JSON.stringify(property),
+        });
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
    * Sync workspace schema from HubSpot.
    * Fetches company and contact properties, extracts enum options.
    * Returns properties that have enum values (select/checkbox field types).
