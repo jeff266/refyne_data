@@ -1090,7 +1090,7 @@ export async function runDedupScan(
   const isFirstScan = !lastRun;
   const isSundayFullScan = new Date().getUTCDay() === FULL_SCAN_DAY;
   const scanType: 'full' | 'incremental' =
-    isFirstScan || isSundayFullScan || forceFullScan ? 'full' : 'incremental';
+    isFirstScan || isSundayFullScan || forceFullScan || objectType !== 'company' ? 'full' : 'incremental';
 
   console.log(`[incremental-scanner] Scan type: ${scanType} (first=${isFirstScan}, sunday=${isSundayFullScan}, forced=${forceFullScan}, objectType=${objectType})`);
 
