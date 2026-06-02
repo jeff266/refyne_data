@@ -245,7 +245,8 @@ async function pairExists(orgId: string, idA: string, idB: string): Promise<bool
 
 async function getAllPendingPairs(
   orgId: string,
-  portalId: string
+  portalId: string,
+  objectType: 'company' | 'contact' | 'deal' = 'company'
 ): Promise<Array<{ id: string; record_a_id: string; record_b_id: string; grade: PairGrade }>> {
   if (!supabase) return [];
 
@@ -254,6 +255,7 @@ async function getAllPendingPairs(
     .select('id, record_a_id, record_b_id, grade')
     .eq('org_id', orgId)
     .eq('portal_id', portalId)
+    .eq('object_type', objectType)
     .eq('status', 'pending');
 
   if (error || !data) {
@@ -386,6 +388,270 @@ async function buildClusters(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Contact Dedup Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function isGenericEmail(email: string): boolean {
+  const genericPrefixes = [
+    'info', 'hello', 'contact', 'admin', 'support', 'sales',
+    'team', 'marketing', 'help', 'billing', 'hr', 'careers',
+    'jobs', 'noreply', 'no-reply', 'donotreply', 'webmaster',
+    'postmaster', 'enquiries', 'enquiry', 'office', 'mail'
+  ];
+  const prefix = email.split('@')[0].toLowerCase();
+  return genericPrefixes.includes(prefix);
+}
+
+function isValidPhone(phone: string): boolean {
+  if (!phone) return false;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 10) return false;
+  if (/^0+$/.test(digits)) return false;  // all zeros
+  if (digits === '5555555555') return false;  // test number
+  return true;
+}
+
+function isCommonName(first: string, last: string): boolean {
+  const commonFirstNames = ['john', 'jane', 'michael', 'david', 'james',
+    'robert', 'mary', 'jennifer', 'linda', 'barbara', 'william', 'richard',
+    'joseph', 'thomas', 'charles', 'chris', 'daniel', 'mark', 'donald'];
+  const commonLastNames = ['smith', 'johnson', 'williams', 'brown', 'jones',
+    'garcia', 'miller', 'davis', 'wilson', 'martinez', 'anderson', 'taylor',
+    'thomas', 'jackson', 'white', 'harris', 'martin', 'thompson', 'young'];
+  return commonFirstNames.includes(first) && commonLastNames.includes(last);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contact Full Scan (Multi-signal graded matching)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function runContactFullScan(
+  orgId: string,
+  portalId: string,
+  connectionId: string,
+  scanRun: ScanRun,
+  records: any[],
+  job?: any
+): Promise<DedupScanResult> {
+  console.log(`[contact-dedup] Starting contact dedup scan with ${records.length} contacts`);
+
+  // Clear old pairs for idempotent full scan
+  if (!supabase) throw new Error('Supabase not configured');
+
+  console.log('[contact-dedup] Clearing old pairs for full scan...');
+  await supabase
+    .from('dedup_pairs')
+    .delete()
+    .eq('org_id', orgId)
+    .eq('portal_id', portalId)
+    .eq('object_type', 'contact');
+
+  console.log('[contact-dedup] Old pairs cleared, building signal maps...');
+
+  // ─── Signal 1: Email Map (Grade A) ───────────────────────────────────────
+  const emailMap = new Map<string, string>();  // normalized email → contact ID
+
+  for (const contact of records) {
+    const email = contact.properties?.email?.toLowerCase().trim();
+    if (email && !isGenericEmail(email)) {
+      if (!emailMap.has(email)) {
+        emailMap.set(email, contact.id);
+      }
+    }
+  }
+
+  // ─── Signal 2: Phone Map (Grade A) ───────────────────────────────────────
+  const phoneMap = new Map<string, string>();  // normalized phone → contact ID
+
+  for (const contact of records) {
+    // Check both phone and mobilephone fields
+    const phones = [
+      contact.properties?.phone,
+      contact.properties?.mobilephone
+    ].filter(p => p && isValidPhone(p));
+
+    for (const phone of phones) {
+      const normalized = phone.replace(/\D/g, '');
+      if (normalized.length >= 10) {
+        if (!phoneMap.has(normalized)) {
+          phoneMap.set(normalized, contact.id);
+        }
+      }
+    }
+  }
+
+  // ─── Signal 3: Name+Domain Map (Grade B) ─────────────────────────────────
+  const nameDomainMap = new Map<string, string>();  // key → contact ID
+
+  for (const contact of records) {
+    const email = contact.properties?.email?.toLowerCase().trim();
+    const first = contact.properties?.firstname?.toLowerCase().trim();
+    const last = contact.properties?.lastname?.toLowerCase().trim();
+
+    if (email && first && last && !isGenericEmail(email)) {
+      const domain = email.split('@')[1];
+      if (domain) {
+        const key = `${first}:${last}:${domain}`;
+        if (!nameDomainMap.has(key)) {
+          nameDomainMap.set(key, contact.id);
+        }
+      }
+    }
+  }
+
+  console.log(`[contact-dedup] Built in-memory maps: ${emailMap.size} emails, ${phoneMap.size} phones, ${nameDomainMap.size} name+domains`);
+
+  // ─── Generate Pairs ───────────────────────────────────────────────────────
+  interface ContactPair {
+    id1: string;
+    id2: string;
+    signal: 'email' | 'phone' | 'name_domain';
+    confidence: number;
+    grade: PairGrade;
+  }
+
+  const pairs: ContactPair[] = [];
+
+  // Email matches (Grade A, confidence 1.0)
+  for (const contact of records) {
+    const email = contact.properties?.email?.toLowerCase().trim();
+    if (email && !isGenericEmail(email)) {
+      const existingId = emailMap.get(email);
+      if (existingId && existingId !== contact.id) {
+        pairs.push({
+          id1: existingId,
+          id2: contact.id,
+          signal: 'email',
+          confidence: 100,
+          grade: 'A'
+        });
+      }
+    }
+  }
+
+  // Phone matches (Grade A, confidence 1.0)
+  for (const contact of records) {
+    const phones = [
+      contact.properties?.phone,
+      contact.properties?.mobilephone
+    ].filter(p => p && isValidPhone(p));
+
+    for (const phone of phones) {
+      const normalized = phone.replace(/\D/g, '');
+      if (normalized.length >= 10) {
+        const existingId = phoneMap.get(normalized);
+        if (existingId && existingId !== contact.id) {
+          pairs.push({
+            id1: existingId,
+            id2: contact.id,
+            signal: 'phone',
+            confidence: 100,
+            grade: 'A'
+          });
+        }
+      }
+    }
+  }
+
+  // Name+domain matches (Grade B, confidence 0.85)
+  for (const contact of records) {
+    const email = contact.properties?.email?.toLowerCase().trim();
+    const first = contact.properties?.firstname?.toLowerCase().trim();
+    const last = contact.properties?.lastname?.toLowerCase().trim();
+
+    if (email && first && last && !isGenericEmail(email)) {
+      const domain = email.split('@')[1];
+      if (domain) {
+        const key = `${first}:${last}:${domain}`;
+        const existingId = nameDomainMap.get(key);
+        if (existingId && existingId !== contact.id) {
+          pairs.push({
+            id1: existingId,
+            id2: contact.id,
+            signal: 'name_domain',
+            confidence: 85,
+            grade: 'B'
+          });
+        }
+      }
+    }
+  }
+
+  console.log(`[contact-dedup] Found ${pairs.length} raw pairs before deduplication`);
+
+  // ─── Deduplicate Pairs (keep highest confidence) ─────────────────────────
+  const seenPairs = new Map<string, ContactPair>();
+
+  for (const pair of pairs) {
+    const key = [pair.id1, pair.id2].sort().join(':');
+    const existing = seenPairs.get(key);
+    if (!existing || pair.confidence > existing.confidence) {
+      seenPairs.set(key, pair);
+    }
+  }
+
+  const finalPairs = Array.from(seenPairs.values());
+  console.log(`[contact-dedup] After deduplication: ${finalPairs.length} unique pairs`);
+
+  // ─── Store Pairs in Database ─────────────────────────────────────────────
+  const gradeCount = { A: 0, B: 0, C: 0, D: 0 };
+
+  for (const pair of finalPairs) {
+    await supabase.from('dedup_pairs').insert({
+      org_id: orgId,
+      portal_id: portalId,
+      connection_id: connectionId,
+      object_type: 'contact',
+      company_id_1: pair.id1,
+      company_id_2: pair.id2,
+      confidence: pair.confidence,
+      grade: pair.grade,
+      signals: [{ signal: pair.signal, fired: true, points: pair.confidence }],
+      created_at: new Date().toISOString(),
+    });
+
+    gradeCount[pair.grade]++;
+  }
+
+  console.log(`[contact-dedup] Stored ${finalPairs.length} pairs in database`);
+  console.log(`[contact-dedup] Grade breakdown: A=${gradeCount.A}, B=${gradeCount.B}, C=${gradeCount.C}, D=${gradeCount.D}`);
+
+  if (job) {
+    await job.updateProgress({
+      phase: 'progress',
+      message: `Building clusters from ${finalPairs.length} pairs...`,
+      progress: 90,
+      pairsFound: finalPairs.length,
+      gradeBreakdown: gradeCount,
+    });
+  }
+
+  // ─── Build Clusters ──────────────────────────────────────────────────────
+  const allPairs = await getAllPendingPairs(orgId, portalId, 'contact');
+  const { count: clustersFound, clusterIds } = await buildClusters(orgId, portalId, connectionId, allPairs, 'contact');
+
+  console.log(`[contact-dedup] Built ${clustersFound} clusters`);
+
+  // ─── Update Scan Run ─────────────────────────────────────────────────────
+  const cursor = records.length > 0 ? getLatestModifiedDate(records) : new Date();
+  await completeScanRun(scanRun.id, {
+    recordsScanned: records.length,
+    newPairsFound: finalPairs.length,
+    newClustersFound: clustersFound,
+    modifiedCursor: cursor,
+  });
+
+  return {
+    scanType: 'full',
+    recordsScanned: records.length,
+    pairsFound: finalPairs.length,
+    clustersFound,
+    newClusterIds: clusterIds,
+    gradeBreakdown: gradeCount,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Full Scan
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -466,6 +732,18 @@ async function runFullScan(
   }
 
   console.log(`[incremental-scanner] Loaded ${fullIndex?.length || 0} index records`);
+
+  // Branch: Company vs Contact dedup logic
+  if (objectType === 'contact') {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CONTACT DEDUP: Multi-signal graded matching
+    // ═══════════════════════════════════════════════════════════════════════════
+    return await runContactFullScan(orgId, portalId, connectionId, scanRun, records, job);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // COMPANY DEDUP: Existing logic (unchanged)
+  // ═══════════════════════════════════════════════════════════════════════════
 
   // Build in-memory lookup maps for O(1) candidate finding
   const domainMap = new Map<string, string[]>();
@@ -657,7 +935,7 @@ async function runFullScan(
   }
 
   // Build clusters
-  const allPairs = await getAllPendingPairs(orgId, portalId);
+  const allPairs = await getAllPendingPairs(orgId, portalId, objectType);
   const { count: clustersFound, clusterIds } = await buildClusters(orgId, portalId, connectionId, allPairs, objectType);
 
   if (job) {
@@ -758,7 +1036,7 @@ async function runIncrementalScan(
   let clustersFound = 0;
   let clusterIds: string[] = [];
   if (newPairsFound > 0) {
-    const allPairs = await getAllPendingPairs(orgId, portalId);
+    const allPairs = await getAllPendingPairs(orgId, portalId, objectType);
     const result = await buildClusters(orgId, portalId, connectionId, allPairs, objectType);
     clustersFound = result.count;
     clusterIds = result.clusterIds;
