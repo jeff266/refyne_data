@@ -650,6 +650,9 @@ async function buildClusters(
 async function processScanJob(
   job: Job<CompanyDedupScanJobData, CompanyDedupScanResult>
 ): Promise<CompanyDedupScanResult> {
+  // DIAGNOSTIC: Check if objectType is being passed
+  console.log(`[Dedup Worker] Job received: objectType=${job.data.objectType ?? 'NOT SET'}, raw job.data=${JSON.stringify(job.data)}`);
+
   const { orgId, accessToken, connectionId, initiatedBy, forceFullScan = false, objectType = 'company' } = job.data;
   const startTime = Date.now();
 
