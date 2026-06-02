@@ -35,13 +35,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Parse request body for optional forceFullScan parameter
+    // Parse request body for optional forceFullScan and objectType parameters
     let forceFullScan = false;
+    let objectType: 'company' | 'contact' | 'deal' = 'company';
     try {
       const body = await request.json();
       forceFullScan = body.forceFullScan === true;
+      objectType = body.objectType || 'company';
     } catch {
-      // No body or invalid JSON - use default
+      // No body or invalid JSON - use defaults
     }
 
     if (!isSupabaseConfigured() || !supabase) {
@@ -96,7 +98,8 @@ export async function POST(request: NextRequest) {
       accessToken,
       connection.id,
       ctx.userId,
-      shouldForceFullScan
+      shouldForceFullScan,
+      objectType
     );
 
     if (!result.queued) {

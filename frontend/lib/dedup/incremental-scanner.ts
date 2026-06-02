@@ -272,7 +272,8 @@ async function buildClusters(
   orgId: string,
   portalId: string,
   connectionId: string,
-  pairs: Array<{ id: string; record_a_id: string; record_b_id: string; grade: PairGrade }>
+  pairs: Array<{ id: string; record_a_id: string; record_b_id: string; grade: PairGrade }>,
+  objectType: 'company' | 'contact' | 'deal' = 'company'
 ): Promise<{ count: number; clusterIds: string[] }> {
   if (!supabase || pairs.length === 0) return { count: 0, clusterIds: [] };
 
@@ -358,6 +359,7 @@ async function buildClusters(
         record_ids: recordIds,
         pair_ids: clusterPairs.map((p) => p.id),
         status: 'pending',
+        object_type: objectType,
       })
       .select('id')
       .single();
@@ -393,25 +395,35 @@ async function runFullScan(
   client: HubSpotClient,
   connectionId: string,
   scanRun: ScanRun,
+  objectType: 'company' | 'contact' | 'deal' = 'company',
   job?: any // Optional job for progress updates
 ): Promise<DedupScanResult> {
-  console.log(`[incremental-scanner] Starting full scan for portal ${portalId}`);
+  const objectLabel = objectType === 'contact' ? 'contacts' : 'companies';
+  console.log(`[incremental-scanner] Starting full scan for ${objectLabel} in portal ${portalId}`);
 
-  // Fetch all companies
-  const companies = await fetchAllCompanies(client);
-  console.log(`[incremental-scanner] Fetched ${companies.length} companies`);
+  // Define properties based on object type
+  const properties = objectType === 'contact'
+    ? ['firstname', 'lastname', 'email', 'phone', 'mobilephone', 'company', 'hs_lastmodifieddate'] as const
+    : ['name', 'domain', 'phone', 'industry', 'linkedin_company_page', 'hs_lastmodifieddate'] as const;
+
+  // Fetch all records using unified getAllRecords method
+  const records: any[] = [];
+  for await (const batch of client.getAllRecords(objectType as 'company' | 'contact', properties)) {
+    records.push(...batch);
+  }
+  console.log(`[incremental-scanner] Fetched ${records.length} ${objectLabel}`);
 
   if (job) {
     await job.updateProgress({
       phase: 'progress',
-      message: `Fetched ${companies.length} companies, building index...`,
+      message: `Fetched ${records.length} ${objectLabel}, building index...`,
       progress: 5,
       pairsFound: 0,
     });
   }
 
   // Rebuild index
-  await rebuildFullIndex(orgId, portalId, companies);
+  await rebuildFullIndex(orgId, portalId, records);
 
   if (job) {
     await job.updateProgress({
@@ -646,7 +658,7 @@ async function runFullScan(
 
   // Build clusters
   const allPairs = await getAllPendingPairs(orgId, portalId);
-  const { count: clustersFound, clusterIds } = await buildClusters(orgId, portalId, connectionId, allPairs);
+  const { count: clustersFound, clusterIds } = await buildClusters(orgId, portalId, connectionId, allPairs, objectType);
 
   if (job) {
     await job.updateProgress({
@@ -687,9 +699,11 @@ async function runIncrementalScan(
   client: HubSpotClient,
   connectionId: string,
   scanRun: ScanRun,
-  cursor: Date
+  cursor: Date,
+  objectType: 'company' | 'contact' | 'deal' = 'company'
 ): Promise<DedupScanResult> {
-  console.log(`[incremental-scanner] Starting incremental scan for portal ${portalId} (cursor: ${cursor.toISOString()})`);
+  const objectLabel = objectType === 'contact' ? 'contacts' : 'companies';
+  console.log(`[incremental-scanner] Starting incremental scan for ${objectLabel} in portal ${portalId} (cursor: ${cursor.toISOString()})`);
 
   // Fetch modified companies
   const modifiedCompanies = await fetchModifiedSince(client, cursor);
@@ -745,7 +759,7 @@ async function runIncrementalScan(
   let clusterIds: string[] = [];
   if (newPairsFound > 0) {
     const allPairs = await getAllPendingPairs(orgId, portalId);
-    const result = await buildClusters(orgId, portalId, connectionId, allPairs);
+    const result = await buildClusters(orgId, portalId, connectionId, allPairs, objectType);
     clustersFound = result.count;
     clusterIds = result.clusterIds;
   }
@@ -779,6 +793,7 @@ export async function runDedupScan(
   client: HubSpotClient,
   connectionId: string,
   forceFullScan = false,
+  objectType: 'company' | 'contact' | 'deal' = 'company',
   job?: any // Optional BullMQ job for progress updates
 ): Promise<DedupScanResult> {
   if (!isSupabaseConfigured()) {
@@ -792,15 +807,15 @@ export async function runDedupScan(
   const scanType: 'full' | 'incremental' =
     isFirstScan || isSundayFullScan || forceFullScan ? 'full' : 'incremental';
 
-  console.log(`[incremental-scanner] Scan type: ${scanType} (first=${isFirstScan}, sunday=${isSundayFullScan}, forced=${forceFullScan})`);
+  console.log(`[incremental-scanner] Scan type: ${scanType} (first=${isFirstScan}, sunday=${isSundayFullScan}, forced=${forceFullScan}, objectType=${objectType})`);
 
   // Create scan run record
   const scanRun = await createScanRun(orgId, portalId, connectionId, scanType);
 
   try {
     const result = scanType === 'full'
-      ? await runFullScan(orgId, portalId, client, connectionId, scanRun, job)
-      : await runIncrementalScan(orgId, portalId, client, connectionId, scanRun, lastRun!.modified_cursor);
+      ? await runFullScan(orgId, portalId, client, connectionId, scanRun, objectType, job)
+      : await runIncrementalScan(orgId, portalId, client, connectionId, scanRun, lastRun!.modified_cursor, objectType);
 
     // Schedule auto-merge for high-confidence clusters
     if (result.newClusterIds.length > 0) {

@@ -618,7 +618,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
           'x-org-id': orgId,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ forceFullScan }),
+        body: JSON.stringify({ forceFullScan, objectType }),
       });
 
       if (!res.ok) {

@@ -46,6 +46,7 @@ export interface CompanyDedupScanJobData {
   connectionId: string;
   initiatedBy: string;
   forceFullScan?: boolean;
+  objectType?: 'company' | 'contact' | 'deal';
 }
 
 export interface CompanyDedupScanResult {
@@ -109,7 +110,8 @@ export async function enqueueCompanyDedupScan(
   accessToken: string,
   connectionId: string,
   initiatedBy: string,
-  forceFullScan = false
+  forceFullScan = false,
+  objectType: 'company' | 'contact' | 'deal' = 'company'
 ): Promise<{ queued: boolean; jobId?: string; reason?: string }> {
   const queue = getCompanyDedupScanQueue();
 
@@ -126,7 +128,7 @@ export async function enqueueCompanyDedupScan(
   try {
     const job = await queue.add(
       'company-dedup-scan',
-      { orgId, accessToken, connectionId, initiatedBy, forceFullScan },
+      { orgId, accessToken, connectionId, initiatedBy, forceFullScan, objectType },
       { jobId }
     );
 
@@ -648,10 +650,10 @@ async function buildClusters(
 async function processScanJob(
   job: Job<CompanyDedupScanJobData, CompanyDedupScanResult>
 ): Promise<CompanyDedupScanResult> {
-  const { orgId, accessToken, connectionId, initiatedBy, forceFullScan = false } = job.data;
+  const { orgId, accessToken, connectionId, initiatedBy, forceFullScan = false, objectType = 'company' } = job.data;
   const startTime = Date.now();
 
-  console.log(`[Company Dedup Worker] Processing scan job for org ${orgId}, user ${initiatedBy}, forceFullScan=${forceFullScan}`);
+  console.log(`[Company Dedup Worker] Processing scan job for org ${orgId}, user ${initiatedBy}, objectType=${objectType}, forceFullScan=${forceFullScan}`);
 
   try {
     // Get portal ID from connection
@@ -683,7 +685,7 @@ async function processScanJob(
     });
 
     // Run incremental scan (auto-detects full vs incremental unless forced)
-    const result = await runDedupScan(orgId, portalId, client, connectionId, forceFullScan, job);
+    const result = await runDedupScan(orgId, portalId, client, connectionId, forceFullScan, objectType, job);
 
     // Emit completion progress
     await job.updateProgress({
@@ -743,9 +745,11 @@ export function startCompanyDedupScanWorker(): Worker<CompanyDedupScanJobData, C
   );
 
   scanWorker.on('completed', (job, result) => {
+    const objectType = job.data.objectType || 'company';
+    const objectLabel = objectType === 'contact' ? 'contacts' : 'companies';
     console.log(
       `[Company Dedup Worker] Job ${job.id} completed: ` +
-      `${result.companiesScanned} companies scanned, ${result.pairsDetected} duplicates found in ${result.durationMs}ms`
+      `${result.companiesScanned} ${objectLabel} scanned, ${result.pairsDetected} duplicates found in ${result.durationMs}ms`
     );
   });
 
