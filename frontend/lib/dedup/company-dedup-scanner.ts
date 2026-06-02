@@ -42,7 +42,6 @@ const COMPANY_PROPERTIES = [
 
 export interface CompanyDedupScanJobData {
   orgId: string;
-  accessToken: string;
   connectionId: string;
   initiatedBy: string;
   forceFullScan?: boolean;
@@ -104,10 +103,11 @@ export function getCompanyDedupScanQueue(): Queue<CompanyDedupScanJobData, Compa
 
 /**
  * Enqueue a company dedup scan job.
+ *
+ * Note: Access token is fetched fresh inside the worker to avoid stale token issues.
  */
 export async function enqueueCompanyDedupScan(
   orgId: string,
-  accessToken: string,
   connectionId: string,
   initiatedBy: string,
   forceFullScan = false,
@@ -128,7 +128,7 @@ export async function enqueueCompanyDedupScan(
   try {
     const job = await queue.add(
       'company-dedup-scan',
-      { orgId, accessToken, connectionId, initiatedBy, forceFullScan, objectType },
+      { orgId, connectionId, initiatedBy, forceFullScan, objectType },
       { jobId }
     );
 
@@ -653,13 +653,13 @@ async function processScanJob(
   // DIAGNOSTIC: Check if objectType is being passed
   console.log(`[Dedup Worker] Job received: objectType=${job.data.objectType ?? 'NOT SET'}, raw job.data=${JSON.stringify(job.data)}`);
 
-  const { orgId, accessToken, connectionId, initiatedBy, forceFullScan = false, objectType = 'company' } = job.data;
+  const { orgId, connectionId, initiatedBy, forceFullScan = false, objectType = 'company' } = job.data;
   const startTime = Date.now();
 
   console.log(`[Company Dedup Worker] Processing scan job for org ${orgId}, user ${initiatedBy}, objectType=${objectType}, forceFullScan=${forceFullScan}`);
 
   try {
-    // Get portal ID from connection
+    // Get connection and fetch fresh access token
     if (!isSupabaseConfigured() || !supabase) {
       throw new Error('Supabase not configured');
     }
@@ -675,6 +675,10 @@ async function processScanJob(
     }
 
     const portalId = connection.portal_id;
+
+    // Fetch fresh access token inside worker (prevents stale token issues)
+    const { getAccessToken } = await import('../hubspot/get-access-token');
+    const accessToken = await getAccessToken(orgId);
 
     // Create HubSpot client
     const client = new HubSpotClient(accessToken, portalId, undefined, connectionId, orgId);

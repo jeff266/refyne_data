@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
-import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { enqueueCompanyDedupScan } from '@/lib/dedup/company-dedup-scanner';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 
@@ -85,19 +84,9 @@ export async function POST(request: NextRequest) {
 
     const connection = connections[0];
 
-    // Get access token
-    const accessToken = await getAccessToken(ctx.orgId);
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: 'Failed to get HubSpot access token' },
-        { status: 500 }
-      );
-    }
-
-    // Enqueue scan job
+    // Enqueue scan job (access token will be fetched fresh inside worker)
     const result = await enqueueCompanyDedupScan(
       ctx.orgId,
-      accessToken,
       connection.id,
       ctx.userId,
       shouldForceFullScan,
