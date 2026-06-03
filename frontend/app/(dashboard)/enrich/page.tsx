@@ -99,14 +99,33 @@ interface HubSpotList {
   name: string;
 }
 
-const ENRICHABLE_FIELDS = [
-  { key: 'industry', label: 'Industry' },
-  { key: 'numberofemployees', label: 'Employee count' },
-  { key: 'linkedin_company_page', label: 'LinkedIn URL' },
-  { key: 'phone', label: 'Phone' },
-  { key: 'domain', label: 'Domain' },
-  { key: 'annualrevenue', label: 'Revenue' },
-];
+const ENRICHABLE_FIELDS: Record<string, Array<{ field: string; label: string }>> = {
+  company: [
+    { field: 'industry', label: 'Industry' },
+    { field: 'numberofemployees', label: 'Employee count' },
+    { field: 'linkedin_company_page', label: 'LinkedIn URL' },
+    { field: 'phone', label: 'Phone' },
+    { field: 'domain', label: 'Domain' },
+    { field: 'annualrevenue', label: 'Revenue' },
+  ],
+  contact: [
+    { field: 'jobtitle', label: 'Job Title' },
+    { field: 'company', label: 'Company name' },
+    { field: 'phone', label: 'Phone' },
+    { field: 'mobilephone', label: 'Mobile phone' },
+    { field: 'linkedin', label: 'LinkedIn URL' },
+    { field: 'city', label: 'City' },
+    { field: 'state', label: 'State' },
+    { field: 'country', label: 'Country' },
+    { field: 'email', label: 'Email' },
+  ],
+};
+
+// Helper function to get field label from field key
+const getFieldLabel = (fieldKey: string): string => {
+  const allFields = [...ENRICHABLE_FIELDS.company, ...ENRICHABLE_FIELDS.contact];
+  return allFields.find(f => f.field === fieldKey)?.label || fieldKey;
+};
 
 const PROVIDER_REGISTRY = [
   { key: 'apollo', label: 'Apollo', managed: false },
@@ -456,7 +475,7 @@ export default function EnrichPage() {
             completedRecords.forEach((record: any) => {
               Object.entries(record.fields_filled || {}).forEach(([fieldKey, fieldData]: [string, any]) => {
                 if (fieldData.after && !fieldData.skipped) {
-                  const fieldLabel = ENRICHABLE_FIELDS.find(f => f.key === fieldKey)?.label || fieldKey;
+                  const fieldLabel = getFieldLabel(fieldKey);
                   latestResults.push({
                     record_name: record.company_name,
                     field_key: fieldKey,
@@ -865,7 +884,7 @@ export default function EnrichPage() {
             record_id: companyResult.hubspotCompanyId,
             record_name: companyResult.companyName,
             field_key: field.fieldKey,
-            field_label: ENRICHABLE_FIELDS.find(f => f.key === field.fieldKey)?.label || field.fieldKey,
+            field_label: getFieldLabel(field.fieldKey),
             current_value: field.currentValue,
             found_value: field.foundValue,
             found_raw: field.foundValue,
@@ -1153,7 +1172,7 @@ export default function EnrichPage() {
       // Build arrangement payload (no test mode)
       // Generate readable name: "Apollo enrichment · Industry, Employee count · May 20"
       const provider = selectedProviders[0] === 'apollo' ? 'Apollo' : selectedProviders[0] === 'graphiq' || selectedProviders[0] === 'refyne' ? 'GraphIQ' : 'ZoomInfo';
-      const fieldLabels = selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label || f);
+      const fieldLabels = selectedFields.map(f => getFieldLabel(f));
       const date = new Date().toLocaleDateString([], { month: 'short', day: 'numeric' });
       const arrangementName = `${provider} enrichment · ${fieldLabels.join(', ')} · ${date}`;
 
@@ -1544,7 +1563,7 @@ export default function EnrichPage() {
                             style={{ cursor: 'pointer' }}
                           />
                           <span style={{ fontSize: 11, color: C.text2 }}>
-                            {ENRICHABLE_FIELDS.find(f => f.key === gap.field)?.label || gap.field} <span style={{ color: C.text3 }}>{gap.missing.toLocaleString()} missing</span>
+                            {getFieldLabel(gap.field)} <span style={{ color: C.text3 }}>{gap.missing.toLocaleString()} missing</span>
                           </span>
                         </label>
                       ))}
@@ -1695,16 +1714,16 @@ export default function EnrichPage() {
                 Fields to fill
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {ENRICHABLE_FIELDS.map(field => (
-                  <label key={field.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                {(ENRICHABLE_FIELDS[objectType] ?? ENRICHABLE_FIELDS.company).map(field => (
+                  <label key={field.field} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                     <input
                       type="checkbox"
-                      checked={selectedFields.includes(field.key)}
+                      checked={selectedFields.includes(field.field)}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedFields(prev => [...prev, field.key]);
+                          setSelectedFields(prev => [...prev, field.field]);
                         } else {
-                          setSelectedFields(prev => prev.filter(f => f !== field.key));
+                          setSelectedFields(prev => prev.filter(f => f !== field.field));
                         }
                       }}
                       style={{ cursor: 'pointer' }}
@@ -2019,7 +2038,7 @@ export default function EnrichPage() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {benchmarkResults.field_breakdown.map(({ field, apollo_rate, refyne_rate, apollo_count, refyne_count }) => {
-                      const fieldLabel = ENRICHABLE_FIELDS.find(f => f.key === field)?.label || field;
+                      const fieldLabel = getFieldLabel(field);
                       return (
                         <div key={field} style={{
                           padding: 12,
@@ -2213,7 +2232,7 @@ export default function EnrichPage() {
 
               {/* Provider and config summary */}
               <div style={{ fontSize: 12, color: C.text2, marginBottom: 20 }}>
-                {selectedProviders.map(p => p === 'apollo' ? 'Apollo' : p === 'graphiq' || p === 'refyne' ? 'GraphIQ' : p).join(' → ')} · {selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label).join(', ')} · {writePolicy === 'overwrite' ? 'Overwrite all' : 'Fill empty'}
+                {selectedProviders.map(p => p === 'apollo' ? 'Apollo' : p === 'graphiq' || p === 'refyne' ? 'GraphIQ' : p).join(' → ')} · {selectedFields.map(f => getFieldLabel(f)).join(', ')} · {writePolicy === 'overwrite' ? 'Overwrite all' : 'Fill empty'}
               </div>
 
               {/* Fetch State (when records_processed === 0) */}
@@ -2400,7 +2419,7 @@ export default function EnrichPage() {
                   Summary by field
                 </div>
                 {Object.entries(runProgress.fields_filled || {}).map(([fieldKey, count]) => {
-                  const fieldLabel = ENRICHABLE_FIELDS.find(f => f.key === fieldKey)?.label || fieldKey;
+                  const fieldLabel = getFieldLabel(fieldKey);
                   const missing = gapAnalysis?.field_gaps.find(fg => fg.field === fieldKey)?.missing || 0;
                   const percentage = missing > 0 ? Math.round((count as number / missing) * 100) : 0;
 
@@ -2497,7 +2516,7 @@ export default function EnrichPage() {
                     Fields filled before cancellation
                   </div>
                   {Object.entries(runProgress.fields_filled || {}).map(([fieldKey, count]) => {
-                    const fieldLabel = ENRICHABLE_FIELDS.find(f => f.key === fieldKey)?.label || fieldKey;
+                    const fieldLabel = getFieldLabel(fieldKey);
                     return (
                       <div key={fieldKey} style={{ fontSize: 12, color: C.text2, marginBottom: 8 }}>
                         <strong>{fieldLabel}</strong>: {(count as number).toLocaleString()} filled
@@ -3046,7 +3065,7 @@ export default function EnrichPage() {
                               onChange={() => {}}
                               style={{ cursor: 'pointer' }}
                             />
-                            {ENRICHABLE_FIELDS.find(f => f.key === gap.field)?.label || gap.field}
+                            {getFieldLabel(gap.field)}
                           </div>
                         </td>
                         <td style={{ padding: '12px 8px', textAlign: 'right', fontSize: 14, fontFamily: F.mono, color: C.text2 }}>
@@ -3204,7 +3223,7 @@ export default function EnrichPage() {
                 companies
               </div>
               <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
-                <strong style={{ color: C.text2 }}>Fields:</strong> {selectedFields.map(f => ENRICHABLE_FIELDS.find(ef => ef.key === f)?.label || f).join(', ')}
+                <strong style={{ color: C.text2 }}>Fields:</strong> {selectedFields.map(f => getFieldLabel(f)).join(', ')}
               </div>
               <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
                 <strong style={{ color: C.text2 }}>Provider:</strong> {selectedProviders.join(', ')}
