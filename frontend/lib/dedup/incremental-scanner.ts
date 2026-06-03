@@ -235,7 +235,7 @@ async function storePair(
         detected_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'org_id,record_a_id,record_b_id' }
+      { onConflict: 'org_id,object_type,record_a_id,record_b_id' }
     )
     .select('id')
     .single();
