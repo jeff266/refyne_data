@@ -2136,8 +2136,10 @@ export default function EnrichPage() {
                 <input
                   type="number"
                   value={testRecordLimit}
-                  onChange={(e) => setTestRecordLimit(Math.max(1, parseInt(e.target.value) || 10))}
+                  onChange={(e) => setTestRecordLimit(Math.min(200, Math.max(1, parseInt(e.target.value) || 10)))}
                   disabled={!testMode}
+                  min={1}
+                  max={200}
                   style={{
                     width: 50,
                     padding: '4px 6px',
@@ -2149,6 +2151,7 @@ export default function EnrichPage() {
                   }}
                 />
                 <span style={{ fontSize: 12, color: C.text2 }}>records</span>
+                <span style={{ fontSize: 11, color: C.text3, marginLeft: 4 }}>(max 200)</span>
               </label>
             </div>
 
