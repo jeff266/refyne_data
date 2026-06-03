@@ -63,6 +63,7 @@ import {
   enqueueCompanyDedupScan,
 } from '../lib/dedup/company-dedup-scanner';
 import { startArrangementWorker, stopArrangementWorker } from '../lib/queue/arrangement-queue';
+import { startPreviewWorker, stopPreviewWorker } from '../lib/queue/enrichment-queue';
 import { getAccessToken } from '../lib/hubspot/get-access-token';
 
 async function main() {
@@ -113,6 +114,16 @@ async function main() {
     console.log('⚠️  Arrangement worker disabled (Redis not configured)');
   } else {
     console.log('✅ Arrangement worker started successfully\n');
+  }
+
+  // Start the preview worker (enrich page preview)
+  console.log('Starting preview worker...');
+  const previewWorker = startPreviewWorker();
+
+  if (!previewWorker) {
+    console.log('⚠️  Preview worker disabled (Redis not configured)');
+  } else {
+    console.log('✅ Preview worker started successfully\n');
   }
 
   // FIX: Fail all stalled jobs from previous crashes on startup
@@ -341,6 +352,7 @@ async function main() {
     await stopDigestWorker();
     await stopCompanyDedupScanWorker();
     await stopArrangementWorker();
+    await stopPreviewWorker();
 
     console.log('[Shutdown] All workers stopped');
     console.log('[Shutdown] Closing health check server...');
