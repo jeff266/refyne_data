@@ -7,7 +7,7 @@
  */
 
 import { Job } from 'bullmq';
-import { createClient } from 'redis';
+import { Redis } from '@upstash/redis';
 import { supabase } from '../db/supabase';
 import { getAccessToken } from '../hubspot/get-access-token';
 import { HubSpotClient } from '../hubspot/client';
@@ -51,15 +51,14 @@ export interface PreviewJobProgress {
 /**
  * Redis client for caching preview results.
  */
-let redisClient: ReturnType<typeof createClient> | null = null;
+let redisClient: Redis | null = null;
 
 function getRedisClient() {
   if (!redisClient && REDIS_URL && REDIS_TOKEN) {
-    redisClient = createClient({
+    redisClient = new Redis({
       url: REDIS_URL,
-      password: REDIS_TOKEN,
+      token: REDIS_TOKEN,
     });
-    redisClient.connect();
   }
   return redisClient;
 }

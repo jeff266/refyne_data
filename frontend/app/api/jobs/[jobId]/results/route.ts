@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authError, requireOperatorOrAbove } from '@/lib/auth/clerk-helpers';
-import { createClient } from 'redis';
+import { Redis } from '@upstash/redis';
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -36,18 +36,15 @@ export async function GET(
       );
     }
 
-    const redis = createClient({
-      url: REDIS_URL,
-      password: REDIS_TOKEN,
+    const redis = new Redis({
+      url: REDIS_URL!,
+      token: REDIS_TOKEN!,
     });
 
-    await redis.connect();
-
     // Get full results
-    const cached = await redis.get(`preview:${jobId}:results`);
+    const cached = await redis.get<string>(`preview:${jobId}:results`);
 
     if (!cached) {
-      await redis.quit();
       return NextResponse.json(
         { error: 'Results not found or expired' },
         { status: 404 }
@@ -57,9 +54,7 @@ export async function GET(
     const results = JSON.parse(cached);
 
     // Also get partial results count for progressive rendering
-    const partialCount = await redis.lLen(`preview:${jobId}:partial`);
-
-    await redis.quit();
+    const partialCount = await redis.llen(`preview:${jobId}:partial`);
 
     return NextResponse.json({
       results,
