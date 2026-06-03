@@ -271,7 +271,7 @@ export async function processPreviewJob(
 
       // Push partial result to Redis for progressive rendering
       if (redis) {
-        await redis.rPush(`preview:${job.id}:partial`, JSON.stringify(previewResult));
+        await redis.rpush(`preview:${job.id}:partial`, JSON.stringify(previewResult));
         await redis.expire(`preview:${job.id}:partial`, 600); // 10 min TTL
       }
     }
@@ -290,7 +290,7 @@ export async function processPreviewJob(
 
     // Store full results in Redis
     if (redis) {
-      await redis.setEx(
+      await redis.setex(
         `preview:${job.id}:results`,
         600, // 10 minutes
         JSON.stringify(results)
@@ -445,7 +445,7 @@ export async function processApplyJob(
 
   try {
     // Fetch preview results from cache
-    const cached = await redis.get(`preview:${previewJobId}:results`);
+    const cached = await redis.get<string>(`preview:${previewJobId}:results`);
     if (!cached) {
       throw new Error('Preview results expired. Run preview again.');
     }
