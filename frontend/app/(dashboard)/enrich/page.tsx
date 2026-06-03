@@ -178,6 +178,227 @@ interface BenchmarkRecommendation {
   };
 }
 
+/**
+ * Preview Loading UI with stepped progress
+ */
+function PreviewLoadingUI({
+  previewJobStatus,
+  objectType,
+  selectedProviders,
+  selectedFields,
+}: {
+  previewJobStatus: JobStatus | null;
+  objectType: string;
+  selectedProviders: string[];
+  selectedFields: string[];
+}) {
+  const [startTime] = useState(Date.now());
+  const [lastProgressUpdate, setLastProgressUpdate] = useState(Date.now());
+  const [stuckWarning, setStuckWarning] = useState(false);
+
+  // Track when progress updates to detect stuck state
+  useEffect(() => {
+    if (previewJobStatus?.status === 'processing') {
+      setLastProgressUpdate(Date.now());
+      setStuckWarning(false);
+    }
+  }, [previewJobStatus?.progress.completed]);
+
+  // Check for stuck state every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (previewJobStatus?.status === 'processing') {
+        const timeSinceUpdate = Date.now() - lastProgressUpdate;
+        if (timeSinceUpdate > 10000) {
+          setStuckWarning(true);
+        }
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [previewJobStatus?.status, lastProgressUpdate]);
+
+  // Get current step from progress or infer based on percentage
+  const getCurrentStep = () => {
+    if (!previewJobStatus) return null;
+
+    const { status, progress } = previewJobStatus;
+    const objectLabel = objectType === 'contact' ? 'contacts' : 'companies';
+
+    if (status === 'queued') {
+      return {
+        step: 1,
+        stepName: `Fetching ${objectLabel} from HubSpot`,
+        current: 0,
+        total: 0,
+        showProgress: false,
+      };
+    }
+
+    if (status === 'processing') {
+      // Use real step data from backend if available
+      if (progress.step && progress.stepName) {
+        return {
+          step: progress.step,
+          stepName: progress.stepName,
+          current: progress.current ?? progress.completed,
+          total: progress.total,
+          showProgress: true,
+        };
+      }
+
+      // Fallback: Infer step based on percentage for backwards compatibility
+      const percentage = progress.percentage || 0;
+
+      // Step 1: 0-20% - Fetching records
+      if (percentage < 20) {
+        return {
+          step: 1,
+          stepName: `Fetching ${objectLabel} from HubSpot`,
+          current: Math.floor((percentage / 20) * progress.total),
+          total: progress.total,
+          showProgress: true,
+        };
+      }
+
+      // Step 2: 20-90% - Querying providers
+      if (percentage < 90) {
+        const providerNames = selectedProviders
+          .map(p => PROVIDER_REGISTRY.find(pr => pr.key === p)?.label || p)
+          .join(', ');
+        const fieldLabels = selectedFields
+          .map(f => getFieldLabel(f))
+          .join(', ');
+
+        return {
+          step: 2,
+          stepName: `Querying ${providerNames} for ${fieldLabels}`,
+          current: progress.completed,
+          total: progress.total,
+          showProgress: true,
+        };
+      }
+
+      // Step 3: 90-100% - Preparing preview
+      return {
+        step: 3,
+        stepName: 'Preparing preview',
+        current: progress.completed,
+        total: progress.total,
+        showProgress: true,
+      };
+    }
+
+    return null;
+  };
+
+  // Calculate estimated time remaining
+  const getTimeEstimate = () => {
+    if (!previewJobStatus || previewJobStatus.status !== 'processing') {
+      return null;
+    }
+
+    const { completed, total } = previewJobStatus.progress;
+    if (completed === 0 || total === 0) return null;
+
+    const elapsed = Date.now() - startTime;
+    const rate = completed / elapsed; // records per ms
+    const remaining = (total - completed) / rate;
+    const estimatedSeconds = Math.ceil(remaining / 1000);
+
+    if (estimatedSeconds < 5) return '~5 seconds';
+    if (estimatedSeconds < 60) return `~${estimatedSeconds} seconds`;
+
+    const minutes = Math.ceil(estimatedSeconds / 60);
+    return `~${minutes} minute${minutes > 1 ? 's' : ''}`;
+  };
+
+  const currentStep = getCurrentStep();
+  const timeEstimate = getTimeEstimate();
+
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
+        Generating preview
+      </div>
+
+      <div style={{ padding: '24px 32px', textAlign: 'center' }}>
+        {currentStep ? (
+          <>
+            {/* Step label */}
+            <div style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 20 }}>
+              {currentStep.stepName}
+            </div>
+
+            {/* Progress bar */}
+            {currentStep.showProgress && currentStep.total > 0 && (
+              <>
+                <div style={{
+                  width: '100%',
+                  maxWidth: 500,
+                  height: 10,
+                  background: C.border,
+                  borderRadius: 5,
+                  margin: '0 auto 12px',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${(currentStep.current / currentStep.total) * 100}%`,
+                    height: '100%',
+                    background: C.indigo,
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+
+                {/* Progress count */}
+                <div style={{ fontSize: 14, color: C.text2, marginBottom: 8 }}>
+                  {currentStep.current} / {currentStep.total}
+                </div>
+
+                {/* Time estimate */}
+                {timeEstimate && !stuckWarning && (
+                  <div style={{ fontSize: 13, color: C.text3, marginTop: 12 }}>
+                    Estimated time remaining: {timeEstimate}
+                  </div>
+                )}
+
+                {/* Stuck warning */}
+                {stuckWarning && (
+                  <div style={{ fontSize: 13, color: C.text3, marginTop: 12, fontStyle: 'italic' }}>
+                    Still working... this may take a moment
+                  </div>
+                )}
+
+                {/* Current company */}
+                {previewJobStatus?.progress?.currentCompany && (
+                  <div style={{ fontSize: 12, color: C.text2, marginTop: 16, opacity: 0.7 }}>
+                    Currently processing: {previewJobStatus?.progress?.currentCompany}
+                  </div>
+                )}
+              </>
+            )}
+
+            {!currentStep.showProgress && (
+              <div style={{ padding: '20px 0' }}>
+                <div className="preview-spinner" style={{
+                  width: 32,
+                  height: 32,
+                  margin: '0 auto',
+                  border: `3px solid ${C.border}`,
+                  borderTop: `3px solid ${C.indigo}`,
+                  borderRadius: '50%',
+                }} />
+              </div>
+            )}
+          </>
+        ) : (
+          <p style={{ color: C.text3 }}>Loading preview results...</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function EnrichPage() {
   const router = useRouter();
   const enrichRunContext = useEnrichRun();
@@ -2573,55 +2794,12 @@ export default function EnrichPage() {
           )}
 
           {previewLoading ? (
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
-                Generating preview
-              </div>
-              <div style={{ padding: 32, textAlign: 'center' }}>
-                {previewJobStatus && (
-                  <>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 16 }}>
-                      {previewJobStatus.status === 'queued' && 'Starting preview...'}
-                      {previewJobStatus.status === 'processing' && `Enriching ${previewJobStatus.progress.completed} of ${previewJobStatus.progress.total} companies`}
-                    </div>
-
-                    {previewJobStatus.status === 'processing' && (
-                      <>
-                        <div style={{
-                          width: '100%',
-                          maxWidth: 400,
-                          height: 8,
-                          background: C.border,
-                          borderRadius: 4,
-                          margin: '0 auto 12px',
-                          overflow: 'hidden',
-                        }}>
-                          <div style={{
-                            width: `${previewJobStatus.progress.percentage}%`,
-                            height: '100%',
-                            background: C.indigo,
-                            transition: 'width 0.3s ease',
-                          }} />
-                        </div>
-
-                        <div style={{ fontSize: 13, color: C.text3, marginBottom: 8 }}>
-                          {previewJobStatus.progress.percentage}% complete
-                        </div>
-
-                        {previewJobStatus.progress.currentCompany && (
-                          <div style={{ fontSize: 12, color: C.text2, marginTop: 8 }}>
-                            Currently processing: {previewJobStatus.progress.currentCompany}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-                {!previewJobStatus && (
-                  <p style={{ color: C.text3 }}>Loading preview results...</p>
-                )}
-              </div>
-            </div>
+            <PreviewLoadingUI
+              previewJobStatus={previewJobStatus}
+              objectType={objectType}
+              selectedProviders={selectedProviders}
+              selectedFields={selectedFields}
+            />
           ) : showingPreview && previewResults ? (
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, padding: 24 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>

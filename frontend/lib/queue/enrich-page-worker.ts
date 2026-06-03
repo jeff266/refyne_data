@@ -42,6 +42,10 @@ export interface PreviewJobProgress {
   total: number;
   percentage: number;
   currentCompany: string | null;
+  step?: number;
+  stepName?: string;
+  current?: number;
+  recordsProcessed?: number;
 }
 
 /**
@@ -100,6 +104,18 @@ export async function processPreviewJob(
     .eq('id', runId);
 
   try {
+    // Step 1: Fetching records from HubSpot
+    await job.updateProgress({
+      step: 1,
+      stepName: 'Fetching records from HubSpot',
+      current: 0,
+      total: recordLimit,
+      completed: 0,
+      percentage: 0,
+      recordsProcessed: 0,
+      currentCompany: null,
+    });
+
     // Get HubSpot access token
     const accessToken = await getAccessToken(orgId);
 
@@ -127,27 +143,46 @@ export async function processPreviewJob(
 
     console.log(`[Preview Job] Fetched ${companies.length} companies to enrich`);
 
-    await job.updateProgress({
-      total: companies.length,
-      completed: 0,
-      percentage: 0,
-      currentCompany: null,
-    });
-
     const results: PreviewResult[] = [];
     const redis = getRedisClient();
+
+    // Map provider ID to display name
+    const providerName = providerId === 'apollo' ? 'Apollo' :
+                         providerId === 'graphiq' ? 'GraphIQ' :
+                         providerId === 'refyne_search' ? 'Refyne Search' :
+                         providerId;
+
+    // Build field names display
+    const fieldNamesDisplay = fieldKeys.map(key => {
+      const labels: Record<string, string> = {
+        industry: 'Industry',
+        numberofemployees: 'Employee count',
+        linkedin_company_page: 'LinkedIn',
+        phone: 'Phone',
+        domain: 'Domain',
+        annualrevenue: 'Revenue',
+      };
+      return labels[key] || key;
+    }).join(', ');
 
     for (let i = 0; i < companies.length; i++) {
       const company = companies[i];
       const companyDomain = company.properties.domain || null;
       const companyName = company.properties.name || companyDomain || company.id;
 
-      await job.updateProgress({
-        total: companies.length,
-        completed: i,
-        percentage: Math.round((i / companies.length) * 100),
-        currentCompany: companyName,
-      });
+      // Step 2: Enriching records (update every 10 records to reduce overhead)
+      if (i % 10 === 0 || i === companies.length - 1) {
+        await job.updateProgress({
+          step: 2,
+          stepName: `Querying ${providerName} for ${fieldNamesDisplay}`,
+          current: i,
+          total: companies.length,
+          completed: i,
+          percentage: Math.round((i / companies.length) * 100),
+          recordsProcessed: i,
+          currentCompany: companyName,
+        });
+      }
 
       // Enrich via Refyne Search
       const enrichmentResults = await refyneSearch(
@@ -221,6 +256,18 @@ export async function processPreviewJob(
       }
     }
 
+    // Step 3: Preparing preview
+    await job.updateProgress({
+      step: 3,
+      stepName: 'Preparing preview',
+      current: companies.length,
+      total: companies.length,
+      completed: companies.length,
+      percentage: 100,
+      recordsProcessed: companies.length,
+      currentCompany: null,
+    });
+
     // Store full results in Redis
     if (redis) {
       await redis.setEx(
@@ -246,13 +293,6 @@ export async function processPreviewJob(
         completed_at: new Date().toISOString(),
       })
       .eq('id', runId);
-
-    await job.updateProgress({
-      total: companies.length,
-      completed: companies.length,
-      percentage: 100,
-      currentCompany: null,
-    });
 
     console.log(`[Preview Job] Completed: ${results.length} companies enriched`);
 

@@ -5,6 +5,10 @@ export interface JobProgress {
   total: number;
   percentage: number;
   currentCompany: string | null;
+  step?: number;
+  stepName?: string;
+  current?: number;
+  recordsProcessed?: number;
 }
 
 export interface JobStatus {
