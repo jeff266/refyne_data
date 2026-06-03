@@ -20,7 +20,8 @@ interface FieldGap {
 }
 
 interface GapAnalysis {
-  total_companies: number;
+  total_records: number;
+  object_type: string;
   field_gaps: FieldGap[];
   scanned_at: string;
   from_cache?: boolean;
@@ -295,7 +296,8 @@ export default function EnrichPage() {
         if (msg.processed > 0 && msg.fields.length > 0) {
           // Show gap analysis panel immediately with partial data
           setGapAnalysis({
-            total_companies: msg.processed,
+            total_records: msg.processed,
+            object_type: objectType,
             field_gaps: msg.fields,
             scanned_at: new Date().toISOString(),
           });
@@ -726,9 +728,9 @@ export default function EnrichPage() {
           const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
           return sum + (gap?.missing || 0);
         }, 0),
-        gapAnalysis?.total_companies || 0
+        gapAnalysis?.total_records || 0
       ) :
-      gapAnalysis?.total_companies || 0;
+      gapAnalysis?.total_records || 0;
     if (estimatedCount > 100) {
       setShowConfirmModal(true);
       return;
@@ -1143,9 +1145,9 @@ export default function EnrichPage() {
             const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
             return sum + (gap?.missing || 0);
           }, 0),
-          gapAnalysis?.total_companies || 0
+          gapAnalysis?.total_records || 0
         ) :
-        (gapAnalysis?.total_companies || 0);
+        (gapAnalysis?.total_records || 0);
 
       // Start the arrangement run (critical: this enqueues the job to the worker)
       const runResponse = await fetch(`/api/arrangements/${newArrangementId}/run`, {
@@ -1275,8 +1277,8 @@ export default function EnrichPage() {
       if (msg.type === 'sample_ready') {
         // Show sample size and distribution
         setBenchmarkSampleSize(msg.sample_size);
-        setBenchmarkTotalMissing(msg.total_companies);
-        console.log('Testing', msg.sample_size, 'companies from', msg.total_companies, 'missing');
+        setBenchmarkTotalMissing(msg.total_records);
+        console.log('Testing', msg.sample_size, 'companies from', msg.total_records, 'missing');
       }
 
       if (msg.type === 'provider_start') {
@@ -1357,7 +1359,7 @@ export default function EnrichPage() {
       return (
         <EnrichLoadingState
           onComplete={() => setLoading(false)}
-          finalCount={gapAnalysis.total_companies}
+          finalCount={gapAnalysis.total_records}
           finalFieldGaps={gapAnalysis.field_gaps}
         />
       );
@@ -1383,7 +1385,7 @@ export default function EnrichPage() {
     );
   }
 
-  const totalCompanies = gapAnalysis.total_companies;
+  const totalRecords = gapAnalysis.total_records;
 
   return (
     <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto', fontFamily: F.sans }}>
@@ -1393,7 +1395,7 @@ export default function EnrichPage() {
           Enrich
         </h1>
         <p style={{ color: C.text2, fontSize: 14 }}>
-          Fill gaps in your existing HubSpot company records
+          Fill gaps in your existing HubSpot {objectType === 'contact' ? 'contact' : 'company'} records
         </p>
       </div>
 
@@ -1420,7 +1422,7 @@ export default function EnrichPage() {
                     style={{ cursor: 'pointer' }}
                   />
                   <span style={{ fontSize: 12, color: C.text2 }}>
-                    All companies ({totalCompanies.toLocaleString()})
+                    All {objectLabelPlural} ({totalRecords.toLocaleString()})
                   </span>
                 </label>
 
@@ -1475,7 +1477,7 @@ export default function EnrichPage() {
                       onChange={() => setCompanyScope('gaps')}
                       style={{ cursor: 'pointer' }}
                     />
-                    <span style={{ fontSize: 12, color: C.text2 }}>Companies with gaps</span>
+                    <span style={{ fontSize: 12, color: C.text2 }}>{objectLabelPlural.charAt(0).toUpperCase() + objectLabelPlural.slice(1)} with gaps</span>
                   </label>
                   {companyScope === 'gaps' && gapAnalysis && (
                     <div style={{ marginLeft: 22, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1505,7 +1507,7 @@ export default function EnrichPage() {
                               const gap = gapAnalysis.field_gaps.find(g => g.field === field);
                               return sum + (gap?.missing || 0);
                             }, 0),
-                            gapAnalysis.total_companies
+                            gapAnalysis.total_records
                           ).toLocaleString()} matches (estimated)
                         </div>
                       )}
@@ -1879,9 +1881,9 @@ export default function EnrichPage() {
                       const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
                       return sum + (gap?.missing || 0);
                     }, 0),
-                    gapAnalysis?.total_companies || 0
+                    gapAnalysis?.total_records || 0
                   ) :
-                  gapAnalysis?.total_companies || 0
+                  gapAnalysis?.total_records || 0
                 ).toLocaleString()} companies →`}
             </PrimaryBtn>
 
@@ -2958,7 +2960,7 @@ export default function EnrichPage() {
               </div>
 
               <div style={{ fontSize: 20, fontWeight: 600, color: C.text, marginBottom: 20 }}>
-                {gapAnalysis.total_companies.toLocaleString()} companies scanned
+                {totalRecords.toLocaleString()} {objectLabelPlural} scanned
               </div>
 
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -3146,9 +3148,9 @@ export default function EnrichPage() {
                         const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
                         return sum + (gap?.missing || 0);
                       }, 0),
-                      gapAnalysis?.total_companies || 0
+                      gapAnalysis?.total_records || 0
                     ) :
-                    (gapAnalysis?.total_companies || 0)
+                    (gapAnalysis?.total_records || 0)
                   ).toLocaleString()}
                 </strong>{' '}
                 companies
@@ -3213,9 +3215,9 @@ export default function EnrichPage() {
                       const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
                       return sum + (gap?.missing || 0);
                     }, 0),
-                    gapAnalysis?.total_companies || 0
+                    gapAnalysis?.total_records || 0
                   ) :
-                  (gapAnalysis?.total_companies || 0)
+                  (gapAnalysis?.total_records || 0)
                 ).toLocaleString()} companies →
               </PrimaryBtn>
             </div>

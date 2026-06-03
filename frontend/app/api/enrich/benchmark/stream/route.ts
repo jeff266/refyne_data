@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
 
         send({
           type: 'sample_ready',
-          total_companies: totalMissing,
+          total_records: totalMissing,
           sample_size: sampleSize,
           distribution,
           confidence,

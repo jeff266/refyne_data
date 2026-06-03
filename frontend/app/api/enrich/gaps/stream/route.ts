@@ -166,7 +166,8 @@ export async function GET(req: NextRequest) {
 
           // Build final result
           const finalResult = {
-            total_companies: totalProcessed,
+            total_records: totalProcessed,
+            object_type: objectType,
             field_gaps: buildFieldGaps(enrichableFields, fieldCounts, totalProcessed),
             scanned_at: new Date().toISOString(),
           };
