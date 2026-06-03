@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrgContext } from '@/lib/auth/org-context';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { enqueueTaxonomySuggestionScan } from '@/lib/queue/taxonomy-suggestion-queue';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 
@@ -13,11 +13,15 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { harmonyId: string } }
 ) {
+  let ctx;
   try {
-    const { orgId } = await getOrgContext(req);
-    if (!orgId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  try {
+    const orgId = ctx.orgId;
 
     // Get harmony details
     const { data: harmony, error: harmonyError } = await supabaseAdmin

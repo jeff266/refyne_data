@@ -5,18 +5,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrgContext } from '@/lib/auth/org-context';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { rejectSuggestion } from '@/lib/harmonies/taxonomy-suggester';
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { suggestionId: string } }
 ) {
+  let ctx;
   try {
-    const { userId } = await getOrgContext(req);
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  try {
+    const userId = ctx.userId;
 
     await rejectSuggestion(params.suggestionId, userId);
 

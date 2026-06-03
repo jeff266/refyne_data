@@ -6,12 +6,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/db/supabase';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 
 export async function GET(req: NextRequest) {
   try {
     // Get all active packs
-    const { data: packs, error: packsError } = await supabase
+    const { data: packs, error: packsError } = await supabaseAdmin
       .from('sub_industry_packs')
       .select('id, name, description, industry_scope, is_active')
       .eq('is_active', true)
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     // Get entry counts for each pack
     const packsWithCounts = await Promise.all(
       (packs || []).map(async (pack) => {
-        const { count } = await supabase
+        const { count } = await supabaseAdmin
           .from('sub_industry_pack_entries')
           .select('*', { count: 'exact', head: true })
           .eq('pack_id', pack.id);

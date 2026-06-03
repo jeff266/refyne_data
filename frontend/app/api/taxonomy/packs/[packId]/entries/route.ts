@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/db/supabase';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 
 export async function GET(
   req: NextRequest,
@@ -16,7 +16,7 @@ export async function GET(
     const { packId } = params;
 
     // Get all entries for this pack
-    const { data: entries, error } = await supabase
+    const { data: entries, error } = await supabaseAdmin
       .from('sub_industry_pack_entries')
       .select('*')
       .eq('pack_id', packId)

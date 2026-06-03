@@ -6,15 +6,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrgContext } from '@/lib/auth/org-context';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 
 export async function POST(req: NextRequest) {
+  let ctx;
   try {
-    const { orgId } = await getOrgContext(req);
-    if (!orgId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  try {
+    const orgId = ctx.orgId;
 
     const body = await req.json();
     const { packId, harmonyId, targetField, writePolicy } = body;
