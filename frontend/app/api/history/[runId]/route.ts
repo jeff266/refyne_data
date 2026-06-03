@@ -29,20 +29,24 @@ export async function GET(
 
     const { runId } = params;
 
-    // Fetch run details
+    // Fetch run details (left join for preview runs without arrangements)
     const { data: run, error: runError } = await supabase
       .from('arrangement_runs')
       .select(`
         id,
         arrangement_id,
+        run_type,
         status,
         records_processed,
         records_total,
+        successful_records,
         fields_filled,
         started_at,
         completed_at,
         error_message,
-        arrangements!inner (
+        source_snapshot,
+        results_snapshot,
+        arrangements (
           id,
           name,
           field_configs
@@ -91,16 +95,25 @@ export async function GET(
     const providers: string[] = [];
     const fields: string[] = [];
 
-    fieldConfigs.forEach((fc: any) => {
-      if (fc.field_key && !fields.includes(fc.field_key)) {
-        fields.push(fc.field_key);
-      }
-      fc.steps?.forEach((step: any) => {
-        if (step.provider && !providers.includes(step.provider)) {
-          providers.push(step.provider);
+    // For preview runs (no arrangement), extract from source_snapshot
+    const isPreviewRun = !run.arrangement_id;
+    if (isPreviewRun && run.source_snapshot) {
+      const snapshot = run.source_snapshot as any;
+      if (snapshot.provider) providers.push(snapshot.provider);
+      if (snapshot.fields) fields.push(...snapshot.fields);
+    } else {
+      // For arrangement runs, extract from field_configs
+      fieldConfigs.forEach((fc: any) => {
+        if (fc.field_key && !fields.includes(fc.field_key)) {
+          fields.push(fc.field_key);
         }
+        fc.steps?.forEach((step: any) => {
+          if (step.provider && !providers.includes(step.provider)) {
+            providers.push(step.provider);
+          }
+        });
       });
-    });
+    }
 
     // Fetch progress records (limit to 100 for now per spec)
     const { data: progressRecords, error: progressError } = await supabase
@@ -183,7 +196,7 @@ export async function GET(
       run: {
         run_id: run.id,
         arrangement_id: run.arrangement_id,
-        arrangement_name: arrangement?.name || 'Unknown',
+        arrangement_name: isPreviewRun ? 'Preview Run' : (arrangement?.name || 'Unknown'),
         started_at: run.started_at,
         completed_at: run.completed_at,
         duration_seconds: durationSeconds,
@@ -191,11 +204,13 @@ export async function GET(
         providers,
         fields,
         records_processed: run.records_processed || 0,
+        records_total: run.records_total || 0,
+        successful_records: run.successful_records || 0,
         fields_filled: totalFilled,
       },
       arrangement: {
         id: run.arrangement_id,
-        name: arrangement?.name || 'Unknown',
+        name: isPreviewRun ? 'Preview Run' : (arrangement?.name || 'Unknown'),
         field_configs: fieldConfigs,
       },
       progress: {
