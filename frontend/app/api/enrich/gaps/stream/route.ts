@@ -1,10 +1,10 @@
 /**
  * Streaming Gap Analysis API
  *
- * GET /api/enrich/gaps/stream
+ * GET /api/enrich/gaps/stream?objectType=company|contact
  *
  * Streams gap analysis results progressively using Server-Sent Events (SSE).
- * Client receives updates after each page of 200 companies, showing data within 1-2 seconds.
+ * Client receives updates after each page of records, showing data within 1-2 seconds.
  * Cache hits return instantly with no delay.
  */
 
@@ -12,25 +12,17 @@ import { NextRequest } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
+import { getEnrichableFields } from '@/lib/enrich/enrichable-fields';
 
-const ENRICHABLE_FIELDS = [
-  'industry',
-  'numberofemployees',
-  'linkedin_company_page',
-  'phone',
-  'domain',
-  'annualrevenue',
-];
-
-const PAGE_SIZE = 100; // Maximum HubSpot allows for companies endpoint
+const PAGE_SIZE = 100; // Maximum HubSpot allows
 const DELAY_BETWEEN_PAGES_MS = 100; // Small delay to avoid rate limits
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function buildFieldGaps(fieldCounts: Record<string, number>, totalProcessed: number) {
-  return ENRICHABLE_FIELDS.map(field => {
+function buildFieldGaps(enrichableFields: string[], fieldCounts: Record<string, number>, totalProcessed: number) {
+  return enrichableFields.map(field => {
     const missing = fieldCounts[field] || 0;
     const coverage = totalProcessed > 0
       ? Math.round(((totalProcessed - missing) / totalProcessed) * 100)
@@ -57,6 +49,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Get objectType from query params
+    const { searchParams } = new URL(req.url);
+    const objectType = searchParams.get('objectType') ?? 'company';
+    const enrichableFields = getEnrichableFields(objectType);
+
     // Get access token and portal_id
     const accessToken = await getAccessToken(ctx.orgId);
     const { data: connection } = await supabase
@@ -69,7 +66,7 @@ export async function GET(req: NextRequest) {
       return new Response('HubSpot not connected', { status: 400 });
     }
 
-    const cacheKey = `${ctx.orgId}:${connection.portal_id}:enrich:gaps`;
+    const cacheKey = `${ctx.orgId}:${connection.portal_id}:enrich:gaps:${objectType}`;
 
     // Create SSE stream
     const encoder = new TextEncoder();
@@ -118,12 +115,13 @@ export async function GET(req: NextRequest) {
             fields: [],
           });
 
-          // Paginate through all companies
+          // Paginate through all records
+          const hubspotObjectType = objectType === 'contact' ? 'contacts' : 'companies';
           do {
-            const properties = ENRICHABLE_FIELDS.join(',');
+            const properties = enrichableFields.join(',');
             const url = after
-              ? `https://api.hubapi.com/crm/v3/objects/companies?limit=${PAGE_SIZE}&properties=${properties}&after=${after}`
-              : `https://api.hubapi.com/crm/v3/objects/companies?limit=${PAGE_SIZE}&properties=${properties}`;
+              ? `https://api.hubapi.com/crm/v3/objects/${hubspotObjectType}?limit=${PAGE_SIZE}&properties=${properties}&after=${after}`
+              : `https://api.hubapi.com/crm/v3/objects/${hubspotObjectType}?limit=${PAGE_SIZE}&properties=${properties}`;
 
             const response = await fetch(url, {
               headers: {
@@ -139,10 +137,10 @@ export async function GET(req: NextRequest) {
             const results = page.results || [];
 
             // Count nulls in this page
-            for (const company of results) {
+            for (const record of results) {
               totalProcessed++;
-              for (const field of ENRICHABLE_FIELDS) {
-                const val = company.properties[field];
+              for (const field of enrichableFields) {
+                const val = record.properties[field];
                 if (!val || val.trim() === '' || val === 'null') {
                   fieldCounts[field] = (fieldCounts[field] || 0) + 1;
                 }
@@ -156,7 +154,7 @@ export async function GET(req: NextRequest) {
               type: 'progress',
               processed: totalProcessed,
               total: null, // HubSpot doesn't provide total count
-              fields: buildFieldGaps(fieldCounts, totalProcessed),
+              fields: buildFieldGaps(enrichableFields, fieldCounts, totalProcessed),
               complete: !after,
             });
 
@@ -169,7 +167,7 @@ export async function GET(req: NextRequest) {
           // Build final result
           const finalResult = {
             total_companies: totalProcessed,
-            field_gaps: buildFieldGaps(fieldCounts, totalProcessed),
+            field_gaps: buildFieldGaps(enrichableFields, fieldCounts, totalProcessed),
             scanned_at: new Date().toISOString(),
           };
 

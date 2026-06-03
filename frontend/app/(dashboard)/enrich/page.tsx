@@ -11,6 +11,7 @@ import { addToast } from '@/components/ui/toast';
 import { useEnrichRun } from '@/context/EnrichRunContext';
 import { useJobPoller, useJobResults } from '@/hooks/useJobPoller';
 import type { JobStatus } from '@/hooks/useJobPoller';
+import { useObjectType } from '@/hooks/useObjectType';
 
 interface FieldGap {
   field: string;
@@ -55,8 +56,8 @@ interface HarmonyPreview {
 }
 
 interface PreviewFieldResult {
-  company_id: string;
-  company_name: string;
+  record_id: string;
+  record_name: string;
   field_key: string;
   field_label: string;
   current_value: string | null;
@@ -159,6 +160,9 @@ interface BenchmarkRecommendation {
 export default function EnrichPage() {
   const router = useRouter();
   const enrichRunContext = useEnrichRun();
+  const [objectType] = useObjectType();
+  const objectLabel = objectType === 'contact' ? 'contact' : 'company';
+  const objectLabelPlural = objectType === 'contact' ? 'contacts' : 'companies';
   const [loading, setLoading] = useState(true);
   const [showAnimatedLoading, setShowAnimatedLoading] = useState(false);
   const [gapAnalysis, setGapAnalysis] = useState<GapAnalysis | null>(null);
@@ -267,7 +271,7 @@ export default function EnrichPage() {
 
   // Fetch gap analysis on mount using streaming
   useEffect(() => {
-    const es = new EventSource('/api/enrich/gaps/stream');
+    const es = new EventSource(`/api/enrich/gaps/stream?objectType=${objectType}`);
 
     es.onmessage = (event) => {
       const msg = JSON.parse(event.data);
@@ -417,7 +421,7 @@ export default function EnrichPage() {
                 if (fieldData.after && !fieldData.skipped) {
                   const fieldLabel = ENRICHABLE_FIELDS.find(f => f.key === fieldKey)?.label || fieldKey;
                   latestResults.push({
-                    company_name: record.company_name,
+                    record_name: record.company_name,
                     field_key: fieldKey,
                     field_label: fieldLabel,
                     value: fieldData.after,
@@ -476,7 +480,7 @@ export default function EnrichPage() {
   // Fallback non-streaming fetch
   async function fetchGapsNonStreaming() {
     try {
-      const res = await fetch('/api/enrich/gaps');
+      const res = await fetch(`/api/enrich/gaps?objectType=${objectType}`);
       if (res.ok) {
         const data = await res.json();
         setGapAnalysis(data);
@@ -493,7 +497,7 @@ export default function EnrichPage() {
   async function fetchEnrichmentHistory() {
     setHistoryLoading(true);
     try {
-      const res = await fetch('/api/enrich/history');
+      const res = await fetch(`/api/enrich/history?objectType=${objectType}`);
       if (res.ok) {
         const data = await res.json();
         setEnrichmentHistory(data.runs || []);
@@ -605,7 +609,7 @@ export default function EnrichPage() {
 
       setLoadingHarmonies(true);
       try {
-        const res = await fetch(`/api/enrich/harmony-preview?fields=${selectedFields.join(',')}`);
+        const res = await fetch(`/api/enrich/harmony-preview?fields=${selectedFields.join(',')}&objectType=${objectType}`);
         if (res.ok) {
           const data = await res.json();
           setHarmonyPreviews(data.fields || []);
@@ -631,7 +635,7 @@ export default function EnrichPage() {
     const timeoutId = setTimeout(async () => {
       setLoadingPreview(true);
       try {
-        const res = await fetch('/api/enrich/preview-count', {
+        const res = await fetch(`/api/enrich/preview-count?objectType=${objectType}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -763,7 +767,7 @@ export default function EnrichPage() {
       }
 
       // Enqueue preview job
-      const response = await fetch('/api/enrich/preview/enqueue', {
+      const response = await fetch(`/api/enrich/preview/enqueue?objectType=${objectType}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -808,8 +812,8 @@ export default function EnrichPage() {
       for (const companyResult of previewResultsFromJob as any[]) {
         for (const field of companyResult.fields) {
           transformedResults.push({
-            company_id: companyResult.hubspotCompanyId,
-            company_name: companyResult.companyName,
+            record_id: companyResult.hubspotCompanyId,
+            record_name: companyResult.companyName,
             field_key: field.fieldKey,
             field_label: ENRICHABLE_FIELDS.find(f => f.key === field.fieldKey)?.label || field.fieldKey,
             current_value: field.currentValue,
@@ -853,7 +857,7 @@ export default function EnrichPage() {
       const autoSelectedRows = new Set<string>();
       transformedResults.forEach(r => {
         if (r.status === 'would_fill') {
-          autoSelectedRows.add(`${r.company_id}-${r.field_key}`);
+          autoSelectedRows.add(`${r.record_id}-${r.field_key}`);
         }
       });
       setSelectedRows(autoSelectedRows);
@@ -876,8 +880,8 @@ export default function EnrichPage() {
     const selectedRecordIds = Array.from(
       new Set(
         previewResults.results
-          .filter(r => selectedRows.has(`${r.company_id}-${r.field_key}`))
-          .map(r => r.company_id)
+          .filter(r => selectedRows.has(`${r.record_id}-${r.field_key}`))
+          .map(r => r.record_id)
       )
     );
 
@@ -891,7 +895,7 @@ export default function EnrichPage() {
     setApplyRunId(null);
 
     try {
-      const response = await fetch('/api/enrich/apply/enqueue', {
+      const response = await fetch(`/api/enrich/apply/enqueue?objectType=${objectType}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -974,7 +978,7 @@ export default function EnrichPage() {
       const initialSelected = new Set<string>();
       previewResults.results.forEach((result, idx) => {
         if (result.selected) {
-          initialSelected.add(`${result.company_id}-${result.field_key}`);
+          initialSelected.add(`${result.record_id}-${result.field_key}`);
         }
       });
       setSelectedRows(initialSelected);
@@ -1000,7 +1004,7 @@ export default function EnrichPage() {
     const allSelectable = new Set<string>();
     previewResults.results.forEach(result => {
       if (result.status === 'would_fill' || result.status === 'would_override') {
-        allSelectable.add(`${result.company_id}-${result.field_key}`);
+        allSelectable.add(`${result.record_id}-${result.field_key}`);
       }
     });
     setSelectedRows(allSelectable);
@@ -1016,7 +1020,7 @@ export default function EnrichPage() {
       const next = new Set(prev);
       previewResults.results.forEach(result => {
         if (result.status === 'would_override') {
-          next.delete(`${result.company_id}-${result.field_key}`);
+          next.delete(`${result.record_id}-${result.field_key}`);
         }
       });
       return next;
@@ -1263,7 +1267,7 @@ export default function EnrichPage() {
     setBenchmarkTotalMissing(0);
 
     const fields = selectedFields.join(',');
-    const es = new EventSource(`/api/enrich/benchmark/stream?fields=${fields}`);
+    const es = new EventSource(`/api/enrich/benchmark/stream?fields=${fields}&objectType=${objectType}`);
 
     es.onmessage = (event) => {
       const msg = JSON.parse(event.data);
@@ -2312,7 +2316,7 @@ export default function EnrichPage() {
                     <tbody>
                       {runProgress.latest_results.slice(0, 20).map((result: any, i: number) => (
                         <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                          <td style={{ padding: '6px 8px', color: C.text }}>{result.company_name || 'Unknown'}</td>
+                          <td style={{ padding: '6px 8px', color: C.text }}>{result.record_name || 'Unknown'}</td>
                           <td style={{ padding: '6px 8px', color: C.text2 }}>{result.field_label || result.field_key}</td>
                           <td style={{ padding: '6px 8px', color: result.value ? C.text : C.text3, fontStyle: result.value ? 'normal' : 'italic' }}>
                             {result.value || '(not found)'}
@@ -2656,7 +2660,7 @@ export default function EnrichPage() {
                     </thead>
                     <tbody>
                       {previewResults.results.map((result, idx) => {
-                        const rowKey = `${result.company_id}-${result.field_key}`;
+                        const rowKey = `${result.record_id}-${result.field_key}`;
                         const isSelected = selectedRows.has(rowKey);
                         const isSelectable = result.status === 'would_fill' || result.status === 'would_override';
 
@@ -2683,7 +2687,7 @@ export default function EnrichPage() {
 
                         return (
                           <tr key={rowKey} style={{ borderBottom: `1px solid ${C.border}` }}>
-                            <td style={{ padding: '8px 12px', color: C.text }}>{result.company_name}</td>
+                            <td style={{ padding: '8px 12px', color: C.text }}>{result.record_name}</td>
                             <td style={{ padding: '8px 12px', color: C.text2 }}>{result.field_label}</td>
                             <td style={{ padding: '8px 12px', color: C.text3 }}>
                               {result.current_value || <span style={{ fontStyle: 'italic', color: C.text3 }}>(empty)</span>}
@@ -2754,7 +2758,7 @@ export default function EnrichPage() {
                                   <input
                                     type="checkbox"
                                     checked={isSelected}
-                                    onChange={() => toggleRowSelection(result.company_id, result.field_key)}
+                                    onChange={() => toggleRowSelection(result.record_id, result.field_key)}
                                     style={{ cursor: 'pointer' }}
                                   />
                                   <span style={{ color: statusColor, fontSize: 11, fontWeight: 500 }}>
@@ -2841,7 +2845,7 @@ export default function EnrichPage() {
                   <path d="M20 6L9 17l-5-5" />
                 </svg>
                 <div style={{ fontSize: 28, fontWeight: 600, color: C.text }}>
-                  {applyResult.written} {applyResult.written === 1 ? 'company' : 'companies'} updated in HubSpot
+                  {applyResult.written} {applyResult.written === 1 ? objectLabel : objectLabelPlural} updated in HubSpot
                 </div>
               </div>
 
@@ -2872,7 +2876,7 @@ export default function EnrichPage() {
                           <div key={fieldKey} style={{ display: 'contents' }}>
                             <div style={{ color: C.text2 }}>{FIELD_LABELS[fieldKey] || fieldKey}</div>
                             <div style={{ color: C.text, textAlign: 'right', fontWeight: 500 }}>
-                              {count} {count === 1 ? 'company' : 'companies'}
+                              {count} {count === 1 ? objectLabel : objectLabelPlural}
                             </div>
                           </div>
                         );

@@ -1,9 +1,9 @@
 /**
  * Enrich Gap Analysis API
  *
- * GET /api/enrich/gaps
+ * GET /api/enrich/gaps?objectType=company|contact
  *
- * Analyzes HubSpot company records to identify missing field values.
+ * Analyzes HubSpot records to identify missing field values.
  * Cached for 1 hour per org.
  */
 
@@ -11,16 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
-
-// Fields to analyze for gaps
-const ENRICHABLE_FIELDS = [
-  'industry',
-  'numberofemployees',
-  'linkedin_company_page',
-  'phone',
-  'domain',
-  'annualrevenue',
-];
+import { getEnrichableFields } from '@/lib/enrich/enrichable-fields';
 
 export async function GET(req: NextRequest) {
   let ctx;
@@ -56,10 +47,11 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
+    const objectType = searchParams.get('objectType') ?? 'company';
     const checkCacheOnly = searchParams.get('check_cache') === 'true';
 
-    // Check cache with portal_id included
-    const cacheKey = `${ctx.orgId}:${connection.portal_id}:enrich:gaps`;
+    // Check cache with portal_id and objectType included
+    const cacheKey = `${ctx.orgId}:${connection.portal_id}:enrich:gaps:${objectType}`;
     const { data: cached } = await supabase
       .from('cache')
       .select('value, expires_at')
@@ -89,16 +81,20 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Fetch ALL companies from HubSpot with pagination
-    const properties = ENRICHABLE_FIELDS.join(',');
-    const allCompanies: any[] = [];
+    // Get enrichable fields for this object type
+    const enrichableFields = getEnrichableFields(objectType);
+
+    // Fetch ALL records from HubSpot with pagination
+    const hubspotObjectType = objectType === 'contact' ? 'contacts' : 'companies';
+    const properties = enrichableFields.join(',');
+    const allRecords: any[] = [];
     let after: string | undefined;
     let hasMore = true;
 
     while (hasMore) {
       const url = after
-        ? `https://api.hubapi.com/crm/v3/objects/companies?limit=100&properties=${properties}&after=${after}`
-        : `https://api.hubapi.com/crm/v3/objects/companies?limit=100&properties=${properties}`;
+        ? `https://api.hubapi.com/crm/v3/objects/${hubspotObjectType}?limit=100&properties=${properties}&after=${after}`
+        : `https://api.hubapi.com/crm/v3/objects/${hubspotObjectType}?limit=100&properties=${properties}`;
 
       const response = await fetch(url, {
         headers: {
@@ -111,7 +107,7 @@ export async function GET(req: NextRequest) {
       }
 
       const data = await response.json();
-      allCompanies.push(...(data.results || []));
+      allRecords.push(...(data.results || []));
 
       // Check for next page
       if (data.paging?.next?.after) {
@@ -121,17 +117,17 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const totalCompanies = allCompanies.length;
+    const totalRecords = allRecords.length;
 
-    // Count missing values per field across ALL companies
-    const fieldGaps = ENRICHABLE_FIELDS.map(field => {
-      const missing = allCompanies.filter((company: any) => {
-        const value = company.properties[field];
+    // Count missing values per field across ALL records
+    const fieldGaps = enrichableFields.map(field => {
+      const missing = allRecords.filter((record: any) => {
+        const value = record.properties[field];
         return !value || value === '' || value === 'null';
       }).length;
 
-      const coverage = totalCompanies > 0
-        ? Math.round(((totalCompanies - missing) / totalCompanies) * 100)
+      const coverage = totalRecords > 0
+        ? Math.round(((totalRecords - missing) / totalRecords) * 100)
         : 0;
 
       return {
@@ -142,7 +138,7 @@ export async function GET(req: NextRequest) {
     });
 
     const result = {
-      total_companies: totalCompanies,
+      total_companies: totalRecords,
       field_gaps: fieldGaps,
       scanned_at: new Date().toISOString(),
     };
