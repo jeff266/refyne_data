@@ -1,10 +1,10 @@
 /**
  * Enrich Preview Count API
  *
- * POST /api/enrich/preview-count
+ * POST /api/enrich/preview-count?objectType=company|contact
  *
- * Returns count of companies matching the filter criteria,
- * plus sample company names for confidence check.
+ * Returns count of records matching the filter criteria,
+ * plus sample names for confidence check.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -38,6 +38,9 @@ export async function POST(req: NextRequest) {
         { status: 503 }
       );
     }
+
+    const { searchParams } = new URL(req.url);
+    const objectType = searchParams.get('objectType') ?? 'company';
 
     const body: PreviewCountRequest = await req.json();
     const { source, list_id, segment, fields } = body;
@@ -105,15 +108,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Use HubSpot search API to count matching companies
+    // Use HubSpot search API to count matching records
+    const hubspotObjectType = objectType === 'contact' ? 'contacts' : 'companies';
+    const sampleProperties = objectType === 'contact'
+      ? ['firstname', 'lastname', 'email']
+      : ['name', 'domain'];
+
     const searchPayload: any = {
       filterGroups,
-      properties: ['name', 'domain'],
+      properties: sampleProperties,
       limit: 10, // Just need sample names
     };
 
     const searchRes = await fetch(
-      'https://api.hubapi.com/crm/v3/objects/companies/search',
+      `https://api.hubapi.com/crm/v3/objects/${hubspotObjectType}/search`,
       {
         method: 'POST',
         headers: {
@@ -133,10 +141,18 @@ export async function POST(req: NextRequest) {
     const total = searchData.total || 0;
     const results = searchData.results || [];
 
-    // Extract sample company names (first 5)
+    // Extract sample names (first 5)
     const sampleNames = results
       .slice(0, 5)
-      .map((company: any) => company.properties.name || company.properties.domain || 'Unnamed')
+      .map((record: any) => {
+        if (objectType === 'contact') {
+          const first = record.properties.firstname || '';
+          const last = record.properties.lastname || '';
+          const email = record.properties.email || '';
+          return `${first} ${last}`.trim() || email || 'Unnamed';
+        }
+        return record.properties.name || record.properties.domain || 'Unnamed';
+      })
       .filter(Boolean);
 
     return NextResponse.json({

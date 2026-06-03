@@ -1,14 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 
 /**
- * GET /api/enrich/history
+ * GET /api/enrich/history?objectType=company|contact
  *
- * Returns the last 10 enrichment runs for the current org.
+ * Returns the last 10 enrichment runs for the current org, filtered by object type.
  * Used for the "Recent runs" table on the Enrich page.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   let ctx;
   try {
     ctx = await requireOperatorOrAbove();
@@ -24,7 +24,10 @@ export async function GET() {
       );
     }
 
-    // Query both arrangement_runs and enrichment_runs
+    const { searchParams } = new URL(req.url);
+    const objectType = searchParams.get('objectType') ?? 'company';
+
+    // Query both arrangement_runs and enrichment_runs, filtered by object_type
     const { data: arrangementRuns, error: arrangementError } = await supabase
       .from('arrangement_runs')
       .select(`
@@ -42,6 +45,7 @@ export async function GET() {
         error_message,
         results_snapshot,
         source_snapshot,
+        object_type,
         arrangements (
           id,
           name,
@@ -49,6 +53,7 @@ export async function GET() {
         )
       `)
       .eq('org_id', ctx.orgId)
+      .eq('object_type', objectType)
       .order('started_at', { ascending: false })
       .limit(20);
 
@@ -56,6 +61,7 @@ export async function GET() {
       .from('enrichment_runs')
       .select('*')
       .eq('org_id', ctx.orgId)
+      .eq('object_type', objectType)
       .order('started_at', { ascending: false })
       .limit(20);
 

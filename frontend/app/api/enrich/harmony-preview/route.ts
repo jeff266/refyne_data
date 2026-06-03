@@ -1,7 +1,7 @@
 /**
  * Harmony Preview API
  *
- * GET /api/enrich/harmony-preview
+ * GET /api/enrich/harmony-preview?objectType=company|contact
  *
  * Shows which harmonies will apply to selected fields during enrichment.
  * Uses proper two-step lookup: HubSpot property → canonical field → harmony.
@@ -27,8 +27,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get fields from query params (HubSpot property names)
+    // Get fields and objectType from query params
     const { searchParams } = new URL(req.url);
+    const objectType = searchParams.get('objectType') ?? 'company';
     const fieldsParam = searchParams.get('fields');
     if (!fieldsParam) {
       return NextResponse.json({ fields: [] });
@@ -53,8 +54,8 @@ export async function GET(req: NextRequest) {
 
     const portalId = connection.portal_id;
 
-    // Hardcoded field labels (HubSpot property name → display label)
-    const fieldLabels: Record<string, string> = {
+    // Field labels by object type
+    const companyFieldLabels: Record<string, string> = {
       industry: 'Industry',
       numberofemployees: 'Employee count',
       linkedin_company_page: 'LinkedIn URL',
@@ -63,13 +64,27 @@ export async function GET(req: NextRequest) {
       annualrevenue: 'Revenue',
     };
 
+    const contactFieldLabels: Record<string, string> = {
+      jobtitle: 'Job Title',
+      company: 'Company',
+      phone: 'Phone',
+      mobilephone: 'Mobile Phone',
+      linkedin: 'LinkedIn URL',
+      city: 'City',
+      state: 'State',
+      country: 'Country',
+      email: 'Email',
+    };
+
+    const fieldLabels = objectType === 'contact' ? contactFieldLabels : companyFieldLabels;
+
     // Build response for each HubSpot property
     const fields = await Promise.all(
       hubspotProperties.map(async (hubspotProperty) => {
         const harmony = await getHarmonyForHubSpotProperty(
           ctx.orgId,
           portalId,
-          'company',
+          objectType,
           hubspotProperty
         );
 

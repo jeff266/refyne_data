@@ -1,6 +1,8 @@
 /**
  * Provider Benchmark Stream API
  *
+ * GET /api/enrich/benchmark/stream?objectType=company|contact
+ *
  * Tests providers (Apollo, Refyne Data/GraphIQ) against a statistically significant
  * sample of the user's database using SSE for live progress updates.
  */
@@ -15,6 +17,7 @@ import { ApolloAdapter } from '@/lib/providers/apollo';
 import { getApolloKey } from '@/lib/providers/apollo-key';
 import { getGraphiqKey } from '@/lib/providers/graphiq-key';
 import { supabase } from '@/lib/db/supabase';
+import { getEnrichableFields } from '@/lib/enrich/enrichable-fields';
 import type { HubSpotCompany } from '@/lib/hubspot/types';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -53,7 +56,9 @@ interface BenchmarkRecommendation {
 export async function GET(req: NextRequest) {
   const ctx = await getOrgContext();
   const { searchParams } = new URL(req.url);
-  const fields = searchParams.get('fields')?.split(',') || ['industry'];
+  const objectType = searchParams.get('objectType') ?? 'company';
+  const enrichableFields = getEnrichableFields(objectType);
+  const fields = searchParams.get('fields')?.split(',') || [enrichableFields[0]];
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

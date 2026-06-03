@@ -8,7 +8,7 @@ const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 /**
- * POST /api/enrich/apply/enqueue
+ * POST /api/enrich/apply/enqueue?objectType=company|contact
  *
  * Enqueues an apply job to write cached preview results to HubSpot.
  * Validates that preview results exist and are fresh.
@@ -28,6 +28,9 @@ export async function POST(req: NextRequest) {
         { status: 503 }
       );
     }
+
+    const { searchParams } = new URL(req.url);
+    const objectType = searchParams.get('objectType') ?? 'company';
 
     const body = await req.json();
     const { jobId: previewJobId, runId: previewRunId, selectedRecordIds } = body;
@@ -68,6 +71,7 @@ export async function POST(req: NextRequest) {
         arrangement_id: null,
         run_type: 'live',
         status: 'queued',
+        object_type: objectType,
         source_snapshot: {
           type: 'enrich_page_apply',
           preview_job_id: previewJobId,
@@ -93,6 +97,7 @@ export async function POST(req: NextRequest) {
       runId: run.id,
       orgId: ctx.orgId,
       userId: ctx.userId,
+      objectType,
       previewJobId,
       selectedRecordIds,
     });

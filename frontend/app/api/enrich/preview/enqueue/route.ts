@@ -4,7 +4,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { enqueuePreviewJob } from '@/lib/queue/enrichment-queue';
 
 /**
- * POST /api/enrich/preview/enqueue
+ * POST /api/enrich/preview/enqueue?objectType=company|contact
  *
  * Enqueues a preview enrichment job without writing to HubSpot.
  * Returns immediately with jobId and runId for polling.
@@ -25,6 +25,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { searchParams } = new URL(req.url);
+    const objectType = searchParams.get('objectType') ?? 'company';
+
     const body = await req.json();
     const { source, fieldKeys, providerId, recordLimit, harmonyIds } = body;
 
@@ -44,6 +47,7 @@ export async function POST(req: NextRequest) {
         arrangement_id: null, // Enrich page runs have no parent arrangement
         run_type: 'live',
         status: 'queued',
+        object_type: objectType,
         source_snapshot: {
           type: 'enrich_page_preview',
           source,
@@ -71,6 +75,7 @@ export async function POST(req: NextRequest) {
       runId: run.id,
       orgId: ctx.orgId,
       userId: ctx.userId,
+      objectType,
       source,
       fieldKeys,
       providerId,
