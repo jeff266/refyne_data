@@ -64,6 +64,7 @@ import {
 } from '../lib/dedup/company-dedup-scanner';
 import { startArrangementWorker, stopArrangementWorker } from '../lib/queue/arrangement-queue';
 import { startPreviewWorker, stopPreviewWorker } from '../lib/queue/enrichment-queue';
+import { startTaxonomySuggestionWorker, stopTaxonomySuggestionWorker } from '../lib/queue/taxonomy-suggestion-queue';
 import { getAccessToken } from '../lib/hubspot/get-access-token';
 
 async function main() {
@@ -124,6 +125,16 @@ async function main() {
     console.log('⚠️  Preview worker disabled (Redis not configured)');
   } else {
     console.log('✅ Preview worker started successfully\n');
+  }
+
+  // Start the taxonomy suggestion worker (AI-powered taxonomy classification)
+  console.log('Starting taxonomy suggestion worker...');
+  const taxonomyWorker = startTaxonomySuggestionWorker();
+
+  if (!taxonomyWorker) {
+    console.log('⚠️  Taxonomy suggestion worker disabled (Redis not configured)');
+  } else {
+    console.log('✅ Taxonomy suggestion worker started successfully\n');
   }
 
   // FIX: Fail all stalled jobs from previous crashes on startup
@@ -353,6 +364,7 @@ async function main() {
     await stopCompanyDedupScanWorker();
     await stopArrangementWorker();
     await stopPreviewWorker();
+    await stopTaxonomySuggestionWorker();
 
     console.log('[Shutdown] All workers stopped');
     console.log('[Shutdown] Closing health check server...');
