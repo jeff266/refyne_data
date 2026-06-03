@@ -1367,7 +1367,7 @@ export default function EnrichPage() {
     return (
       <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto', fontFamily: F.sans }}>
         <div style={{ padding: 40, textAlign: 'center', color: C.text3 }}>
-          <p>Scanning your HubSpot companies...</p>
+          <p>Scanning your HubSpot {objectType === 'contact' ? 'contacts' : 'companies'}...</p>
         </div>
       </div>
     );

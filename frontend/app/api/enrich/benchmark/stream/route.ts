@@ -68,6 +68,18 @@ export async function GET(req: NextRequest) {
       };
 
       try {
+        // Skip benchmark for contacts - only works for companies
+        if (objectType === 'contact') {
+          console.log('[Benchmark Stream] Skipping benchmark for contacts - not supported');
+          send({
+            type: 'complete',
+            message: 'Benchmark not available for contacts',
+            skipped: true,
+          });
+          controller.close();
+          return;
+        }
+
         // Get HubSpot client
         send({ type: 'init', message: 'Connecting to HubSpot...' });
 
@@ -142,8 +154,11 @@ export async function GET(req: NextRequest) {
 
         controller.close();
       } catch (error) {
+        console.error('[Benchmark Stream] Error:', error);
         const message = error instanceof Error ? error.message : 'Unknown error';
-        send({ type: 'error', error: message });
+        const stack = error instanceof Error ? error.stack : undefined;
+        console.error('[Benchmark Stream] Stack:', stack);
+        send({ type: 'error', error: message, details: stack });
         controller.close();
       }
     }
