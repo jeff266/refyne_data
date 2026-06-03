@@ -100,10 +100,35 @@ export async function seedHarmonyLibrary(): Promise<{
       };
     });
 
+    // Query existing harmonies to preserve user changes
+    const { data: existingHarmonies } = await supabase
+      .from('harmonies')
+      .select('id, is_active, write_policy')
+      .eq('is_preset', true);
+
+    const existingMap = new Map(
+      (existingHarmonies || []).map(h => [h.id, { is_active: h.is_active, write_policy: h.write_policy }])
+    );
+
+    // Preserve user changes to is_active and write_policy
+    const rowsToUpsert = rows.map(row => {
+      const existing = existingMap.get(row.id);
+      if (existing) {
+        // Preserve user-configured fields
+        return {
+          ...row,
+          is_active: existing.is_active,
+          write_policy: existing.write_policy || 'fill_empty',
+        };
+      }
+      // New harmony - use defaults from YAML
+      return row;
+    });
+
     // Upsert in batches of 50
     const batchSize = 50;
-    for (let i = 0; i < rows.length; i += batchSize) {
-      const batch = rows.slice(i, i + batchSize);
+    for (let i = 0; i < rowsToUpsert.length; i += batchSize) {
+      const batch = rowsToUpsert.slice(i, i + batchSize);
 
       const { error } = await supabase.from('harmonies').upsert(batch, {
         onConflict: 'id',

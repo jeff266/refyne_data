@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Plus, AlertTriangle, ChevronDown, Database } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, Chip, PrimaryBtn, GhostBtn, Tooltip } from '@/components/refyne';
@@ -190,17 +191,19 @@ function HarmonyRow({
         <div style={{ padding: '14px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: enabled ? C.text : C.text3 }}>{h.name}</span>
-                {h.isPreset && <Chip color="amber">Library</Chip>}
-                {isRec && <Chip color="indigo">★ recommended</Chip>}
-                {h.unmatchedCount && h.unmatchedCount > 0 && (
-                  <Chip color="red">{h.unmatchedCount} unmatched</Chip>
-                )}
-              </div>
-              <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>
-                {h.description || h.name}
-              </div>
+              <Link href={`/harmonies/${h.id}`} style={{ textDecoration: 'none', display: 'block' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: enabled ? C.text : C.text3 }}>{h.name}</span>
+                  {h.isPreset && <Chip color="amber">Library</Chip>}
+                  {isRec && <Chip color="indigo">★ recommended</Chip>}
+                  {h.unmatchedCount && h.unmatchedCount > 0 && (
+                    <Chip color="red">{h.unmatchedCount} unmatched</Chip>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>
+                  {h.description || h.name}
+                </div>
+              </Link>
               <div style={{ fontSize: 10, fontFamily: F.mono, color: C.text3, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span>{h.fields[0]}</span>
                 {issueCount !== undefined && issueCount > 0 && (

@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { captureWithOrgContext } from '@/lib/monitoring/sentry';
-
-interface RouteContext {
-  params: { id: string };
-}
+import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 
 /**
- * PATCH /api/harmonies/[id]
+ * GET /api/harmonies/[id]
  *
- * Update harmony (approach, rules, activation status)
+ * Returns harmony configuration and field assignments.
  */
-export async function PATCH(request: NextRequest, context: RouteContext) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   let ctx;
   try {
     ctx = await getOrgContext();
@@ -20,68 +18,135 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
-  if (!isSupabaseConfigured() || !supabase) {
-    return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
-  }
-
-  const harmonyId = context.params.id;
-
   try {
-    const body = await request.json();
-    const { approach, rules, is_active } = body;
-
-    // Update harmony
-    const updates: any = {};
-    if (approach) updates.approach = approach;
-    if (typeof is_active === 'boolean') updates.is_active = is_active;
-    updates.updated_at = new Date().toISOString();
-
-    const { error: harmonyError } = await supabase
-      .from('harmonies')
-      .update(updates)
-      .eq('id', harmonyId)
-      .eq('org_id', ctx.orgId);
-
-    if (harmonyError) {
-      captureWithOrgContext(harmonyError, ctx.orgId, { route: `/api/harmonies/${harmonyId} PATCH` });
-      console.error('[Update Harmony] Failed:', harmonyError);
-      return NextResponse.json({ error: 'Failed to update harmony' }, { status: 500 });
+    if (!isSupabaseConfigured() || !supabase) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 503 }
+      );
     }
 
-    // If rules provided, replace all rules
-    if (rules && Array.isArray(rules)) {
-      // Delete existing rules
-      await supabase
-        .from('harmony_rules')
-        .delete()
-        .eq('harmony_id', harmonyId);
+    const { id } = params;
 
-      // Insert new rules
-      if (rules.length > 0) {
-        const { error: rulesError } = await supabase
-          .from('harmony_rules')
-          .insert(
-            rules.map((rule: any) => ({
-              harmony_id: harmonyId,
-              input_pattern: rule.input_pattern,
-              normalized_value: rule.normalized_value,
-              match_type: rule.match_type || 'exact',
-              sort_order: rule.sort_order || 0,
-            }))
-          );
+    // Fetch harmony (preset harmonies have org_id = null, org-specific have org_id = ctx.orgId)
+    const { data: harmony, error: harmonyError } = await supabase
+      .from('harmonies')
+      .select('*')
+      .eq('id', id)
+      .or(`org_id.is.null,org_id.eq.${ctx.orgId}`)
+      .single();
 
-        if (rulesError) {
-          captureWithOrgContext(rulesError, ctx.orgId, { route: `/api/harmonies/${harmonyId} rules` });
-          console.error('[Update Harmony Rules] Failed:', rulesError);
-          return NextResponse.json({ error: 'Failed to update rules' }, { status: 500 });
-        }
-      }
+    if (harmonyError || !harmony) {
+      console.error('[Harmony Detail] Not found:', harmonyError);
+      return NextResponse.json(
+        { error: 'Harmony not found' },
+        { status: 404 }
+      );
+    }
+
+    // Fetch field assignments
+    const { data: assignments, error: assignmentsError } = await supabase
+      .from('harmony_field_assignments')
+      .select('canonical_field, hubspot_property')
+      .eq('harmony_id', id)
+      .or(`org_id.is.null,org_id.eq.${ctx.orgId}`);
+
+    if (assignmentsError) {
+      console.error('[Harmony Detail] Failed to fetch assignments:', assignmentsError);
+      return NextResponse.json(
+        { error: 'Failed to fetch field assignments' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      id: harmony.id,
+      name: harmony.name,
+      description: harmony.description,
+      transformType: harmony.transform_type,
+      transformFunction: harmony.transform_function,
+      referenceTable: harmony.reference_table,
+      objectType: harmony.object_type,
+      isActive: harmony.is_active,
+      writePolicy: harmony.write_policy || 'fill_empty',
+      fieldAssignments: (assignments || []).map(a => ({
+        canonicalField: a.canonical_field,
+        hubspotProperty: a.hubspot_property,
+      })),
+    });
+  } catch (error) {
+    console.error('[Harmony Detail] Error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch harmony' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PATCH /api/harmonies/[id]
+ *
+ * Updates harmony name, description, write_policy, and is_active.
+ * Never allows updating transform_type, transform_function, or reference_table (library-defined).
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  try {
+    if (!isSupabaseConfigured() || !supabase) {
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 503 }
+      );
+    }
+
+    const { id } = params;
+    const body = await req.json();
+    const { name, description, writePolicy, isActive } = body;
+
+    // Build update object with only allowed fields
+    const updates: any = {};
+    if (name !== undefined) updates.name = name;
+    if (description !== undefined) updates.description = description;
+    if (writePolicy !== undefined) updates.write_policy = writePolicy;
+    if (isActive !== undefined) updates.is_active = isActive;
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json(
+        { error: 'No valid fields to update' },
+        { status: 400 }
+      );
+    }
+
+    // Update harmony (only if it's preset or owned by this org)
+    const { error: updateError } = await supabase
+      .from('harmonies')
+      .update(updates)
+      .eq('id', id)
+      .or(`org_id.is.null,org_id.eq.${ctx.orgId}`);
+
+    if (updateError) {
+      console.error('[Harmony Update] Failed:', updateError);
+      return NextResponse.json(
+        { error: 'Failed to update harmony' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    captureWithOrgContext(error, ctx.orgId, { route: `/api/harmonies/${harmonyId} PATCH` });
-    console.error('[Update Harmony] Unexpected error:', error);
-    return NextResponse.json({ error: 'Failed to update harmony' }, { status: 500 });
+    console.error('[Harmony Update] Error:', error);
+    return NextResponse.json(
+      { error: 'Failed to update harmony' },
+      { status: 500 }
+    );
   }
 }
