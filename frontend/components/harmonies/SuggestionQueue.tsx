@@ -36,7 +36,7 @@ export function SuggestionQueue({ harmonyId }: { harmonyId: string }) {
 
   const fetchSuggestions = useCallback(async () => {
     try {
-      const res = await fetch(`/api/taxonomy/suggestions/${harmonyId}`);
+      const res = await fetch(`/api/taxonomy/harmonies/${harmonyId}/suggestions`);
       if (res.ok) {
         const data = await res.json();
         setSuggestions(data.suggestions);
@@ -82,7 +82,7 @@ export function SuggestionQueue({ harmonyId }: { harmonyId: string }) {
   const handleScanNow = async () => {
     setScanning(true);
     try {
-      const res = await fetch(`/api/taxonomy/suggestions/${harmonyId}/scan`, {
+      const res = await fetch(`/api/taxonomy/harmonies/${harmonyId}/suggestions/scan`, {
         method: 'POST',
       });
       if (res.ok) {
