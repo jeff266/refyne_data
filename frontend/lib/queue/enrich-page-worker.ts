@@ -116,8 +116,29 @@ export async function processPreviewJob(
       currentCompany: null,
     });
 
-    // Get HubSpot access token
-    const accessToken = await getAccessToken(orgId);
+    // Get HubSpot access token with clear error message
+    let accessToken: string;
+    try {
+      accessToken = await getAccessToken(orgId);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to decrypt access token';
+      const detailedError = errorMsg.includes('TOKEN_ENCRYPTION_KEY')
+        ? 'TOKEN_ENCRYPTION_KEY not configured in worker environment - contact support'
+        : errorMsg;
+
+      console.error('[Preview Job] Token decryption failed:', detailedError);
+
+      await supabase
+        .from('arrangement_runs')
+        .update({
+          status: 'failed',
+          error_message: detailedError,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', runId);
+
+      throw new Error(detailedError);
+    }
 
     // Get portal info
     const { data: connection } = await supabase
@@ -442,8 +463,29 @@ export async function processApplyJob(
       currentCompany: null,
     });
 
-    // Get HubSpot access token
-    const accessToken = await getAccessToken(orgId);
+    // Get HubSpot access token with clear error message
+    let accessToken: string;
+    try {
+      accessToken = await getAccessToken(orgId);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to decrypt access token';
+      const detailedError = errorMsg.includes('TOKEN_ENCRYPTION_KEY')
+        ? 'TOKEN_ENCRYPTION_KEY not configured in worker environment - contact support'
+        : errorMsg;
+
+      console.error('[Apply Job] Token decryption failed:', detailedError);
+
+      await supabase
+        .from('arrangement_runs')
+        .update({
+          status: 'failed',
+          error_message: detailedError,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', runId);
+
+      throw new Error(detailedError);
+    }
 
     const { data: connection } = await supabase
       .from('hubspot_connections')
