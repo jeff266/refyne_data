@@ -91,7 +91,10 @@ async function searchByCapabilities(
   capabilities: string[],
   limit: number = 20
 ): Promise<Record<string, unknown>[]> {
-  const response = await fetch(`${GRAPHIQ_BASE_URL}/organizations/search`, {
+  const url = new URL(`${GRAPHIQ_BASE_URL}/organizations/search`);
+  url.searchParams.set('limit', limit.toString());
+
+  const response = await fetch(url.toString(), {
     method: 'POST',
     headers: {
       'X-API-Key': apiKey,
@@ -101,7 +104,6 @@ async function searchByCapabilities(
       organization: {
         capabilities,
       },
-      limit,
     }),
   });
 
@@ -126,7 +128,7 @@ async function searchByCapabilities(
 
 /**
  * General organization search with multiple filters.
- * DEPRECATED: Use GraphiqAdapter.searchOrganizations() instance method.
+ * DEPRECATED: Use GraphiqAdapter instance methods instead.
  */
 async function searchOrganizations(
   apiKey: string,
@@ -148,7 +150,10 @@ async function searchOrganizations(
     orgFilter.location = location;
   }
 
-  const response = await fetch(`${GRAPHIQ_BASE_URL}/organizations/search`, {
+  const url = new URL(`${GRAPHIQ_BASE_URL}/organizations/search`);
+  url.searchParams.set('limit', limit.toString());
+
+  const response = await fetch(url.toString(), {
     method: 'POST',
     headers: {
       'X-API-Key': apiKey,
@@ -156,7 +161,6 @@ async function searchOrganizations(
     },
     body: JSON.stringify({
       organization: orgFilter,
-      limit,
     }),
   });
 
@@ -213,7 +217,7 @@ export class GraphiqAdapter implements ProviderAdapter {
 
     const apiKey = this.getApiKey();
 
-    // If domain provided, search by website_url for better accuracy
+    // If domain provided, search by website_url for better accuracy (primary signal)
     if (query.domain) {
       const results = await this.searchByDomain(query.domain);
       if (results.length === 0) {
@@ -222,8 +226,8 @@ export class GraphiqAdapter implements ProviderAdapter {
       return createProviderResponse(this.id, results[0], results[0]);
     }
 
-    // Otherwise search by name
-    const results = await searchOrganizations(apiKey, query.name, undefined, undefined, 1);
+    // Otherwise search by name (fallback)
+    const results = await this.searchByName(query.name!);
 
     if (results.length === 0) {
       return null;
@@ -233,7 +237,10 @@ export class GraphiqAdapter implements ProviderAdapter {
   }
 
   /**
-   * Search by domain using website_url field (most accurate).
+   * Search by domain using website_url field (primary signal).
+   * Pattern from GraphIQ head of product:
+   * POST /organizations/search?limit=1
+   * body: { organization: { website_url: domain, and: [] } }
    */
   private async searchByDomain(domain: string): Promise<Record<string, unknown>[]> {
     const apiKey = this.getApiKey();
@@ -244,7 +251,10 @@ export class GraphiqAdapter implements ProviderAdapter {
       .replace(/^www\./, '')
       .trim();
 
-    const response = await fetch(`${GRAPHIQ_BASE_URL}/organizations/search`, {
+    const url = new URL(`${GRAPHIQ_BASE_URL}/organizations/search`);
+    url.searchParams.set('limit', '1');
+
+    const response = await fetch(url.toString(), {
       method: 'POST',
       headers: {
         'X-API-Key': apiKey,
@@ -253,8 +263,8 @@ export class GraphiqAdapter implements ProviderAdapter {
       body: JSON.stringify({
         organization: {
           website_url: cleanedDomain,
+          and: [],
         },
-        limit: 1,
       }),
     });
 
@@ -275,6 +285,97 @@ export class GraphiqAdapter implements ProviderAdapter {
     const entities = data.entities || [];
 
     return entities.map(transformOrganization);
+  }
+
+  /**
+   * Search by name (fallback when domain not available).
+   * Pattern from GraphIQ head of product:
+   * POST /organizations/search?limit=25&offset=0&rev_sort_by=num_employees
+   * body: { organization: { name: companyName } }
+   */
+  private async searchByName(name: string): Promise<Record<string, unknown>[]> {
+    const apiKey = this.getApiKey();
+
+    const url = new URL(`${GRAPHIQ_BASE_URL}/organizations/search`);
+    url.searchParams.set('limit', '25');
+    url.searchParams.set('offset', '0');
+    url.searchParams.set('rev_sort_by', 'num_employees');
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        organization: {
+          name,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      // 422 Unprocessable Entity - clean skip (e.g., invalid name format)
+      if (response.status === 422) {
+        return [];
+      }
+      throw new ProviderError(
+        'graphiq',
+        'api_error',
+        `API request failed: ${response.statusText}`,
+        response.status
+      );
+    }
+
+    const data = await response.json();
+    const entities = data.entities || [];
+
+    return entities.map(transformOrganization);
+  }
+
+  /**
+   * Fetch full organization dossier by org_id.
+   * Pattern from GraphIQ head of product:
+   * POST /organizations/search?limit=1
+   * body: { organization: { id: [orgId], and: [] } }
+   */
+  private async fetchDossier(orgId: string): Promise<Record<string, unknown> | null> {
+    const apiKey = this.getApiKey();
+
+    const url = new URL(`${GRAPHIQ_BASE_URL}/organizations/search`);
+    url.searchParams.set('limit', '1');
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        organization: {
+          id: [orgId],
+          and: [],
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new ProviderError(
+        'graphiq',
+        'api_error',
+        `API request failed: ${response.statusText}`,
+        response.status
+      );
+    }
+
+    const data = await response.json();
+    const entities = data.entities || [];
+
+    if (entities.length === 0) {
+      return null;
+    }
+
+    return transformOrganization(entities[0]);
   }
 
   /**
