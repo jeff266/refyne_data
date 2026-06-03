@@ -1932,7 +1932,7 @@ export default function EnrichPage() {
                     gapAnalysis?.total_records || 0
                   ) :
                   gapAnalysis?.total_records || 0
-                ).toLocaleString()} companies →`}
+                ).toLocaleString()} ${objectLabelPlural} →`}
             </PrimaryBtn>
 
             {/* Show message when run is active */}
