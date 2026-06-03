@@ -342,6 +342,8 @@ async function fetchCompaniesForPreview(
   fieldKeys: string[],
   limit: number
 ): Promise<any[]> {
+  // HubSpot Search API has a max limit of 200
+  const cappedLimit = Math.min(limit, 200);
   const properties = ['name', 'domain', ...fieldKeys];
   const companies: any[] = [];
 
@@ -359,7 +361,7 @@ async function fetchCompaniesForPreview(
     const searchRequest = {
       filterGroups,
       properties,
-      limit,
+      limit: cappedLimit,
       sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' as const }],
     };
 
@@ -379,13 +381,13 @@ async function fetchCompaniesForPreview(
     // Fetch from HubSpot list
     for await (const batch of hubspot.getListMembers(source.list_id, properties)) {
       companies.push(...batch);
-      if (companies.length >= limit) break;
+      if (companies.length >= cappedLimit) break;
     }
   } else {
     // All companies
     const searchRequest = {
       properties,
-      limit,
+      limit: cappedLimit,
       sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' as const }],
     };
 
@@ -403,7 +405,7 @@ async function fetchCompaniesForPreview(
     companies.push(...response.results.map((r) => ({ id: r.id, properties: r.properties })));
   }
 
-  return companies.slice(0, limit);
+  return companies.slice(0, cappedLimit);
 }
 
 // ─────────────────────────────────────────────────────────────
