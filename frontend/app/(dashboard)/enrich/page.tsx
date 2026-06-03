@@ -1057,6 +1057,7 @@ export default function EnrichPage() {
       }
 
       // Enqueue preview job
+      console.log('[Preview] Enqueueing with provider:', selectedProviders[0], 'from', selectedProviders);
       const response = await fetch(`/api/enrich/preview/enqueue?objectType=${objectType}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
