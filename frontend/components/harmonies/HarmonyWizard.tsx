@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, ChevronRight, ChevronLeft, Loader2, Check } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn, GhostBtn } from '@/components/refyne';
+import { HubSpotPropertyPicker } from './HubSpotPropertyPicker';
 import {
   DndContext,
   DragOverlay,
@@ -51,6 +52,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<'company' | 'contact'>('company');
   const [field, setField] = useState('');
+  const [fieldLabel, setFieldLabel] = useState('');
 
   // Step 2: Scan
   const [scanning, setScanning] = useState(false);
@@ -493,21 +495,14 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>
                   HubSpot Field *
                 </label>
-                <input
-                  type="text"
+                <HubSpotPropertyPicker
+                  objectType={category}
                   value={field}
-                  onChange={(e) => setField(e.target.value)}
-                  placeholder="e.g., industry"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    fontSize: 13,
-                    fontFamily: F.mono,
-                    background: C.surface,
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 6,
-                    color: C.text,
+                  onChange={(propertyName, propertyLabel) => {
+                    setField(propertyName);
+                    setFieldLabel(propertyLabel);
                   }}
+                  placeholder="Select a HubSpot property..."
                 />
                 <p style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>
                   The internal HubSpot property name (e.g., "industry", "company_size")
