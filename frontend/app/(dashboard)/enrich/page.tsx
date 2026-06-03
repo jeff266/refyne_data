@@ -1093,67 +1093,77 @@ export default function EnrichPage() {
 
   // Handle preview job completion
   useEffect(() => {
-    if (previewJobStatus?.status === 'completed' && previewResultsFromJob) {
-      console.log('[Preview] Job completed, transforming results');
+    if (previewJobStatus?.status === 'completed') {
+      console.log('[Preview] Job completed', {
+        hasResults: !!previewResultsFromJob,
+        resultsLength: previewResultsFromJob?.length,
+      });
 
-      // Transform results from job format to preview format
-      const transformedResults: PreviewFieldResult[] = [];
+      if (previewResultsFromJob && previewResultsFromJob.length > 0) {
+        // Transform results from job format to preview format
+        const transformedResults: PreviewFieldResult[] = [];
 
-      for (const companyResult of previewResultsFromJob as any[]) {
-        for (const field of companyResult.fields) {
-          transformedResults.push({
-            record_id: companyResult.hubspotCompanyId,
-            record_name: companyResult.companyName,
-            field_key: field.fieldKey,
-            field_label: getFieldLabel(field.fieldKey),
-            current_value: field.currentValue,
-            found_value: field.foundValue,
-            found_raw: field.foundValue,
-            mapped_value: field.foundValue,
-            mapping_confidence: field.level === 'high' ? 'high' : field.level === 'medium' ? 'medium' : 'low',
-            source: field.provider,
-            status: field.action as any,
-            harmony_applied: false,
-            harmony_name: null,
-            selected: field.action === 'would_fill',
-            confidence: field.confidence,
-            confidence_level: field.level,
-            evidence: field.evidence,
-            from_cache: false,
-          });
+        for (const companyResult of previewResultsFromJob as any[]) {
+          for (const field of companyResult.fields) {
+            transformedResults.push({
+              record_id: companyResult.hubspotCompanyId,
+              record_name: companyResult.companyName,
+              field_key: field.fieldKey,
+              field_label: getFieldLabel(field.fieldKey),
+              current_value: field.currentValue,
+              found_value: field.foundValue,
+              found_raw: field.foundValue,
+              mapped_value: field.foundValue,
+              mapping_confidence: field.level === 'high' ? 'high' : field.level === 'medium' ? 'medium' : 'low',
+              source: field.provider,
+              status: field.action as any,
+              harmony_applied: false,
+              harmony_name: null,
+              selected: field.action === 'would_fill',
+              confidence: field.confidence,
+              confidence_level: field.level,
+              evidence: field.evidence,
+              from_cache: false,
+            });
+          }
         }
+
+        // Calculate summary
+        const summary = {
+          would_fill: transformedResults.filter(r => r.status === 'would_fill').length,
+          would_override: transformedResults.filter(r => r.status === 'would_override').length,
+          already_set: transformedResults.filter(r => r.status === 'already_set').length,
+          no_data: transformedResults.filter(r => r.status === 'no_data').length,
+          skipped: transformedResults.filter(r => r.status === 'skipped').length,
+          harmonies_applied: 0,
+        };
+
+        setPreviewResults({
+          preview_id: previewJobId!,
+          status: 'completed',
+          records_processed: (previewResultsFromJob as any[]).length,
+          duration_seconds: 0,
+          results: transformedResults,
+          summary,
+        });
+
+        // Auto-select would_fill rows
+        const autoSelectedRows = new Set<string>();
+        transformedResults.forEach(r => {
+          if (r.status === 'would_fill') {
+            autoSelectedRows.add(`${r.record_id}-${r.field_key}`);
+          }
+        });
+        setSelectedRows(autoSelectedRows);
+
+        setShowingPreview(true);
+        setPreviewLoading(false);
+      } else {
+        // Job completed but no results found
+        console.warn('[Preview] Job completed but no results available');
+        alert('Preview completed but no results were found. The job may have failed to cache results.');
+        setPreviewLoading(false);
       }
-
-      // Calculate summary
-      const summary = {
-        would_fill: transformedResults.filter(r => r.status === 'would_fill').length,
-        would_override: transformedResults.filter(r => r.status === 'would_override').length,
-        already_set: transformedResults.filter(r => r.status === 'already_set').length,
-        no_data: transformedResults.filter(r => r.status === 'no_data').length,
-        skipped: transformedResults.filter(r => r.status === 'skipped').length,
-        harmonies_applied: 0,
-      };
-
-      setPreviewResults({
-        preview_id: previewJobId!,
-        status: 'completed',
-        records_processed: (previewResultsFromJob as any[]).length,
-        duration_seconds: 0,
-        results: transformedResults,
-        summary,
-      });
-
-      // Auto-select would_fill rows
-      const autoSelectedRows = new Set<string>();
-      transformedResults.forEach(r => {
-        if (r.status === 'would_fill') {
-          autoSelectedRows.add(`${r.record_id}-${r.field_key}`);
-        }
-      });
-      setSelectedRows(autoSelectedRows);
-
-      setShowingPreview(true);
-      setPreviewLoading(false);
 
     } else if (previewJobStatus?.status === 'failed') {
       console.error('[Preview] Job failed:', previewJobStatus.error);

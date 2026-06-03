@@ -103,9 +103,14 @@ export function useJobResults<T = any>(
 
   useEffect(() => {
     if (!jobId || !status || status.status !== 'completed' || fetchedRef.current) {
+      if (!jobId) console.log('[useJobResults] No jobId');
+      if (!status) console.log('[useJobResults] No status');
+      if (status && status.status !== 'completed') console.log('[useJobResults] Status not completed:', status.status);
+      if (fetchedRef.current) console.log('[useJobResults] Already fetched');
       return;
     }
 
+    console.log('[useJobResults] Fetching results for job:', jobId);
     fetchedRef.current = true;
     setLoading(true);
 
@@ -113,10 +118,13 @@ export function useJobResults<T = any>(
       try {
         const res = await fetch(`/api/jobs/${jobId}/results`);
         if (!res.ok) {
-          throw new Error(`Failed to fetch results: ${res.status}`);
+          const errorText = await res.text();
+          console.error('[useJobResults] Response not OK:', res.status, errorText);
+          throw new Error(`Failed to fetch results: ${res.status} - ${errorText}`);
         }
 
         const data = await res.json();
+        console.log('[useJobResults] Got results:', { count: data.results?.length, data });
         setResults(data.results);
         setError(null);
       } catch (err) {
