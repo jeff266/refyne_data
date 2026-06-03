@@ -2136,7 +2136,18 @@ export default function EnrichPage() {
                 <input
                   type="number"
                   value={testRecordLimit}
-                  onChange={(e) => setTestRecordLimit(Math.min(200, Math.max(1, parseInt(e.target.value) || 10)))}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (!isNaN(val)) {
+                      setTestRecordLimit(Math.min(200, Math.max(1, val)));
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Ensure valid value on blur if user left it empty
+                    if (!e.target.value) {
+                      setTestRecordLimit(10);
+                    }
+                  }}
                   disabled={!testMode}
                   min={1}
                   max={200}
