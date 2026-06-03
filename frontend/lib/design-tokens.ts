@@ -50,10 +50,9 @@ export const NAV = [
   { id: 'dedup',       label: 'Dedup',         icon: 'GitMerge' },
   { divider: true },
   { group: 'ENRICH' },
+  { id: 'enrich',      label: 'Enrich',        icon: 'Search' },
   // Hidden: Prospect is a future product. Quarantine is undefined scope.
   // { id: 'prospect',    label: 'Prospect',      icon: 'Users' },
-  { id: 'arrangements', label: 'Arrangements',  icon: 'Workflow' },
-  // Hidden: Prospect is a future product. Quarantine is undefined scope.
   // { id: 'quarantine',  label: 'Quarantine',    icon: 'Shield' },
   { divider: true },
   { group: 'CONFIGURE' },
@@ -74,9 +73,9 @@ export const PAGE_META: Record<string, { label: string; action: string | null }>
   // prospect:     { label: 'Prospect',       action: null },
   normalize:    { label: 'Normalize',      action: null },
   dedup:        { label: 'Dedup',          action: 'Run scan' },
+  enrich:       { label: 'Enrich',         action: null },
   // Hidden: Prospect is a future product. Quarantine is undefined scope.
   // quarantine:   { label: 'Quarantine',     action: null },
-  arrangements: { label: 'Arrangements',   action: 'New arrangement' },
   harmonies:    { label: 'Harmonies',      action: null },
   connections:  { label: 'Connections',    action: 'Add connection' },
   mappings:     { label: 'Field Mappings', action: null },
