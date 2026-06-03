@@ -7,15 +7,15 @@
 export function getEnrichableFields(objectType: string): string[] {
   if (objectType === 'contact') {
     return [
-      'firstname',
-      'lastname',
-      'email',
-      'phone',
-      'jobtitle',
-      'company',
-      'city',
-      'state',
-      'country'
+      'jobtitle',       // Job title (critical for ICP scoring)
+      'company',        // Company name text field
+      'phone',          // Direct dial
+      'mobilephone',    // Mobile number
+      'linkedin',       // LinkedIn personal URL
+      'city',           // Location targeting
+      'state',          // Location targeting
+      'country',        // Location targeting
+      'email',          // Email (fill only, never overwrite)
     ];
   }
 
