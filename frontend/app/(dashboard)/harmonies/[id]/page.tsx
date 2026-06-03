@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, StatCard, Toggle, PrimaryBtn, GhostBtn, Chip } from '@/components/refyne';
 import { ReferenceDataTable } from '@/components/harmonies/ReferenceDataTable';
+import { SuggestionQueue } from '@/components/harmonies/SuggestionQueue';
 
 interface HarmonyConfig {
   id: string;
@@ -518,6 +519,13 @@ export default function HarmonyDetailPage() {
               </tbody>
             </table>
           </div>
+        </Card>
+      )}
+
+      {/* AI Suggestions (lookup only) */}
+      {config.transformType === 'lookup' && (
+        <Card style={{ marginBottom: 24 }}>
+          <SuggestionQueue harmonyId={harmonyId} />
         </Card>
       )}
 

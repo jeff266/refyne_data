@@ -7,6 +7,7 @@ import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, Chip, PrimaryBtn, GhostBtn, Tooltip } from '@/components/refyne';
 import { ReferenceDataTable } from '@/components/harmonies/ReferenceDataTable';
 import { HarmonyWizard } from '@/components/harmonies/HarmonyWizard';
+import { TaxonomyWizard } from '@/components/harmonies/TaxonomyWizard';
 import { useObjectType } from '@/hooks/useObjectType';
 
 interface HarmonyItem {
@@ -384,6 +385,7 @@ export default function HarmoniesPage() {
   const [expandedHarmonyId, setExpandedHarmonyId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [taxonomyWizardOpen, setTaxonomyWizardOpen] = useState(false);
 
   // Fetch harmonies and enabled state
   const fetchHarmonies = useCallback(async () => {
@@ -559,6 +561,9 @@ export default function HarmoniesPage() {
         <PrimaryBtn onClick={() => setWizardOpen(true)}>
           <Plus size={12} /> New harmony
         </PrimaryBtn>
+        <PrimaryBtn onClick={() => setTaxonomyWizardOpen(true)}>
+          <Plus size={12} /> Add Taxonomy
+        </PrimaryBtn>
         <GhostBtn onClick={() => alert('YAML import coming soon. You can currently manage reference data inline by clicking the "Data" button on lookup harmonies.')}>
           Import YAML
         </GhostBtn>
@@ -618,6 +623,16 @@ export default function HarmoniesPage() {
           setWizardOpen(false);
         }}
       />
+
+      {/* Taxonomy Wizard */}
+      {taxonomyWizardOpen && (
+        <TaxonomyWizard
+          onClose={() => {
+            setTaxonomyWizardOpen(false);
+            fetchHarmonies(); // Refresh the harmonies list
+          }}
+        />
+      )}
     </div>
   );
 }
