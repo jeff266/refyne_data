@@ -2656,7 +2656,7 @@ export default function EnrichPage() {
 
               {/* Summary */}
               <div style={{ fontSize: 13, color: C.text2, marginBottom: 20 }}>
-                {runProgress.records_processed.toLocaleString()} companies processed{runProgress.duration && ` in ${Math.floor(runProgress.duration / 60)}m ${runProgress.duration % 60}s`}
+                {runProgress.records_processed.toLocaleString()} {objectLabelPlural} processed{runProgress.duration && ` in ${Math.floor(runProgress.duration / 60)}m ${runProgress.duration % 60}s`}
               </div>
 
               {/* Field breakdown */}
@@ -2752,7 +2752,7 @@ export default function EnrichPage() {
 
               {/* Summary */}
               <div style={{ fontSize: 13, color: C.text2, marginBottom: 20 }}>
-                {runProgress.records_processed.toLocaleString()} companies processed before cancellation
+                {runProgress.records_processed.toLocaleString()} {objectLabelPlural} processed before cancellation
               </div>
 
               {/* Field breakdown */}
@@ -3074,10 +3074,10 @@ export default function EnrichPage() {
                   fontSize: 13,
                   color: C.text
                 }}>
-                  <strong>Provider returned no data</strong> for these {previewResults.records_processed} companies.
+                  <strong>Provider returned no data</strong> for these {previewResults.records_processed} {objectLabelPlural}.
                   {previewResults.summary.skipped > 0 && (
                     <div style={{ marginTop: 8, color: C.text2 }}>
-                      {previewResults.summary.skipped} companies have no domain or name in HubSpot and cannot be enriched.
+                      {previewResults.summary.skipped} {objectLabelPlural} have no domain or name in HubSpot and cannot be enriched.
                     </div>
                   )}
                 </div>
@@ -3200,7 +3200,7 @@ export default function EnrichPage() {
                   Data gaps in your HubSpot
                   {loadingState === 'streaming' && (
                     <span style={{ marginLeft: 12, fontSize: 11, color: C.amber, fontWeight: 400 }}>
-                      Scanning... {scannedCount.toLocaleString()} companies
+                      Scanning... {scannedCount.toLocaleString()} {objectLabelPlural}
                     </span>
                   )}
                   {fromCache && lastScannedAt && (

@@ -102,7 +102,8 @@ async function createScanRun(
   orgId: string,
   portalId: string,
   connectionId: string,
-  scanType: 'full' | 'incremental'
+  scanType: 'full' | 'incremental',
+  objectType: 'company' | 'contact' | 'deal' = 'company'
 ): Promise<ScanRun> {
   if (!supabase) {
     throw new Error('Supabase not configured');
@@ -115,6 +116,7 @@ async function createScanRun(
       portal_id: portalId,
       connection_id: connectionId,
       scan_type: scanType,
+      object_type: objectType,
       status: 'running',
       started_at: new Date().toISOString(),
     })
@@ -1154,7 +1156,7 @@ export async function runDedupScan(
   console.log(`[incremental-scanner] Scan type: ${scanType} (first=${isFirstScan}, sunday=${isSundayFullScan}, forced=${forceFullScan}, objectType=${objectType})`);
 
   // Create scan run record
-  const scanRun = await createScanRun(orgId, portalId, connectionId, scanType);
+  const scanRun = await createScanRun(orgId, portalId, connectionId, scanType, objectType);
 
   try {
     const result = scanType === 'full'
