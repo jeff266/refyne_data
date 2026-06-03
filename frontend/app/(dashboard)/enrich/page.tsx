@@ -2218,7 +2218,7 @@ export default function EnrichPage() {
 
               {benchmarkSampleSize > 0 && (
                 <div style={{ fontSize: 12, color: C.text2, marginBottom: 16 }}>
-                  Testing {benchmarkSampleSize} companies (from {benchmarkTotalMissing.toLocaleString()} with gaps)
+                  Testing {benchmarkSampleSize} {objectLabelPlural} (from {benchmarkTotalMissing.toLocaleString()} with gaps)
                 </div>
               )}
 
@@ -2391,9 +2391,9 @@ export default function EnrichPage() {
 
                     {/* Summary */}
                     <div style={{ marginTop: 12, fontSize: 11, color: C.text2, textAlign: 'center' }}>
-                      <strong>{benchmarkResults.overlap.apollo_and_refyne}</strong> companies matched by both providers
+                      <strong>{benchmarkResults.overlap.apollo_and_refyne}</strong> {objectLabelPlural} matched by both providers
                       <br />
-                      <strong>{benchmarkResults.overlap.apollo_only + benchmarkResults.overlap.refyne_only}</strong> additional companies covered by using both
+                      <strong>{benchmarkResults.overlap.apollo_only + benchmarkResults.overlap.refyne_only}</strong> additional {objectLabelPlural} covered by using both
                     </div>
                   </div>
                 </div>
@@ -2492,7 +2492,7 @@ export default function EnrichPage() {
                     textAlign: 'center'
                   }}>
                     <div style={{ fontSize: 13, color: C.text2, marginBottom: 12 }}>
-                      Fetching companies from HubSpot...
+                      Fetching {objectLabelPlural} from HubSpot...
                     </div>
                     <div style={{
                       height: 4,
@@ -3423,7 +3423,7 @@ export default function EnrichPage() {
                     (gapAnalysis?.total_records || 0)
                   ).toLocaleString()}
                 </strong>{' '}
-                companies
+                {objectLabelPlural}
               </div>
               <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
                 <strong style={{ color: C.text2 }}>Fields:</strong> {selectedFields.map(f => getFieldLabel(f)).join(', ')}
@@ -3488,7 +3488,7 @@ export default function EnrichPage() {
                     gapAnalysis?.total_records || 0
                   ) :
                   (gapAnalysis?.total_records || 0)
-                ).toLocaleString()} companies →
+                ).toLocaleString()} {objectLabelPlural} →
               </PrimaryBtn>
             </div>
           </div>
