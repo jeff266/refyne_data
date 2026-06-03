@@ -25,6 +25,7 @@ export interface PreviewJobData {
   runId: string;
   orgId: string;
   userId: string;
+  objectType: string;
   source: {
     type: 'gaps' | 'all' | 'list';
     fields?: string[];
@@ -352,6 +353,7 @@ export interface ApplyJobData {
   runId: string;
   orgId: string;
   userId: string;
+  objectType: string;
   previewJobId: string;
   selectedRecordIds: string[];
 }
