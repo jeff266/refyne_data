@@ -180,6 +180,7 @@ export async function POST(req: NextRequest) {
         arrangement_id: null,  // Enrich page runs have no parent arrangement
         run_type: 'live',
         status: 'completed',
+        object_type: 'company',  // Default to company for backward compatibility
         total_records: companyUpdates.size,  // Unique companies processed
         processed_records: companyUpdates.size,
         successful_records: results.length,

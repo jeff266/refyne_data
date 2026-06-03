@@ -76,6 +76,7 @@ async function main() {
       org_id: ORG_ID,
       status: 'pending',
       mode: 'live',
+      object_type: 'company',  // Default to company for backward compatibility
       total_records: 5,
       estimated_credits: 5,
     })

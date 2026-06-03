@@ -79,6 +79,7 @@ export async function POST(
         org_id: ctx.orgId,
         run_type: 'live',
         status: 'queued',
+        object_type: 'company',  // Default to company for backward compatibility
         source_snapshot: {
           type: arrangement.source_type,
           total_records: totalRecords,

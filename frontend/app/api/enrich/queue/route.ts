@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
         source_type: body.source.type,
         source_config: body.source,
         status: 'queued',
+        object_type: 'company',  // Default to company for backward compatibility
         total_records: body.record_limit,
         initiated_by: ctx.userId,
       })

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn, CustomDropdown } from '@/components/refyne';
 import type { CustomDropdownOption } from '@/components/refyne';
@@ -161,6 +162,7 @@ interface BenchmarkRecommendation {
 export default function EnrichPage() {
   const router = useRouter();
   const enrichRunContext = useEnrichRun();
+  const { orgId } = useAuth();
   const [objectType] = useObjectType();
   const objectLabel = objectType === 'contact' ? 'contact' : 'company';
   const objectLabelPlural = objectType === 'contact' ? 'contacts' : 'companies';
@@ -271,7 +273,16 @@ export default function EnrichPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
 
   // Fetch gap analysis on mount using streaming
+  // Refetch when orgId or objectType changes (e.g., when user switches workspaces)
   useEffect(() => {
+    // Skip if orgId not yet available
+    if (!orgId) return;
+
+    // Reset loading state when refetching
+    setLoading(true);
+    setLoadingState('initial');
+    setGapAnalysis(null);
+
     const es = new EventSource(`/api/enrich/gaps/stream?objectType=${objectType}`);
 
     es.onmessage = (event) => {
@@ -333,7 +344,31 @@ export default function EnrichPage() {
     };
 
     return () => es.close();
-  }, []);
+  }, [orgId, objectType]);
+
+  // Clear stale data when org changes
+  useEffect(() => {
+    if (!orgId) return;
+
+    // Clear localStorage for active runs from previous org
+    const stored = localStorage.getItem('refyne_active_run');
+    if (stored) {
+      console.log('[Enrich] Org changed, clearing stale run from localStorage');
+      localStorage.removeItem('refyne_active_run');
+
+      // Reset run state
+      setRunStatus('idle');
+      setArrangementId(null);
+      setRunId(null);
+      enrichRunContext.setRunState({
+        isRunning: false,
+        arrangementId: null,
+        runId: null,
+        total: 0,
+        processed: 0,
+      });
+    }
+  }, [orgId]);
 
   // Check localStorage for active run on mount and verify it's still running
   useEffect(() => {
@@ -597,9 +632,22 @@ export default function EnrichPage() {
     fetchLifecycleStages();
     fetchOwners();
     fetchIndustries();
-    fetchEnrichmentHistory();
     fetchPortalId();
   }, []);
+
+  // Fetch enrichment history when objectType changes
+  useEffect(() => {
+    fetchEnrichmentHistory();
+  }, [objectType]);
+
+  // Reset selected fields when objectType changes to prevent company fields showing on contact view
+  useEffect(() => {
+    if (objectType === 'contact') {
+      setSelectedFields([]);
+    } else {
+      setSelectedFields(['industry', 'numberofemployees']);
+    }
+  }, [objectType]);
 
   // Fetch harmony preview when selected fields change
   useEffect(() => {
@@ -624,7 +672,7 @@ export default function EnrichPage() {
     }
 
     fetchHarmonyPreview();
-  }, [selectedFields]);
+  }, [selectedFields, objectType]);
 
   // Fetch preview count when segment filters change (debounced)
   useEffect(() => {
@@ -664,7 +712,7 @@ export default function EnrichPage() {
     }, 400);
 
     return () => clearTimeout(timeoutId);
-  }, [companyScope, lifecycleStage, ownerId, selectedIndustries, selectedFields]);
+  }, [companyScope, lifecycleStage, ownerId, selectedIndustries, selectedFields, objectType]);
 
   // Helper function to format time ago
   function formatTimeAgo(isoDate: string): string {
