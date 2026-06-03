@@ -15,11 +15,6 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['lib/**/*.test.ts', 'lib/**/*.spec.ts'],
-    env: {
-      // Load from .env.local for local development tests
-      // This ensures provider API keys are available during testing
-    },
-    envDir: __dirname,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
