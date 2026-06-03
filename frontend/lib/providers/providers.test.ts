@@ -221,7 +221,7 @@ describe('Provider Interface Compliance', () => {
     new ApolloAdapter('test-apollo-key'),
     new ZoomInfoAdapter(),
     new ClayAdapter(),
-    new GraphiqAdapter(),
+    new GraphiqAdapter(process.env.GRAPHIQ_API_KEY),
     new YelpAdapter(),
   ];
 
@@ -540,7 +540,7 @@ describe('ClayAdapter', () => {
 // ─────────────────────────────────────────────────────────────
 
 describe('GraphiqAdapter', () => {
-  const adapter = new GraphiqAdapter();
+  const adapter = new GraphiqAdapter(process.env.GRAPHIQ_API_KEY);
 
   it('should have correct id and name', () => {
     expect(adapter.id).toBe('graphiq');
@@ -761,7 +761,7 @@ describe('Response Shape Validation', () => {
       },
       { adapter: new ClayAdapter(), mockData: null }, // Uses mock brief
       {
-        adapter: new GraphiqAdapter(),
+        adapter: new GraphiqAdapter(process.env.GRAPHIQ_API_KEY),
         mockData: { entities: [{ name: 'Test', website: 'test.com' }] },
       },
       {
