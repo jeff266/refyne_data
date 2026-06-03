@@ -105,7 +105,7 @@ export function startTaxonomySuggestionWorker() {
 
       try {
         // Get HubSpot client
-        const accessToken = await getAccessToken(connectionId, orgId);
+        const accessToken = await getAccessToken(orgId);
         if (!accessToken) {
           throw new Error('Failed to get HubSpot access token');
         }

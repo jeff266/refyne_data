@@ -260,8 +260,8 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                   style={{
                     padding: '16px 20px',
                     marginBottom: 12,
-                    background: classificationType === option.value ? C.surface2 : C.surface,
-                    border: `1px solid ${classificationType === option.value ? C.accent : C.border}`,
+                    background: classificationType === option.value ? C.indigoDim : C.surface,
+                    border: `1px solid ${classificationType === option.value ? C.indigo : C.border}`,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -272,8 +272,8 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                     width: 16,
                     height: 16,
                     borderRadius: '50%',
-                    border: `2px solid ${classificationType === option.value ? C.accent : C.border}`,
-                    background: classificationType === option.value ? C.accent : 'transparent',
+                    border: `2px solid ${classificationType === option.value ? C.indigo : C.border}`,
+                    background: classificationType === option.value ? C.indigo : 'transparent',
                   }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>
@@ -427,8 +427,8 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                         }}
                         style={{
                           padding: 20,
-                          background: C.surface2,
-                          border: `1px solid ${selectedPack?.id === pack.id ? C.accent : C.border}`,
+                          background: C.indigoDim,
+                          border: `1px solid ${selectedPack?.id === pack.id ? C.indigo : C.border}`,
                           cursor: 'pointer',
                         }}
                       >
@@ -441,7 +441,7 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                         {selectedPack?.id === pack.id && (
                           <div style={{
                             padding: '6px 12px',
-                            background: C.accent,
+                            background: C.indigo,
                             color: '#fff',
                             fontSize: 12,
                             fontWeight: 500,
@@ -480,7 +480,7 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                   onClick={() => setValueSource('field')}
                   style={{
                     padding: '12px 20px',
-                    background: valueSource === 'field' ? C.surface2 : 'transparent',
+                    background: valueSource === 'field' ? C.indigoDim : 'transparent',
                     border: `1px solid ${C.border}`,
                     color: C.text,
                     fontSize: 13,
@@ -500,7 +500,7 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                   onClick={() => setValueSource('blank')}
                   style={{
                     padding: '12px 20px',
-                    background: valueSource === 'blank' ? C.surface2 : 'transparent',
+                    background: valueSource === 'blank' ? C.indigoDim : 'transparent',
                     border: `1px solid ${C.border}`,
                     color: C.text,
                     fontSize: 13,
@@ -653,7 +653,7 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                   }}
                   style={{
                     padding: '10px 20px',
-                    background: C.accent,
+                    background: C.indigo,
                     border: 'none',
                     color: '#fff',
                     fontSize: 14,
@@ -725,7 +725,7 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
               disabled={!canProceed() || (currentStep === 4 && activating)}
               style={{
                 padding: '10px 20px',
-                background: canProceed() && !(currentStep === 4 && activating) ? C.accent : C.surface3,
+                background: canProceed() && !(currentStep === 4 && activating) ? C.indigo : C.hover,
                 border: 'none',
                 color: canProceed() && !(currentStep === 4 && activating) ? '#fff' : C.text3,
                 fontSize: 14,

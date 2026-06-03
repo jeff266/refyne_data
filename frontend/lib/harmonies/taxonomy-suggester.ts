@@ -282,9 +282,9 @@ export async function runTaxonomySuggester(
     .select('canonical_value')
     .eq('table_name', harmonyId);
 
-  const canonicalValues = [
-    ...new Set((refData ?? []).map((r) => r.canonical_value)),
-  ];
+  const canonicalValues = Array.from(
+    new Set((refData ?? []).map((r) => r.canonical_value))
+  );
 
   if (canonicalValues.length === 0) {
     return { found: 0, stored: 0 };
