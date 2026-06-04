@@ -1,5 +1,50 @@
 # Enrichment Switcher - Claude Context
 
+## Security Checklist for New Tables
+
+**Before creating any new table in a migration, follow this checklist:**
+
+- [ ] **If table has org_id column:** Enable RLS in the same migration
+  ```sql
+  -- RLS: Required if table has org_id column
+  -- Pattern: CREATE POLICY {table}_org_isolation ON {table}
+  --   USING (org_id = (auth.jwt() ->> 'org_id'));
+
+  ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY;
+
+  CREATE POLICY {table_name}_org_isolation ON {table_name}
+    FOR ALL
+    USING (org_id = (auth.jwt() ->> 'org_id'))
+    WITH CHECK (org_id = (auth.jwt() ->> 'org_id'));
+  ```
+
+- [ ] **If table is global (no org_id):** Add read-only RLS for defense in depth
+  ```sql
+  ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY;
+
+  CREATE POLICY {table_name}_read_all ON {table_name}
+    FOR SELECT
+    USING (true);
+  ```
+
+- [ ] **Verify all queries use supabaseAdmin:** Search codebase for non-admin access
+  ```bash
+  grep -rn "supabase\." app/ lib/ --include="*.ts" | grep -v "supabaseAdmin" | grep "{table_name}"
+  ```
+
+- [ ] **Run RLS verification query after applying migration:**
+  ```sql
+  SELECT tablename, rowsecurity
+  FROM pg_tables
+  WHERE schemaname = 'public'
+  AND tablename = '{table_name}';
+  -- Should return: rowsecurity = true
+  ```
+
+**Why this matters:** Migration 077 (June 4, 2026) fixed 9 org-specific tables that shipped without RLS, including `dedup_policies` which was added just hours before the vulnerability was discovered. RLS must be applied in the same migration that creates the table.
+
+---
+
 ## HubSpot Portals
 
 ### Frontera Health
