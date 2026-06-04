@@ -3,6 +3,12 @@ const { withSentryConfig } = require('@sentry/nextjs');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    outputFileTracingIncludes: {
+      '/': ['./lib/harmonies/library/*.yaml'],
+      '/api/**/*': ['./lib/harmonies/library/*.yaml'],
+    },
+  },
 }
 
 module.exports = withSentryConfig(
