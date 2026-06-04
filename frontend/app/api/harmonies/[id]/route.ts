@@ -1,6 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import type { ConditionGroups } from '@/lib/harmonies/condition-evaluator';
+
+/**
+ * Validate condition_groups JSONB structure.
+ * Ensures required fields are present and types are correct.
+ */
+function validateConditionGroups(groups: any): void {
+  if (groups === null) return; // NULL is valid (runs on all records)
+
+  if (typeof groups !== 'object' || Array.isArray(groups)) {
+    throw new Error('condition_groups must be an object or null');
+  }
+
+  if (!['all', 'any'].includes(groups.match)) {
+    throw new Error('condition_groups.match must be "all" or "any"');
+  }
+
+  if (!Array.isArray(groups.groups)) {
+    throw new Error('condition_groups.groups must be an array');
+  }
+
+  for (const group of groups.groups) {
+    if (typeof group !== 'object' || !group) {
+      throw new Error('Each group must be an object');
+    }
+
+    if (!['all', 'any'].includes(group.match)) {
+      throw new Error('group.match must be "all" or "any"');
+    }
+
+    if (!Array.isArray(group.conditions)) {
+      throw new Error('group.conditions must be an array');
+    }
+
+    for (const condition of group.conditions) {
+      if (typeof condition !== 'object' || !condition) {
+        throw new Error('Each condition must be an object');
+      }
+
+      // Required fields
+      if (typeof condition.field !== 'string' || !condition.field) {
+        throw new Error('condition.field must be a non-empty string');
+      }
+
+      if (typeof condition.fieldLabel !== 'string') {
+        throw new Error('condition.fieldLabel must be a string');
+      }
+
+      if (typeof condition.fieldType !== 'string' || !condition.fieldType) {
+        throw new Error('condition.fieldType must be a non-empty string');
+      }
+
+      if (typeof condition.operator !== 'string' || !condition.operator) {
+        throw new Error('condition.operator must be a non-empty string');
+      }
+
+      // value can be any type (string, number, array, object, null)
+      // No validation needed
+    }
+  }
+}
 
 /**
  * GET /api/harmonies/[id]
@@ -71,6 +132,7 @@ export async function GET(
       isPreset: harmony.is_preset || false,
       isArchived: harmony.is_archived || false,
       writePolicy: harmony.write_policy || 'fill_empty',
+      conditionGroups: harmony.condition_groups || null, // NEW: Conditional execution
       fieldAssignments: (assignments || []).map(a => ({
         canonicalField: a.canonical_field,
         hubspotProperty: a.hubspot_property,
@@ -112,7 +174,7 @@ export async function PATCH(
 
     const { id } = params;
     const body = await req.json();
-    const { name, description, writePolicy, isActive, isArchived } = body;
+    const { name, description, writePolicy, isActive, isArchived, conditionGroups } = body;
 
     // Build update object with only allowed fields
     const updates: any = {};
@@ -121,6 +183,19 @@ export async function PATCH(
     if (writePolicy !== undefined) updates.write_policy = writePolicy;
     if (isActive !== undefined) updates.is_active = isActive;
     if (isArchived !== undefined) updates.is_archived = isArchived;
+
+    // Validate and add condition_groups if provided
+    if (conditionGroups !== undefined) {
+      try {
+        validateConditionGroups(conditionGroups);
+        updates.condition_groups = conditionGroups;
+      } catch (validationError: any) {
+        return NextResponse.json(
+          { error: `Invalid condition_groups: ${validationError.message}` },
+          { status: 400 }
+        );
+      }
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(

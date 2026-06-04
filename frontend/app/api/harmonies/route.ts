@@ -92,6 +92,7 @@ export async function GET(request: NextRequest) {
         outputFormatsAvailable: h.output_formats_available || [],
         transformType: h.transform_type || 'lookup',
         referenceTable: h.reference_table,
+        conditionGroups: h.condition_groups || null, // NEW: For displaying condition badge
       };
     });
 
