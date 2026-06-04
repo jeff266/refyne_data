@@ -32,7 +32,7 @@ export function WizardShell({
   children,
 }: WizardShellProps) {
   const showFooter = currentStep < 5;
-  const isActivateStep = currentStep === 4 || currentStep === 2.75;
+  const isActivateStep = currentStep === 4 || currentStep === 2.75 || currentStep === 3.75;
 
   return (
     <div style={{
@@ -67,7 +67,7 @@ export function WizardShell({
               Add Taxonomy Classification
             </h2>
             <div style={{ fontSize: 13, color: C.text3 }}>
-              Step {Math.floor(currentStep)} of 5
+              Step {currentStep >= 3.5 && currentStep < 4 ? 3 : Math.floor(currentStep)} of 5
             </div>
           </div>
           <button
@@ -140,7 +140,7 @@ export function WizardShell({
               }}
             >
               {isActivateStep ? (activating ? 'Activating...' : 'Activate') : 'Next'}
-              {currentStep < 4 && currentStep !== 2.75 && <ChevronRight size={16} />}
+              {currentStep < 4 && currentStep !== 2.75 && currentStep !== 3.75 && <ChevronRight size={16} />}
             </button>
           </div>
         )}

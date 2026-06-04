@@ -8,6 +8,8 @@ import { Screen2FieldMapping } from './screens/Screen2FieldMapping';
 import { Screen2p5TransformType } from './screens/Screen2p5TransformType';
 import { Screen2p75FormatFunction } from './screens/Screen2p75FormatFunction';
 import { Screen3ValueSource } from './screens/Screen3ValueSource';
+import { Screen3bReadingValues } from './screens/Screen3bReadingValues';
+import { Screen3cReviewCanonicals } from './screens/Screen3cReviewCanonicals';
 import { Screen4ReviewMappings } from './screens/Screen4ReviewMappings';
 import { Screen5Activated } from './screens/Screen5Activated';
 
@@ -64,6 +66,27 @@ export function TaxonomyWizard({ onClose }: TaxonomyWizardProps) {
           onValueSourceChange={w.setValueSource}
           onPackSelect={w.setSelectedPack}
           onReadFromFieldChange={setFieldPair(w.setReadFromField, w.setReadFromFieldLabel)}
+        />
+      )}
+      {w.currentStep === 3.5 && (
+        <Screen3bReadingValues
+          objectType="company"
+          fieldLabel={w.readFromFieldLabel}
+        />
+      )}
+      {w.currentStep === 3.75 && (
+        <Screen3cReviewCanonicals
+          values={w.readFieldValues}
+          totalRecords={w.readFieldMetadata?.totalRecords || 0}
+          blankCount={w.readFieldMetadata?.blankCount || 0}
+          objectType="company"
+          fieldLabel={w.readFromFieldLabel}
+          onToggle={w.toggleValueSelection}
+          onSelectAll={() => w.setReadFieldValues(vals => vals.map(v => ({ ...v, isSelected: true })))}
+          onDeselectAll={() => w.setReadFieldValues(vals => vals.map(v => ({ ...v, isSelected: false })))}
+          onRename={w.renameValueAtIndex}
+          onRenamingIndexChange={w.setRenamingIndex}
+          renamingIndex={w.renamingIndex}
         />
       )}
       {w.currentStep === 4 && (

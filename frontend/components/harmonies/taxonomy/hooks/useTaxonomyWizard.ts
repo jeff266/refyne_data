@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { addToast } from '@/components/ui/toast';
 
-export type WizardStep = 1 | 2 | 2.5 | 2.75 | 3 | 4 | 5;
+export type WizardStep = 1 | 2 | 2.5 | 2.75 | 3 | 3.5 | 3.75 | 4 | 5;
 export type ClassificationType = 'industry' | 'sub-industry' | 'market-segment' | 'custom';
 export type TransformType = 'format' | 'lookup' | null;
 
@@ -316,6 +316,12 @@ export function useTaxonomyWizard(): TaxonomyWizardState {
         return selectedFormatFunction !== null;
       case 3:
         return valueSource === 'blank' || (valueSource === 'pack' && !!selectedPack) || (valueSource === 'field' && !!readFromField);
+      case 3.5:
+        // Loading screen - can't proceed manually (handled by API call)
+        return false;
+      case 3.75:
+        // Review canonicals - must have at least one selected
+        return readFieldValues.filter(v => v.isSelected).length > 0;
       case 4:
         if (valueSource === 'pack') {
           return packEntries.length > 0;
@@ -341,6 +347,8 @@ export function useTaxonomyWizard(): TaxonomyWizardState {
     } else if (currentStep === 2.75) {
       handleActivate();
     } else if (currentStep === 3 && valueSource === 'field' && readFromField) {
+      // Show loading screen
+      setCurrentStep(3.5 as WizardStep);
       setLoadingFieldValues(true);
 
       try {
@@ -369,16 +377,22 @@ export function useTaxonomyWizard(): TaxonomyWizardState {
           uniqueValueCount: data.uniqueValueCount,
         });
 
-        setCurrentStep(4 as WizardStep);
+        // Navigate to review screen
+        setCurrentStep(3.75 as WizardStep);
       } catch (error) {
         console.error('Failed to read field values:', error);
         addToast('error', 'Failed to read field values from HubSpot');
+        // Go back to value source screen on error
+        setCurrentStep(3);
       } finally {
         setLoadingFieldValues(false);
       }
       return;
     } else if (currentStep === 3) {
       setCurrentStep(4);
+    } else if (currentStep === 3.75) {
+      // From review canonicals, go to step 4 (but skip it and go straight to activation)
+      handleActivate();
     } else if (currentStep === 4) {
       handleActivate();
     } else if (canProceed()) {
@@ -397,10 +411,19 @@ export function useTaxonomyWizard(): TaxonomyWizardState {
         prevStep = 2.75;
       } else if (currentStep === 3 && transformType === 'lookup') {
         prevStep = 2.5;
+      } else if (currentStep === 3.5) {
+        // From loading screen, go back to value source
+        prevStep = 3;
+      } else if (currentStep === 3.75) {
+        // From review canonicals, go back to value source (skip loading screen)
+        prevStep = 3;
       } else if (currentStep === 4) {
         prevStep = 3;
       } else if (currentStep === 5 && transformType === 'format') {
         prevStep = 2.75;
+      } else if (currentStep === 5 && transformType === 'lookup' && valueSource === 'field') {
+        // From activation screen, go back to review canonicals if using field source
+        prevStep = 3.75;
       } else if (currentStep === 5 && transformType === 'lookup') {
         prevStep = 4;
       } else {
