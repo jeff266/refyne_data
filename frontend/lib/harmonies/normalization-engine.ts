@@ -12,6 +12,11 @@
 import { supabase } from '@/lib/db/supabase';
 import { extractHarmonyOutput, getEffectiveOutputFormat } from './output';
 import { getFieldAssignments } from './field-assignments';
+import {
+  evaluateConditionGroups,
+  getConditionFields,
+  type ConditionGroups,
+} from './condition-evaluator';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -35,6 +40,7 @@ export interface Harmony {
   outputFormat?: string;
   outputFormatsAvailable?: Array<{ key: string; label: string; default?: boolean }>;
   isPreset?: boolean;
+  conditionGroups?: ConditionGroups | null; // NEW: Conditional execution
 }
 
 export interface NormalizationResult {
@@ -144,6 +150,35 @@ async function getDisplayLabel(field: string, value: string): Promise<string> {
   return value;
 }
 
+// ── Required Properties Helper ─────────────────────────────────────
+
+/**
+ * Collect all HubSpot properties needed for harmony execution.
+ * Includes both write target fields AND condition source fields.
+ * Used to minimize API payload size by only fetching required properties.
+ */
+export function getRequiredProperties(harmonies: Harmony[]): Set<string> {
+  const properties = new Set<string>();
+
+  for (const harmony of harmonies) {
+    // Add write target field (extract property name from canonical field)
+    if (harmony.field) {
+      const propertyName = harmony.field.includes('.')
+        ? harmony.field.split('.').pop()
+        : harmony.field;
+      if (propertyName) properties.add(propertyName);
+    }
+
+    // Add condition source fields
+    if (harmony.conditionGroups) {
+      const conditionFields = getConditionFields(harmony.conditionGroups);
+      conditionFields.forEach(field => properties.add(field));
+    }
+  }
+
+  return properties;
+}
+
 // ── Field Assignment Helper ────────────────────────────────────────
 
 /**
@@ -192,6 +227,19 @@ export async function applyLookupHarmony(
     throw new Error('Supabase client not configured');
   }
 
+  // CONDITIONAL EXECUTION: Filter records by condition groups
+  // NULL conditionGroups = run on all records (existing behavior)
+  const eligibleRecords = harmony.conditionGroups
+    ? records.filter(record =>
+        evaluateConditionGroups(record, harmony.conditionGroups)
+      )
+    : records;
+
+  if (eligibleRecords.length === 0) {
+    console.log(`[Normalization Engine] Harmony ${harmony.id}: 0 records matched conditions`);
+    return [];
+  }
+
   // Get HubSpot property name from field assignments
   const hubspotProperty = await getHubSpotProperty(harmony, orgId);
   if (!hubspotProperty) {
@@ -199,10 +247,10 @@ export async function applyLookupHarmony(
     return [];
   }
 
-  // 1. Collect unique non-empty field values
+  // 1. Collect unique non-empty field values (from eligible records only)
   const uniqueValues = Array.from(
     new Set(
-      records
+      eligibleRecords
         .map((r) => r[hubspotProperty])
         .filter((v) => v && typeof v === 'string' && v.trim().length > 0)
     )
@@ -250,10 +298,10 @@ export async function applyLookupHarmony(
   cached.forEach((value, key) => allMappings.set(key, value));
   freshMappings.forEach((value, key) => allMappings.set(key, value));
 
-  // 5. Generate change list
+  // 5. Generate change list (only for eligible records)
   const changes: NormalizationResult[] = [];
 
-  for (const record of records) {
+  for (const record of eligibleRecords) {
     const raw = record[hubspotProperty];
     if (!raw) continue;
 
@@ -712,6 +760,19 @@ export async function applyFormatHarmony(
     );
   }
 
+  // CONDITIONAL EXECUTION: Filter records by condition groups
+  // NULL conditionGroups = run on all records (existing behavior)
+  const eligibleRecords = harmony.conditionGroups
+    ? records.filter(record =>
+        evaluateConditionGroups(record, harmony.conditionGroups)
+      )
+    : records;
+
+  if (eligibleRecords.length === 0) {
+    console.log(`[Normalization Engine] Harmony ${harmony.id}: 0 records matched conditions`);
+    return [];
+  }
+
   // Get HubSpot property name from field assignments
   const hubspotProperty = await getHubSpotProperty(harmony, orgId);
   if (!hubspotProperty) {
@@ -722,7 +783,7 @@ export async function applyFormatHarmony(
   const changes: NormalizationResult[] = [];
   const config = harmony.transformConfig || {};
 
-  for (const record of records) {
+  for (const record of eligibleRecords) {
     const raw = record[hubspotProperty];
     if (!raw) continue;
 
