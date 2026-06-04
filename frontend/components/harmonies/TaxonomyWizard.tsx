@@ -16,10 +16,12 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Check, X } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { HubSpotPropertyPicker } from './HubSpotPropertyPicker';
+import { FormatFunctionPicker } from './FormatFunctionPicker';
 import { addToast } from '@/components/ui/toast';
 
-type WizardStep = 1 | 2 | 3 | 4 | 5;
+type WizardStep = 1 | 2 | 2.5 | 2.75 | 3 | 4 | 5;
 type ClassificationType = 'industry' | 'sub-industry' | 'market-segment' | 'custom';
+type TransformType = 'format' | 'lookup' | null;
 
 interface Pack {
   id: string;
@@ -50,6 +52,12 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
   const [targetFieldLabel, setTargetFieldLabel] = useState('');
   const [createNewField, setCreateNewField] = useState(false);
   const [writePolicy, setWritePolicy] = useState<'fill_empty' | 'always_overwrite'>('fill_empty');
+
+  // Step 2.5: Transform type selection
+  const [transformType, setTransformType] = useState<TransformType>(null);
+
+  // Step 2.75: Format function selection
+  const [selectedFormatFunction, setSelectedFormatFunction] = useState<string | null>(null);
 
   // Step 3: Choose canonical values
   const [valueSource, setValueSource] = useState<'pack' | 'field' | 'blank'>('pack');
@@ -166,8 +174,33 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
     try {
       const generatedHarmonyId = `taxonomy-${targetField}`;
 
-      // Branch 1: Pack activation
-      if (valueSource === 'pack') {
+      // Branch 1: Format function activation
+      if (transformType === 'format') {
+        const res = await fetch('/api/taxonomy/activate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: targetFieldLabel || targetField,
+            description: `Format function: ${selectedFormatFunction}`,
+            field: targetField,
+            object_type: 'company',
+            transform_type: 'format',
+            transform_function: selectedFormatFunction,
+            org_id: 'default', // TODO: Get from context
+            is_preset: false,
+            write_policy: writePolicy,
+          }),
+        });
+
+        if (!res.ok) throw new Error('Failed to activate format function');
+
+        const data = await res.json();
+        setHarmonyId(data.harmonyId);
+        setCurrentStep(5 as WizardStep);
+        addToast('success', 'Format function activated successfully');
+      }
+      // Branch 2: Pack activation
+      else if (valueSource === 'pack') {
         const res = await fetch('/api/taxonomy/activate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -184,10 +217,10 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
 
         const data = await res.json();
         setHarmonyId(data.harmonyId);
-        setCurrentStep(5);
+        setCurrentStep(5 as WizardStep);
         addToast('success', 'Taxonomy activated successfully');
       }
-      // Branch 2: Field activation
+      // Branch 3: Field activation
       else if (valueSource === 'field') {
         const selectedValues = readFieldValues
           .filter(v => v.isSelected)
@@ -226,6 +259,10 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
         return classificationType !== null;
       case 2:
         return sourceField && targetField && (!createNewField || targetField);
+      case 2.5:
+        return transformType !== null;
+      case 2.75:
+        return selectedFormatFunction !== null;
       case 3:
         return valueSource === 'blank' || (valueSource === 'pack' && selectedPack) || (valueSource === 'field' && readFromField);
       case 4:
@@ -282,7 +319,7 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
               Add Taxonomy Classification
             </h2>
             <div style={{ fontSize: 13, color: C.text3 }}>
-              Step {currentStep} of 5
+              Step {Math.floor(currentStep)} of 5
             </div>
           </div>
           <button
@@ -457,6 +494,79 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Screen 2.5: Transform Type Selection */}
+          {currentStep === 2.5 && (
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 24 }}>
+                How should this harmony transform values?
+              </h3>
+
+              {[
+                {
+                  value: 'format' as const,
+                  label: 'Format function',
+                  desc: 'Apply a built-in transformation rule',
+                  bestFor: 'Best for: phone numbers, emails, URLs, names',
+                },
+                {
+                  value: 'lookup' as const,
+                  label: 'Lookup table',
+                  desc: 'Map input values to canonical values',
+                  bestFor: 'Best for: industry, country, sub-industry',
+                },
+              ].map((option) => (
+                <div
+                  key={option.value}
+                  onClick={() => setTransformType(option.value)}
+                  style={{
+                    padding: '16px 20px',
+                    marginBottom: 12,
+                    background: transformType === option.value ? C.indigoDim : C.surface,
+                    border: `1px solid ${transformType === option.value ? C.indigo : C.border}`,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <div style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: '50%',
+                    border: `2px solid ${transformType === option.value ? C.indigo : C.border}`,
+                    background: transformType === option.value ? C.indigo : 'transparent',
+                  }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>
+                      {option.label}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
+                      {option.desc}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.text3, fontStyle: 'italic' }}>
+                      {option.bestFor}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Screen 2.75: Format Function Picker */}
+          {currentStep === 2.75 && (
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 24 }}>
+                Select a format function
+              </h3>
+
+              <FormatFunctionPicker
+                selectedFunction={selectedFormatFunction}
+                onSelect={setSelectedFormatFunction}
+                objectType="company"
+              />
             </div>
           )}
 
@@ -1137,7 +1247,28 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
           }}>
             <button
               onClick={() => {
-                if (currentStep > 1) setCurrentStep((currentStep - 1) as WizardStep);
+                if (currentStep > 1) {
+                  // Handle backward navigation with skip logic
+                  let prevStep: WizardStep;
+                  if (currentStep === 2.75) {
+                    prevStep = 2.5;
+                  } else if (currentStep === 2.5) {
+                    prevStep = 2;
+                  } else if (currentStep === 3 && transformType === 'format') {
+                    prevStep = 2.75;
+                  } else if (currentStep === 3 && transformType === 'lookup') {
+                    prevStep = 2.5;
+                  } else if (currentStep === 4) {
+                    prevStep = 3;
+                  } else if (currentStep === 5 && transformType === 'format') {
+                    prevStep = 2.75;
+                  } else if (currentStep === 5 && transformType === 'lookup') {
+                    prevStep = 4;
+                  } else {
+                    prevStep = (currentStep - 1) as WizardStep;
+                  }
+                  setCurrentStep(prevStep);
+                }
               }}
               disabled={currentStep === 1}
               style={{
@@ -1159,9 +1290,20 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
 
             <button
               onClick={async () => {
-                // Intercept Screen 3 → Screen 4 transition for field flow
-                if (currentStep === 3 && valueSource === 'field' && readFromField) {
-                  // Call API to read field values
+                // Handle next navigation with skip logic
+                if (currentStep === 2) {
+                  setCurrentStep(2.5);
+                } else if (currentStep === 2.5) {
+                  if (transformType === 'format') {
+                    setCurrentStep(2.75);
+                  } else if (transformType === 'lookup') {
+                    setCurrentStep(3);
+                  }
+                } else if (currentStep === 2.75) {
+                  // Format function flow: skip to activation
+                  handleActivate();
+                } else if (currentStep === 3 && valueSource === 'field' && readFromField) {
+                  // Intercept Screen 3 → Screen 4 transition for field flow
                   setLoadingFieldValues(true);
 
                   try {
@@ -1199,32 +1341,31 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                     setLoadingFieldValues(false);
                   }
                   return;
-                }
-
-                // Normal next step logic
-                if (currentStep === 4) {
+                } else if (currentStep === 3) {
+                  setCurrentStep(4);
+                } else if (currentStep === 4) {
                   handleActivate();
                 } else if (canProceed()) {
                   setCurrentStep((currentStep + 1) as WizardStep);
                 }
               }}
-              disabled={!canProceed() || (currentStep === 4 && activating)}
+              disabled={!canProceed() || ((currentStep === 4 || currentStep === 2.75) && activating)}
               style={{
                 padding: '10px 20px',
-                background: canProceed() && !(currentStep === 4 && activating) ? C.indigo : C.hover,
+                background: canProceed() && !((currentStep === 4 || currentStep === 2.75) && activating) ? C.indigo : C.hover,
                 border: 'none',
-                color: canProceed() && !(currentStep === 4 && activating) ? '#fff' : C.text3,
+                color: canProceed() && !((currentStep === 4 || currentStep === 2.75) && activating) ? '#fff' : C.text3,
                 fontSize: 14,
                 fontWeight: 500,
-                cursor: canProceed() && !(currentStep === 4 && activating) ? 'pointer' : 'not-allowed',
+                cursor: canProceed() && !((currentStep === 4 || currentStep === 2.75) && activating) ? 'pointer' : 'not-allowed',
                 fontFamily: F.sans,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
               }}
             >
-              {currentStep === 4 ? (activating ? 'Activating...' : 'Activate') : 'Next'}
-              {currentStep < 4 && <ChevronRight size={16} />}
+              {(currentStep === 4 || currentStep === 2.75) ? (activating ? 'Activating...' : 'Activate') : 'Next'}
+              {currentStep < 4 && currentStep !== 2.75 && <ChevronRight size={16} />}
             </button>
           </div>
         )}

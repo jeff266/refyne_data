@@ -125,18 +125,37 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, description, category, field, approach } = body;
+    const {
+      name,
+      description,
+      category,
+      field,
+      approach,
+      object_type,
+      transform_type,
+      transform_function,
+      write_policy,
+    } = body;
 
     // Validate required fields
-    if (!name || !field || !category) {
+    const objectTypeValue = object_type || category;
+    if (!name || !field || !objectTypeValue) {
       return NextResponse.json(
-        { error: 'Missing required fields: name, field, category' },
+        { error: 'Missing required fields: name, field, object_type' },
         { status: 400 }
       );
     }
 
-    // Generate harmony ID (slug from name + timestamp for uniqueness)
-    const harmonyId = `${name
+    // Validate transform type specific requirements
+    if (transform_type === 'format' && !transform_function) {
+      return NextResponse.json(
+        { error: 'transform_function is required when transform_type is "format"' },
+        { status: 400 }
+      );
+    }
+
+    // Generate harmony ID (slug from field + timestamp for uniqueness)
+    const harmonyId = `${field
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')}-${Date.now()}`;
@@ -149,13 +168,17 @@ export async function POST(request: NextRequest) {
         org_id: ctx.orgId,
         name,
         description,
-        category,
         field,
-        object_type: category,
-        approach: approach || 'reference_list',
+        object_type: objectTypeValue,
+        transform_type: transform_type || 'lookup',
+        transform_function: transform_type === 'format' ? transform_function : null,
+        write_policy: write_policy || 'fill_empty',
         is_preset: false,
         is_active: false,
         created_by: ctx.userId,
+        // Legacy fields for backward compatibility
+        category: objectTypeValue,
+        approach: approach || 'reference_list',
       })
       .select()
       .single();
