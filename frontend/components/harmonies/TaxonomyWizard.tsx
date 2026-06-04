@@ -59,6 +59,22 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
   const [readFromField, setReadFromField] = useState('');
   const [readFromFieldLabel, setReadFromFieldLabel] = useState('');
 
+  // NEW: Field read flow state
+  const [readFieldValues, setReadFieldValues] = useState<Array<{
+    value: string;
+    count: number;
+    isSuspect: boolean;
+    isSelected: boolean;
+  }>>([]);
+  const [readFieldMetadata, setReadFieldMetadata] = useState<{
+    totalRecords: number;
+    blankCount: number;
+    uniqueValueCount: number;
+  } | null>(null);
+  const [loadingFieldValues, setLoadingFieldValues] = useState(false);
+  const [showSuspects, setShowSuspects] = useState(false);
+  const [renamingIndex, setRenamingIndex] = useState<number | null>(null);
+
   // Step 4: Review mappings
   const [packEntries, setPackEntries] = useState<PackEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
@@ -133,29 +149,69 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const toggleValueSelection = (index: number) => {
+    setReadFieldValues(vals =>
+      vals.map((v, i) => (i === index ? { ...v, isSelected: !v.isSelected } : v))
+    );
+  };
+
+  const renameValueAtIndex = (index: number, newValue: string) => {
+    setReadFieldValues(vals =>
+      vals.map((v, i) => (i === index ? { ...v, value: newValue } : v))
+    );
+  };
+
   const handleActivate = async () => {
     setActivating(true);
     try {
       const generatedHarmonyId = `taxonomy-${targetField}`;
 
-      const res = await fetch('/api/taxonomy/activate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          packId: selectedPack?.id,
-          harmonyId: generatedHarmonyId,
-          targetField,
-          targetFieldLabel,
-          writePolicy,
-        }),
-      });
+      // Branch 1: Pack activation
+      if (valueSource === 'pack') {
+        const res = await fetch('/api/taxonomy/activate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            packId: selectedPack?.id,
+            harmonyId: generatedHarmonyId,
+            targetField,
+            targetFieldLabel,
+            writePolicy,
+          }),
+        });
 
-      if (!res.ok) throw new Error('Failed to activate pack');
+        if (!res.ok) throw new Error('Failed to activate pack');
 
-      const data = await res.json();
-      setHarmonyId(data.harmonyId);
-      setCurrentStep(5);
-      addToast('success', 'Taxonomy activated successfully');
+        const data = await res.json();
+        setHarmonyId(data.harmonyId);
+        setCurrentStep(5);
+        addToast('success', 'Taxonomy activated successfully');
+      }
+      // Branch 2: Field activation
+      else if (valueSource === 'field') {
+        const selectedValues = readFieldValues
+          .filter(v => v.isSelected)
+          .map(v => v.value);
+
+        const res = await fetch('/api/taxonomy/activate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            canonicalValues: selectedValues,
+            harmonyId: generatedHarmonyId,
+            targetField,
+            targetFieldLabel,
+            writePolicy,
+            objectType: 'company',
+          }),
+        });
+
+        if (!res.ok) throw new Error('Activation failed');
+
+        const data = await res.json();
+        setHarmonyId(data.harmonyId);
+        setCurrentStep(5 as WizardStep);
+      }
     } catch (error) {
       console.error('Failed to activate:', error);
       addToast('error', 'Failed to activate taxonomy pack');
@@ -173,7 +229,13 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
       case 3:
         return valueSource === 'blank' || (valueSource === 'pack' && selectedPack) || (valueSource === 'field' && readFromField);
       case 4:
-        return valueSource === 'blank' || valueSource === 'field' || packEntries.length > 0;
+        if (valueSource === 'pack') {
+          return packEntries.length > 0;
+        } else if (valueSource === 'field') {
+          return readFieldValues.filter(v => v.isSelected).length > 0;
+        } else {
+          return true;  // blank
+        }
       default:
         return true;
     }
@@ -534,6 +596,40 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
+          {/* Screen 3b: Loading Field Values */}
+          {loadingFieldValues && (
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 24 }}>
+                Reading from HubSpot
+              </h3>
+
+              <div style={{ marginBottom: 16, fontSize: 13, color: C.text2 }}>
+                Reading distinct values from{' '}
+                <span style={{ fontWeight: 500, color: C.text }}>{readFromFieldLabel}</span>
+                {' '}across companies...
+              </div>
+
+              <div style={{
+                width: '100%',
+                height: 4,
+                background: C.border,
+                borderRadius: 2,
+                overflow: 'hidden',
+                marginBottom: 24,
+              }}>
+                <div style={{
+                  width: '70%',
+                  height: '100%',
+                  background: C.indigo,
+                }} />
+              </div>
+
+              <div style={{ fontSize: 12, color: C.text3 }}>
+                This may take a moment for large datasets...
+              </div>
+            </div>
+          )}
+
           {/* Screen 4: Review Mappings */}
           {currentStep === 4 && (
             <div>
@@ -618,32 +714,252 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                 </>
               )}
 
-              {valueSource === 'field' && (
-                <>
-                  <div style={{ fontSize: 13, color: C.text3, marginBottom: 24 }}>
-                    Reading from field: {readFromFieldLabel}
+              {valueSource === 'field' && readFieldValues.length > 0 && (
+                <div>
+                  {/* Header */}
+                  <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+                    Review your canonical values
+                  </h3>
+                  <div style={{ fontSize: 13, color: C.text2, marginBottom: 24 }}>
+                    Found {readFieldMetadata?.uniqueValueCount} distinct values in{' '}
+                    <span style={{ fontWeight: 500, color: C.text }}>{readFromFieldLabel}</span>
+                    {' '}across {readFieldMetadata?.totalRecords} companies
                   </div>
 
-                  {/* Canonical Values */}
-                  <div style={{ marginBottom: 32 }}>
-                    <h4 style={{ fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      CANONICAL VALUES (what gets written)
-                    </h4>
-                    <div style={{
-                      background: C.surface,
-                      border: `1px solid ${C.border}`,
-                      padding: '24px',
-                      textAlign: 'center',
-                    }}>
-                      <div style={{ fontSize: 13, color: C.text2, marginBottom: 8 }}>
-                        Feature coming soon
-                      </div>
-                      <div style={{ fontSize: 12, color: C.text3 }}>
-                        Will read unique values from <span style={{ fontWeight: 500, color: C.text }}>{readFromFieldLabel}</span> field and use them as canonical values
-                      </div>
+                  {/* Blank count info */}
+                  {readFieldMetadata && readFieldMetadata.blankCount > 0 && (
+                    <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
+                      {readFieldMetadata.blankCount} companies have no value
                     </div>
+                  )}
+
+                  {/* Instructions */}
+                  <div style={{ fontSize: 13, color: C.text2, marginBottom: 16 }}>
+                    Select the values you want to keep as canonical. Deselect any that are duplicates, typos, or garbage.
                   </div>
-                </>
+
+                  {/* Controls */}
+                  <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+                    <button
+                      onClick={() => {
+                        setReadFieldValues(vals => vals.map(v => ({ ...v, isSelected: true })));
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                        background: C.surface,
+                        border: `1px solid ${C.border}`,
+                        color: C.text,
+                        fontFamily: F.sans,
+                      }}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      onClick={() => {
+                        setReadFieldValues(vals => vals.map(v => ({ ...v, isSelected: false })));
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                        background: C.surface,
+                        border: `1px solid ${C.border}`,
+                        color: C.text,
+                        fontFamily: F.sans,
+                      }}
+                    >
+                      Deselect all
+                    </button>
+                    <button
+                      onClick={() => setShowSuspects(!showSuspects)}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                        background: C.surface,
+                        border: `1px solid ${C.border}`,
+                        color: C.text,
+                        fontFamily: F.sans,
+                      }}
+                    >
+                      {showSuspects ? 'Hide' : 'Show'} suspects ({readFieldValues.filter(v => v.isSuspect).length})
+                    </button>
+                  </div>
+
+                  {/* Value list - non-suspects */}
+                  <div style={{ maxHeight: 400, overflowY: 'auto', marginBottom: 24, border: `1px solid ${C.border}` }}>
+                    {readFieldValues.filter(v => !v.isSuspect).map((item, idx) => {
+                      const actualIdx = readFieldValues.findIndex(v => v === item);
+                      const maxCount = readFieldValues[0]?.count || 1;
+                      const percentage = Math.round((item.count / maxCount) * 100);
+
+                      return (
+                        <div
+                          key={actualIdx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '8px 12px',
+                            borderBottom: `1px solid ${C.border}`,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={item.isSelected}
+                            onChange={() => toggleValueSelection(actualIdx)}
+                            style={{ marginRight: 12 }}
+                          />
+
+                          {renamingIndex === actualIdx ? (
+                            <div style={{ flex: 1, display: 'flex', gap: 8 }}>
+                              <input
+                                type="text"
+                                defaultValue={item.value}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    renameValueAtIndex(actualIdx, e.currentTarget.value);
+                                    setRenamingIndex(null);
+                                  } else if (e.key === 'Escape') {
+                                    setRenamingIndex(null);
+                                  }
+                                }}
+                                style={{
+                                  flex: 1,
+                                  padding: '4px 8px',
+                                  fontSize: 13,
+                                  background: C.surface,
+                                  border: `1px solid ${C.border}`,
+                                  color: C.text,
+                                  fontFamily: F.sans,
+                                }}
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => {
+                                  const input = document.querySelector('input[type="text"]:focus') as HTMLInputElement;
+                                  if (input) {
+                                    renameValueAtIndex(actualIdx, input.value);
+                                  }
+                                  setRenamingIndex(null);
+                                }}
+                                style={{ padding: '4px 8px', fontSize: 11 }}
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setRenamingIndex(null)}
+                                style={{ padding: '4px 8px', fontSize: 11 }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ flex: 1, fontSize: 13, color: item.isSelected ? C.text : C.text3 }}>
+                              {item.value}
+                            </div>
+                          )}
+
+                          <div style={{ fontSize: 12, color: C.text3, marginRight: 12, width: 40, textAlign: 'right' }}>
+                            {item.count}
+                          </div>
+
+                          <div style={{ width: 120, height: 8, background: C.border, borderRadius: 2, marginRight: 12 }}>
+                            <div
+                              style={{
+                                width: `${percentage}%`,
+                                height: '100%',
+                                background: '#2E6BA8',
+                                borderRadius: 2,
+                              }}
+                            />
+                          </div>
+
+                          <div style={{ fontSize: 11, color: C.text3, width: 40, textAlign: 'right' }}>
+                            {percentage}%
+                          </div>
+
+                          {!renamingIndex && (
+                            <button
+                              onClick={() => setRenamingIndex(actualIdx)}
+                              style={{
+                                marginLeft: 12,
+                                fontSize: 11,
+                                padding: '4px 8px',
+                                background: 'transparent',
+                                border: `1px solid ${C.border}`,
+                                color: C.text,
+                                cursor: 'pointer',
+                                fontFamily: F.sans,
+                              }}
+                            >
+                              rename
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Suspect section */}
+                  {showSuspects && readFieldValues.some(v => v.isSuspect) && (
+                    <>
+                      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16, marginBottom: 8 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: C.text3, marginBottom: 12 }}>
+                          SUSPECTS (low frequency, possible typos)
+                        </div>
+                      </div>
+                      <div style={{ maxHeight: 200, overflowY: 'auto', border: `1px solid ${C.border}` }}>
+                        {readFieldValues.filter(v => v.isSuspect).map((item) => {
+                          const actualIdx = readFieldValues.findIndex(v => v === item);
+                          const maxCount = readFieldValues[0]?.count || 1;
+                          const percentage = Math.round((item.count / maxCount) * 100);
+
+                          return (
+                            <div
+                              key={actualIdx}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '8px 12px',
+                                borderBottom: `1px solid ${C.border}`,
+                                opacity: 0.6,
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={item.isSelected}
+                                onChange={() => toggleValueSelection(actualIdx)}
+                                style={{ marginRight: 12 }}
+                              />
+                              <div style={{ flex: 1, fontSize: 13, color: C.text3 }}>
+                                {item.value}
+                              </div>
+                              <div style={{ fontSize: 12, color: C.text3, marginRight: 12, width: 40, textAlign: 'right' }}>
+                                {item.count}
+                              </div>
+                              <div style={{ width: 120, height: 8, background: C.border, borderRadius: 2, marginRight: 12 }}>
+                                <div
+                                  style={{
+                                    width: `${percentage}%`,
+                                    height: '100%',
+                                    background: '#2E6BA8',
+                                    borderRadius: 2,
+                                  }}
+                                />
+                              </div>
+                              <div style={{ fontSize: 11, color: C.text3, width: 40, textAlign: 'right' }}>
+                                {percentage}%
+                              </div>
+                              <div style={{ width: 65, marginLeft: 12 }} /> {/* Spacer for rename button */}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
 
               {valueSource === 'blank' && (
@@ -708,52 +1024,104 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                 )}
               </div>
 
-              <div style={{ marginBottom: 24, fontSize: 13, color: C.text3 }}>
-                <h4 style={{ fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 12 }}>
-                  NEXT STEPS
-                </h4>
-                <div style={{ marginBottom: 8 }}>
-                  1. Run normalize to classify existing companies
-                </div>
-                <div>
-                  2. Refyne will scan for unmapped values and suggest new mappings automatically
-                </div>
-              </div>
+              {valueSource === 'pack' && (
+                <>
+                  <div style={{ marginBottom: 24, fontSize: 13, color: C.text3 }}>
+                    <h4 style={{ fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 12 }}>
+                      NEXT STEPS
+                    </h4>
+                    <div style={{ marginBottom: 8 }}>
+                      1. Run normalize to classify existing companies
+                    </div>
+                    <div>
+                      2. Refyne will scan for unmapped values and suggest new mappings automatically
+                    </div>
+                  </div>
 
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                <button
-                  onClick={() => {
-                    router.push('/normalize');
-                    onClose();
-                  }}
-                  style={{
-                    padding: '10px 20px',
-                    background: C.indigo,
-                    border: 'none',
-                    color: '#fff',
-                    fontSize: 14,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    fontFamily: F.sans,
-                  }}
-                >
-                  Run normalize now
-                </button>
-                <button
-                  onClick={onClose}
-                  style={{
-                    padding: '10px 20px',
-                    background: 'transparent',
+                  <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                    <button
+                      onClick={() => {
+                        router.push('/normalize');
+                        onClose();
+                      }}
+                      style={{
+                        padding: '10px 20px',
+                        background: C.indigo,
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: 14,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        fontFamily: F.sans,
+                      }}
+                    >
+                      Run normalize now
+                    </button>
+                    <button
+                      onClick={onClose}
+                      style={{
+                        padding: '10px 20px',
+                        background: 'transparent',
+                        border: `1px solid ${C.border}`,
+                        color: C.text,
+                        fontSize: 14,
+                        cursor: 'pointer',
+                        fontFamily: F.sans,
+                      }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {valueSource === 'field' && (
+                <>
+                  <div style={{ marginBottom: 8 }}>
+                    <span style={{ color: C.text3 }}>Canonicals:</span>{' '}
+                    <span style={{ color: C.text }}>
+                      {readFieldValues.filter(v => v.isSelected).length} values from your HubSpot field
+                    </span>
+                  </div>
+                  <div style={{ marginBottom: 24 }}>
+                    <span style={{ color: C.text3 }}>Mappings:</span>{' '}
+                    <span style={{ color: C.text }}>0 (Refyne is scanning now)</span>
+                  </div>
+
+                  <div style={{
+                    padding: 24,
+                    background: C.surface,
                     border: `1px solid ${C.border}`,
-                    color: C.text,
-                    fontSize: 14,
-                    cursor: 'pointer',
-                    fontFamily: F.sans,
-                  }}
-                >
-                  Done
-                </button>
-              </div>
+                    marginBottom: 24,
+                  }}>
+                    <h4 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>
+                      WHAT HAPPENS NEXT
+                    </h4>
+                    <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.6 }}>
+                      Refyne is scanning your HubSpot data for values that should map to your canonical list.
+                      This takes 1-2 minutes for most portals.
+                      <div style={{ marginTop: 12 }}>
+                        Check the harmony detail page for suggestions.
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => router.push(`/harmonies/${harmonyId}`)}
+                    style={{
+                      padding: '10px 20px',
+                      fontSize: 14,
+                      cursor: 'pointer',
+                      background: C.indigo,
+                      border: 'none',
+                      color: '#fff',
+                      fontFamily: F.sans,
+                    }}
+                  >
+                    View harmony + suggestions
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -790,7 +1158,50 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
             </button>
 
             <button
-              onClick={() => {
+              onClick={async () => {
+                // Intercept Screen 3 → Screen 4 transition for field flow
+                if (currentStep === 3 && valueSource === 'field' && readFromField) {
+                  // Call API to read field values
+                  setLoadingFieldValues(true);
+
+                  try {
+                    const res = await fetch('/api/taxonomy/read-field-values', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        hubspotProperty: readFromField,
+                        objectType: 'company',
+                      }),
+                    });
+
+                    if (!res.ok) throw new Error('Failed to read field values');
+
+                    const data = await res.json();
+
+                    // Initialize with all non-suspects selected
+                    setReadFieldValues(
+                      data.values.map((v: any) => ({
+                        ...v,
+                        isSelected: !v.isSuspect,
+                      }))
+                    );
+                    setReadFieldMetadata({
+                      totalRecords: data.totalRecords,
+                      blankCount: data.blankCount,
+                      uniqueValueCount: data.uniqueValueCount,
+                    });
+
+                    setCurrentStep(4 as WizardStep);
+                  } catch (error) {
+                    console.error('Failed to read field values:', error);
+                    addToast('error', 'Failed to read field values from HubSpot');
+                  } finally {
+                    setLoadingFieldValues(false);
+                  }
+                  return;
+                }
+
+                // Normal next step logic
                 if (currentStep === 4) {
                   handleActivate();
                 } else if (canProceed()) {
