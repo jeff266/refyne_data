@@ -5,6 +5,8 @@ import { X, ChevronRight, ChevronLeft, Loader2, Check } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn, GhostBtn } from '@/components/refyne';
 import { HubSpotPropertyPicker } from './HubSpotPropertyPicker';
+import { ConditionBuilder } from './ConditionBuilder';
+import type { ConditionGroups } from '@/lib/harmonies/condition-evaluator';
 import {
   DndContext,
   DragOverlay,
@@ -68,7 +70,11 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const [ungrouped, setUngrouped] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  // Step 4: Preview
+  // Step 4: Add Conditions (optional)
+  const [conditionMode, setConditionMode] = useState<'all' | 'conditional'>('all');
+  const [conditionGroups, setConditionGroups] = useState<ConditionGroups | null>(null);
+
+  // Step 5: Preview
   const [harmonyId, setHarmonyId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -82,13 +88,22 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
     { number: 1, label: 'Basics' },
     { number: 2, label: 'Scan Field' },
     { number: 3, label: 'Group Values' },
-    { number: 4, label: 'Preview' },
+    { number: 4, label: 'Add Conditions' },
+    { number: 5, label: 'Preview' },
   ];
 
   const canAdvance = () => {
     if (step === 1) return name && field;
     if (step === 2) return distinctValues.length > 0;
     if (step === 3) return groups.length > 0;
+    if (step === 4) {
+      // Conditions are optional - allow advancement regardless
+      // If conditional mode, must have at least one valid condition
+      if (conditionMode === 'conditional') {
+        return conditionGroups && conditionGroups.groups.length > 0;
+      }
+      return true;
+    }
     return true;
   };
 
@@ -127,7 +142,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
       setUngrouped(distinctValues.map((v) => v.value));
       setStep(3);
     } else if (step === 3) {
-      // Save groups as rules and proceed to preview
+      // Save groups as rules and proceed to conditions
       try {
         setSaving(true);
         const rules = groups.flatMap((group, groupIndex) =>
@@ -153,6 +168,29 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
       } catch (err) {
         console.error('Failed to save rules:', err);
         alert('Failed to save rules');
+      } finally {
+        setSaving(false);
+      }
+    } else if (step === 4) {
+      // Save conditions and proceed to preview
+      try {
+        setSaving(true);
+        const res = await fetch(`/api/harmonies/${harmonyId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conditionGroups: conditionMode === 'conditional' ? conditionGroups : null,
+          }),
+        });
+
+        if (res.ok) {
+          setStep(5);
+        } else {
+          alert('Failed to save conditions');
+        }
+      } catch (err) {
+        console.error('Failed to save conditions:', err);
+        alert('Failed to save conditions');
       } finally {
         setSaving(false);
       }
@@ -677,6 +715,103 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
                 <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+                  Add Conditions (Optional)
+                </h3>
+                <p style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
+                  By default, this harmony will run on all {category} records. Add conditions to limit which records it applies to.
+                </p>
+              </div>
+
+              {/* Condition mode selector */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: 12,
+                    border: `2px solid ${conditionMode === 'all' ? C.indigo : C.border}`,
+                    borderRadius: 8,
+                    background: conditionMode === 'all' ? C.indigoDim : C.surface,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="conditionMode"
+                    value="all"
+                    checked={conditionMode === 'all'}
+                    onChange={() => {
+                      setConditionMode('all');
+                      setConditionGroups(null);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
+                      Run on all records
+                    </div>
+                    <div style={{ fontSize: 11, color: C.text3 }}>
+                      This harmony will process every {category} record (default)
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: 12,
+                    border: `2px solid ${conditionMode === 'conditional' ? C.indigo : C.border}`,
+                    borderRadius: 8,
+                    background: conditionMode === 'conditional' ? C.indigoDim : C.surface,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="conditionMode"
+                    value="conditional"
+                    checked={conditionMode === 'conditional'}
+                    onChange={() => setConditionMode('conditional')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
+                      Only records matching conditions
+                    </div>
+                    <div style={{ fontSize: 11, color: C.text3 }}>
+                      Add rules to filter which records this harmony applies to
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Condition builder (shown when conditional mode selected) */}
+              {conditionMode === 'conditional' && (
+                <div
+                  style={{
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 8,
+                    padding: 16,
+                    background: C.surface,
+                  }}
+                >
+                  <ConditionBuilder
+                    value={conditionGroups}
+                    onChange={setConditionGroups}
+                    objectType={category}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 5 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div>
+                <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 8 }}>
                   Preview
                 </h3>
                 <p style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
@@ -747,7 +882,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                 <Loader2 size={14} />
                 Saving...
               </>
-            ) : step === 4 ? (
+            ) : step === 5 ? (
               'Activate'
             ) : (
               <>

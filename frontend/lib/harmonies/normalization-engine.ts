@@ -228,10 +228,10 @@ export async function applyLookupHarmony(
   }
 
   // CONDITIONAL EXECUTION: Filter records by condition groups
-  // NULL conditionGroups = run on all records (existing behavior)
+  // NULL/undefined conditionGroups = run on all records (existing behavior)
   const eligibleRecords = harmony.conditionGroups
     ? records.filter(record =>
-        evaluateConditionGroups(record, harmony.conditionGroups)
+        evaluateConditionGroups(record, harmony.conditionGroups!)
       )
     : records;
 
@@ -761,10 +761,10 @@ export async function applyFormatHarmony(
   }
 
   // CONDITIONAL EXECUTION: Filter records by condition groups
-  // NULL conditionGroups = run on all records (existing behavior)
+  // NULL/undefined conditionGroups = run on all records (existing behavior)
   const eligibleRecords = harmony.conditionGroups
     ? records.filter(record =>
-        evaluateConditionGroups(record, harmony.conditionGroups)
+        evaluateConditionGroups(record, harmony.conditionGroups!)
       )
     : records;
 
