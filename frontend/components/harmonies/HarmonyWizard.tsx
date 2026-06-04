@@ -69,6 +69,8 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const [groups, setGroups] = useState<ValueGroup[]>([]);
   const [ungrouped, setUngrouped] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [ungroupedSearch, setUngroupedSearch] = useState('');
+  const [ungroupedSort, setUngroupedSort] = useState<'alpha' | 'count'>('alpha');
 
   // Step 4: Add Conditions (optional)
   const [conditionMode, setConditionMode] = useState<'all' | 'conditional'>('all');
@@ -357,6 +359,32 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
     } else if (overId === 'ungrouped') {
       moveToUngrouped(activeValue);
     }
+  };
+
+  // Filter and sort ungrouped values
+  const getFilteredSortedUngrouped = () => {
+    let filtered = ungrouped;
+
+    // Apply search filter
+    if (ungroupedSearch) {
+      filtered = filtered.filter((v) =>
+        v.toLowerCase().includes(ungroupedSearch.toLowerCase())
+      );
+    }
+
+    // Apply sort
+    if (ungroupedSort === 'alpha') {
+      filtered = [...filtered].sort((a, b) => a.localeCompare(b));
+    } else if (ungroupedSort === 'count') {
+      // Sort by count from distinctValues
+      filtered = [...filtered].sort((a, b) => {
+        const aCount = distinctValues.find((d) => d.value === a)?.count || 0;
+        const bCount = distinctValues.find((d) => d.value === b)?.count || 0;
+        return bCount - aCount; // Descending
+      });
+    }
+
+    return filtered;
   };
 
   if (!open) return null;
@@ -664,7 +692,12 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                   </div>
 
                   {groups.map((group) => (
-                    <GroupContainer key={group.id} group={group} onUpdateLabel={updateGroupLabel} />
+                    <GroupContainer
+                      key={group.id}
+                      group={group}
+                      onUpdateLabel={updateGroupLabel}
+                      onRemoveValue={moveToUngrouped}
+                    />
                   ))}
 
                   {ungrouped.length > 0 && (
@@ -677,11 +710,45 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                         marginTop: 12,
                       }}
                     >
-                      <div style={{ fontSize: 12, fontWeight: 600, color: C.text3, marginBottom: 8 }}>
-                        Ungrouped Values
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: C.text3 }}>
+                          Ungrouped Values ({ungrouped.length})
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            placeholder="Search values..."
+                            value={ungroupedSearch}
+                            onChange={(e) => setUngroupedSearch(e.target.value)}
+                            style={{
+                              padding: '4px 8px',
+                              fontSize: 11,
+                              background: C.bg,
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 4,
+                              color: C.text,
+                              width: 180,
+                            }}
+                          />
+                          <select
+                            value={ungroupedSort}
+                            onChange={(e) => setUngroupedSort(e.target.value as 'alpha' | 'count')}
+                            style={{
+                              padding: '4px 8px',
+                              fontSize: 11,
+                              background: C.bg,
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 4,
+                              color: C.text,
+                            }}
+                          >
+                            <option value="alpha">A-Z</option>
+                            <option value="count">By Count</option>
+                          </select>
+                        </div>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {ungrouped.map((value) => (
+                        {getFilteredSortedUngrouped().map((value) => (
                           <DraggableValue key={value} value={value} />
                         ))}
                       </div>
@@ -899,9 +966,11 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
 function GroupContainer({
   group,
   onUpdateLabel,
+  onRemoveValue,
 }: {
   group: ValueGroup;
   onUpdateLabel: (id: string, label: string) => void;
+  onRemoveValue: (value: string) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: group.id });
 
@@ -951,9 +1020,30 @@ function GroupContainer({
                 fontSize: 11,
                 fontFamily: F.mono,
                 color: C.indigo,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
               }}
             >
-              {value}
+              <span>{value}</span>
+              <button
+                onClick={() => onRemoveValue(value)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: C.indigo,
+                  opacity: 0.7,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
+                title="Remove from group"
+              >
+                <X size={12} />
+              </button>
             </div>
           ))
         )}
