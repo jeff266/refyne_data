@@ -7,6 +7,13 @@ import { C, F } from '@/lib/design-tokens';
 import { Card, StatCard, Toggle, PrimaryBtn, GhostBtn, Chip } from '@/components/refyne';
 import { ReferenceDataTable } from '@/components/harmonies/ReferenceDataTable';
 import { SuggestionQueue } from '@/components/harmonies/SuggestionQueue';
+import { ConditionBuilder } from '@/components/harmonies/ConditionBuilder';
+import {
+  evaluateConditionGroups,
+  getConditionFields,
+  countConditions,
+  type ConditionGroups,
+} from '@/lib/harmonies/condition-evaluator';
 
 interface HarmonyConfig {
   id: string;
@@ -20,6 +27,7 @@ interface HarmonyConfig {
   isPreset: boolean;
   isArchived: boolean;
   writePolicy: 'always_overwrite' | 'fill_empty' | 'never_overwrite';
+  conditionGroups?: ConditionGroups | null;
   fieldAssignments: Array<{
     canonicalField: string;
     hubspotProperty: string;
@@ -79,8 +87,13 @@ export default function HarmonyDetailPage() {
   const [editedDescription, setEditedDescription] = useState('');
   const [editedWritePolicy, setEditedWritePolicy] = useState<'always_overwrite' | 'fill_empty' | 'never_overwrite'>('fill_empty');
 
+  // Conditions state
+  const [editingConditions, setEditingConditions] = useState(false);
+  const [editedConditionGroups, setEditedConditionGroups] = useState<ConditionGroups | null>(null);
+
   // Test state
   const [testInput, setTestInput] = useState('');
+  const [conditionFieldValues, setConditionFieldValues] = useState<Record<string, string>>({});
   const [testOutput, setTestOutput] = useState<{
     matched: boolean;
     output: string | null;
@@ -261,6 +274,70 @@ export default function HarmonyDetailPage() {
     }
   }
 
+  async function handleSaveConditions() {
+    if (!config) return;
+
+    try {
+      setSaving(true);
+      const res = await fetch(`/api/harmonies/${config.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conditionGroups: editedConditionGroups,
+        }),
+      });
+
+      if (res.ok) {
+        setConfig({
+          ...config,
+          conditionGroups: editedConditionGroups,
+        });
+        setEditingConditions(false);
+      } else {
+        console.error('Failed to save conditions');
+        alert('Failed to save conditions');
+      }
+    } catch (err) {
+      console.error('Failed to save conditions:', err);
+      alert('Failed to save conditions');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleClearConditions() {
+    if (!config) return;
+    if (!confirm('Remove all conditions? This harmony will run on all records.')) return;
+
+    try {
+      setSaving(true);
+      const res = await fetch(`/api/harmonies/${config.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conditionGroups: null,
+        }),
+      });
+
+      if (res.ok) {
+        setConfig({
+          ...config,
+          conditionGroups: null,
+        });
+        setEditingConditions(false);
+        setEditedConditionGroups(null);
+      } else {
+        console.error('Failed to clear conditions');
+        alert('Failed to clear conditions');
+      }
+    } catch (err) {
+      console.error('Failed to clear conditions:', err);
+      alert('Failed to clear conditions');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function handleArchive() {
     setShowArchiveModal(true);
   }
@@ -357,6 +434,75 @@ export default function HarmonyDetailPage() {
   }
 
   const hitRate = stats ? Math.round(stats.changeRate * 100) : 0;
+
+  // Helper function to format operator display name
+  function formatOperator(op: string): string {
+    const operatorMap: Record<string, string> = {
+      equals: '=',
+      not_equals: '≠',
+      contains: 'contains',
+      not_contains: 'does not contain',
+      starts_with: 'starts with',
+      ends_with: 'ends with',
+      is_empty: 'is empty',
+      is_not_empty: 'is not empty',
+      greater_than: '>',
+      less_than: '<',
+      greater_than_or_equal: '≥',
+      less_than_or_equal: '≤',
+      between: 'between',
+      is_any_of: 'is any of',
+      is_none_of: 'is none of',
+      is_true: 'is true',
+      is_false: 'is false',
+      before: 'before',
+      after: 'after',
+      in_last_n_days: 'in last N days',
+      not_in_last_n_days: 'not in last N days',
+    };
+    return operatorMap[op] || op;
+  }
+
+  // Helper function to format condition value for display
+  function formatConditionValue(value: any, operator: string): string {
+    // Operators with no value input
+    if (['is_empty', 'is_not_empty', 'is_true', 'is_false'].includes(operator)) {
+      return '';
+    }
+
+    // Handle null/undefined
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    // Handle between operator (object with from/to)
+    if (operator === 'between' && typeof value === 'object' && 'from' in value && 'to' in value) {
+      return `${value.from} to ${value.to}`;
+    }
+
+    // Handle is_any_of/is_none_of (arrays)
+    if (Array.isArray(value)) {
+      return value.join(', ');
+    }
+
+    // Handle in_last_n_days (number)
+    if (operator === 'in_last_n_days' || operator === 'not_in_last_n_days') {
+      return `${value} days`;
+    }
+
+    // Handle dates (convert ISO strings to readable format)
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+      try {
+        const date = new Date(value);
+        return date.toLocaleDateString();
+      } catch {
+        return value;
+      }
+    }
+
+    // Default: return as string
+    return String(value);
+  }
 
   return (
     <div style={{ padding: '28px 32px', fontFamily: F.sans }}>
@@ -477,6 +623,128 @@ export default function HarmonyDetailPage() {
         </div>
       </Card>
 
+      {/* CONDITIONS */}
+      <div id="conditions">
+        <Card style={{ marginBottom: 24 }}>
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2 style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>
+              Conditions
+            </h2>
+            {config?.conditionGroups && !editingConditions && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <GhostBtn
+                  onClick={() => {
+                    setEditedConditionGroups(config.conditionGroups ?? null);
+                    setEditingConditions(true);
+                  }}
+                  disabled={saving}
+                >
+                  Edit
+                </GhostBtn>
+                <GhostBtn onClick={handleClearConditions} disabled={saving}>
+                  Clear
+                </GhostBtn>
+              </div>
+            )}
+          </div>
+        </div>
+        <div style={{ padding: '16px 20px' }}>
+          {!config?.conditionGroups ? (
+            <div>
+              <div style={{ fontSize: 13, color: C.text3, marginBottom: 12 }}>
+                Runs on all {config?.objectType || 'company'} records.
+              </div>
+              <GhostBtn
+                onClick={() => {
+                  setEditedConditionGroups({
+                    match: 'all',
+                    groups: [{
+                      match: 'all',
+                      conditions: [{
+                        field: '',
+                        fieldLabel: '',
+                        fieldType: 'string',
+                        operator: 'equals',
+                        value: null,
+                      }],
+                    }],
+                  });
+                  setEditingConditions(true);
+                }}
+                disabled={saving}
+              >
+                + Add conditions
+              </GhostBtn>
+            </div>
+          ) : editingConditions ? (
+            <div>
+              <ConditionBuilder
+                value={editedConditionGroups}
+                onChange={setEditedConditionGroups}
+                objectType={config.objectType}
+              />
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                <PrimaryBtn onClick={handleSaveConditions} disabled={saving}>
+                  {saving ? <><Loader2 size={14} /> Saving...</> : 'Save'}
+                </PrimaryBtn>
+                <GhostBtn
+                  onClick={() => {
+                    setEditingConditions(false);
+                    setEditedConditionGroups(config.conditionGroups ?? null);
+                  }}
+                  disabled={saving}
+                >
+                  Cancel
+                </GhostBtn>
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 13 }}>
+              <div style={{ marginBottom: 12, color: C.text3 }}>
+                Match <strong style={{ color: C.text, fontFamily: F.mono }}>
+                  {config.conditionGroups.match.toUpperCase()}
+                </strong> of:
+              </div>
+              {config.conditionGroups.groups.map((group, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    marginBottom: 12,
+                    padding: 12,
+                    background: C.surface,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: C.text3, marginBottom: 8 }}>
+                    Group {idx + 1} - Match <strong style={{ fontFamily: F.mono }}>
+                      {group.match.toUpperCase()}
+                    </strong>:
+                  </div>
+                  {group.conditions.map((cond, condIdx) => (
+                    <div
+                      key={condIdx}
+                      style={{
+                        marginBottom: 4,
+                        fontSize: 12,
+                        color: C.text2,
+                        fontFamily: F.mono,
+                      }}
+                    >
+                      {cond.fieldLabel || cond.field}{' '}
+                      <span style={{ color: C.text3 }}>{formatOperator(cond.operator)}</span>{' '}
+                      {formatConditionValue(cond.value, cond.operator)}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+      </div>
+
       {/* Live Tester */}
       <Card style={{ marginBottom: 24 }}>
         <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}` }}>
@@ -485,6 +753,66 @@ export default function HarmonyDetailPage() {
           </h2>
         </div>
         <div style={{ padding: '16px 20px' }}>
+          {/* Condition Fields (if harmony has conditions) */}
+          {config?.conditionGroups && (() => {
+            const conditionFields = Array.from(getConditionFields(config.conditionGroups));
+            if (conditionFields.length > 0) {
+              return (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, color: C.text3, marginBottom: 8 }}>
+                    Condition fields (set values to test condition matching):
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    {conditionFields.map((field) => (
+                      <div key={field}>
+                        <label style={{ fontSize: 10, color: C.text3, marginBottom: 4, display: 'block' }}>
+                          {field}
+                        </label>
+                        <input
+                          type="text"
+                          value={conditionFieldValues[field] || ''}
+                          onChange={(e) => setConditionFieldValues({ ...conditionFieldValues, [field]: e.target.value })}
+                          placeholder={`Enter ${field}...`}
+                          style={{
+                            width: '100%',
+                            padding: '6px 10px',
+                            fontSize: 12,
+                            fontFamily: F.mono,
+                            background: C.surface,
+                            border: `1px solid ${C.border}`,
+                            color: C.text,
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {/* Condition Evaluation Result */}
+                  {conditionFields.some(f => conditionFieldValues[f]) && (() => {
+                    const conditionMet = evaluateConditionGroups(conditionFieldValues, config.conditionGroups!);
+                    return (
+                      <div style={{
+                        marginTop: 12,
+                        padding: '8px 12px',
+                        background: conditionMet ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        border: `1px solid ${conditionMet ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                        borderRadius: 6,
+                        fontSize: 12,
+                        color: conditionMet ? C.green : C.red,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}>
+                        {conditionMet ? '✓' : '✗'} Condition {conditionMet ? 'matched' : 'not matched'}
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Test Input */}
           <div style={{ fontSize: 11, color: C.text3, marginBottom: 8 }}>Try a value:</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <input
@@ -506,36 +834,54 @@ export default function HarmonyDetailPage() {
             <div style={{ flex: 1, padding: '8px 12px', fontSize: 13, fontFamily: F.mono, minHeight: 36 }}>
               {testing ? (
                 <span style={{ color: C.text3 }}>...</span>
-              ) : testOutput ? (
-                testOutput.matched ? (
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ color: C.green }}>{testOutput.output} ✓</span>
-                      {testOutput.matchType === 'exact' && (
-                        <span style={{ fontSize: 10, color: C.green }}>exact</span>
-                      )}
-                      {testOutput.matchType === 'fuzzy' && (
-                        <span style={{ fontSize: 10, color: C.amber }}>fuzzy {testOutput.confidence}%</span>
-                      )}
-                      {testOutput.matchType === 'phonetic' && (
-                        <span style={{ fontSize: 10, color: '#f97316' }}>phonetic {testOutput.confidence}%</span>
-                      )}
+              ) : (() => {
+                // Check if conditions are met (if harmony has conditions)
+                const hasConditions = config?.conditionGroups;
+                const conditionMet = hasConditions
+                  ? evaluateConditionGroups(conditionFieldValues, config.conditionGroups!)
+                  : true;
+
+                // If conditions exist but not met, show skipped message
+                if (hasConditions && !conditionMet && testInput) {
+                  return (
+                    <div>
+                      <span style={{ color: C.text3, opacity: 0.6 }}>(skipped - condition not met)</span>
                     </div>
-                    <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>
-                      {testOutput.explanation}
+                  );
+                }
+
+                // Otherwise show normal test output
+                return testOutput ? (
+                  testOutput.matched ? (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ color: C.green }}>{testOutput.output} ✓</span>
+                        {testOutput.matchType === 'exact' && (
+                          <span style={{ fontSize: 10, color: C.green }}>exact</span>
+                        )}
+                        {testOutput.matchType === 'fuzzy' && (
+                          <span style={{ fontSize: 10, color: C.amber }}>fuzzy {testOutput.confidence}%</span>
+                        )}
+                        {testOutput.matchType === 'phonetic' && (
+                          <span style={{ fontSize: 10, color: '#f97316' }}>phonetic {testOutput.confidence}%</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>
+                        {testOutput.explanation}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div>
+                      <span style={{ color: C.amber }}>No match ⚠</span>
+                      <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>
+                        {testOutput.explanation || 'Would appear as unmatched in compliance score'}
+                      </div>
+                    </div>
+                  )
                 ) : (
-                  <div>
-                    <span style={{ color: C.amber }}>No match ⚠</span>
-                    <div style={{ fontSize: 10, color: C.text3, marginTop: 4 }}>
-                      {testOutput.explanation || 'Would appear as unmatched in compliance score'}
-                    </div>
-                  </div>
-                )
-              ) : (
-                <span style={{ color: C.text3 }}>Type to see output</span>
-              )}
+                  <span style={{ color: C.text3 }}>Type to see output</span>
+                );
+              })()}
             </div>
           </div>
         </div>

@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Plus, AlertTriangle, ChevronDown, Database } from 'lucide-react';
+import { Plus, AlertTriangle, ChevronDown, Database, Zap } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, Chip, PrimaryBtn, GhostBtn, Tooltip } from '@/components/refyne';
 import { ReferenceDataTable } from '@/components/harmonies/ReferenceDataTable';
 import { HarmonyWizard } from '@/components/harmonies/HarmonyWizard';
 import { TaxonomyWizard } from '@/components/harmonies/TaxonomyWizard';
 import { useObjectType } from '@/hooks/useObjectType';
+import { countConditions, type ConditionGroups } from '@/lib/harmonies/condition-evaluator';
 
 interface HarmonyItem {
   id: string;
@@ -30,6 +31,7 @@ interface HarmonyItem {
   unmatchedCount?: number;
   outputFormat?: string;
   outputFormatsAvailable?: Array<{ key: string; label: string; default?: boolean }>;
+  conditionGroups?: ConditionGroups | null;
 }
 
 interface ComplianceInsight {
@@ -224,6 +226,29 @@ function HarmonyRow({
                   {isRec && <Chip color="indigo">★ recommended</Chip>}
                   {h.unmatchedCount && h.unmatchedCount > 0 && (
                     <Chip color="red">{h.unmatchedCount} unmatched</Chip>
+                  )}
+                  {h.conditionGroups && (
+                    <a
+                      href={`/harmonies/${h.id}#conditions`}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: C.indigo,
+                        background: 'rgba(99,102,241,0.1)',
+                        padding: '2px 8px',
+                        borderRadius: 4,
+                        textDecoration: 'none',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                      }}
+                    >
+                      <Zap size={10} />
+                      {countConditions(h.conditionGroups)} {countConditions(h.conditionGroups) === 1 ? 'condition' : 'conditions'}
+                    </a>
                   )}
                 </div>
                 <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>

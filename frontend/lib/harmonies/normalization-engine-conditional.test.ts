@@ -222,7 +222,7 @@ describe('Conditional Harmonies - Backward Compatibility', () => {
       field: 'person.phone',
       objectType: 'contact',
       transformType: 'format',
-      transformFunction: 'phone_e164',
+      transformFunction: 'e164_phone', // Use correct function key
       isActive: true,
       conditionGroups: null, // NULL = run on all records
     };
@@ -236,9 +236,10 @@ describe('Conditional Harmonies - Backward Compatibility', () => {
     const results = await applyFormatHarmony(records, harmony, 'org-123');
 
     // Should process records 1 and 2 (record 3 has no phone)
-    // In this mock, phone_e164 isn't registered so we'll get an error
-    // But the important thing is it tried to process all records
-    // (This test would pass if we mock FORMAT_FUNCTIONS properly)
+    // Record 3 skipped because phone is null (write policy: fill_empty)
+    expect(results).toHaveLength(2);
+    expect(results[0].hubspotRecordId).toBe('1');
+    expect(results[1].hubspotRecordId).toBe('2');
   });
 });
 
