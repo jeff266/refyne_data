@@ -390,7 +390,7 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
   for (const duplicateId of duplicateIds) {
     const duplicateSnapshot = preMergeSnapshots[duplicateId] || {};
 
-    for (const field of allFields) {
+    for (const field of Array.from(allFields)) {
       // Skip system fields
       if (field.startsWith('hs_object_id') || field === 'createdate') {
         continue;

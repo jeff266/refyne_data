@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useToast } from '@/components/ui/ToastProvider';
+import { addToast } from '@/components/ui/toast';
 
 const C = {
   text: '#0F172A',
@@ -48,7 +48,6 @@ const DEFAULT_COMPLIANCE_FIELDS = [
 ];
 
 export default function DedupPoliciesPage() {
-  const { addToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [policy, setPolicy] = useState<DedupPolicy | null>(null);

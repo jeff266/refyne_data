@@ -48,7 +48,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       const ageMinutes = (Date.now() - new Date(job.created_at).getTime()) / 60000;
 
       if (ageMinutes > 10) {
-        console.warn(\`[Scan Status] Job \${jobId} timed out after \${ageMinutes.toFixed(1)} minutes\`);
+        console.warn(`[Scan Status] Job ${jobId} timed out after ${ageMinutes.toFixed(1)} minutes`);
 
         await supabase
           .from('harmony_scan_jobs')
