@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 interface RouteContext {
   params: { id: string };
 }
 
 /**
- * GET /api/harmonies/[id]/scan/status?jobId=xxx
+ * GET /api/harmonies/[id]/scan/status
  *
- * Get scan job status
+ * Poll scan job status with inline timeout check
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   let ctx;
@@ -20,7 +19,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
-  if (!isSupabaseConfigured() || !supabase) {
+  if (!supabase) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
   }
 
@@ -28,31 +27,59 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const jobId = searchParams.get('jobId');
 
   if (!jobId) {
-    return NextResponse.json({ error: 'Missing jobId parameter' }, { status: 400 });
+    return NextResponse.json({ error: 'jobId required' }, { status: 400 });
   }
 
   try {
-    const { data: job, error } = await supabase
+    // Fetch scan job
+    const { data: job, error: jobError } = await supabase
       .from('harmony_scan_jobs')
       .select('*')
       .eq('id', jobId)
       .eq('org_id', ctx.orgId)
       .single();
 
-    if (error || !job) {
+    if (jobError || !job) {
       return NextResponse.json({ error: 'Scan job not found' }, { status: 404 });
     }
 
+    // Inline timeout check: if job has been pending/scanning for >10 minutes, mark as failed
+    if (['pending', 'scanning'].includes(job.status)) {
+      const ageMinutes = (Date.now() - new Date(job.created_at).getTime()) / 60000;
+
+      if (ageMinutes > 10) {
+        console.warn(\`[Scan Status] Job \${jobId} timed out after \${ageMinutes.toFixed(1)} minutes\`);
+
+        await supabase
+          .from('harmony_scan_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Scan timed out. Please try again.',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', job.id);
+
+        return NextResponse.json({
+          status: 'failed',
+          error: 'Scan timed out. Please try again.',
+          progress: job.progress || 0,
+        });
+      }
+    }
+
+    // Return current job status
     return NextResponse.json({
       status: job.status,
       progress: job.progress || 0,
-      totalRecords: job.total_records,
+      totalRecords: job.total_records || 0,
       distinctValues: job.distinct_values || [],
-      errorMessage: job.error_message,
+      error: job.error_message || null,
     });
-  } catch (error) {
-    captureWithOrgContext(error, ctx.orgId, { route: `/api/harmonies/scan/status` });
-    console.error('[Scan Status] Unexpected error:', error);
-    return NextResponse.json({ error: 'Failed to get scan status' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[Scan Status] Error:', error);
+    return NextResponse.json(
+      { error: 'Failed to check scan status' },
+      { status: 500 }
+    );
   }
 }
