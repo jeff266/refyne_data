@@ -191,6 +191,36 @@ curl -X GET http://localhost:3000/api/webhooks/hubspot
 
 **Backward Compatible:** Existing merge flow preserved, policies opt-in
 
+### RLS Security (D3.1) ✅ - June 4, 2026
+**Migration 077:** Row Level Security for 9 org-specific tables + 3 global tables
+
+**Critical Security Fix:** Immediately after shipping migration 076 (dedup_policies), RLS audit revealed 12 tables without row-level security protection.
+
+**Org-Isolated Tables (9):**
+- `dedup_policies` - Merge policy configurations per org
+- `dedup_decisions` - User merge decisions for ML training
+- `dedup_auto_merge_settings` - Auto-merge wait periods per org
+- `dedup_survivorship_rules` - Field-level merge rules (allows reading defaults with NULL org_id)
+- `enrichment_field_sources` - Provider attribution per company
+- `harmony_field_assignments` - Field mappings per org (allows reading defaults)
+- `job_segmentation_runs` - Job segmentation execution history
+- `normalization_run_progress` - Field change audit trail (org via FK to normalization_runs)
+- `taxonomy_suggestions` - Suggested taxonomy mappings
+
+**Global Read-Only Tables (3):**
+- `job_title_cache` - Global job title normalization (BCBA → IC/Clinical)
+- `sub_industry_packs` - Global industry taxonomy packs
+- `sub_industry_pack_entries` - Industry normalization mappings
+
+**RLS Policy Pattern:**
+```sql
+USING (org_id = (auth.jwt() ->> 'org_id'))
+```
+
+**Application Impact:** Zero - All app code uses `supabaseAdmin` (service role) which bypasses RLS. Policies protect against direct client-side access and Supabase dashboard exposure only.
+
+**Tests:** 946/949 passed (3 unrelated GraphIQ API key failures)
+
 ### Webhook Bridge Complete ✅
 **Critical fix:** Unified two previously separate dedup systems (webhook vs scanner)
 
