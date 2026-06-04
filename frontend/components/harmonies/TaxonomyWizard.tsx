@@ -56,6 +56,8 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [selectedPack, setSelectedPack] = useState<Pack | null>(null);
   const [loadingPacks, setLoadingPacks] = useState(false);
+  const [readFromField, setReadFromField] = useState('');
+  const [readFromFieldLabel, setReadFromFieldLabel] = useState('');
 
   // Step 4: Review mappings
   const [packEntries, setPackEntries] = useState<PackEntry[]>([]);
@@ -169,9 +171,9 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
       case 2:
         return sourceField && targetField && (!createNewField || targetField);
       case 3:
-        return valueSource === 'blank' || (valueSource === 'pack' && selectedPack) || valueSource === 'field';
+        return valueSource === 'blank' || (valueSource === 'pack' && selectedPack) || (valueSource === 'field' && readFromField);
       case 4:
-        return packEntries.length > 0;
+        return valueSource === 'blank' || valueSource === 'field' || packEntries.length > 0;
       default:
         return true;
     }
@@ -479,17 +481,35 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
                 <button
                   onClick={() => setValueSource('field')}
                   style={{
+                    width: '100%',
                     padding: '12px 20px',
                     background: valueSource === 'field' ? C.indigoDim : 'transparent',
-                    border: `1px solid ${C.border}`,
+                    border: `1px solid ${valueSource === 'field' ? C.indigo : C.border}`,
                     color: C.text,
                     fontSize: 13,
                     cursor: 'pointer',
                     fontFamily: F.sans,
+                    textAlign: 'left',
                   }}
                 >
                   Read from HubSpot field
                 </button>
+                {valueSource === 'field' && (
+                  <div style={{ marginTop: 16 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: C.text2, marginBottom: 8 }}>
+                      SELECT FIELD TO READ FROM
+                    </label>
+                    <HubSpotPropertyPicker
+                      objectType="company"
+                      value={readFromField}
+                      onChange={(name, label) => {
+                        setReadFromField(name);
+                        setReadFromFieldLabel(label);
+                      }}
+                      placeholder="Select field with canonical values..."
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -520,78 +540,133 @@ export function TaxonomyWizard({ onClose }: { onClose: () => void }) {
               <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 8 }}>
                 Review mappings
               </h3>
-              <div style={{ fontSize: 13, color: C.text3, marginBottom: 24 }}>
-                {selectedPack?.name} pack · {packEntries.length} mappings loaded
-              </div>
 
-              {/* Canonical Values */}
-              <div style={{ marginBottom: 32 }}>
-                <h4 style={{ fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  CANONICAL VALUES (what gets written)
-                </h4>
-                <div style={{
-                  background: C.surface,
-                  border: `1px solid ${C.border}`,
-                  maxHeight: 300,
-                  overflowY: 'auto',
-                }}>
-                  {Object.entries(groupedEntries).map(([canonical, entries]) => (
-                    <div
-                      key={canonical}
-                      style={{
-                        padding: '12px 16px',
-                        borderBottom: `1px solid ${C.border}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <span style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>{canonical}</span>
-                        <span style={{ fontSize: 12, color: C.text3, marginLeft: 12 }}>
-                          {entries.length} mappings
-                        </span>
+              {valueSource === 'pack' && (
+                <>
+                  <div style={{ fontSize: 13, color: C.text3, marginBottom: 24 }}>
+                    {selectedPack?.name} pack · {packEntries.length} mappings loaded
+                  </div>
+
+                  {/* Canonical Values */}
+                  <div style={{ marginBottom: 32 }}>
+                    <h4 style={{ fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      CANONICAL VALUES (what gets written)
+                    </h4>
+                    <div style={{
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      maxHeight: 300,
+                      overflowY: 'auto',
+                    }}>
+                      {Object.entries(groupedEntries).map(([canonical, entries]) => (
+                        <div
+                          key={canonical}
+                          style={{
+                            padding: '12px 16px',
+                            borderBottom: `1px solid ${C.border}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <span style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>{canonical}</span>
+                            <span style={{ fontSize: 12, color: C.text3, marginLeft: 12 }}>
+                              {entries.length} mappings
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Input Mappings Preview */}
+                  <div>
+                    <h4 style={{ fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      INPUT MAPPINGS
+                    </h4>
+                    <div style={{
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      maxHeight: 200,
+                      overflowY: 'auto',
+                    }}>
+                      {packEntries.slice(0, 10).map((entry) => (
+                        <div
+                          key={entry.id}
+                          style={{
+                            padding: '10px 16px',
+                            borderBottom: `1px solid ${C.border}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 16,
+                            fontSize: 12,
+                          }}
+                        >
+                          <span style={{ color: C.text2, flex: 1 }}>{entry.input_value}</span>
+                          <span style={{ color: C.text3 }}>→</span>
+                          <span style={{ color: C.text, flex: 1 }}>{entry.canonical_value}</span>
+                        </div>
+                      ))}
+                      {packEntries.length > 10 && (
+                        <div style={{ padding: '10px 16px', fontSize: 12, color: C.text3, textAlign: 'center' }}>
+                          + {packEntries.length - 10} more
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {valueSource === 'field' && (
+                <>
+                  <div style={{ fontSize: 13, color: C.text3, marginBottom: 24 }}>
+                    Reading from field: {readFromFieldLabel}
+                  </div>
+
+                  {/* Canonical Values */}
+                  <div style={{ marginBottom: 32 }}>
+                    <h4 style={{ fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      CANONICAL VALUES (what gets written)
+                    </h4>
+                    <div style={{
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      padding: '24px',
+                      textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: 13, color: C.text2, marginBottom: 8 }}>
+                        Feature coming soon
+                      </div>
+                      <div style={{ fontSize: 12, color: C.text3 }}>
+                        Will read unique values from <span style={{ fontWeight: 500, color: C.text }}>{readFromFieldLabel}</span> field and use them as canonical values
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                </>
+              )}
 
-              {/* Input Mappings Preview */}
-              <div>
-                <h4 style={{ fontSize: 13, fontWeight: 600, color: C.text2, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  INPUT MAPPINGS
-                </h4>
-                <div style={{
-                  background: C.surface,
-                  border: `1px solid ${C.border}`,
-                  maxHeight: 200,
-                  overflowY: 'auto',
-                }}>
-                  {packEntries.slice(0, 10).map((entry) => (
-                    <div
-                      key={entry.id}
-                      style={{
-                        padding: '10px 16px',
-                        borderBottom: `1px solid ${C.border}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 16,
-                        fontSize: 12,
-                      }}
-                    >
-                      <span style={{ color: C.text2, flex: 1 }}>{entry.input_value}</span>
-                      <span style={{ color: C.text3 }}>→</span>
-                      <span style={{ color: C.text, flex: 1 }}>{entry.canonical_value}</span>
+              {valueSource === 'blank' && (
+                <>
+                  <div style={{ fontSize: 13, color: C.text3, marginBottom: 24 }}>
+                    Starting with blank canonical values
+                  </div>
+
+                  <div style={{
+                    background: C.surface,
+                    border: `1px solid ${C.border}`,
+                    padding: '24px',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: 13, color: C.text2, marginBottom: 8 }}>
+                      No pre-loaded canonical values
                     </div>
-                  ))}
-                  {packEntries.length > 10 && (
-                    <div style={{ padding: '10px 16px', fontSize: 12, color: C.text3, textAlign: 'center' }}>
-                      + {packEntries.length - 10} more
+                    <div style={{ fontSize: 12, color: C.text3 }}>
+                      Refyne will suggest mappings as it encounters new values during normalization
                     </div>
-                  )}
-                </div>
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
