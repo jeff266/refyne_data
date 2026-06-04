@@ -11,6 +11,12 @@ Portal: `49169539`
 Token: `pat-na1-7817798e-3dfc-426d-aaa9-f9ed91d90b32`
 Portal: `8863617`
 
+### RevOps Impact
+Portal: `24202132`
+Org ID: `org_3DuSdb0FBnx7RMLmJSUegrpiNLS`
+Total Contacts: 7,143
+Token: OAuth (encrypted in database, use `getAccessToken(orgId)`)
+
 ## Quick Commands
 
 ```bash
@@ -154,6 +160,36 @@ curl -X GET http://localhost:3000/api/webhooks/hubspot
 - **Cluster tracking** in incremental scanner
   - `buildClusters()` returns `{ count, clusterIds }`
   - Calls `scheduleAutoMerges()` at end of scan
+
+### Dedup Policies (D3) ✅ - June 4, 2026
+**Migration 076:** Configurable merge policies with field-level rules and exclusion criteria
+
+**Policy Components:**
+- **Exclusion Rules** - Block merges based on conditions:
+  - Different parent companies (`block_if_different_parent`)
+  - Closed-won deals present (`block_if_closed_won_deals`)
+- **Compliance Fields** - Always use most restrictive value:
+  - Email opt-out, bounce status, legal basis
+  - JSONB array, org-customizable
+- **Field Merge Rules** - 8 rule types with wildcard support:
+  - `fill_empty` - Use duplicate if master blank
+  - `keep_master` - Always use master
+  - `append_both` - Concatenate with separator
+  - `keep_highest` / `keep_lowest` - Numeric comparison
+  - `keep_newest` / `keep_oldest` - Date-based
+  - `keep_most_advanced` - Funnel progression (e.g., lifecyclestage)
+
+**Implementation:**
+- `lib/dedup/merge-executor.ts` - Policy-driven merge execution
+- `app/api/settings/dedup-policies/` - GET/POST endpoints
+- `/settings/policies/dedup` - UI with 4 sections (name, exclusions, compliance, rules)
+- Wired into cluster merge route, replaces direct HubSpot API calls
+- Manual selections override policy rules
+- Applied rules tracked in merge history
+
+**Default Policy:** Matches current behavior (lifecyclestage never_downgrade + fill_empty wildcard)
+
+**Backward Compatible:** Existing merge flow preserved, policies opt-in
 
 ### Webhook Bridge Complete ✅
 **Critical fix:** Unified two previously separate dedup systems (webhook vs scanner)
