@@ -17,6 +17,8 @@ interface HarmonyConfig {
   referenceTable: string | null;
   objectType: 'company' | 'contact';
   isActive: boolean;
+  isPreset: boolean;
+  isArchived: boolean;
   writePolicy: 'always_overwrite' | 'fill_empty' | 'never_overwrite';
   fieldAssignments: Array<{
     canonicalField: string;
@@ -67,6 +69,9 @@ export default function HarmonyDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
 
   // Form state
   const [editedName, setEditedName] = useState('');
@@ -252,6 +257,67 @@ export default function HarmonyDetailPage() {
       alert('Failed to save settings');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleArchive() {
+    if (!config) return;
+
+    if (!confirm('Archive this harmony? It will be hidden from the harmonies list but can be recovered.')) {
+      return;
+    }
+
+    setArchiving(true);
+
+    try {
+      const res = await fetch(`/api/harmonies/${harmonyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isArchived: true,
+          isActive: false, // Also deactivate when archiving
+        }),
+      });
+
+      if (res.ok) {
+        // Redirect back to harmonies list
+        router.push('/harmonies');
+      } else {
+        console.error('Failed to archive harmony');
+        alert('Failed to archive harmony');
+      }
+    } catch (err) {
+      console.error('Failed to archive harmony:', err);
+      alert('Failed to archive harmony');
+    } finally {
+      setArchiving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!config) return;
+
+    setDeleting(true);
+
+    try {
+      const res = await fetch(`/api/harmonies/${harmonyId}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        // Redirect back to harmonies list
+        router.push('/harmonies');
+      } else {
+        const error = await res.json();
+        console.error('Failed to delete harmony:', error);
+        alert(error.error || 'Failed to delete harmony');
+      }
+    } catch (err) {
+      console.error('Failed to delete harmony:', err);
+      alert('Failed to delete harmony');
+    } finally {
+      setDeleting(false);
+      setDeleteConfirmName('');
     }
   }
 
@@ -650,6 +716,96 @@ export default function HarmonyDetailPage() {
                 Cancel
               </GhostBtn>
             </div>
+
+            {/* Archive/Delete Actions (Custom Harmonies Only) */}
+            {!config.isPreset && (
+              <>
+                <div style={{
+                  marginTop: 32,
+                  paddingTop: 32,
+                  borderTop: `1px solid ${C.border}`,
+                }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 600, color: C.red, marginBottom: 12 }}>
+                    Danger Zone
+                  </h4>
+
+                  {!config.isArchived ? (
+                    <div>
+                      <div style={{ fontSize: 12, color: C.text3, marginBottom: 12 }}>
+                        Archive this harmony to hide it from the harmonies list. You can unarchive it later.
+                      </div>
+                      <button
+                        onClick={handleArchive}
+                        disabled={archiving}
+                        style={{
+                          padding: '8px 16px',
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: C.red,
+                          background: 'transparent',
+                          border: `1px solid ${C.redBrd}`,
+                          cursor: archiving ? 'not-allowed' : 'pointer',
+                          opacity: archiving ? 0.5 : 1,
+                        }}
+                      >
+                        {archiving ? 'Archiving...' : 'Archive Harmony'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ fontSize: 12, color: C.text3, marginBottom: 12 }}>
+                        Permanently delete this harmony and all its reference data. This cannot be undone.
+                      </div>
+                      <div style={{ fontSize: 11, color: C.text3, marginBottom: 8 }}>
+                        Type <strong>{config.name}</strong> to confirm:
+                      </div>
+                      <input
+                        type="text"
+                        value={deleteConfirmName}
+                        onChange={(e) => setDeleteConfirmName(e.target.value)}
+                        placeholder={config.name}
+                        style={{
+                          width: '100%',
+                          maxWidth: 400,
+                          padding: '8px 12px',
+                          fontSize: 13,
+                          background: C.surface,
+                          border: `1px solid ${C.border}`,
+                          color: C.text,
+                          marginBottom: 12,
+                        }}
+                      />
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleting || deleteConfirmName !== config.name}
+                        style={{
+                          padding: '8px 16px',
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: '#fff',
+                          background: deleteConfirmName === config.name ? C.red : C.hover,
+                          border: 'none',
+                          cursor: deleting || deleteConfirmName !== config.name ? 'not-allowed' : 'pointer',
+                          opacity: deleting || deleteConfirmName !== config.name ? 0.5 : 1,
+                        }}
+                      >
+                        {deleting ? (
+                          <>
+                            <Loader2 size={14} className="preview-spinner" style={{ marginRight: 8 }} />
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 size={14} style={{ marginRight: 8, display: 'inline-block', verticalAlign: 'middle' }} />
+                            Delete Permanently
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </Card>

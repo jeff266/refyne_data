@@ -21,6 +21,7 @@ interface HarmonyItem {
   warning?: string;
   isActive?: boolean;
   isPreset?: boolean;
+  isArchived?: boolean;
   ruleCount?: number;
   recordsAffected?: number;
   examples?: Array<{ input: any; output: any }>;
@@ -196,6 +197,30 @@ function HarmonyRow({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: enabled ? C.text : C.text3 }}>{h.name}</span>
                   {h.isPreset && <Chip color="amber">Library</Chip>}
+                  {!h.isPreset && !h.isArchived && (
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: '#71717A',
+                      background: 'rgba(113,113,122,0.1)',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>Custom</span>
+                  )}
+                  {h.isArchived && (
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: C.text3,
+                      background: 'rgba(82,82,91,0.1)',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>Archived</span>
+                  )}
                   {isRec && <Chip color="indigo">★ recommended</Chip>}
                   {h.unmatchedCount && h.unmatchedCount > 0 && (
                     <Chip color="red">{h.unmatchedCount} unmatched</Chip>
@@ -386,6 +411,7 @@ export default function HarmoniesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [wizardOpen, setWizardOpen] = useState(false);
   const [taxonomyWizardOpen, setTaxonomyWizardOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   // Fetch harmonies and enabled state
   const fetchHarmonies = useCallback(async () => {
@@ -519,14 +545,19 @@ export default function HarmoniesPage() {
     };
   });
 
+  // Filter out archived harmonies unless showArchived is true
+  const visibleHarmonies = showArchived
+    ? enrichedHarmonies
+    : enrichedHarmonies.filter(h => !h.isArchived);
+
   // Filter harmonies based on search query
   const filteredHarmonies = searchQuery.trim()
-    ? enrichedHarmonies.filter(h =>
+    ? visibleHarmonies.filter(h =>
         h.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         h.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         h.fields.some(f => f.toLowerCase().includes(searchQuery.toLowerCase()))
       )
-    : enrichedHarmonies;
+    : visibleHarmonies;
 
   const enrichedCompany = filteredHarmonies.filter(h => h.category === 'company');
   const enrichedPerson = filteredHarmonies.filter(h => h.category === 'person' || h.category === 'contact');
@@ -613,6 +644,41 @@ export default function HarmoniesPage() {
           </Card>
         )}
       </div>
+
+      {/* Show Archived Toggle */}
+      {harmonies.some(h => h.isArchived) && (
+        <div style={{ marginTop: 24, textAlign: 'center' }}>
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            style={{
+              padding: '8px 16px',
+              fontSize: 12,
+              color: C.text2,
+              background: 'transparent',
+              border: `1px solid ${C.border}`,
+              borderRadius: 6,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            {showArchived ? 'Hide archived' : 'Show archived'}
+            {!showArchived && harmonies.filter(h => h.isArchived).length > 0 && (
+              <span style={{
+                background: C.text3,
+                color: C.bg,
+                fontSize: 10,
+                fontWeight: 600,
+                padding: '2px 6px',
+                borderRadius: 4,
+              }}>
+                {harmonies.filter(h => h.isArchived).length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Harmony Wizard */}
       <HarmonyWizard
