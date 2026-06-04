@@ -66,6 +66,8 @@ import { startArrangementWorker, stopArrangementWorker } from '../lib/queue/arra
 import { startPreviewWorker, stopPreviewWorker } from '../lib/queue/enrichment-queue';
 import { startTaxonomySuggestionWorker, stopTaxonomySuggestionWorker } from '../lib/queue/taxonomy-suggestion-queue';
 import { startCleanupWorker, getCleanupQueue } from '../lib/queue/cleanup-worker';
+import { createHarmonyScanWorker } from '../lib/queue/harmony-scan-queue';
+import { processHarmonyScan } from '../lib/queue/harmony-scan-processor';
 import { getAccessToken } from '../lib/hubspot/get-access-token';
 
 async function main() {
@@ -156,6 +158,16 @@ async function main() {
     }
   );
   console.log('✅ Daily cleanup scheduled (3am UTC)\n');
+
+  // Start the harmony scan worker (field scans for taxonomy wizard)
+  console.log('Starting harmony scan worker...');
+  const harmonyScanWorker = createHarmonyScanWorker(processHarmonyScan);
+
+  if (!harmonyScanWorker) {
+    console.log('⚠️  Harmony scan worker disabled (Redis not configured)');
+  } else {
+    console.log('✅ Harmony scan worker started successfully\n');
+  }
 
   // FIX: Fail all stalled jobs from previous crashes on startup
   // This prevents old jobs running for hours in the background and causing OOM
@@ -386,6 +398,9 @@ async function main() {
     await stopPreviewWorker();
     await stopTaxonomySuggestionWorker();
     await cleanupWorker.close();
+    if (harmonyScanWorker) {
+      await harmonyScanWorker.close();
+    }
 
     console.log('[Shutdown] All workers stopped');
     console.log('[Shutdown] Closing health check server...');
