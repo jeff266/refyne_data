@@ -7,6 +7,7 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { revalidatePath } from 'next/cache';
 import { loadRules, applyRules } from '@/lib/dedup/survivorship-rules';
+import { executeMerge } from '@/lib/dedup/merge-executor';
 
 interface MergeClusterRequest {
   masterId: string;
@@ -108,102 +109,52 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
       }
 
-      // Step 1: Merge each record into master
-      for (const recordId of recordsToMerge) {
-        const mergeRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies/merge', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            primaryObjectId: masterId,
-            objectIdToMerge: recordId,
-          }),
-        });
+      // Step 1: Execute policy-driven merge
+      const mergeResult = await executeMerge({
+        orgId,
+        masterId,
+        duplicateIds: recordsToMerge,
+        accessToken,
+        preMergeSnapshots,
+      });
 
-        if (!mergeRes.ok) {
-          const error = await mergeRes.text();
-          console.error(`[Merge Cluster] Failed to merge ${recordId} into ${masterId}:`, error);
-          throw new Error(`HubSpot merge failed: ${error}`);
-        }
+      if (!mergeResult.success) {
+        console.error('[Merge Cluster] Policy-driven merge failed:', mergeResult.error);
+        throw new Error(mergeResult.error || 'Merge failed');
       }
 
-      // Step 2: Apply survivorship rules and field selections
-      // Load survivorship rules for this org
-      const rules = await loadRules(orgId);
+      console.log(`[Merge Cluster] Merged ${mergeResult.mergedIds.length} records using policy`);
 
-      // Apply survivorship rules to ALL record pairs in cluster
-      const survivorshipSelections: Record<string, string> = {};
+      // Convert appliedRules to survivorshipDecisions format for history
       const survivorshipDecisions: Record<
         string,
         { rule: string; source: string; value?: any; method?: string }
       > = {};
 
-      for (const recordId of recordsToMerge) {
-        const masterSnapshot = preMergeSnapshots[masterId] || {};
-        const duplicateSnapshot = preMergeSnapshots[recordId] || {};
-
-        const survivorshipResult = applyRules(
-          masterSnapshot,
-          duplicateSnapshot,
-          rules
-        );
-
-        // Convert survivorship results to field selections and track decisions
-        // (duplicate source = use duplicate's record ID, master source = use master ID)
-        for (const [field, winner] of Object.entries(survivorshipResult)) {
-          // Track which rule was applied
-          survivorshipDecisions[field] = {
-            rule: winner.rule,
-            source: winner.source,
-          };
-
-          // For specific_value, include the winning value
-          if (winner.rule === 'specific_value') {
-            survivorshipDecisions[field].value = winner.value;
-          }
-
-          // For rollup, include the method used
-          if (winner.rule === 'rollup') {
-            const fieldRules = rules.filter(
-              (r) => r.field_key === field || r.field_key === '*'
-            );
-            const rollupRule = fieldRules.find((r) => r.rule_type === 'rollup');
-            if (rollupRule) {
-              survivorshipDecisions[field].method = rollupRule.rule_config.method;
-            }
-          }
-
-          if (winner.source === 'duplicate' && winner.rule !== 'default_master') {
-            survivorshipSelections[field] = recordId;
-          }
-        }
+      for (const [field, ruleInfo] of Object.entries(mergeResult.appliedRules)) {
+        survivorshipDecisions[field] = {
+          rule: ruleInfo.rule,
+          source: ruleInfo.source,
+        };
       }
 
-      // Merge manual selections with survivorship selections
-      // Manual selections override survivorship rules
-      const effectiveFieldSelections = {
-        ...survivorshipSelections,
-        ...(body.fieldSelections ?? {}),
-      };
-
-      // Update field values if selections exist
-      if (Object.keys(effectiveFieldSelections).length > 0 && !body.absorb) {
+      // If manual field selections provided, apply them (overrides policy)
+      if (body.fieldSelections && Object.keys(body.fieldSelections).length > 0 && !body.absorb) {
         const updates: Record<string, string> = {};
 
-        // For each field selection, determine which record's value to use
-        for (const [field, sourceRecordId] of Object.entries(effectiveFieldSelections)) {
+        for (const [field, sourceRecordId] of Object.entries(body.fieldSelections)) {
           if (sourceRecordId !== masterId) {
-            // Use pre-merge snapshot if available (record is already merged/deleted)
             const value = preMergeSnapshots[sourceRecordId]?.[field];
             if (value !== null && value !== '' && value !== undefined) {
               updates[field] = value;
+              survivorshipDecisions[field] = {
+                rule: 'manual_selection',
+                source: 'duplicate',
+              };
             }
           }
         }
 
-        // Apply updates to master
         if (Object.keys(updates).length > 0) {
           const updateRes = await fetch(
             `https://api.hubapi.com/crm/v3/objects/companies/${masterId}`,
@@ -219,7 +170,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
           if (!updateRes.ok) {
             const error = await updateRes.text();
-            console.error(`[Merge Cluster] Failed to update master ${masterId}:`, error);
+            console.error(`[Merge Cluster] Failed to apply manual selections:`, error);
           }
         }
       }

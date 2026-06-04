@@ -290,6 +290,39 @@ export function PoliciesTab() {
         <SurvivorshipRulesPanel />
       </div>
 
+      {/* Dedup Merge Policies */}
+      <Card style={{ marginBottom: 24 }}>
+        <div style={{ padding: 20, borderBottom: `1px solid ${C.border}` }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+            Dedup merge policies
+          </h3>
+          <p style={{ fontSize: 12, color: C.text3 }}>
+            Advanced field-level merge rules and exclusion criteria
+          </p>
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, color: C.text2, marginBottom: 16 }}>
+            Configure how duplicate companies are merged together with field-level rules, compliance fields, and exclusion criteria.
+          </div>
+          <a
+            href="/settings/policies/dedup"
+            style={{
+              display: 'inline-block',
+              padding: '8px 16px',
+              fontSize: 13,
+              color: C.indigo,
+              background: 'white',
+              border: `1px solid ${C.indigo}`,
+              borderRadius: 6,
+              textDecoration: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            Configure merge policies →
+          </a>
+        </div>
+      </Card>
+
       {/* Save Button */}
       <PrimaryBtn onClick={handleSave} disabled={saving}>
         {saving ? 'Saving...' : 'Save policies'}
