@@ -5,6 +5,7 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { scanHubSpotField } from '@/lib/hubspot/harmony-field-scanner';
 import { getFieldAssignments } from '@/lib/harmonies/field-assignments';
+import { enqueueHarmonyScan } from '@/lib/queue/harmony-scan-queue';
 
 interface RouteContext {
   params: { id: string };
@@ -134,7 +135,25 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Failed to create scan job' }, { status: 500 });
     }
 
-    // Start scan in background (don't await)
+    // Try to enqueue the scan job to BullMQ worker
+    const bullmqJobId = await enqueueHarmonyScan({
+      jobId: job.id,
+      orgId: ctx.orgId,
+      portalId: connection.portal_id,
+      accessToken,
+      objectType: apiObjectType,
+      fieldName: hubspotProperty,
+      harmonyId,
+    });
+
+    // If queue is available, return immediately
+    if (bullmqJobId) {
+      console.log(`[Scan Job] Enqueued to BullMQ worker (job ${bullmqJobId})`);
+      return NextResponse.json({ jobId: job.id, success: true });
+    }
+
+    // Fallback: Run scan synchronously in serverless function (will timeout for large datasets)
+    console.warn('[Scan Job] BullMQ queue not available, falling back to synchronous scan');
     performScan(job.id, {
       orgId: ctx.orgId,
       portalId: connection.portal_id,

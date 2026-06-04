@@ -31,6 +31,53 @@ Tests the complete harmony deletion workflow:
 17. Verify redirected to /harmonies
 18. Verify harmony is no longer in the list (even with "Show archived" on)
 
+### Taxonomy Read Field Test (`taxonomy-read-field.spec.ts`)
+
+Tests the "Read from your existing HubSpot field" flow in the Taxonomy Wizard:
+
+1. Sign in to the app
+2. Navigate to /harmonies
+3. Click "+ New harmony" button (opens TaxonomyWizard)
+4. **Screen 1**: Select "Sub-industry" classification type, click Next
+5. **Screen 2**:
+   - Select source field (auto-selected: industry)
+   - Select target field (industry)
+   - Select write policy (default: fill_empty)
+   - Click Next
+6. **Screen 3**:
+   - Select "Read from your existing HubSpot field" option (valueSource='field')
+   - Use HubSpotPropertyPicker to select 'industry' field
+   - Click Next
+7. **Screen 3b** (Loading):
+   - Verify "Reading from HubSpot" text appears
+   - Verify progress bar is visible
+   - Wait for API call to complete
+8. **Screen 3c** (Value Selection):
+   - Verify header shows "Review your canonical values"
+   - Verify it shows "Found X distinct values"
+   - Verify value list is displayed with checkboxes
+   - Verify frequency bars are visible
+   - Verify counts are shown
+   - Test "Select all" button
+   - Test "Deselect all" button
+   - Test individual checkbox toggle
+   - Test "Show suspects" / "Hide suspects" button (if suspects exist)
+   - Test inline rename functionality (click rename, cancel)
+   - Click Next
+9. **Screen 4**:
+   - Verify "Review your canonical values" header
+   - Verify selected values are listed with counts
+   - Click "Activate"
+10. **Screen 5**:
+    - Verify success message: "Taxonomy classifier active"
+    - Verify "X values from your HubSpot field" is shown
+    - Verify "Mappings: 0 (Refyne is scanning now)" is shown
+    - Verify "View harmony + suggestions" button exists
+    - Click the button
+11. **Harmony Detail Page**:
+    - Verify redirect to /harmonies/[id]
+    - Verify harmony is displayed
+
 ## Prerequisites
 
 - Application running at `BASE_URL` (default: https://app.refynedata.com)
@@ -42,20 +89,19 @@ Tests the complete harmony deletion workflow:
 
 ## Running Tests
 
-### Headless mode (default)
+### Delete Harmony Test
 
+**Headless mode (default)**
 ```bash
 npm run test:delete-harmony
 ```
 
-### Headful mode (visible browser)
-
+**Headful mode (visible browser)**
 ```bash
 npm run test:delete-harmony:headful
 ```
 
-### Direct execution
-
+**Direct execution**
 ```bash
 npx tsx tests/e2e/delete-harmony.spec.ts
 
@@ -63,12 +109,25 @@ npx tsx tests/e2e/delete-harmony.spec.ts
 HEADLESS=false npx tsx tests/e2e/delete-harmony.spec.ts
 ```
 
+### Taxonomy Read Field Test
+
+**Direct execution**
+```bash
+npx tsx tests/e2e/taxonomy-read-field.spec.ts
+
+# With visible browser
+HEADLESS=false npx tsx tests/e2e/taxonomy-read-field.spec.ts
+```
+
 ## Test Results
 
 Test results and screenshots are saved to:
 ```
 test-results/delete-harmony/
+test-results/taxonomy-read-field/
 ```
+
+### Delete Harmony Test Screenshots
 
 Each step of the test generates a screenshot for debugging:
 
@@ -85,6 +144,21 @@ Each step of the test generates a screenshot for debugging:
 - `11-confirmation-typed.png` - Confirmation text entered
 - `12-after-deletion.png` - After permanent deletion
 - `13-final-verification.png` - Final verification
+
+### Taxonomy Read Field Test Screenshots
+
+- `01-harmonies-page.png` - Initial harmonies page
+- `02-wizard-opened.png` - TaxonomyWizard opened
+- `03-classification-selected.png` - Sub-industry selected
+- `04-field-mapping-configured.png` - Source/target fields configured
+- `05-read-from-field-selected.png` - "Read from field" option selected with industry field
+- `06-loading-state.png` - API loading state with progress bar
+- `07-value-selection-ui.png` - Value selection UI with checkboxes, bars, counts
+- `08-selection-controls-tested.png` - After testing select/deselect controls
+- `09-rename-tested.png` - After testing rename functionality
+- `10-review-screen.png` - Final review screen
+- `11-success-screen.png` - Success confirmation
+- `12-harmony-detail-page.png` - Redirected to harmony detail page
 
 ## Expected Behavior
 
