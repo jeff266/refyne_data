@@ -54,6 +54,36 @@ export const FORMAT_FUNCTIONS: FormatFunction[] = [
     example: '1500000',
     description: 'Extracts numbers from text like "$1.5M"',
   },
+  {
+    id: 'trim_whitespace',
+    name: 'Trim Whitespace',
+    example: 'Acme Corp',
+    description: 'Removes leading/trailing spaces, collapses multiple',
+  },
+  {
+    id: 'employee_range',
+    name: 'Employee Range',
+    example: '201-500',
+    description: 'Converts employee count to HubSpot range buckets',
+  },
+  {
+    id: 'extract_domain',
+    name: 'Extract Domain',
+    example: 'acme.com',
+    description: 'Extracts domain from URL or normalizes raw domain',
+  },
+  {
+    id: 'state_abbreviate',
+    name: 'State Abbreviation',
+    example: 'CA',
+    description: 'Converts US state names to 2-letter codes',
+  },
+  {
+    id: 'country_code_iso2',
+    name: 'Country Code (ISO2)',
+    example: 'US',
+    description: 'Converts country names to ISO 3166-1 alpha-2 codes',
+  },
 ];
 
 interface FormatFunctionPickerProps {
@@ -95,6 +125,21 @@ export function FormatFunctionPicker({
             break;
           case 'numeric_parse':
             setTestInput('$1.5M');
+            break;
+          case 'trim_whitespace':
+            setTestInput('  Acme   Corp  ');
+            break;
+          case 'employee_range':
+            setTestInput('250');
+            break;
+          case 'extract_domain':
+            setTestInput('https://www.acme.com/about');
+            break;
+          case 'state_abbreviate':
+            setTestInput('California');
+            break;
+          case 'country_code_iso2':
+            setTestInput('United States');
             break;
         }
       }
