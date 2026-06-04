@@ -72,6 +72,7 @@ export default function HarmonyDetailPage() {
   const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
 
   // Form state
   const [editedName, setEditedName] = useState('');
@@ -260,13 +261,14 @@ export default function HarmonyDetailPage() {
     }
   }
 
-  async function handleArchive() {
+  function handleArchive() {
+    setShowArchiveModal(true);
+  }
+
+  async function confirmArchive() {
     if (!config) return;
 
-    if (!confirm('Archive this harmony? It will be hidden from the harmonies list but can be recovered.')) {
-      return;
-    }
-
+    setShowArchiveModal(false);
     setArchiving(true);
 
     try {
@@ -809,6 +811,93 @@ export default function HarmonyDetailPage() {
           </div>
         </div>
       </Card>
+
+      {/* Archive Confirmation Modal */}
+      {showArchiveModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setShowArchiveModal(false)}
+        >
+          <div
+            style={{
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              padding: 24,
+              maxWidth: 480,
+              width: '90%',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{
+              fontSize: 16,
+              fontWeight: 600,
+              color: C.text,
+              marginBottom: 12,
+              fontFamily: F.sans,
+            }}>
+              Archive this harmony?
+            </h3>
+            <p style={{
+              fontSize: 14,
+              color: C.text2,
+              marginBottom: 24,
+              lineHeight: 1.5,
+              fontFamily: F.sans,
+            }}>
+              It will be hidden from the harmonies list but can be recovered.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowArchiveModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 6,
+                  color: C.text,
+                  cursor: 'pointer',
+                  fontFamily: F.sans,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmArchive}
+                disabled={archiving}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  background: C.indigo,
+                  border: 'none',
+                  borderRadius: 6,
+                  color: '#fff',
+                  cursor: archiving ? 'not-allowed' : 'pointer',
+                  opacity: archiving ? 0.5 : 1,
+                  fontFamily: F.sans,
+                }}
+              >
+                {archiving ? 'Archiving...' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
