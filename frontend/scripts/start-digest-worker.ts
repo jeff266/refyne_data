@@ -65,6 +65,7 @@ import {
 import { startArrangementWorker, stopArrangementWorker } from '../lib/queue/arrangement-queue';
 import { startPreviewWorker, stopPreviewWorker } from '../lib/queue/enrichment-queue';
 import { startTaxonomySuggestionWorker, stopTaxonomySuggestionWorker } from '../lib/queue/taxonomy-suggestion-queue';
+import { startCleanupWorker, getCleanupQueue } from '../lib/queue/cleanup-worker';
 import { getAccessToken } from '../lib/hubspot/get-access-token';
 
 async function main() {
@@ -136,6 +137,25 @@ async function main() {
   } else {
     console.log('✅ Taxonomy suggestion worker started successfully\n');
   }
+
+  // Start the cleanup worker (90-day retention for run data)
+  console.log('Starting cleanup worker...');
+  const cleanupWorker = startCleanupWorker();
+  console.log('✅ Cleanup worker started successfully');
+
+  // Schedule daily cleanup at 3am UTC
+  const cleanupQueue = getCleanupQueue();
+  await cleanupQueue.add(
+    'daily-cleanup',
+    {},
+    {
+      repeat: {
+        pattern: '0 3 * * *'  // 3am UTC daily
+      },
+      jobId: 'daily-cleanup-repeat'
+    }
+  );
+  console.log('✅ Daily cleanup scheduled (3am UTC)\n');
 
   // FIX: Fail all stalled jobs from previous crashes on startup
   // This prevents old jobs running for hours in the background and causing OOM
@@ -365,6 +385,7 @@ async function main() {
     await stopArrangementWorker();
     await stopPreviewWorker();
     await stopTaxonomySuggestionWorker();
+    await cleanupWorker.close();
 
     console.log('[Shutdown] All workers stopped');
     console.log('[Shutdown] Closing health check server...');

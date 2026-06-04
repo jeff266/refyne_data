@@ -32,7 +32,7 @@ const QUEUE_NAME = 'enrichment';
 /**
  * Worker concurrency - how many enrichment jobs to process in parallel.
  */
-const WORKER_CONCURRENCY = 3;
+const WORKER_CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '5', 10);
 
 /**
  * Batch size for HubSpot updates.

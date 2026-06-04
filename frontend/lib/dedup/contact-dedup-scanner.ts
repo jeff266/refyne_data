@@ -21,7 +21,7 @@ const QUEUE_NAME = 'contact-dedup-scan';
 /**
  * Worker concurrency - keep low to avoid HubSpot rate limits.
  */
-const WORKER_CONCURRENCY = 1;
+const WORKER_CONCURRENCY = parseInt(process.env.DEDUP_WORKER_CONCURRENCY ?? '3', 10);
 
 /**
  * Contact properties to fetch for dedup analysis.

@@ -17,7 +17,7 @@ import { runTaxonomySuggester } from '../harmonies/taxonomy-suggester';
 
 const QUEUE_NAME = 'taxonomy-suggestions';
 
-const WORKER_CONCURRENCY = 2;
+const WORKER_CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY ?? '5', 10);
 
 const RETRY_SETTINGS = {
   attempts: 2,

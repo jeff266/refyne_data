@@ -381,8 +381,13 @@ export function startNormalizeWorker() {
 
       return { processed: companyIds.length, changed, failed };
     },
-    { connection, concurrency: 3 }
+    {
+      connection,
+      concurrency: parseInt(process.env.WORKER_CONCURRENCY ?? '5', 10)
+    }
   );
+
+  console.log(`[Normalize Worker] Started with concurrency ${parseInt(process.env.WORKER_CONCURRENCY ?? '5', 10)}`);
 
   worker.on('completed', (job) => {
     console.log(`[Normalize Worker] Job ${job.id} completed`);

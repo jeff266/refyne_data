@@ -274,9 +274,11 @@ export const jobSegmentationWorker = new Worker<JobSegmentationJobData>(
   },
   {
     connection: redisOptions,
-    concurrency: 1, // Process one run at a time
+    concurrency: parseInt(process.env.WORKER_CONCURRENCY ?? '5', 10),
   }
 );
+
+console.log(`[JobSegmentation Worker] Started with concurrency ${parseInt(process.env.WORKER_CONCURRENCY ?? '5', 10)}`);
 
 jobSegmentationWorker.on('completed', (job) => {
   console.log(`[JobSegmentation] Job ${job.id} completed`);
