@@ -6,6 +6,7 @@ import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { scanHubSpotField } from '@/lib/hubspot/harmony-field-scanner';
 import { getFieldAssignments } from '@/lib/harmonies/field-assignments';
 import { enqueueHarmonyScan } from '@/lib/queue/harmony-scan-queue';
+import { HubSpotClient } from '@/lib/hubspot/client';
 
 interface RouteContext {
   params: { id: string };
@@ -135,6 +136,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Failed to create scan job' }, { status: 500 });
     }
 
+    // Check if connection has crm.export scope for Export API
+    const hasExportScope = connection.oauth_scopes?.includes('crm.export') ?? false;
+
     // Try to enqueue the scan job to BullMQ worker
     const bullmqJobId = await enqueueHarmonyScan({
       jobId: job.id,
@@ -144,6 +148,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       objectType: apiObjectType,
       fieldName: hubspotProperty,
       harmonyId,
+      hasExportScope,
     });
 
     // If queue is available, return immediately
@@ -160,6 +165,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       accessToken,
       objectType: apiObjectType,
       fieldName: hubspotProperty,
+      hasExportScope,
     }).catch((err) => {
       console.error('[Scan Job] Background scan failed:', err);
       captureWithOrgContext(err, ctx.orgId, { jobId: job.id });
@@ -185,6 +191,7 @@ async function performScan(
     accessToken: string;
     objectType: 'companies' | 'contacts';
     fieldName: string;
+    hasExportScope?: boolean;
   }
 ) {
   if (!supabase) {
@@ -204,9 +211,15 @@ async function performScan(
       })
       .eq('id', jobId);
 
+    // Create HubSpot client
+    const client = new HubSpotClient(options.accessToken, options.portalId);
+
     // Perform scan
     const distinctValues = await scanHubSpotField({
-      ...options,
+      client,
+      objectType: options.objectType === 'companies' ? 'company' : 'contact',
+      fieldName: options.fieldName,
+      hasExportScope: options.hasExportScope,
       onProgress: async (progress, totalRecords) => {
         await db
           .from('harmony_scan_jobs')

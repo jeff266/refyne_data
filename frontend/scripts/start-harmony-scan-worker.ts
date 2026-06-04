@@ -13,9 +13,10 @@ import { Job } from 'bullmq';
 import { createHarmonyScanWorker, HarmonyScanJobData } from '../lib/queue/harmony-scan-queue';
 import { supabaseAdmin } from '../lib/db/admin-client';
 import { scanHubSpotField } from '../lib/hubspot/harmony-field-scanner';
+import { HubSpotClient } from '../lib/hubspot/client';
 
 async function processHarmonyScan(job: Job<HarmonyScanJobData>): Promise<void> {
-  const { jobId, orgId, portalId, accessToken, objectType, fieldName, harmonyId } = job.data;
+  const { jobId, orgId, portalId, accessToken, objectType, fieldName, harmonyId, hasExportScope } = job.data;
 
   console.log(`[HarmonyScanWorker] Processing scan for harmony ${harmonyId}, job ${jobId}`);
 
@@ -29,13 +30,15 @@ async function processHarmonyScan(job: Job<HarmonyScanJobData>): Promise<void> {
       })
       .eq('id', jobId);
 
+    // Create HubSpot client
+    const client = new HubSpotClient(accessToken, portalId);
+
     // Perform scan with progress updates
     const distinctValues = await scanHubSpotField({
-      orgId,
-      portalId,
-      accessToken,
-      objectType,
+      client,
+      objectType: objectType === 'companies' ? 'company' : 'contact',
       fieldName,
+      hasExportScope,
       onProgress: async (progress, totalRecords) => {
         console.log(`[HarmonyScanWorker] Progress: ${progress}% (${totalRecords} records)`);
 

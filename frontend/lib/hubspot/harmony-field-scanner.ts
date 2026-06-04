@@ -2,15 +2,17 @@
  * HubSpot Field Scanner for Harmony Wizard
  *
  * Scans a HubSpot field to find all distinct values and their counts.
- * Uses CRM Search API with pagination and rate limiting.
+ * Uses Export API for large portals with crm.export scope, otherwise uses
+ * standard list endpoint for optimal performance.
  */
 
+import { HubSpotClient } from './client';
+
 interface ScanOptions {
-  orgId: string;
-  portalId: string;
-  accessToken: string;
-  objectType: 'companies' | 'contacts';
+  client: HubSpotClient;
+  objectType: 'company' | 'contact';
   fieldName: string;
+  hasExportScope?: boolean;
   onProgress?: (progress: number, totalRecords: number) => void;
 }
 
@@ -20,44 +22,87 @@ interface DistinctValue {
 }
 
 export async function scanHubSpotField(options: ScanOptions): Promise<DistinctValue[]> {
-  const { orgId, portalId, accessToken, objectType, fieldName, onProgress } = options;
+  const { client, objectType, fieldName, hasExportScope = false, onProgress } = options;
+
+  const startTime = Date.now();
+  console.log(`[Harmony Scanner] Starting scan for field ${fieldName} on ${objectType}s`);
 
   // Value frequency map
   const valueMap = new Map<string, number>();
   let totalRecords = 0;
-  let after = undefined;
+  let batchCount = 0;
 
-  // Paginate through all records
-  while (true) {
-    const searchBody: any = {
-      filterGroups: [],
-      properties: [fieldName],
-      limit: 100,
-    };
+  try {
+    // For large portals with Export API access, use export method
+    if (hasExportScope) {
+      console.log(`[Harmony Scanner] Using Export API (has crm.export scope)`);
 
-    if (after) {
-      searchBody.after = after;
+      const exportedRecords = await client.exportCompanies([fieldName]);
+
+      if (exportedRecords) {
+        // Process exported records
+        for (const record of exportedRecords) {
+          totalRecords++;
+          const value = record.properties?.[fieldName];
+          if (value && value.trim()) {
+            const trimmedValue = value.trim();
+            valueMap.set(trimmedValue, (valueMap.get(trimmedValue) || 0) + 1);
+          }
+        }
+
+        if (onProgress) {
+          onProgress(100, totalRecords);
+        }
+
+        console.log(`[Harmony Scanner] Export API: processed ${totalRecords} records`);
+      } else {
+        console.warn(`[Harmony Scanner] Export API failed, falling back to getAllRecords`);
+        // Fall through to getAllRecords method below
+        return scanViaGetAllRecords(client, objectType, fieldName, onProgress);
+      }
+    } else {
+      // Use standard list endpoint with getAllRecords
+      return scanViaGetAllRecords(client, objectType, fieldName, onProgress);
     }
+  } catch (error) {
+    console.error(`[Harmony Scanner] Scan failed:`, error);
+    throw error;
+  } finally {
+    const elapsed = Date.now() - startTime;
+    console.log(`[Harmony Scanner] Completed in ${elapsed}ms (${totalRecords} records, ${valueMap.size} distinct values)`);
+  }
 
-    const res = await fetch(`https://api.hubapi.com/crm/v3/objects/${objectType}/search`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(searchBody),
-    });
+  // Convert map to sorted array
+  const distinctValues: DistinctValue[] = Array.from(valueMap.entries())
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count); // Sort by frequency descending
 
-    if (!res.ok) {
-      const error = await res.text();
-      throw new Error(`HubSpot API error: ${error}`);
-    }
+  return distinctValues;
+}
 
-    const data = await res.json();
-    const results = data.results || [];
+/**
+ * Scan using standard getAllRecords method.
+ * Faster than Search API, no artificial delays.
+ */
+async function scanViaGetAllRecords(
+  client: HubSpotClient,
+  objectType: 'company' | 'contact',
+  fieldName: string,
+  onProgress?: (progress: number, totalRecords: number) => void
+): Promise<DistinctValue[]> {
+  console.log(`[Harmony Scanner] Using getAllRecords (standard list endpoint)`);
 
-    // Aggregate values
-    for (const record of results) {
+  const valueMap = new Map<string, number>();
+  let totalRecords = 0;
+  let batchCount = 0;
+
+  // Use client.getAllRecords which uses standard list endpoint
+  for await (const batch of client.getAllRecords(objectType, [fieldName])) {
+    batchCount++;
+
+    // Aggregate values from batch
+    for (const record of batch) {
+      totalRecords++;
       const value = record.properties?.[fieldName];
       if (value && value.trim()) {
         const trimmedValue = value.trim();
@@ -65,23 +110,21 @@ export async function scanHubSpotField(options: ScanOptions): Promise<DistinctVa
       }
     }
 
-    totalRecords += results.length;
-
-    // Report progress
+    // Report progress (estimate 50% until we know we're done)
     if (onProgress) {
-      const progress = data.paging?.next ? 50 : 100; // Approximate progress
+      const progress = batchCount === 1 ? 50 : 75; // Will update to 100 at end
       onProgress(progress, totalRecords);
     }
 
-    // Check for more pages
-    if (data.paging?.next?.after) {
-      after = data.paging.next.after;
-
-      // Rate limiting: wait 200ms between requests (max 5 req/sec for search API)
-      await new Promise(resolve => setTimeout(resolve, 200));
-    } else {
-      break;
+    if (batchCount % 10 === 0) {
+      console.log(`[Harmony Scanner] Processed ${batchCount} batches, ${totalRecords} records so far`);
     }
+  }
+
+  console.log(`[Harmony Scanner] getAllRecords: processed ${totalRecords} records in ${batchCount} batches`);
+
+  if (onProgress) {
+    onProgress(100, totalRecords);
   }
 
   // Convert map to sorted array

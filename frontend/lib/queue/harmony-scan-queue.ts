@@ -17,6 +17,7 @@ export interface HarmonyScanJobData {
   objectType: 'companies' | 'contacts';
   fieldName: string;
   harmonyId: string;
+  hasExportScope?: boolean;
 }
 
 let harmonyScanQueue: Queue<HarmonyScanJobData> | null = null;
