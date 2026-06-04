@@ -247,7 +247,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
           } else if (data.status === 'failed') {
             clearInterval(interval);
             setScanning(false);
-            alert('Scan failed: ' + (data.errorMessage || 'Unknown error'));
+            alert('Scan failed: ' + (data.error || 'Unknown error'));
           }
         }
       } catch (err) {
