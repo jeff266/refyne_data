@@ -218,12 +218,15 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
         // Start polling for progress
         pollScanProgress(data.jobId);
       } else {
-        alert('Failed to start scan');
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        const errorMessage = errorData.error || 'Failed to start scan';
+        console.error('Failed to start scan:', errorMessage);
+        alert(errorMessage);
         setScanning(false);
       }
     } catch (err) {
       console.error('Failed to start scan:', err);
-      alert('Failed to start scan');
+      alert('Failed to start scan: Network error');
       setScanning(false);
     }
   };

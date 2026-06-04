@@ -33,3 +33,6 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated files
+/lib/harmonies/library/generated-bundle.ts

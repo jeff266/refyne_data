@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run generate:harmonies && next build",
     "start": "next start",
     "lint": "next lint",
+    "generate:harmonies": "npx tsx scripts/generate-harmony-bundle.ts",
+    "verify:harmonies": "npx tsx scripts/verify-harmony-bundle.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",

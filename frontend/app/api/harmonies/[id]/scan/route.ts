@@ -30,15 +30,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const harmonyId = context.params.id;
 
   try {
-    // Get harmony details
+    // Get harmony details (include preset harmonies with org_id IS NULL)
     const { data: harmony, error: harmonyError } = await supabase
       .from('harmonies')
       .select('*')
       .eq('id', harmonyId)
-      .eq('org_id', ctx.orgId)
+      .or(`org_id.is.null,org_id.eq.${ctx.orgId}`)
       .single();
 
     if (harmonyError || !harmony) {
+      console.error('[Scan Job] Harmony not found:', { harmonyId, orgId: ctx.orgId, error: harmonyError });
       return NextResponse.json({ error: 'Harmony not found' }, { status: 404 });
     }
 
@@ -50,30 +51,70 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .single();
 
     if (connError || !connection) {
-      return NextResponse.json({ error: 'HubSpot not connected' }, { status: 400 });
+      console.error('[Scan Job] HubSpot connection not found:', { orgId: ctx.orgId, error: connError });
+      return NextResponse.json(
+        { error: 'HubSpot connection not found. Please connect HubSpot in Settings.' },
+        { status: 400 }
+      );
     }
 
     // Get access token
     const accessToken = await getAccessToken(ctx.orgId);
     if (!accessToken) {
-      return NextResponse.json({ error: 'Failed to get access token' }, { status: 500 });
+      console.error('[Scan Job] Failed to get access token:', { orgId: ctx.orgId });
+      return NextResponse.json(
+        { error: 'Failed to authenticate with HubSpot. Please reconnect in Settings.' },
+        { status: 500 }
+      );
     }
 
-    // Get HubSpot property name from field assignments
-    const fieldAssignments = await getFieldAssignments(
-      ctx.orgId,
-      harmony.object_type as 'company' | 'contact' | 'deal'
-    );
-    const assignment = fieldAssignments.find(a => a.harmonyId === harmonyId);
+    // Get HubSpot property name
+    // For custom harmonies, use harmony.field directly (it's already the HubSpot property)
+    // For preset harmonies, try to find field assignment
+    let hubspotProperty = harmony.field;
 
-    if (!assignment) {
+    if (harmony.is_preset) {
+      const fieldAssignments = await getFieldAssignments(
+        ctx.orgId,
+        harmony.object_type as 'company' | 'contact' | 'deal'
+      );
+      const assignment = fieldAssignments.find(a => a.harmonyId === harmonyId);
+
+      if (assignment) {
+        hubspotProperty = assignment.hubspotProperty;
+      }
+    }
+
+    if (!hubspotProperty) {
+      console.error('[Scan Job] No field configured:', { harmonyId, isPreset: harmony.is_preset, field: harmony.field });
       return NextResponse.json(
-        { error: 'No field assignment found for this harmony' },
+        { error: 'No field configured for this harmony' },
         { status: 400 }
       );
     }
 
-    const hubspotProperty = assignment.hubspotProperty;
+    // Map object type to HubSpot API format (validate before creating job)
+    let apiObjectType: 'companies' | 'contacts';
+    if (harmony.object_type === 'company') {
+      apiObjectType = 'companies';
+    } else if (harmony.object_type === 'contact') {
+      apiObjectType = 'contacts';
+    } else {
+      console.error('[Scan Job] Unsupported object type:', harmony.object_type);
+      return NextResponse.json(
+        { error: `Unsupported object type: ${harmony.object_type}` },
+        { status: 400 }
+      );
+    }
+
+    console.log('[Scan Job] Starting scan:', {
+      harmonyId,
+      harmonyName: harmony.name,
+      objectType: harmony.object_type,
+      apiObjectType,
+      hubspotProperty,
+      isPreset: harmony.is_preset,
+    });
 
     // Create scan job
     const { data: job, error: jobError } = await supabase
@@ -98,18 +139,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
       orgId: ctx.orgId,
       portalId: connection.portal_id,
       accessToken,
-      objectType: harmony.object_type === 'company' ? 'companies' : 'contacts',
-      fieldName: hubspotProperty, // Use HubSpot property from field assignments, not canonical field
+      objectType: apiObjectType,
+      fieldName: hubspotProperty,
     }).catch((err) => {
       console.error('[Scan Job] Background scan failed:', err);
       captureWithOrgContext(err, ctx.orgId, { jobId: job.id });
     });
 
     return NextResponse.json({ jobId: job.id, success: true });
-  } catch (error) {
+  } catch (error: any) {
     captureWithOrgContext(error, ctx.orgId, { route: `/api/harmonies/${harmonyId}/scan` });
     console.error('[Scan Job] Unexpected error:', error);
-    return NextResponse.json({ error: 'Failed to start scan' }, { status: 500 });
+    const errorMessage = error?.message || 'Unknown error occurred';
+    return NextResponse.json(
+      { error: `Failed to start scan: ${errorMessage}` },
+      { status: 500 }
+    );
   }
 }
 

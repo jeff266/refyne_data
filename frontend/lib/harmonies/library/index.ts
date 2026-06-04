@@ -3,52 +3,90 @@
  *
  * This module loads and exports all built-in Harmonies from YAML files.
  * Provides utilities for discovering Harmonies by ID or field.
+ *
+ * YAML files are bundled at build time via generated-bundle.ts to ensure
+ * they're available in serverless environments (Vercel) where filesystem
+ * access is restricted.
  */
 
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { parseHarmony, parseHarmonies } from '../spec/parser';
 import type { ValidatedHarmony, HarmonySpec } from '../spec/schema';
 
-// Get the directory of this file for resolving YAML paths
-// Works in both ESM and CJS contexts
-const getLibraryDir = (): string => {
-  // Try ESM style first
-  try {
-    if (typeof import.meta !== 'undefined' && import.meta.url) {
-      return dirname(fileURLToPath(import.meta.url));
-    }
-  } catch {
-    // Fall through to __dirname
-  }
-  // Fallback for CJS or test environments
-  return __dirname;
-};
+// Import the pre-bundled YAML files (generated at build time)
+// Falls back to filesystem for local dev/testing
+let HARMONY_YAML_BUNDLE: Record<string, string> = {};
+let LIBRARY_HARMONY_FILES: string[] = [];
 
-/**
- * List of all library Harmony YAML files.
- */
-const LIBRARY_HARMONY_FILES = [
-  'company-name.yaml',
-  'company-domain.yaml',
-  'company-revenue.yaml',
-  'company-employees.yaml',
-  'company-industry.yaml',
-  'person-name.yaml',
-  'person-title.yaml',
-  'phone.yaml',
-  'email.yaml',
-  'address-country.yaml',
-  'address-state.yaml',
-  'linkedin-url.yaml',
-  'contact-name-case.yaml',
-  'contact-phone-e164.yaml',
-  'contact-title-standard.yaml',
-  'contact-email-lower.yaml',
-  'contact-location.yaml',
-  'website-social-media.yaml',
-] as const;
+// Synchronous initialization - try to load the bundle
+function initializeBundle() {
+  try {
+    // Try to require the generated bundle (available after build)
+    // Use require for synchronous loading
+    const bundle = require('./generated-bundle');
+    HARMONY_YAML_BUNDLE = bundle.HARMONY_YAML_BUNDLE;
+    LIBRARY_HARMONY_FILES = bundle.HARMONY_YAML_FILES;
+  } catch (err) {
+    // Fallback for dev/test environments - use filesystem
+    console.warn(
+      'Generated bundle not found, falling back to filesystem. Run: npm run generate:harmonies'
+    );
+
+    try {
+      const { readFileSync } = require('fs');
+      const { join, dirname } = require('path');
+      const { fileURLToPath } = require('url');
+
+      const getLibraryDir = (): string => {
+        try {
+          if (typeof import.meta !== 'undefined' && import.meta.url) {
+            return dirname(fileURLToPath(import.meta.url));
+          }
+        } catch {
+          // Fall through
+        }
+        return __dirname;
+      };
+
+      const libraryDir = getLibraryDir();
+      const files = [
+        'company-name.yaml',
+        'company-domain.yaml',
+        'company-revenue.yaml',
+        'company-employees.yaml',
+        'company-industry.yaml',
+        'person-name.yaml',
+        'person-title.yaml',
+        'phone.yaml',
+        'email.yaml',
+        'address-country.yaml',
+        'address-state.yaml',
+        'linkedin-url.yaml',
+        'contact-name-case.yaml',
+        'contact-phone-e164.yaml',
+        'contact-title-standard.yaml',
+        'contact-email-lower.yaml',
+        'contact-location.yaml',
+        'website-social-media.yaml',
+      ];
+
+      for (const filename of files) {
+        try {
+          const filepath = join(libraryDir, filename);
+          const content = readFileSync(filepath, 'utf-8');
+          HARMONY_YAML_BUNDLE[filename] = content;
+          LIBRARY_HARMONY_FILES.push(filename);
+        } catch (e) {
+          console.error(`Failed to read ${filename}:`, e);
+        }
+      }
+    } catch (fsErr) {
+      console.error('Failed to initialize harmony bundle:', fsErr);
+    }
+  }
+}
+
+// Initialize on module load
+initializeBundle();
 
 /**
  * Cache for loaded Harmonies to avoid re-parsing.
@@ -64,11 +102,13 @@ let cachedByFieldMap: Map<string, ValidatedHarmony[]> | null = null;
  * @returns ParseResult with the validated Harmony or errors
  */
 export function loadHarmonyFile(filename: string): ValidatedHarmony | null {
-  const libraryDir = getLibraryDir();
-  const filepath = join(libraryDir, filename);
-
   try {
-    const content = readFileSync(filepath, 'utf-8');
+    const content = HARMONY_YAML_BUNDLE[filename];
+    if (!content) {
+      console.error(`YAML file not found in bundle: ${filename}`);
+      return null;
+    }
+
     const result = parseHarmony(content, { source: 'library' });
 
     if (result.success && result.harmony) {
@@ -78,7 +118,7 @@ export function loadHarmonyFile(filename: string): ValidatedHarmony | null {
     console.error(`Failed to parse ${filename}:`, result.errors);
     return null;
   } catch (err) {
-    console.error(`Failed to read ${filename}:`, err);
+    console.error(`Failed to load ${filename}:`, err);
     return null;
   }
 }
@@ -87,7 +127,7 @@ export function loadHarmonyFile(filename: string): ValidatedHarmony | null {
  * Load all library Harmonies from YAML files.
  * Results are cached after first load.
  *
- * @param forceReload - Force reloading from disk
+ * @param forceReload - Force reloading from bundle
  * @returns Array of validated Harmonies
  */
 export function loadLibraryHarmonies(forceReload = false): ValidatedHarmony[] {
@@ -95,16 +135,14 @@ export function loadLibraryHarmonies(forceReload = false): ValidatedHarmony[] {
     return cachedHarmonies;
   }
 
-  const libraryDir = getLibraryDir();
   const yamls: Array<{ name: string; content: string }> = [];
 
   for (const filename of LIBRARY_HARMONY_FILES) {
-    try {
-      const filepath = join(libraryDir, filename);
-      const content = readFileSync(filepath, 'utf-8');
+    const content = HARMONY_YAML_BUNDLE[filename];
+    if (content) {
       yamls.push({ name: filename, content });
-    } catch (err) {
-      console.error(`Failed to read library file ${filename}:`, err);
+    } else {
+      console.error(`YAML file missing from bundle: ${filename}`);
     }
   }
 
