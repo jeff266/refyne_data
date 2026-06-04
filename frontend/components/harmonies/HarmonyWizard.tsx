@@ -15,6 +15,8 @@ import {
   useSensors,
   DragStartEvent,
   DragEndEvent,
+  useDroppable,
+  useDraggable,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -766,7 +768,7 @@ function GroupContainer({
   group: ValueGroup;
   onUpdateLabel: (id: string, label: string) => void;
 }) {
-  const { setNodeRef } = useSortable({ id: group.id });
+  const { setNodeRef } = useDroppable({ id: group.id });
 
   return (
     <div
@@ -826,13 +828,12 @@ function GroupContainer({
 }
 
 function DraggableValue({ value }: { value: string }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: value,
   });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.5 : 1,
     padding: '6px 10px',
     background: C.surface,
