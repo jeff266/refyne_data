@@ -150,8 +150,15 @@ export function SurvivorshipRulesPanel() {
     return labels[ruleType] || ruleType;
   };
 
-  const getFieldLabel = (fieldKey: string): string => {
+  const getFieldLabel = (fieldKey: string, ruleType?: string): string => {
+    // Special case: TLD disqualifier always shows "Domain matching"
+    if (ruleType === 'tld_disqualifier') {
+      return 'Domain matching';
+    }
+
     if (fieldKey === '*') return 'All fields';
+
+    // Look up human-readable label from field options
     const field = fieldOptions.find((f) => f.key === fieldKey);
     return field?.label || fieldKey;
   };
@@ -244,7 +251,7 @@ export function SurvivorshipRulesPanel() {
                 e.currentTarget.style.background = 'transparent';
               }}
             >
-              <div>{getFieldLabel(rule.field_key)}</div>
+              <div>{getFieldLabel(rule.field_key, rule.rule_type)}</div>
               <div>{getRuleTypeLabel(rule.rule_type)}</div>
               <div style={{ color: C.text3 }}>{getRuleBehaviorText(rule)}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -371,7 +378,7 @@ export function SurvivorshipRulesPanel() {
                   e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <div>{getFieldLabel(rule.field_key)}</div>
+                <div>{getFieldLabel(rule.field_key, rule.rule_type)}</div>
                 <div>{getRuleTypeLabel(rule.rule_type)}</div>
                 <div style={{ color: C.text3 }}>{getRuleBehaviorText(rule)}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
