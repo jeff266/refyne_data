@@ -1,13 +1,24 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { addToast } from '@/components/ui/toast';
-import { C } from '@/lib/design-tokens';
+import { C, F } from '@/lib/design-tokens';
+import { ChevronDown } from 'lucide-react';
+import { OrderEditor } from '../components/OrderEditor';
 
 interface FieldRule {
   field: string;
   rule: string;
   config: Record<string, any>;
+}
+
+interface HubSpotField {
+  name: string;
+  label: string;
+  type: string;
+  fieldType: string;
+  options?: Array<{ label: string; value: string }>;
 }
 
 interface DedupPolicy {
@@ -51,10 +62,18 @@ function getComplianceFieldLabel(field: string): string {
 }
 
 export default function DedupPoliciesPage() {
+  // Phase 1: Object type support
+  const searchParams = useSearchParams();
+  const objectType = (searchParams.get('object') as 'company' | 'contact') || 'company';
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [policy, setPolicy] = useState<DedupPolicy | null>(null);
   const [isDefault, setIsDefault] = useState(false);
+
+  // Phase 2: Field options for dropdown
+  const [fieldOptions, setFieldOptions] = useState<HubSpotField[]>([]);
+  const [loadingFields, setLoadingFields] = useState(false);
 
   // Form state
   const [policyName, setPolicyName] = useState('Default Policy');
@@ -64,10 +83,14 @@ export default function DedupPoliciesPage() {
   const [fieldRules, setFieldRules] = useState<FieldRule[]>([]);
   const [newComplianceField, setNewComplianceField] = useState('');
 
-  // Load policy on mount
+  // Phase 3: Track field types for each rule
+  const [fieldTypes, setFieldTypes] = useState<Record<number, string>>({});
+
+  // Load policy on mount and when object type changes
   useEffect(() => {
     loadPolicy();
-  }, []);
+    loadFieldOptions();
+  }, [objectType]);
 
   async function loadPolicy() {
     try {
@@ -91,6 +114,47 @@ export default function DedupPoliciesPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Phase 2: Load HubSpot field options for the current object type
+  async function loadFieldOptions() {
+    setLoadingFields(true);
+    try {
+      const res = await fetch(`/api/hubspot/properties?objectType=${objectType}`);
+      if (!res.ok) throw new Error('Failed to load fields');
+
+      const data = await res.json();
+      if (data.properties) {
+        const allFields = [...(data.properties.standard || []), ...(data.properties.custom || [])];
+        setFieldOptions(allFields);
+      }
+    } catch (error) {
+      console.error('Failed to load field options:', error);
+      addToast('error', 'Failed to load field options');
+    } finally {
+      setLoadingFields(false);
+    }
+  }
+
+  // Phase 3: Get applicable rule types based on field type
+  function getApplicableRules(fieldType?: string) {
+    if (!fieldType || fieldType === '*') {
+      return RULE_TYPES; // All rules available for wildcard
+    }
+
+    const universalRules = ['fill_empty', 'keep_master', 'keep_newest', 'keep_oldest'];
+
+    if (fieldType === 'string' || fieldType === 'text' || fieldType === 'textarea') {
+      return RULE_TYPES.filter(r => [...universalRules, 'append_both'].includes(r.value));
+    }
+    if (fieldType === 'number') {
+      return RULE_TYPES.filter(r => [...universalRules, 'keep_highest', 'keep_lowest'].includes(r.value));
+    }
+    if (fieldType === 'enumeration' || fieldType === 'booleancheckbox' || fieldType === 'radio' || fieldType === 'checkbox') {
+      return RULE_TYPES.filter(r => [...universalRules, 'keep_most_advanced'].includes(r.value));
+    }
+
+    return RULE_TYPES.filter(r => universalRules.includes(r.value));
   }
 
   async function savePolicy() {
@@ -133,7 +197,76 @@ export default function DedupPoliciesPage() {
   function updateFieldRule(index: number, updates: Partial<FieldRule>) {
     const updated = [...fieldRules];
     updated[index] = { ...updated[index], ...updates };
+
+    // Phase 3: Track field type when field changes
+    if (updates.field !== undefined) {
+      const selectedField = fieldOptions.find(f => f.name === updates.field);
+      if (selectedField) {
+        setFieldTypes(prev => ({ ...prev, [index]: selectedField.type }));
+
+        // Phase 4: Auto-populate enum values for keep_most_advanced
+        if (updated[index].rule === 'keep_most_advanced' &&
+            (selectedField.type === 'enumeration' || selectedField.type === 'booleancheckbox')) {
+          fetchEnumValues(updates.field!, index);
+        }
+      } else if (updates.field === '*') {
+        setFieldTypes(prev => ({ ...prev, [index]: '*' }));
+      }
+    }
+
+    // Phase 4: Clear config when switching away from keep_most_advanced
+    if (updates.rule !== undefined && updates.rule !== 'keep_most_advanced') {
+      updated[index].config = {};
+    }
+
+    // Phase 4: Fetch enum values when switching to keep_most_advanced
+    if (updates.rule === 'keep_most_advanced' && updated[index].field && updated[index].field !== '*') {
+      const selectedField = fieldOptions.find(f => f.name === updated[index].field);
+      if (selectedField && (selectedField.type === 'enumeration' || selectedField.type === 'booleancheckbox')) {
+        fetchEnumValues(updated[index].field, index);
+      }
+    }
+
     setFieldRules(updated);
+  }
+
+  // Phase 4: Fetch enum values for a field
+  async function fetchEnumValues(fieldName: string, ruleIndex: number) {
+    try {
+      const res = await fetch(`/api/hubspot/properties/${fieldName}/options?objectType=${objectType}`);
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (data.options && data.options.length > 0) {
+        // Auto-populate with HubSpot's actual enum values
+        const values = data.options.map((opt: any) => opt.value);
+        updateFieldRuleConfig(ruleIndex, { order: values });
+      }
+    } catch (error) {
+      console.error('Failed to fetch enum values:', error);
+    }
+  }
+
+  function updateFieldRuleConfig(index: number, config: Record<string, any>) {
+    const updated = [...fieldRules];
+    updated[index] = { ...updated[index], config: { ...updated[index].config, ...config } };
+    setFieldRules(updated);
+  }
+
+  // Phase 2: Sort fields with popular ones first
+  const POPULAR_FIELDS = ['domain', 'name', 'email', 'phone', 'lifecyclestage', 'industry', 'company', 'city', 'state', 'country'];
+
+  function getSortedFieldOptions(): HubSpotField[] {
+    return [...fieldOptions].sort((a, b) => {
+      const aPopular = POPULAR_FIELDS.indexOf(a.name);
+      const bPopular = POPULAR_FIELDS.indexOf(b.name);
+
+      if (aPopular !== -1 && bPopular !== -1) return aPopular - bPopular;
+      if (aPopular !== -1) return -1;
+      if (bPopular !== -1) return 1;
+
+      return a.label.localeCompare(b.label);
+    });
   }
 
   function removeFieldRule(index: number) {
@@ -375,24 +508,34 @@ export default function DedupPoliciesPage() {
                 <div style={{ fontSize: 11, color: C.text3, marginBottom: 6, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Field
                 </div>
-                <input
-                  type="text"
+                <select
                   value={rule.field}
                   onChange={(e) =>
                     updateFieldRule(index, { field: e.target.value })
                   }
-                  placeholder="lifecyclestage"
                   style={{
                     width: '100%',
                     padding: '10px 12px',
                     fontSize: 13,
-                    fontFamily: 'monospace',
                     border: `1px solid ${C.border}`,
                     borderRadius: 0,
                     background: C.bg,
                     color: C.text,
+                    cursor: 'pointer',
                   }}
-                />
+                >
+                  <option value="">Select field...</option>
+                  <option value="*">* (All fields)</option>
+                  {loadingFields ? (
+                    <option disabled>Loading fields...</option>
+                  ) : (
+                    getSortedFieldOptions().map((field) => (
+                      <option key={field.name} value={field.name}>
+                        {field.label} ({field.name})
+                      </option>
+                    ))
+                  )}
+                </select>
               </div>
 
               {/* Rule type */}
@@ -416,7 +559,7 @@ export default function DedupPoliciesPage() {
                     cursor: 'pointer',
                   }}
                 >
-                  {RULE_TYPES.map((rt) => (
+                  {getApplicableRules(fieldTypes[index]).map((rt) => (
                     <option key={rt.value} value={rt.value}>
                       {rt.label}
                     </option>
@@ -432,30 +575,23 @@ export default function DedupPoliciesPage() {
 
             {/* Config for keep_most_advanced */}
             {rule.rule === 'keep_most_advanced' && (
-              <div style={{ marginBottom: 16, padding: 12, background: C.bg, border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 11, color: C.text3, marginBottom: 6, fontWeight: 500 }}>
-                  Funnel Order (comma-separated)
+              <div style={{ marginBottom: 16, padding: 16, background: C.bg, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 8 }}>
+                  Funnel Order
                 </div>
-                <input
-                  type="text"
-                  value={rule.config.order?.join(', ') || ''}
-                  onChange={(e) =>
-                    updateFieldRule(index, {
-                      config: { order: e.target.value.split(',').map(s => s.trim()) },
-                    })
-                  }
-                  placeholder="lead, marketingqualifiedlead, salesqualifiedlead, opportunity, customer"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 0,
-                    background: C.surface,
-                    color: C.text,
-                  }}
-                />
+                {rule.config.order && rule.config.order.length > 0 ? (
+                  <OrderEditor
+                    values={rule.config.order}
+                    onChange={(order) => updateFieldRuleConfig(index, { order })}
+                    fieldKey={rule.field}
+                    topLabel="Most advanced"
+                    bottomLabel="Least advanced"
+                  />
+                ) : (
+                  <div style={{ fontSize: 12, color: C.text3, fontStyle: 'italic', padding: '12px 0' }}>
+                    {loadingFields ? 'Loading enum values...' : 'Select an enumeration field to configure funnel order'}
+                  </div>
+                )}
               </div>
             )}
 
