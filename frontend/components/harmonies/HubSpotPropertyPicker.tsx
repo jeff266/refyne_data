@@ -10,6 +10,7 @@ export interface HubSpotPropertyPickerProps {
   value: string | null;
   onChange: (propertyName: string, propertyLabel: string) => void;
   placeholder?: string;
+  preferredField?: string; // Show this field at the top if it matches
 }
 
 interface HubSpotProperty {
@@ -22,11 +23,16 @@ interface HubSpotProperty {
   hubspotDefined: boolean;
 }
 
+// Most commonly used HubSpot properties (for smart sorting)
+const POPULAR_COMPANY_FIELDS = ['name', 'domain', 'industry', 'city', 'state', 'country', 'phone', 'numberofemployees', 'annualrevenue'];
+const POPULAR_CONTACT_FIELDS = ['firstname', 'lastname', 'email', 'phone', 'jobtitle', 'company', 'city', 'state', 'country'];
+
 export function HubSpotPropertyPicker({
   objectType,
   value,
   onChange,
   placeholder = 'Select a HubSpot property...',
+  preferredField,
 }: HubSpotPropertyPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -64,22 +70,50 @@ export function HubSpotPropertyPicker({
     fetchProperties();
   }, [objectType]);
 
-  // Filter properties based on search
+  // Smart sort function: preferred field first, then popular fields, then alphabetical
+  const smartSort = (properties: HubSpotProperty[]) => {
+    const popularFields = objectType === 'company' ? POPULAR_COMPANY_FIELDS : POPULAR_CONTACT_FIELDS;
+
+    return [...properties].sort((a, b) => {
+      // 1. Preferred field (exact match) comes first
+      if (preferredField) {
+        const aMatchesPreferred = a.name === preferredField || a.label.toLowerCase() === preferredField.toLowerCase();
+        const bMatchesPreferred = b.name === preferredField || b.label.toLowerCase() === preferredField.toLowerCase();
+        if (aMatchesPreferred && !bMatchesPreferred) return -1;
+        if (!aMatchesPreferred && bMatchesPreferred) return 1;
+      }
+
+      // 2. Popular fields come next
+      const aIsPopular = popularFields.includes(a.name);
+      const bIsPopular = popularFields.includes(b.name);
+      if (aIsPopular && !bIsPopular) return -1;
+      if (!aIsPopular && bIsPopular) return 1;
+
+      // 3. Alphabetical by label
+      return a.label.localeCompare(b.label);
+    });
+  };
+
+  // Filter and sort properties based on search
   const filteredStandard = useMemo(() => {
-    if (!search) return standardProperties;
-    const query = search.toLowerCase();
-    return standardProperties.filter(
-      p => p.label.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)
-    );
-  }, [standardProperties, search]);
+    const filtered = !search
+      ? standardProperties
+      : standardProperties.filter(p =>
+          p.label.toLowerCase().includes(search.toLowerCase()) ||
+          p.name.toLowerCase().includes(search.toLowerCase())
+        );
+    return smartSort(filtered);
+  }, [standardProperties, search, preferredField, objectType]);
 
   const filteredCustom = useMemo(() => {
-    if (!search) return customProperties;
-    const query = search.toLowerCase();
-    return customProperties.filter(
-      p => p.label.toLowerCase().includes(query) || p.name.toLowerCase().includes(query)
-    );
-  }, [customProperties, search]);
+    const filtered = !search
+      ? customProperties
+      : customProperties.filter(p =>
+          p.label.toLowerCase().includes(search.toLowerCase()) ||
+          p.name.toLowerCase().includes(search.toLowerCase())
+        );
+    return smartSort(filtered);
+  }, [customProperties, search, preferredField, objectType]);
 
   // Get selected property label
   const selectedProperty = useMemo(() => {

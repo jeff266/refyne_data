@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Loader2, Lock, ArrowRight } from 'lucide-react';
+import { Plus, Loader2, Lock, ArrowRight, Info } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, PrimaryBtn, GhostBtn } from '@/components/refyne';
+import { HubSpotPropertyPicker } from '@/components/harmonies/HubSpotPropertyPicker';
 
 interface FieldMapping {
   id: string;
@@ -59,6 +60,7 @@ export default function MappingsPage() {
     harmonyId: '',
     canonicalField: '',
     hubspotProperty: '',
+    hubspotPropertyLabel: '',
     outputFormat: '',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -149,6 +151,7 @@ export default function MappingsPage() {
         harmonyId: '',
         canonicalField: '',
         hubspotProperty: '',
+        hubspotPropertyLabel: '',
         outputFormat: '',
       });
     } catch (err) {
@@ -221,6 +224,37 @@ export default function MappingsPage() {
           Configure how Refyne canonical fields map to HubSpot properties
         </p>
       </div>
+
+      {/* Explainer */}
+      <Card style={{ padding: 16, marginBottom: 16, background: `linear-gradient(135deg, ${C.indigoDim} 0%, ${C.surface} 100%)`, border: `1px solid ${C.indigoBrd}` }}>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <Info size={18} color={C.indigo} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <h3 style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 6 }}>
+              How Field Mappings Work
+            </h3>
+            <p style={{ fontSize: 12, color: C.text2, lineHeight: 1.6, marginBottom: 8 }}>
+              Field Mappings connect Refyne's canonical data model to your HubSpot properties.
+              When a harmony normalizes data, it outputs a canonical field (e.g., <code style={{ background: C.bg, padding: '2px 4px', borderRadius: 3, fontFamily: F.mono, fontSize: 11 }}>canonical.industry</code>).
+              This mapping tells Refyne which HubSpot property to write that normalized value to.
+            </p>
+            <div style={{ fontSize: 11, color: C.text3, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ArrowRight size={12} color={C.indigo} />
+                <span>System mappings are pre-configured for library harmonies</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ArrowRight size={12} color={C.indigo} />
+                <span>Custom mappings are required for custom harmonies</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ArrowRight size={12} color={C.indigo} />
+                <span>One canonical field can map to multiple HubSpot properties</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Filters */}
       <Card style={{ padding: 16, marginBottom: 16 }}>
@@ -526,13 +560,16 @@ export default function MappingsPage() {
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: C.text3, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   HubSpot Property
                 </label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. firstname"
+                <HubSpotPropertyPicker
+                  objectType={objectFilter === 'company' ? 'company' : 'contact'}
                   value={formData.hubspotProperty}
-                  onChange={(e) => setFormData({ ...formData, hubspotProperty: e.target.value })}
-                  style={{ width: '100%', padding: '8px 12px', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, fontFamily: F.mono }}
+                  onChange={(property, label) => setFormData({
+                    ...formData,
+                    hubspotProperty: property,
+                    hubspotPropertyLabel: label,
+                  })}
+                  preferredField={formData.canonicalField}
+                  placeholder="Search HubSpot properties..."
                 />
               </div>
 
