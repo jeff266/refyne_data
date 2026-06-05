@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
 import { Plus, Settings as SettingsIcon, X } from 'lucide-react';
 import { AddRuleModal } from './AddRuleModal';
@@ -30,6 +31,9 @@ interface FieldOption {
 }
 
 export function SurvivorshipRulesPanel() {
+  const searchParams = useSearchParams();
+  const objectType = (searchParams.get('object') as 'company' | 'contact') || 'company';
+
   const [rules, setRules] = useState<SurvivorshipRule[]>([]);
   const [fieldOptions, setFieldOptions] = useState<FieldOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -37,11 +41,11 @@ export function SurvivorshipRulesPanel() {
 
   useEffect(() => {
     loadRules();
-  }, []);
+  }, [objectType]);
 
   const loadRules = async () => {
     try {
-      const response = await fetch('/api/settings/survivorship-rules');
+      const response = await fetch(`/api/settings/survivorship-rules?objectType=${objectType}`);
       const data = await response.json();
       setRules(data.rules || []);
       setFieldOptions(data.field_options || []);
