@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { enqueuePreviewJob } from '@/lib/queue/enrichment-queue';
+import { getOrgBillingState } from '@/lib/billing/trial';
 
 /**
  * POST /api/enrich/preview/enqueue?objectType=company|contact
@@ -36,6 +37,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields: source, fieldKeys, providerId' },
         { status: 400 }
+      );
+    }
+
+    // Trial enforcement
+    const billingState = await getOrgBillingState(supabase, ctx.orgId);
+    if (billingState.trialStatus === 'expired') {
+      return NextResponse.json(
+        { error: 'Trial expired. Upgrade to continue enriching.' },
+        { status: 402 }
       );
     }
 

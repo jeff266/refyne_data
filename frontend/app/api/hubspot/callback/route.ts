@@ -4,6 +4,7 @@ import { upsertSchemaFieldMappings } from '@/lib/hubspot/repository';
 import { HubSpotClient } from '@/lib/hubspot';
 import { seedFieldMappings } from '@/lib/field-mappings/auto-configure';
 import { encryptToken } from '@/lib/crypto/token-encryption';
+import { startTrial } from '@/lib/billing/trial';
 
 // Force dynamic rendering for OAuth callback
 export const dynamic = 'force-dynamic';
@@ -198,6 +199,15 @@ export async function GET(request: NextRequest) {
       }
 
       console.log('[OAuth Callback] Connection created successfully');
+    }
+
+    // Auto-start trial on first HubSpot connection
+    try {
+      await startTrial(supabase, stateRecord.org_id);
+      console.log(`[OAuth Callback] Trial auto-started for org ${stateRecord.org_id}`);
+    } catch (trialError) {
+      console.error('[OAuth Callback] Trial auto-start failed (non-fatal):', trialError);
+      // Don't fail the connection - trial start is best-effort
     }
 
     // Sync workspace schema (discover enum fields)
