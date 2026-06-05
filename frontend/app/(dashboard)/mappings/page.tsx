@@ -234,10 +234,14 @@ export default function MappingsPage() {
               How Field Mappings Work
             </h3>
             <p style={{ fontSize: 12, color: C.text2, lineHeight: 1.6, marginBottom: 8 }}>
-              Field Mappings connect Refyne's canonical data model to your HubSpot properties.
-              When a harmony normalizes data, it outputs a canonical field (e.g., <code style={{ background: C.bg, padding: '2px 4px', borderRadius: 3, fontFamily: F.mono, fontSize: 11 }}>canonical.industry</code>).
-              This mapping tells Refyne which HubSpot property to write that normalized value to.
+              When a harmony runs, it reads from a HubSpot field, normalizes the data, and outputs to a <strong>canonical field</strong> (just an identifier like <code style={{ background: C.bg, padding: '2px 4px', borderRadius: 3, fontFamily: F.mono, fontSize: 11 }}>industry</code>).
+              This mapping tells Refyne where to <strong>write</strong> that normalized output. You can write back to the same field to normalize in-place, or to a different field to preserve the original.
             </p>
+            <div style={{ fontSize: 11, color: C.text3, marginBottom: 8 }}>
+              <strong style={{ color: C.text2 }}>Example:</strong> Harmony scans <code style={{ background: C.bg, padding: '2px 4px', borderRadius: 3, fontFamily: F.mono }}>industry</code> → normalizes "Tech" to "Technology" →
+              outputs to canonical field <code style={{ background: C.bg, padding: '2px 4px', borderRadius: 3, fontFamily: F.mono }}>industry</code> →
+              mapping writes to HubSpot property <code style={{ background: C.bg, padding: '2px 4px', borderRadius: 3, fontFamily: F.mono }}>industry</code> (same field = normalize in-place ✓)
+            </div>
             <div style={{ fontSize: 11, color: C.text3, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <ArrowRight size={12} color={C.indigo} />
@@ -249,7 +253,7 @@ export default function MappingsPage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <ArrowRight size={12} color={C.indigo} />
-                <span>One canonical field can map to multiple HubSpot properties</span>
+                <span>Same canonical field can write to multiple HubSpot properties</span>
               </div>
             </div>
           </div>
@@ -549,16 +553,19 @@ export default function MappingsPage() {
                 <input
                   required
                   type="text"
-                  placeholder="e.g. contact.firstname"
+                  placeholder="e.g. industry or canonical.industry"
                   value={formData.canonicalField}
                   onChange={(e) => setFormData({ ...formData, canonicalField: e.target.value })}
                   style={{ width: '100%', padding: '8px 12px', fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, fontFamily: F.mono }}
                 />
+                <div style={{ fontSize: 11, color: C.text3, marginTop: 4, lineHeight: 1.4 }}>
+                  The harmony's output identifier. This is just a namespace - it doesn't need to be a real field.
+                </div>
               </div>
 
               <div style={{ marginBottom: 16 }}>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: C.text3, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  HubSpot Property
+                  HubSpot Property (Write Destination)
                 </label>
                 <HubSpotPropertyPicker
                   objectType={objectFilter === 'company' ? 'company' : 'contact'}
@@ -571,6 +578,9 @@ export default function MappingsPage() {
                   preferredField={formData.canonicalField}
                   placeholder="Search HubSpot properties..."
                 />
+                <div style={{ fontSize: 11, color: C.text3, marginTop: 4, lineHeight: 1.4 }}>
+                  Where to write the normalized value. <strong>Tip:</strong> Use the same field as your harmony scans to normalize in-place.
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
