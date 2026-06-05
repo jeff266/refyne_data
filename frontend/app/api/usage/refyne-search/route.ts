@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { supabaseAdmin } from '@/lib/db/supabase';
+import { supabase } from '@/lib/db/supabase';
 
 // Pricing constants
 const SERPER_COST_PER_CALL = 0.001; // $1 per 1000 calls
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    if (!supabaseAdmin) {
+    if (!supabase) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
 
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     const { start, end } = getDateRange(period);
 
     // Query usage data for this org and period
-    const { data: usageRows, error: usageError } = await supabaseAdmin
+    const { data: usageRows, error: usageError } = await supabase
       .from('refyne_search_usage')
       .select('*')
       .eq('org_id', ctx.orgId)
