@@ -8,8 +8,8 @@ const VALID_TYPES = [
   'always_on_digest',
   'compliance_threshold_alert',
   'dedup_pairs_detected',
-  'quarantine_submitted',
-  'quarantine_decided',
+  'enrich_run_complete',
+  'normalize_run_complete',
   'credit_limit_warning',
   'member_joined',
 ];

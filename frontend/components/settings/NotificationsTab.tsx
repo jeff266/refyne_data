@@ -40,10 +40,17 @@ const NOTIFICATION_TYPES = [
     defaultSubscribed: true
   },
   {
-    key: 'quarantine_submitted',
-    label: 'Quarantine',
-    tooltip: 'Alert when records are quarantined for review',
-    mandatory: true,
+    key: 'enrich_run_complete',
+    label: 'Enrich',
+    tooltip: 'Notification when an enrichment run finishes',
+    mandatory: false,
+    defaultSubscribed: true
+  },
+  {
+    key: 'normalize_run_complete',
+    label: 'Normalize',
+    tooltip: 'Notification when a normalization run finishes',
+    mandatory: false,
     defaultSubscribed: true
   },
   {
@@ -269,7 +276,7 @@ export function NotificationsTab() {
             background: C.surface,
             borderBottom: `1px solid ${C.border}`,
             display: 'grid',
-            gridTemplateColumns: '200px repeat(6, 80px)',
+            gridTemplateColumns: '200px repeat(7, 80px)',
             gap: 12,
             alignItems: 'center',
           }}
@@ -323,7 +330,7 @@ export function NotificationsTab() {
               padding: '12px 16px',
               borderBottom: `1px solid ${C.border}`,
               display: 'grid',
-              gridTemplateColumns: '200px repeat(6, 80px)',
+              gridTemplateColumns: '200px repeat(7, 80px)',
               gap: 12,
               alignItems: 'center',
             }}
