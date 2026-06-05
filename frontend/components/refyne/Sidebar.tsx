@@ -25,6 +25,7 @@ import {
 import { C, F, NAV } from '@/lib/design-tokens';
 import { RefyneLogo } from './RefyneLogo';
 import { useEnrichRun } from '@/context/EnrichRunContext';
+import { CreditsWidget } from './CreditsWidget';
 
 const ICONS: Record<string, React.ElementType> = {
   LayoutDashboard,
@@ -166,6 +167,7 @@ export function Sidebar() {
       </nav>
 
       <div style={{ borderTop: `1px solid ${C.border}`, padding: '8px 8px' }}>
+        <CreditsWidget />
         <div
           style={{
             display: 'flex',
