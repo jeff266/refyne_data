@@ -967,9 +967,13 @@ export default function HarmonyDetailPage() {
                         </td>
                         <td style={{ padding: '10px 20px', textAlign: 'center' }}>
                           {change.status === 'failed' ? (
-                            <XCircle size={16} color={C.red} title="Write failed" />
+                            <span title="Write failed">
+                              <XCircle size={16} color={C.red} />
+                            </span>
                           ) : (
-                            <CheckCircle size={16} color={C.green} title="Written successfully" />
+                            <span title="Written successfully">
+                              <CheckCircle size={16} color={C.green} />
+                            </span>
                           )}
                         </td>
                         <td style={{ padding: '10px 20px', fontSize: 12, color: C.text3, textAlign: 'right' }}>

@@ -202,7 +202,7 @@ export default function NormalizePage() {
 
       // If any invalid values found, add warning for this harmony
       if (invalidValues.size > 0) {
-        const [firstInvalidValue] = invalidValues.keys();
+        const firstInvalidValue = Array.from(invalidValues.keys())[0];
         const totalInvalid = Array.from(invalidValues.values()).reduce((sum, count) => sum + count, 0);
 
         warningsByHarmony.set(harmonyId, {

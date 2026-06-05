@@ -451,18 +451,22 @@ export function ReferenceDataTable({ harmonyId, tableName, targetFieldProperty }
                     </span>
                     {targetFieldProperty?.type === 'enumeration' && (
                       validation.valid ? (
-                        <CheckCircle
-                          size={14}
-                          color={C.green}
-                          title="Valid HubSpot value"
-                        />
+                        <span title="Valid HubSpot value">
+                          <CheckCircle
+                            size={14}
+                            color={C.green}
+                          />
+                        </span>
                       ) : (
-                        <AlertTriangle
-                          size={14}
-                          color={C.amber}
+                        <span
                           title={`This value is not accepted by HubSpot's ${targetFieldProperty.label} field. HubSpot will reject writes with this value.`}
                           style={{ cursor: 'help' }}
-                        />
+                        >
+                          <AlertTriangle
+                            size={14}
+                            color={C.amber}
+                          />
+                        </span>
                       )
                     )}
                   </div>
