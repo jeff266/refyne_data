@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const objectType = searchParams.get('objectType') ?? 'company';
 
     const body = await req.json();
-    const { source, fieldKeys, providerId, recordLimit, harmonyIds } = body;
+    const { source, fieldKeys, providerId, recordLimit, harmonyIds, enrichmentMode } = body;
 
     // Validate request
     if (!source || !fieldKeys || fieldKeys.length === 0 || !providerId) {
@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
       source,
       fieldKeys,
       providerId,
+      enrichmentMode: enrichmentMode || 'fast',
       recordLimit: recordLimit || 20,
       harmonyIds: harmonyIds || [],
     });

@@ -7,12 +7,14 @@
  * - Branching = separate harmonies with different conditions
  *
  * Features:
- * - 31 operators across 5 field types (string, number, enumeration, bool, date)
+ * - 33 operators across 5 field types (string, number, enumeration, bool, date)
  * - Nested AND/OR logic (groups + conditions within groups)
  * - Case-insensitive string comparison
  * - Soft failure for missing fields (returns false, logs warning)
  * - No I/O operations (pure in-memory evaluation)
  */
+
+import { PERSONAL_EMAIL_DOMAINS } from '@/lib/constants/personal-email-domains';
 
 // ============================================================================
 // Types
@@ -29,7 +31,9 @@ export type StringOperator =
   | 'ends_with'
   | 'is_empty'
   | 'is_not_empty'
-  | 'trimmed_equals';
+  | 'trimmed_equals'
+  | 'is_personal_email'
+  | 'is_not_personal_email';
 
 export type NumberOperator =
   | 'equals'
@@ -95,15 +99,17 @@ export interface OperatorDefinition {
 
 export const OPERATORS_BY_TYPE: Record<FieldType, OperatorDefinition[]> = {
   string: [
-    { value: 'equals',          label: 'equals' },
-    { value: 'not_equals',      label: 'does not equal' },
-    { value: 'contains',        label: 'contains' },
-    { value: 'not_contains',    label: 'does not contain' },
-    { value: 'starts_with',     label: 'starts with' },
-    { value: 'ends_with',       label: 'ends with' },
-    { value: 'is_empty',        label: 'is empty' },
-    { value: 'is_not_empty',    label: 'is not empty' },
-    { value: 'trimmed_equals',  label: 'trimmed equals' },
+    { value: 'equals',                label: 'equals' },
+    { value: 'not_equals',            label: 'does not equal' },
+    { value: 'contains',              label: 'contains' },
+    { value: 'not_contains',          label: 'does not contain' },
+    { value: 'starts_with',           label: 'starts with' },
+    { value: 'ends_with',             label: 'ends with' },
+    { value: 'is_empty',              label: 'is empty' },
+    { value: 'is_not_empty',          label: 'is not empty' },
+    { value: 'trimmed_equals',        label: 'trimmed equals' },
+    { value: 'is_personal_email',     label: 'is personal email' },
+    { value: 'is_not_personal_email', label: 'is not personal email' },
   ],
   number: [
     { value: 'equals',          label: 'equals' },
@@ -265,6 +271,18 @@ function evaluateStringCondition(
 
     case 'trimmed_equals':
       return value.trim().toLowerCase() === expected.trim().toLowerCase();
+
+    case 'is_personal_email': {
+      // Extract domain from email (part after @)
+      const domain = value.split('@')[1]?.toLowerCase() || '';
+      return PERSONAL_EMAIL_DOMAINS.includes(domain);
+    }
+
+    case 'is_not_personal_email': {
+      // Extract domain from email (part after @)
+      const domain = value.split('@')[1]?.toLowerCase() || '';
+      return !PERSONAL_EMAIL_DOMAINS.includes(domain);
+    }
 
     default:
       console.warn(`[Condition Evaluator] Unknown string operator: ${operator}`);

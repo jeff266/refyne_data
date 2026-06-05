@@ -13,6 +13,8 @@ import { useEnrichRun } from '@/context/EnrichRunContext';
 import { useJobPoller, useJobResults } from '@/hooks/useJobPoller';
 import type { JobStatus } from '@/hooks/useJobPoller';
 import { useObjectType } from '@/hooks/useObjectType';
+import { ConditionBuilder } from '@/components/harmonies/ConditionBuilder';
+import type { ConditionGroups } from '@/lib/harmonies/condition-evaluator';
 
 interface FieldGap {
   field: string;
@@ -423,23 +425,14 @@ export default function EnrichPage() {
   const [listPermissionError, setListPermissionError] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvText, setCsvText] = useState<string>('');
-  const [lifecycleStage, setLifecycleStage] = useState<string>('');
-  const [ownerId, setOwnerId] = useState<string>('');
-  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [segmentConditionGroups, setSegmentConditionGroups] = useState<ConditionGroups | null>(null);
   const [selectedFields, setSelectedFields] = useState<string[]>(['industry', 'numberofemployees']);
   const [selectedProviders, setSelectedProviders] = useState<string[]>(['apollo']);
+  const [enrichmentMode, setEnrichmentMode] = useState<'fast' | 'thorough'>('fast');
   const [writePolicy, setWritePolicy] = useState<'fill_empty' | 'overwrite'>('fill_empty');
   const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
   const [harmonyPreviews, setHarmonyPreviews] = useState<HarmonyPreview[]>([]);
   const [loadingHarmonies, setLoadingHarmonies] = useState(false);
-
-  // Subsegment filter data
-  const [lifecycleStages, setLifecycleStages] = useState<LifecycleStage[]>([]);
-  const [owners, setOwners] = useState<Owner[]>([]);
-  const [industries, setIndustries] = useState<string[]>([]);
-  const [previewCount, setPreviewCount] = useState<number | null>(null);
-  const [sampleNames, setSampleNames] = useState<string[]>([]);
-  const [loadingPreview, setLoadingPreview] = useState(false);
 
   // Test mode state
   const [testMode, setTestMode] = useState(false);
@@ -816,43 +809,6 @@ export default function EnrichPage() {
       }
     }
 
-    async function fetchLifecycleStages() {
-      try {
-        const res = await fetch('/api/hubspot/lifecycle-stages');
-        if (res.ok) {
-          const data = await res.json();
-          setLifecycleStages(data.stages || []);
-        }
-      } catch (error) {
-        console.error('Failed to fetch lifecycle stages:', error);
-      }
-    }
-
-    async function fetchOwners() {
-      try {
-        const res = await fetch('/api/hubspot/owners');
-        if (res.ok) {
-          const data = await res.json();
-          setOwners(data.owners || []);
-        }
-      } catch (error) {
-        console.error('Failed to fetch owners:', error);
-      }
-    }
-
-    async function fetchIndustries() {
-      try {
-        const res = await fetch('/api/harmonies/industry/reference');
-        if (res.ok) {
-          const data = await res.json();
-          setIndustries(data.industries || []);
-        }
-      } catch (error) {
-        console.error('Failed to fetch industries:', error);
-        setIndustries(['Healthcare', 'Software', 'Education', 'Manufacturing', 'Retail']);
-      }
-    }
-
     async function fetchPortalId() {
       try {
         const res = await fetch('/api/hubspot/connections');
@@ -869,9 +825,6 @@ export default function EnrichPage() {
 
     fetchConnections();
     fetchHubSpotLists();
-    fetchLifecycleStages();
-    fetchOwners();
-    fetchIndustries();
     fetchPortalId();
   }, []);
 
@@ -913,46 +866,6 @@ export default function EnrichPage() {
 
     fetchHarmonyPreview();
   }, [selectedFields, objectType]);
-
-  // Fetch preview count when segment filters change (debounced)
-  useEffect(() => {
-    if (companyScope !== 'segment' || selectedFields.length === 0) {
-      setPreviewCount(null);
-      setSampleNames([]);
-      return;
-    }
-
-    const timeoutId = setTimeout(async () => {
-      setLoadingPreview(true);
-      try {
-        const res = await fetch(`/api/enrich/preview-count?objectType=${objectType}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            source: 'segment',
-            segment: {
-              lifecycle_stage: lifecycleStage || undefined,
-              owner_id: ownerId || undefined,
-              industries: selectedIndustries.length > 0 ? selectedIndustries : undefined,
-            },
-            fields: selectedFields,
-          }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setPreviewCount(data.count);
-          setSampleNames(data.sample_names || []);
-        }
-      } catch (error) {
-        console.error('Failed to fetch preview count:', error);
-      } finally {
-        setLoadingPreview(false);
-      }
-    }, 400);
-
-    return () => clearTimeout(timeoutId);
-  }, [companyScope, lifecycleStage, ownerId, selectedIndustries, selectedFields, objectType]);
 
   // Helper function to format time ago
   function formatTimeAgo(isoDate: string): string {
@@ -1010,7 +923,7 @@ export default function EnrichPage() {
 
     // Show confirmation modal for large runs
     const estimatedCount =
-      companyScope === 'segment' ? (previewCount || 0) :
+      companyScope === 'segment' ? 0 : // ConditionBuilder provides its own feedback
       companyScope === 'gaps' ? Math.min(
         selectedGapFields.reduce((sum, field) => {
           const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
@@ -1042,11 +955,10 @@ export default function EnrichPage() {
       if (companyScope === 'list') {
         source.list_id = selectedList;
       } else if (companyScope === 'segment') {
-        const filters: any = { missing_fields: selectedFields };
-        if (lifecycleStage) filters.lifecyclestage = lifecycleStage;
-        if (ownerId) filters.hubspot_owner_id = ownerId;
-        if (selectedIndustries.length > 0) filters.industry = selectedIndustries;
-        source.filters = filters;
+        source = {
+          type: 'segment',
+          conditionGroups: segmentConditionGroups,
+        };
       } else if (companyScope === 'gaps') {
         source.fields = selectedGapFields;
       } else if (companyScope === 'csv') {
@@ -1065,6 +977,7 @@ export default function EnrichPage() {
           source,
           fieldKeys: selectedFields,
           providerId: selectedProviders[0] || 'refyne_search',
+          enrichmentMode,
           recordLimit: testRecordLimit,
           harmonyIds: [],
         }),
@@ -1344,18 +1257,11 @@ export default function EnrichPage() {
       } else {
         source_type = 'hubspot_filter';
         if (companyScope === 'segment') {
-          // Apply segment filters
-          const filters: any = { missing_fields: selectedFields };
-          if (lifecycleStage) {
-            filters.lifecyclestage = lifecycleStage;
-          }
-          if (ownerId) {
-            filters.hubspot_owner_id = ownerId;
-          }
-          if (selectedIndustries.length > 0) {
-            filters.industry = selectedIndustries;
-          }
-          source_config = { filters };
+          // Apply segment condition groups (new path)
+          source_config = {
+            conditionGroups: segmentConditionGroups,
+            missing_fields: selectedFields,
+          };
         } else {
           // "All companies with missing fields"
           source_config = { filters: { missing_fields: selectedFields } };
@@ -1438,7 +1344,7 @@ export default function EnrichPage() {
 
       // Get total companies count
       const totalCompanies =
-        companyScope === 'segment' ? (previewCount || 0) :
+        companyScope === 'segment' ? 0 :
         companyScope === 'gaps' ? Math.min(
           selectedGapFields.reduce((sum, field) => {
             const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
@@ -1825,58 +1731,16 @@ export default function EnrichPage() {
                     <span style={{ fontSize: 12, color: C.text2 }}>Segment filter</span>
                   </label>
                   {companyScope === 'segment' && (
-                    <div style={{ marginLeft: 22, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <CustomDropdown
-                        value={lifecycleStage}
-                        onChange={setLifecycleStage}
-                        options={lifecycleStages.map(stage => ({
-                          value: stage.value,
-                          label: stage.label,
-                          count: stage.count > 0 ? stage.count : undefined,
-                        }))}
-                        placeholder="Lifecycle..."
+                    <div style={{ marginLeft: 22, marginTop: 8 }}>
+                      <ConditionBuilder
+                        value={segmentConditionGroups}
+                        onChange={setSegmentConditionGroups}
+                        objectType={objectType as 'company' | 'contact'}
                       />
-
-                      <CustomDropdown
-                        value={ownerId}
-                        onChange={setOwnerId}
-                        options={owners.map(owner => ({
-                          value: owner.id,
-                          label: owner.name,
-                        }))}
-                        placeholder="Owner..."
-                      />
-
-                      <select
-                        multiple
-                        value={selectedIndustries}
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.selectedOptions, option => option.value);
-                          setSelectedIndustries(selected);
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '6px 8px',
-                          background: C.bg,
-                          border: `1px solid ${C.border}`,
-                          color: C.text,
-                          fontSize: 11,
-                          minHeight: 60,
-                          borderRadius: 4,
-                        }}
-                      >
-                        {industries.map(industry => (
-                          <option key={industry} value={industry}>
-                            {industry}
-                          </option>
-                        ))}
-                      </select>
-
-                      {loadingPreview ? (
-                        <div style={{ fontSize: 11, color: C.text3 }}>Calculating...</div>
-                      ) : previewCount !== null && (
-                        <div style={{ fontSize: 11, color: C.text2 }}>
-                          {previewCount.toLocaleString()} matches
+                      {segmentConditionGroups && segmentConditionGroups.groups.length > 0 && (
+                        <div style={{ fontSize: 11, color: C.text3, marginTop: 6 }}>
+                          {segmentConditionGroups.groups.length} condition group
+                          {segmentConditionGroups.groups.length > 1 ? 's' : ''} defined
                         </div>
                       )}
                     </div>
@@ -2107,6 +1971,76 @@ export default function EnrichPage() {
               </div>
             </div>
 
+            {/* Enrichment mode (only for Refyne Search) */}
+            {selectedProviders[0] === 'refyne_search' && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 8 }}>
+                  Enrichment mode
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        checked={enrichmentMode === 'fast'}
+                        onChange={() => setEnrichmentMode('fast')}
+                        style={{ cursor: 'pointer', marginTop: 2 }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 12, color: C.text2 }}>Fast</span>
+                        <span style={{ fontSize: 11, color: C.text3 }}>
+                          Search only · ~{(() => {
+                            const recordCount = companyScope === 'all' ? (gapAnalysis?.total_records || 0) :
+                              companyScope === 'list' ? 0 :
+                              companyScope === 'gaps' ? Math.min(
+                                selectedGapFields.reduce((sum, field) => {
+                                  const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
+                                  return sum + (gap?.missing || 0);
+                                }, 0),
+                                gapAnalysis?.total_records || 0
+                              ) : 0;
+                            const minutes = Math.ceil(recordCount / 500);
+                            return minutes > 60 ? '60+ min' : `${minutes} min`;
+                          })()} per 1,000 records
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                  <div>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        checked={enrichmentMode === 'thorough'}
+                        onChange={() => setEnrichmentMode('thorough')}
+                        style={{ cursor: 'pointer', marginTop: 2 }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 12, color: C.text2 }}>Thorough</span>
+                        <span style={{ fontSize: 11, color: C.text3 }}>
+                          Search + website · ~{(() => {
+                            const recordCount = companyScope === 'all' ? (gapAnalysis?.total_records || 0) :
+                              companyScope === 'list' ? 0 :
+                              companyScope === 'gaps' ? Math.min(
+                                selectedGapFields.reduce((sum, field) => {
+                                  const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
+                                  return sum + (gap?.missing || 0);
+                                }, 0),
+                                gapAnalysis?.total_records || 0
+                              ) : 0;
+                            const minutes = Math.ceil(recordCount / 65);
+                            return minutes > 60 ? '60+ min' : `${minutes} min`;
+                          })()} per 1,000 records
+                        </span>
+                        <span style={{ fontSize: 11, color: C.text3, marginLeft: 0 }}>
+                          Recommended for healthcare, local services
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Write policy */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 8 }}>
@@ -2188,7 +2122,7 @@ export default function EnrichPage() {
                 : testMode
                 ? `Preview ${testRecordLimit} records`
                 : `Enrich all ${(
-                  companyScope === 'segment' ? (previewCount || 0) :
+                  companyScope === 'segment' ? 0 :
                   companyScope === 'gaps' ? Math.min(
                     selectedGapFields.reduce((sum, field) => {
                       const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
@@ -3412,7 +3346,7 @@ export default function EnrichPage() {
                 Enriching{' '}
                 <strong style={{ color: C.text }}>
                   {(
-                    companyScope === 'segment' ? (previewCount || 0) :
+                    companyScope === 'segment' ? 0 :
                     companyScope === 'gaps' ? Math.min(
                       selectedGapFields.reduce((sum, field) => {
                         const gap = gapAnalysis?.field_gaps.find(g => g.field === field);
@@ -3479,7 +3413,7 @@ export default function EnrichPage() {
                 }}
               >
                 Enrich {(
-                  companyScope === 'segment' ? (previewCount || 0) :
+                  companyScope === 'segment' ? 0 :
                   companyScope === 'gaps' ? Math.min(
                     selectedGapFields.reduce((sum, field) => {
                       const gap = gapAnalysis?.field_gaps.find(g => g.field === field);

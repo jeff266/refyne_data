@@ -38,10 +38,10 @@ export function CreditsWidget() {
   const percentage = (credits_used / credits_included) * 100;
 
   // Three visual states
-  let bgColor = C.bg2; // Normal (<80%)
-  let textColor = C.text2;
+  let bgColor: string = C.bg; // Normal (<80%)
+  let textColor: string = C.text2;
   let Icon = TrendingUp;
-  let iconColor = C.text3;
+  let iconColor: string = C.text3;
 
   if (percentage >= 100) {
     // Overage (>100%)

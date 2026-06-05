@@ -14,6 +14,8 @@ import { HubSpotClient } from '../hubspot/client';
 import { refyneSearch } from '../providers/refyne-search';
 import { classifyIndustry } from '../providers/refyne-search/industry-classifier';
 import { track } from '../telemetry/track';
+import type { ConditionGroups } from '../harmonies/condition-evaluator';
+import { conditionGroupsToHubSpotFilters, applyClientSideConditions } from '../hubspot/condition-groups-to-filters';
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -28,12 +30,14 @@ export interface PreviewJobData {
   userId: string;
   objectType: string;
   source: {
-    type: 'gaps' | 'all' | 'list';
+    type: 'gaps' | 'all' | 'list' | 'segment';
     fields?: string[];
     list_id?: string;
+    conditionGroups?: ConditionGroups;
   };
   fieldKeys: string[];
   providerId: string;
+  enrichmentMode?: 'fast' | 'thorough';
   recordLimit: number;
   harmonyIds: string[];
 }
@@ -91,7 +95,7 @@ export interface PreviewResult {
 export async function processPreviewJob(
   job: Job<PreviewJobData>
 ): Promise<{ resultCount: number }> {
-  const { runId, orgId, source, fieldKeys, providerId, recordLimit } = job.data;
+  const { runId, orgId, source, fieldKeys, providerId, recordLimit, enrichmentMode } = job.data;
 
   if (!supabase) {
     throw new Error('Database not configured');
@@ -200,7 +204,8 @@ export async function processPreviewJob(
             companyDomain,
             companyName,
             fieldKeys,
-            'preview'
+            'preview',
+            enrichmentMode ?? 'fast'
           );
           return { company, companyName, companyDomain, enrichmentResults };
         })
@@ -411,6 +416,34 @@ async function fetchCompaniesForPreview(
       companies.push(...batch);
       if (companies.length >= cappedLimit) break;
     }
+  } else if (source.type === 'segment' && source.conditionGroups) {
+    // Fetch companies using ConditionBuilder filters
+    const filterGroups = conditionGroupsToHubSpotFilters(source.conditionGroups);
+
+    const searchRequest = {
+      filterGroups,
+      properties,
+      limit: cappedLimit,
+      sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' as const }],
+    };
+
+    const response = await hubspot.request<{
+      results: Array<{ id: string; properties: Record<string, string | null> }>;
+    }>(
+      '/crm/v3/objects/companies/search',
+      {
+        method: 'POST',
+        body: JSON.stringify(searchRequest),
+      },
+      true
+    );
+
+    let results = response.results.map((r) => ({ id: r.id, properties: r.properties }));
+
+    // Apply client-side conditions for operators HubSpot can't handle
+    results = applyClientSideConditions(results, source.conditionGroups);
+
+    companies.push(...results);
   } else {
     // All companies
     const searchRequest = {
@@ -455,7 +488,7 @@ export interface ApplyJobData {
 export async function processApplyJob(
   job: Job<ApplyJobData>
 ): Promise<{ filled: number; total: number }> {
-  const { runId, orgId, previewJobId, selectedRecordIds } = job.data;
+  const { runId, orgId, userId, previewJobId, selectedRecordIds } = job.data;
 
   if (!supabase) {
     throw new Error('Database not configured');

@@ -22,6 +22,8 @@ import {
   type PreviewJobProgress,
   type ApplyJobData,
 } from './enrich-page-worker';
+import type { ConditionGroups } from '../harmonies/condition-evaluator';
+import { conditionGroupsToHubSpotFilters, applyClientSideConditions } from '../hubspot/condition-groups-to-filters';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -61,6 +63,7 @@ export interface EnrichmentJobData {
   fields: string[];
   providers: string[];
   write_policy: 'fill_empty' | 'overwrite';
+  enrichmentMode?: 'fast' | 'thorough';
   source: {
     type: 'all' | 'list' | 'segment' | 'csv';
     list_id?: string;
@@ -70,6 +73,7 @@ export interface EnrichmentJobData {
       hubspot_owner_id?: string;
       industry?: string[];
     };
+    conditionGroups?: ConditionGroups; // New: full ConditionBuilder conditions
     domains?: string[];
   };
   record_limit: number;
@@ -195,7 +199,7 @@ export async function stopEnrichmentWorker(): Promise<void> {
 async function processEnrichmentJob(
   job: Job<EnrichmentJobData>
 ): Promise<EnrichmentJobResult> {
-  const { runId, orgId, fields, providers, write_policy, source, record_limit } = job.data;
+  const { runId, orgId, fields, providers, write_policy, source, record_limit, enrichmentMode } = job.data;
 
   if (!supabase) {
     throw new Error('Database not configured');
@@ -296,7 +300,9 @@ async function processEnrichmentJob(
             orgId,
             companyDomain || null,
             company.properties.name || null,
-            fields
+            fields,
+            'background',
+            enrichmentMode ?? 'fast'
           );
 
           // Convert array to keyed object
@@ -452,9 +458,19 @@ async function fetchCompanies(
       companies.push(...batch);
       if (companies.length >= limit) break;
     }
-  } else if (source.type === 'segment' && source.filters) {
+  } else if (source.type === 'segment') {
     // Use HubSpot Search API with filters
-    const filterGroups = buildSearchFilters(source.filters);
+    let filterGroups: any[];
+
+    if (source.conditionGroups) {
+      // New path: full ConditionBuilder conditions
+      filterGroups = conditionGroupsToHubSpotFilters(source.conditionGroups);
+    } else if (source.filters) {
+      // Legacy path: old hardcoded filters (lifecycle, owner, industry)
+      filterGroups = buildSearchFilters(source.filters);
+    } else {
+      filterGroups = [];
+    }
 
     const searchRequest = {
       filterGroups,
@@ -477,12 +493,17 @@ async function fetchCompanies(
       true
     );
 
-    companies.push(
-      ...response.results.map((r) => ({
-        id: r.id,
-        properties: r.properties,
-      }))
-    );
+    let results = response.results.map((r) => ({
+      id: r.id,
+      properties: r.properties,
+    }));
+
+    // Apply client-side conditions for operators HubSpot can't handle
+    if (source.conditionGroups) {
+      results = applyClientSideConditions(results, source.conditionGroups);
+    }
+
+    companies.push(...results);
   } else if (source.type === 'csv' && source.domains) {
     // Fetch companies by domain lookup
     for (const domain of source.domains.slice(0, limit)) {

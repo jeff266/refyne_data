@@ -136,7 +136,8 @@ export async function refyneSearch(
   domain: string | null,
   companyName: string | null,
   fieldKeys: string[],
-  context: SearchContext = 'background'
+  context: SearchContext = 'background',
+  mode: 'fast' | 'thorough' = 'fast'
 ): Promise<RefyneSearchResult[]> {
   const lookupKey = domain?.toLowerCase() ?? null
   const results: RefyneSearchResult[] = []
@@ -205,7 +206,10 @@ export async function refyneSearch(
         results: await searchWeb(q, 5),
       }))
     ),
-    domain ? fetchWithJina(domain) : Promise.resolve([]),
+    // Only fetch Jina when mode is thorough
+    mode === 'thorough' && domain
+      ? fetchWithJina(domain)
+      : Promise.resolve([]),
   ])
 
   const serperCallCount = queries.length
