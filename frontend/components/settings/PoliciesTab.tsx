@@ -9,7 +9,6 @@ interface OrgPolicies {
   write_policy_default: 'fill_empty' | 'overwrite' | 'per_field';
   dedup_auto_merge_threshold: number | null;
   dedup_merge_survivor_rule: 'most_recent' | 'most_complete' | 'oldest';
-  quarantine_threshold: number;
   nightly_scan_enabled: boolean;
   incremental_scan_enabled: boolean;
 }
@@ -19,7 +18,6 @@ export function PoliciesTab() {
     write_policy_default: 'fill_empty',
     dedup_auto_merge_threshold: null,
     dedup_merge_survivor_rule: 'most_recent',
-    quarantine_threshold: 40,
     nightly_scan_enabled: true,
     incremental_scan_enabled: true,
   });
@@ -175,44 +173,6 @@ export function PoliciesTab() {
                 </div>
               </label>
             ))}
-          </div>
-        </div>
-      </Card>
-
-      {/* Quarantine Policy */}
-      <Card style={{ marginBottom: 24 }}>
-        <div style={{ padding: 20, borderBottom: `1px solid ${C.border}` }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-            Quarantine policy
-          </h3>
-        </div>
-        <div style={{ padding: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 8 }}>
-            Auto-quarantine threshold
-          </div>
-          <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
-            Records with a compliance score below this level are automatically flagged for review.
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 12, color: C.text3 }}>Threshold</span>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={policies.quarantine_threshold}
-              onChange={(e) => setPolicies({ ...policies, quarantine_threshold: parseInt(e.target.value) || 40 })}
-              style={{
-                width: 80,
-                padding: '8px 12px',
-                background: C.surface,
-                border: `1px solid ${C.border2}`,
-                borderRadius: 6,
-                color: C.text,
-                fontFamily: F.mono,
-                fontSize: 13,
-              }}
-            />
-            <span style={{ fontSize: 12, color: C.text3 }}>(0-100, default 40)</span>
           </div>
         </div>
       </Card>
