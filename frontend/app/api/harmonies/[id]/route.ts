@@ -174,7 +174,7 @@ export async function PATCH(
 
     const { id } = params;
     const body = await req.json();
-    const { name, description, writePolicy, isActive, isArchived, conditionGroups } = body;
+    const { name, description, writePolicy, isActive, isArchived, conditionGroups, approach, rules } = body;
 
     // Build update object with only allowed fields
     const updates: any = {};
@@ -183,6 +183,7 @@ export async function PATCH(
     if (writePolicy !== undefined) updates.write_policy = writePolicy;
     if (isActive !== undefined) updates.is_active = isActive;
     if (isArchived !== undefined) updates.is_archived = isArchived;
+    if (approach !== undefined) updates.approach = approach;
 
     // Validate and add condition_groups if provided
     if (conditionGroups !== undefined) {
@@ -217,6 +218,44 @@ export async function PATCH(
         { error: 'Failed to update harmony' },
         { status: 500 }
       );
+    }
+
+    // If rules are provided, save them to the reference table
+    if (rules !== undefined && Array.isArray(rules)) {
+      // First, get the harmony to find the reference table
+      const { data: harmony } = await supabase
+        .from('harmonies')
+        .select('reference_table, org_id')
+        .eq('id', id)
+        .single();
+
+      if (harmony?.reference_table) {
+        // Delete existing org-specific rules
+        await supabase
+          .from(harmony.reference_table)
+          .delete()
+          .eq('org_id', ctx.orgId);
+
+        // Insert new rules if any
+        if (rules.length > 0) {
+          const rulesWithOrgId = rules.map((rule: any) => ({
+            ...rule,
+            org_id: ctx.orgId,
+          }));
+
+          const { error: rulesError } = await supabase
+            .from(harmony.reference_table)
+            .insert(rulesWithOrgId);
+
+          if (rulesError) {
+            console.error('[Harmony Update] Failed to save rules:', rulesError);
+            return NextResponse.json(
+              { error: 'Failed to save rules: ' + rulesError.message },
+              { status: 500 }
+            );
+          }
+        }
+      }
     }
 
     return NextResponse.json({ success: true });

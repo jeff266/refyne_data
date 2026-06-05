@@ -80,6 +80,9 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   // Step 5: Preview
   const [harmonyId, setHarmonyId] = useState<string | null>(null);
 
+  // Error handling
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -166,11 +169,14 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
         if (res.ok) {
           setStep(4);
         } else {
-          alert('Failed to save rules');
+          const errorData = await res.json().catch(() => ({}));
+          const message = errorData.error || `Failed to save rules (${res.status})`;
+          console.error('Failed to save rules:', message, errorData);
+          setErrorMessage(message);
         }
       } catch (err) {
         console.error('Failed to save rules:', err);
-        alert('Failed to save rules');
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to save rules. Please try again.');
       } finally {
         setSaving(false);
       }
@@ -991,6 +997,82 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
           </PrimaryBtn>
         </div>
       </div>
+      {/* Error Modal */}
+      {errorMessage && (
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.6)',
+              zIndex: 1001,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            onClick={() => setErrorMessage(null)}
+          >
+            <div
+              style={{
+                background: C.surface,
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                padding: 24,
+                maxWidth: 480,
+                width: '90%',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+                <AlertTriangle size={20} color={C.red} style={{ flexShrink: 0 }} />
+                <div>
+                  <h3
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: C.text,
+                      marginBottom: 8,
+                      fontFamily: F.sans,
+                    }}
+                  >
+                    Failed to save
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: 14,
+                      color: C.text2,
+                      lineHeight: 1.5,
+                      fontFamily: F.sans,
+                      margin: 0,
+                    }}
+                  >
+                    {errorMessage}
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setErrorMessage(null)}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    background: C.indigo,
+                    border: 'none',
+                    borderRadius: 6,
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontFamily: F.sans,
+                  }}
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }
