@@ -14,6 +14,7 @@ import {
   countConditions,
   type ConditionGroups,
 } from '@/lib/harmonies/condition-evaluator';
+import type { HubSpotProperty } from '@/lib/harmonies/enum-validator';
 
 interface HarmonyConfig {
   id: string;
@@ -74,6 +75,7 @@ export default function HarmonyDetailPage() {
   const [stats, setStats] = useState<HarmonyStats | null>(null);
   const [changes, setChanges] = useState<HarmonyChange[]>([]);
   const [reference, setReference] = useState<HarmonyReference | null>(null);
+  const [targetFieldProperty, setTargetFieldProperty] = useState<HubSpotProperty | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -116,6 +118,13 @@ export default function HarmonyDetailPage() {
       fetchReference();
     }
   }, [config?.transformType, config?.referenceTable]);
+
+  // Fetch target field property for enum validation
+  useEffect(() => {
+    if (config) {
+      fetchTargetFieldProperty();
+    }
+  }, [config]);
 
   // Debounced test
   useEffect(() => {
@@ -164,6 +173,28 @@ export default function HarmonyDetailPage() {
       console.error('Failed to fetch config:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchTargetFieldProperty() {
+    if (!config) return;
+
+    const targetField = config.fieldAssignments[0]?.hubspotProperty;
+    if (!targetField) return;
+
+    try {
+      const res = await fetch(`/api/hubspot/properties?objectType=${config.objectType}`);
+      if (res.ok) {
+        const data = await res.json();
+        // Find the target field in the properties list
+        const allProperties = [...(data.properties?.standard || []), ...(data.properties?.custom || [])];
+        const property = allProperties.find((p: HubSpotProperty) => p.name === targetField);
+        if (property) {
+          setTargetFieldProperty(property);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch target field property:', err);
     }
   }
 
@@ -951,7 +982,11 @@ export default function HarmonyDetailPage() {
               Reference Data
             </h2>
           </div>
-          <ReferenceDataTable harmonyId={harmonyId} tableName={config.referenceTable} />
+          <ReferenceDataTable
+            harmonyId={harmonyId}
+            tableName={config.referenceTable}
+            targetFieldProperty={targetFieldProperty}
+          />
         </Card>
       )}
 

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn, GhostBtn, Toggle } from '@/components/refyne';
-import { Plus, Download, Upload, Trash2 } from 'lucide-react';
+import { Plus, Download, Upload, Trash2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { validateEnumValue, type HubSpotProperty } from '@/lib/harmonies/enum-validator';
 
 interface ReferenceDataRow {
   id: string;
@@ -23,9 +24,10 @@ interface UnmatchedValue {
 interface ReferenceDataTableProps {
   harmonyId: string;
   tableName: string;
+  targetFieldProperty?: HubSpotProperty | null;
 }
 
-export function ReferenceDataTable({ harmonyId, tableName }: ReferenceDataTableProps) {
+export function ReferenceDataTable({ harmonyId, tableName, targetFieldProperty }: ReferenceDataTableProps) {
   const [rows, setRows] = useState<ReferenceDataRow[]>([]);
   const [unmatchedValues, setUnmatchedValues] = useState<UnmatchedValue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,22 @@ export function ReferenceDataTable({ harmonyId, tableName }: ReferenceDataTableP
   const [newRow, setNewRow] = useState<Partial<ReferenceDataRow> | null>(null);
 
   const PAGE_SIZE = 50;
+
+  // Validate canonical values against enum options
+  const invalidCanonicalCount = useMemo(() => {
+    if (!targetFieldProperty || targetFieldProperty.type !== 'enumeration') {
+      return 0;
+    }
+
+    let count = 0;
+    for (const row of rows) {
+      const validation = validateEnumValue(row.canonical_value, targetFieldProperty);
+      if (!validation.valid) {
+        count++;
+      }
+    }
+    return count;
+  }, [rows, targetFieldProperty]);
 
   useEffect(() => {
     fetchData();
@@ -255,6 +273,33 @@ export function ReferenceDataTable({ harmonyId, tableName }: ReferenceDataTableP
         </GhostBtn>
       </div>
 
+      {/* Enum Validation Warning Banner */}
+      {invalidCanonicalCount > 0 && targetFieldProperty && (
+        <div
+          style={{
+            padding: '12px 16px',
+            background: C.amberDim,
+            border: `1px solid ${C.amberBrd}`,
+            borderRadius: 6,
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'start',
+            gap: 12,
+          }}
+        >
+          <AlertTriangle size={16} color={C.amber} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+              {invalidCanonicalCount} canonical value{invalidCanonicalCount === 1 ? '' : 's'} not valid for this HubSpot field
+            </div>
+            <div style={{ fontSize: 12, color: C.text2 }}>
+              Records with these values will fail to write to HubSpot's <strong>{targetFieldProperty.label}</strong> field.
+              Update the canonical values to match accepted options.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* New Row Form */}
       {newRow && (
         <div
@@ -388,13 +433,39 @@ export function ReferenceDataTable({ harmonyId, tableName }: ReferenceDataTableP
             </tr>
           </thead>
           <tbody>
-            {paginatedRows.map((row) => (
+            {paginatedRows.map((row) => {
+              // Validate canonical value if target field is enum
+              const validation = targetFieldProperty
+                ? validateEnumValue(row.canonical_value, targetFieldProperty)
+                : { valid: true };
+
+              return (
               <tr key={row.id} style={{ borderBottom: `1px solid ${C.border}` }}>
                 <td style={{ padding: '10px 12px', fontSize: 13, fontFamily: F.mono, color: C.text }}>
                   {row.input_value}
                 </td>
-                <td style={{ padding: '10px 12px', fontSize: 13, fontFamily: F.mono, color: C.text }}>
-                  {row.canonical_value}
+                <td style={{ padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontFamily: F.mono, color: C.text }}>
+                      {row.canonical_value}
+                    </span>
+                    {targetFieldProperty?.type === 'enumeration' && (
+                      validation.valid ? (
+                        <CheckCircle
+                          size={14}
+                          color={C.green}
+                          title="Valid HubSpot value"
+                        />
+                      ) : (
+                        <AlertTriangle
+                          size={14}
+                          color={C.amber}
+                          title={`This value is not accepted by HubSpot's ${targetFieldProperty.label} field. HubSpot will reject writes with this value.`}
+                          style={{ cursor: 'help' }}
+                        />
+                      )
+                    )}
+                  </div>
                 </td>
                 <td style={{ padding: '10px 12px', fontSize: 12, color: C.text2 }}>{row.language}</td>
                 <td style={{ padding: '10px 12px', fontSize: 12 }}>
@@ -438,7 +509,8 @@ export function ReferenceDataTable({ harmonyId, tableName }: ReferenceDataTableP
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
