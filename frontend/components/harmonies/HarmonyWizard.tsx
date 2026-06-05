@@ -69,7 +69,8 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const [approach, setApproach] = useState<'reference_list' | 'rule_based' | 'regex'>('reference_list');
   const [groups, setGroups] = useState<ValueGroup[]>([]);
   const [ungrouped, setUngrouped] = useState<string[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null); // For drag-and-drop
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null); // For click-to-add
   const [ungroupedSearch, setUngroupedSearch] = useState('');
   const [ungroupedSort, setUngroupedSort] = useState<'alpha' | 'count'>('alpha');
 
@@ -314,6 +315,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
       values: [],
     };
     setGroups([...groups, newGroup]);
+    setActiveGroupId(newGroup.id); // New group becomes active
   };
 
   const updateGroupLabel = (groupId: string, label: string) => {
@@ -344,6 +346,13 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
     // Add to ungrouped
     if (!ungrouped.includes(value)) {
       setUngrouped([...ungrouped, value]);
+    }
+  };
+
+  const handleUngroupedValueClick = (value: string) => {
+    // Only add to group if there's an active group
+    if (activeGroupId) {
+      moveToGroup(value, activeGroupId);
     }
   };
 
@@ -733,8 +742,10 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                     <GroupContainer
                       key={group.id}
                       group={group}
+                      isActive={activeGroupId === group.id}
                       onUpdateLabel={updateGroupLabel}
                       onRemoveValue={moveToUngrouped}
+                      onSelect={() => setActiveGroupId(group.id)}
                     />
                   ))}
 
@@ -787,7 +798,11 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         {getFilteredSortedUngrouped().map((value) => (
-                          <DraggableValue key={value} value={value} />
+                          <DraggableValue
+                            key={value}
+                            value={value}
+                            onClick={() => handleUngroupedValueClick(value)}
+                          />
                         ))}
                       </div>
                     </div>
@@ -1079,48 +1094,74 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
 
 function GroupContainer({
   group,
+  isActive,
   onUpdateLabel,
   onRemoveValue,
+  onSelect,
 }: {
   group: ValueGroup;
+  isActive: boolean;
   onUpdateLabel: (id: string, label: string) => void;
   onRemoveValue: (value: string) => void;
+  onSelect: () => void;
 }) {
   const { setNodeRef } = useDroppable({ id: group.id });
 
   return (
     <div
       ref={setNodeRef}
+      onClick={onSelect}
       style={{
         background: C.surface,
-        border: `1px solid ${C.border}`,
+        border: `2px solid ${isActive ? C.indigo : C.border}`,
         borderRadius: 6,
         padding: 12,
         marginBottom: 12,
+        cursor: 'pointer',
+        transition: 'border-color 0.2s',
+        boxShadow: isActive ? `0 0 0 3px ${C.indigoDim}` : 'none',
       }}
     >
-      <input
-        type="text"
-        value={group.label}
-        onChange={(e) => onUpdateLabel(group.id, e.target.value)}
-        placeholder="Group label..."
-        style={{
-          width: '100%',
-          padding: '6px 10px',
-          fontSize: 13,
-          fontWeight: 500,
-          background: C.bg,
-          border: `1px solid ${C.border}`,
-          borderRadius: 4,
-          color: C.text,
-          marginBottom: 8,
-        }}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <input
+          type="text"
+          value={group.label}
+          onChange={(e) => onUpdateLabel(group.id, e.target.value)}
+          placeholder="Group label..."
+          style={{
+            flex: 1,
+            padding: '6px 10px',
+            fontSize: 13,
+            fontWeight: 500,
+            background: C.bg,
+            border: `1px solid ${C.border}`,
+            borderRadius: 4,
+            color: C.text,
+          }}
+        />
+        {isActive && (
+          <span
+            style={{
+              padding: '4px 8px',
+              fontSize: 10,
+              fontWeight: 600,
+              background: C.indigoDim,
+              border: `1px solid ${C.indigoBrd}`,
+              borderRadius: 4,
+              color: C.indigo,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+            }}
+          >
+            Active
+          </span>
+        )}
+      </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 32 }}>
         {group.values.length === 0 ? (
           <div style={{ fontSize: 11, color: C.text3, fontStyle: 'italic' }}>
-            Drag values here
+            {isActive ? 'Click values below to add them here' : 'Drag values here or click to activate'}
           </div>
         ) : (
           group.values.map((value) => (
@@ -1166,7 +1207,7 @@ function GroupContainer({
   );
 }
 
-function DraggableValue({ value }: { value: string }) {
+function DraggableValue({ value, onClick }: { value: string; onClick?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: value,
   });
@@ -1181,11 +1222,33 @@ function DraggableValue({ value }: { value: string }) {
     fontSize: 12,
     fontFamily: F.mono,
     color: C.text,
-    cursor: 'grab',
+    cursor: 'pointer',
+    transition: 'background 0.15s, border-color 0.15s',
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Only trigger click if not dragging
+    if (!isDragging && onClick) {
+      onClick();
+    }
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={handleClick}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = C.hover;
+        e.currentTarget.style.borderColor = C.border2;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = C.surface;
+        e.currentTarget.style.borderColor = C.border;
+      }}
+    >
       {value}
     </div>
   );
