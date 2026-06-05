@@ -2,16 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { addToast } from '@/components/ui/toast';
-
-const C = {
-  text: '#0F172A',
-  text2: '#64748B',
-  text3: '#94A3B8',
-  border: '#E2E8F0',
-  surface: '#F8FAFC',
-  indigo: '#4F46E5',
-  red: '#EF4444',
-};
+import { C } from '@/lib/design-tokens';
 
 interface FieldRule {
   field: string;
