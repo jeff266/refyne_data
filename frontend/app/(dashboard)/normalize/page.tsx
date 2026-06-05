@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { CheckCircle2, ChevronDown, ChevronUp, RotateCcw, Loader2, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { CheckCircle2, ChevronDown, ChevronUp, RotateCcw, Loader2, CheckCircle, XCircle, Clock, AlertCircle, AlertTriangle } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Toggle, PrimaryBtn, Chip } from '@/components/refyne';
 import { RollbackConfirmModal } from '@/components/normalize/RollbackConfirmModal';
@@ -11,6 +11,7 @@ import { ByFieldView } from '@/components/normalize/ByFieldView';
 import { SkippedList } from '@/components/normalize/SkippedList';
 import { addToast } from '@/components/ui/toast';
 import { useObjectType } from '@/hooks/useObjectType';
+import { validateEnumValue, type HubSpotProperty } from '@/lib/harmonies/enum-validator';
 
 // Harmony list is now dynamic based on issue-counts API response
 
@@ -83,6 +84,10 @@ export default function NormalizePage() {
   const [detailSlideOverOpen, setDetailSlideOverOpen] = useState(false);
   const [detailRunId, setDetailRunId] = useState<string | null>(null);
 
+  // Enum validation state
+  const [hubspotProperties, setHubspotProperties] = useState<HubSpotProperty[]>([]);
+  const [harmoniesMetadata, setHarmoniesMetadata] = useState<Map<string, { name: string; targetField: string }>>(new Map());
+
   // Fetch issue counts
   const fetchIssueCounts = async () => {
     try {
@@ -142,6 +147,79 @@ export default function NormalizePage() {
     }, 60000);
     return () => clearInterval(interval);
   }, [previewLoadedAt]);
+
+  // Fetch HubSpot properties and harmony metadata when preview loads
+  useEffect(() => {
+    if (preview.length > 0) {
+      fetchHubSpotProperties();
+
+      // Get unique harmony IDs from preview
+      const harmonyIds = Array.from(new Set(active));
+      if (harmonyIds.length > 0) {
+        fetchHarmoniesMetadata(harmonyIds);
+      }
+    }
+  }, [preview.length, objectType]);
+
+  // Calculate enum validation warnings
+  const enumValidationWarnings = useMemo(() => {
+    if (preview.length === 0 || hubspotProperties.length === 0 || harmoniesMetadata.size === 0) {
+      return [];
+    }
+
+    const warningsByHarmony = new Map<string, { harmonyName: string; targetField: string; fieldLabel: string; invalidValue: string; recordCount: number }>();
+
+    // Group preview records by field to find the harmony
+    const recordsByField = new Map<string, PreviewRecord[]>();
+    preview.forEach((record) => {
+      if (!recordsByField.has(record.field)) {
+        recordsByField.set(record.field, []);
+      }
+      recordsByField.get(record.field)!.push(record);
+    });
+
+    // For each field, find the harmony and validate
+    harmoniesMetadata.forEach((metadata, harmonyId) => {
+      const { name: harmonyName, targetField } = metadata;
+
+      // Find the property definition
+      const property = hubspotProperties.find((p) => p.name === targetField);
+      if (!property || property.type !== 'enumeration') {
+        return; // Skip non-enum fields
+      }
+
+      // Get records for this field
+      const records = recordsByField.get(targetField) || [];
+
+      // Validate each proposed value
+      const invalidValues = new Map<string, number>(); // value -> count
+      records.forEach((record) => {
+        const validation = validateEnumValue(record.after, property);
+        if (!validation.valid) {
+          invalidValues.set(record.after, (invalidValues.get(record.after) || 0) + 1);
+        }
+      });
+
+      // If any invalid values found, add warning for this harmony
+      if (invalidValues.size > 0) {
+        const [firstInvalidValue] = invalidValues.keys();
+        const totalInvalid = Array.from(invalidValues.values()).reduce((sum, count) => sum + count, 0);
+
+        warningsByHarmony.set(harmonyId, {
+          harmonyName,
+          targetField,
+          fieldLabel: property.label,
+          invalidValue: firstInvalidValue,
+          recordCount: totalInvalid,
+        });
+      }
+    });
+
+    return Array.from(warningsByHarmony.entries()).map(([harmonyId, warning]) => ({
+      harmonyId,
+      ...warning,
+    }));
+  }, [preview, hubspotProperties, harmoniesMetadata]);
 
   const fetchPreview = async () => {
     // Determine which harmonies to run based on source type
@@ -212,6 +290,52 @@ export default function NormalizePage() {
       addToast('error', 'Failed to load preview. Check console for details.');
     } finally {
       setPreviewLoading(false);
+    }
+  };
+
+  // Fetch HubSpot properties for enum validation
+  const fetchHubSpotProperties = async () => {
+    try {
+      const res = await fetch(`/api/hubspot/properties?objectType=${objectType}`);
+      if (res.ok) {
+        const data = await res.json();
+        const allProperties = [...(data.properties?.standard || []), ...(data.properties?.custom || [])];
+        setHubspotProperties(allProperties);
+      }
+    } catch (err) {
+      console.error('Failed to fetch HubSpot properties:', err);
+    }
+  };
+
+  // Fetch harmony metadata for active harmonies
+  const fetchHarmoniesMetadata = async (harmonyIds: string[]) => {
+    try {
+      const metadata = new Map<string, { name: string; targetField: string }>();
+
+      // Fetch metadata for each harmony
+      await Promise.all(
+        harmonyIds.map(async (harmonyId) => {
+          try {
+            const res = await fetch(`/api/harmonies/${harmonyId}`);
+            if (res.ok) {
+              const harmony = await res.json();
+              const targetField = harmony.fieldAssignments[0]?.hubspotProperty;
+              if (targetField) {
+                metadata.set(harmonyId, {
+                  name: harmony.name,
+                  targetField,
+                });
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to fetch metadata for harmony ${harmonyId}:`, err);
+          }
+        })
+      );
+
+      setHarmoniesMetadata(metadata);
+    } catch (err) {
+      console.error('Failed to fetch harmonies metadata:', err);
     }
   };
 
@@ -762,6 +886,42 @@ export default function NormalizePage() {
                   </>
                 )}
               </div>
+
+              {/* Enum validation warning banner */}
+              {enumValidationWarnings.length > 0 && selectedChanges.size > 0 && (
+                <div
+                  style={{
+                    borderTop: `1px solid ${C.amberBrd}`,
+                    background: C.amberDim,
+                    padding: '16px 24px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'start', gap: 12, marginBottom: 12 }}>
+                    <AlertTriangle size={20} color={C.amber} style={{ flexShrink: 0, marginTop: 2 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+                        Some changes may fail in HubSpot
+                      </div>
+                      {enumValidationWarnings.map((warning) => (
+                        <div key={warning.harmonyId} style={{ fontSize: 13, color: C.text, marginBottom: 6 }}>
+                          <strong>{warning.harmonyName}:</strong> "{warning.invalidValue}" is not a valid option for the{' '}
+                          <strong>{warning.fieldLabel}</strong> field. {warning.recordCount} record{warning.recordCount !== 1 ? 's' : ''} affected.{' '}
+                          <a
+                            href={`/harmonies/${warning.harmonyId}#reference-data`}
+                            style={{
+                              color: C.indigo,
+                              textDecoration: 'underline',
+                              fontWeight: 600,
+                            }}
+                          >
+                            Fix reference data →
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Action bar (shown when changes selected) */}
               {selectedChanges.size > 0 && (

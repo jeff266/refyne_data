@@ -1,28 +1,42 @@
 # Enrichment Switcher - Claude Context
 
-## Future: Preview enum validation (Fix 3)
+## Enum Validation System - COMPLETE (June 2026)
 
-**Status:** Deferred June 2026
+**Status:** Implemented and shipped ✅
 
-Before showing Apply in normalize preview, validate all proposed canonical values against HubSpot enum options for enumeration fields. Show warning banner per harmony with link to fix reference data.
+Complete three-tier enum validation system prevents HubSpot write failures for enumeration fields:
 
-**Requirements:**
-- Map active harmonies → target fields → fetch properties from hubspot_properties_cache
-- Validate all preview records' proposed values against their field's enum options
-- Group invalid values by harmony
-- Show compact warning banner:
+**Fix 1: Worker error tracking (migration 079)**
+- Added `error_message TEXT` column to `normalization_run_progress`
+- Normalize worker captures field-level errors from HubSpot batch API
+- Stores specific rejection reasons (e.g., "Property 'industry' with value 'ABA Therapy' was not one of the allowed options")
+
+**Fix 2: Reference data validation UI**
+- Harmony detail page validates canonical values against HubSpot enum options
+- Inline indicators: ✓ green CheckCircle for valid, ⚠️ amber AlertTriangle for invalid
+- Warning banner at top when invalid values exist
+- Shared utility: `lib/harmonies/enum-validator.ts`
+
+**Fix 3: Preview enum validation warning**
+- Normalize preview validates ALL proposed changes before apply
+- Fetches properties from `hubspot_properties_cache` (no HubSpot API calls)
+- Groups invalid values by harmony with record counts
+- Warning banner above Apply button:
   ```
-  ⚠️ {N} changes may fail
-  The {harmonyName} harmony would write "{invalidValue}" to {fieldLabel},
-  which is not a valid HubSpot option.
-  [Fix harmony reference data →]  [Apply anyway]
+  ⚠️ Some changes may fail in HubSpot
+
+  Company Industry Taxonomy: "ABA Therapy" is not a valid option
+  for the industry field. 23 records affected. [Fix reference data →]
   ```
-- "Fix harmony reference data →" links to `/harmonies/{harmonyId}#reference-data`
-- "Apply anyway" proceeds with apply (user's choice)
+- "Fix reference data →" links to `/harmonies/{harmonyId}#reference-data`
+- User can choose "Apply anyway" (they may know something we don't)
 
-**Complexity:** Multi-harmony coordination, parallel property fetching, compact UI without overwhelming the preview.
-
-**Current mitigation:** Fix 2 (enum validation in reference data) catches issues at the harmony configuration level before they reach the normalize preview.
+**Implementation:**
+- `lib/harmonies/enum-validator.ts`: Shared validation utility
+- `app/(dashboard)/harmonies/[id]/page.tsx`: Reference data validation
+- `app/(dashboard)/normalize/page.tsx`: Preview validation warnings
+- `components/harmonies/ReferenceDataTable.tsx`: Inline validation UI
+- Recent Changes table shows write errors with specific rejection reasons
 
 ---
 
