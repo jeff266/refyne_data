@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, ChevronRight, ChevronLeft, Loader2, Check } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, Loader2, Check, AlertTriangle } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn, GhostBtn } from '@/components/refyne';
 import { HubSpotPropertyPicker } from './HubSpotPropertyPicker';
@@ -63,6 +63,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const [scanProgress, setScanProgress] = useState(0);
   const [distinctValues, setDistinctValues] = useState<DistinctValue[]>([]);
   const [scanJobId, setScanJobId] = useState<string | null>(null);
+  const [scanCompleted, setScanCompleted] = useState(false);
 
   // Step 3: Grouping
   const [approach, setApproach] = useState<'reference_list' | 'rule_based' | 'regex'>('reference_list');
@@ -249,6 +250,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
     try {
       setScanning(true);
       setScanProgress(0);
+      setScanCompleted(false);
 
       const res = await fetch(`/api/harmonies/${harmonyId}/scan`, {
         method: 'POST',
@@ -286,6 +288,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
             setScanning(false);
             setScanProgress(100);
             setDistinctValues(data.distinctValues || []);
+            setScanCompleted(true);
           } else if (data.status === 'failed') {
             clearInterval(interval);
             setScanning(false);
@@ -593,16 +596,45 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                 </p>
 
                 {distinctValues.length === 0 ? (
-                  <PrimaryBtn onClick={startScan} disabled={scanning}>
-                    {scanning ? (
-                      <>
-                        <Loader2 size={14} />
-                        Scanning... {scanProgress}%
-                      </>
-                    ) : (
-                      'Start Scan'
-                    )}
-                  </PrimaryBtn>
+                  <div>
+                    {scanCompleted ? (
+                      <div
+                        style={{
+                          background: C.amberDim,
+                          border: `1px solid ${C.amberBrd}`,
+                          borderRadius: 6,
+                          padding: 16,
+                          marginBottom: 16,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                          <AlertTriangle size={18} color={C.amber} style={{ flexShrink: 0, marginTop: 2 }} />
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+                              Field is empty
+                            </div>
+                            <div style={{ fontSize: 12, color: C.text2, marginBottom: 12 }}>
+                              The field "{field}" has no values across your {category === 'company' ? 'companies' : 'contacts'}.
+                              You cannot create normalization rules for an empty field.
+                            </div>
+                            <div style={{ fontSize: 11, color: C.text3 }}>
+                              Try selecting a different field or populate this field in HubSpot first.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                    <PrimaryBtn onClick={startScan} disabled={scanning}>
+                      {scanning ? (
+                        <>
+                          <Loader2 size={14} />
+                          Scanning... {scanProgress}%
+                        </>
+                      ) : (
+                        scanCompleted ? 'Scan Again' : 'Start Scan'
+                      )}
+                    </PrimaryBtn>
+                  </div>
                 ) : (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
