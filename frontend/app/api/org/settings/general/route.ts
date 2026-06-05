@@ -119,6 +119,7 @@ export async function PUT(request: NextRequest) {
       digestTime,
       scoreThreshold,
       sendOnNoChange,
+      emailRecipients,
     } = body;
 
     // Update workspace settings if provided
@@ -150,7 +151,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update Always On config if provided
-    if (digestTime !== undefined || scoreThreshold !== undefined || sendOnNoChange !== undefined) {
+    if (digestTime !== undefined || scoreThreshold !== undefined || sendOnNoChange !== undefined || emailRecipients !== undefined) {
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
       if (digestTime !== undefined) {
@@ -161,6 +162,9 @@ export async function PUT(request: NextRequest) {
       }
       if (sendOnNoChange !== undefined) {
         updates.send_on_no_change = sendOnNoChange;
+      }
+      if (emailRecipients !== undefined) {
+        updates.email_recipients = emailRecipients;
       }
 
       const { error: alwaysOnError } = await supabase
