@@ -181,8 +181,33 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Return updated settings
-    return GET();
+    // Fetch and return updated settings
+    const { data: workspace } = await supabase
+      .from('workspace_entitlements')
+      .select('org_name, display_name, timezone')
+      .eq('org_id', ctx.orgId)
+      .single();
+
+    const { data: alwaysOnConfig } = await supabase
+      .from('always_on_config')
+      .select('digest_enabled, scan_time_utc, score_delta_threshold, send_on_no_change, email_recipients')
+      .eq('org_id', ctx.orgId)
+      .maybeSingle();
+
+    const settings: GeneralSettings = {
+      workspaceName: workspace?.org_name || null,
+      displayName: workspace?.display_name || null,
+      timezone: workspace?.timezone || 'UTC',
+      alwaysOn: alwaysOnConfig ? {
+        enabled: alwaysOnConfig.digest_enabled ?? false,
+        digestTime: alwaysOnConfig.scan_time_utc || '06:00:00',
+        scoreThreshold: alwaysOnConfig.score_delta_threshold || 3,
+        sendOnNoChange: alwaysOnConfig.send_on_no_change ?? false,
+        emailRecipients: alwaysOnConfig.email_recipients || [],
+      } : null,
+    };
+
+    return NextResponse.json({ settings });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/org/settings/general' });
     console.error('Failed to update general settings:', error);
