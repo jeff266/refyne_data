@@ -38,6 +38,18 @@ const DEFAULT_COMPLIANCE_FIELDS = [
   'hs_legal_basis',
 ];
 
+// Map HubSpot field names to human-readable labels
+const COMPLIANCE_FIELD_LABELS: Record<string, string> = {
+  'hs_email_optout': 'Email Opt-out',
+  'hs_email_bounce': 'Email Bounce',
+  'hs_email_hardbounce_reason': 'Email Hard Bounce Reason',
+  'hs_legal_basis': 'Legal Basis',
+};
+
+function getComplianceFieldLabel(field: string): string {
+  return COMPLIANCE_FIELD_LABELS[field] || field;
+}
+
 export default function DedupPoliciesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -218,22 +230,24 @@ export default function DedupPoliciesPage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={blockDifferentParent}
               onChange={(e) => setBlockDifferentParent(e.target.checked)}
+              style={{ cursor: 'pointer' }}
             />
-            <span>Block if records have different parent companies</span>
+            <span style={{ color: C.text }}>Block if records have different parent companies</span>
           </label>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={blockClosedWonDeals}
               onChange={(e) => setBlockClosedWonDeals(e.target.checked)}
+              style={{ cursor: 'pointer' }}
             />
-            <span>Block if any record has closed-won deals</span>
+            <span style={{ color: C.text }}>Block if any record has closed-won deals</span>
           </label>
         </div>
       </div>
@@ -255,14 +269,19 @@ export default function DedupPoliciesPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '8px 12px',
+                padding: '12px 16px',
                 background: C.surface,
                 border: `1px solid ${C.border}`,
                 marginBottom: 8,
               }}
             >
-              <div style={{ fontSize: 13, fontFamily: 'monospace', color: C.text }}>
-                {field}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontSize: 13, color: C.text }}>
+                  {getComplianceFieldLabel(field)}
+                </div>
+                <div style={{ fontSize: 11, fontFamily: 'monospace', color: C.text3 }}>
+                  {field}
+                </div>
               </div>
               <button
                 onClick={() => removeComplianceField(field)}
@@ -343,16 +362,17 @@ export default function DedupPoliciesPage() {
           <div
             key={index}
             style={{
-              padding: 16,
-              background: 'white',
+              padding: 20,
+              background: C.surface,
               border: `1px solid ${C.border}`,
-              marginBottom: 12,
+              marginBottom: 16,
+              borderRadius: 0,
             }}
           >
-            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16, marginBottom: 16 }}>
               {/* Field name */}
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, color: C.text2, marginBottom: 4 }}>
+              <div>
+                <div style={{ fontSize: 11, color: C.text3, marginBottom: 6, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Field
                 </div>
                 <input
@@ -361,21 +381,23 @@ export default function DedupPoliciesPage() {
                   onChange={(e) =>
                     updateFieldRule(index, { field: e.target.value })
                   }
-                  placeholder="domain or *"
+                  placeholder="lifecyclestage"
                   style={{
                     width: '100%',
-                    padding: '8px 12px',
-                    fontSize: 14,
+                    padding: '10px 12px',
+                    fontSize: 13,
                     fontFamily: 'monospace',
                     border: `1px solid ${C.border}`,
-                    borderRadius: 4,
+                    borderRadius: 0,
+                    background: C.bg,
+                    color: C.text,
                   }}
                 />
               </div>
 
               {/* Rule type */}
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, color: C.text2, marginBottom: 4 }}>
+              <div>
+                <div style={{ fontSize: 11, color: C.text3, marginBottom: 6, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Rule
                 </div>
                 <select
@@ -385,10 +407,13 @@ export default function DedupPoliciesPage() {
                   }
                   style={{
                     width: '100%',
-                    padding: '8px 12px',
-                    fontSize: 14,
+                    padding: '10px 12px',
+                    fontSize: 13,
                     border: `1px solid ${C.border}`,
-                    borderRadius: 4,
+                    borderRadius: 0,
+                    background: C.bg,
+                    color: C.text,
+                    cursor: 'pointer',
                   }}
                 >
                   {RULE_TYPES.map((rt) => (
@@ -401,14 +426,14 @@ export default function DedupPoliciesPage() {
             </div>
 
             {/* Rule description */}
-            <div style={{ fontSize: 12, color: C.text3, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: C.text3, marginBottom: 16, fontStyle: 'italic' }}>
               {RULE_TYPES.find((rt) => rt.value === rule.rule)?.description}
             </div>
 
             {/* Config for keep_most_advanced */}
             {rule.rule === 'keep_most_advanced' && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 12, color: C.text2, marginBottom: 4 }}>
+              <div style={{ marginBottom: 16, padding: 12, background: C.bg, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, color: C.text3, marginBottom: 6, fontWeight: 500 }}>
                   Funnel Order (comma-separated)
                 </div>
                 <input
@@ -423,10 +448,12 @@ export default function DedupPoliciesPage() {
                   style={{
                     width: '100%',
                     padding: '8px 12px',
-                    fontSize: 14,
+                    fontSize: 12,
                     fontFamily: 'monospace',
                     border: `1px solid ${C.border}`,
-                    borderRadius: 4,
+                    borderRadius: 0,
+                    background: C.surface,
+                    color: C.text,
                   }}
                 />
               </div>
@@ -434,8 +461,8 @@ export default function DedupPoliciesPage() {
 
             {/* Config for append_both */}
             {rule.rule === 'append_both' && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 12, color: C.text2, marginBottom: 4 }}>
+              <div style={{ marginBottom: 16, padding: 12, background: C.bg, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, color: C.text3, marginBottom: 6, fontWeight: 500 }}>
                   Separator
                 </div>
                 <input
@@ -450,26 +477,30 @@ export default function DedupPoliciesPage() {
                   style={{
                     width: 200,
                     padding: '8px 12px',
-                    fontSize: 14,
+                    fontSize: 13,
                     border: `1px solid ${C.border}`,
-                    borderRadius: 4,
+                    borderRadius: 0,
+                    background: C.surface,
+                    color: C.text,
                   }}
                 />
               </div>
             )}
 
             {/* Actions */}
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
               <button
                 onClick={() => moveFieldRule(index, 'up')}
                 disabled={index === 0}
                 style={{
-                  padding: '4px 8px',
-                  fontSize: 12,
-                  background: 'white',
+                  padding: '6px 12px',
+                  fontSize: 11,
+                  background: 'transparent',
+                  color: index === 0 ? C.text3 : C.text,
                   border: `1px solid ${C.border}`,
+                  borderRadius: 0,
                   cursor: index === 0 ? 'not-allowed' : 'pointer',
-                  opacity: index === 0 ? 0.5 : 1,
+                  fontWeight: 500,
                 }}
               >
                 ↑ Move up
@@ -478,12 +509,14 @@ export default function DedupPoliciesPage() {
                 onClick={() => moveFieldRule(index, 'down')}
                 disabled={index === fieldRules.length - 1}
                 style={{
-                  padding: '4px 8px',
-                  fontSize: 12,
-                  background: 'white',
+                  padding: '6px 12px',
+                  fontSize: 11,
+                  background: 'transparent',
+                  color: index === fieldRules.length - 1 ? C.text3 : C.text,
                   border: `1px solid ${C.border}`,
+                  borderRadius: 0,
                   cursor: index === fieldRules.length - 1 ? 'not-allowed' : 'pointer',
-                  opacity: index === fieldRules.length - 1 ? 0.5 : 1,
+                  fontWeight: 500,
                 }}
               >
                 ↓ Move down
@@ -492,12 +525,14 @@ export default function DedupPoliciesPage() {
                 onClick={() => removeFieldRule(index)}
                 style={{
                   marginLeft: 'auto',
-                  padding: '4px 8px',
-                  fontSize: 12,
+                  padding: '6px 12px',
+                  fontSize: 11,
                   color: C.red,
-                  background: 'white',
+                  background: 'transparent',
                   border: `1px solid ${C.red}`,
+                  borderRadius: 0,
                   cursor: 'pointer',
+                  fontWeight: 500,
                 }}
               >
                 Remove
@@ -510,12 +545,13 @@ export default function DedupPoliciesPage() {
           onClick={addFieldRule}
           style={{
             padding: '10px 20px',
-            fontSize: 14,
-            color: C.indigo,
-            background: 'white',
+            fontSize: 13,
+            color: C.text,
+            background: C.indigo,
             border: `1px solid ${C.indigo}`,
-            borderRadius: 4,
+            borderRadius: 0,
             cursor: 'pointer',
+            fontWeight: 500,
           }}
         >
           + Add Rule
