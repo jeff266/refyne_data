@@ -87,6 +87,7 @@ export async function GET() {
       .from('hubspot_connections')
       .select('id')
       .eq('org_id', ctx.orgId)
+      .eq('connection_status', 'active')
       .limit(1);
 
     const connectedHubspot = (connections?.length || 0) > 0;

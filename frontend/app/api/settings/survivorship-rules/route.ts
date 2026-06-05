@@ -27,6 +27,9 @@ export async function GET(request: NextRequest) {
 
   const orgId = ctx.orgId;
 
+  // Read objectType from query params, default to 'companies'
+  const objectType = request.nextUrl.searchParams.get('objectType') || 'companies';
+
   if (!supabase) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
   }
@@ -54,7 +57,8 @@ export async function GET(request: NextRequest) {
       const accessToken = await getAccessToken(orgId);
 
       if (accessToken) {
-        const response = await fetch('https://api.hubapi.com/crm/v3/properties/companies', {
+        const hubspotObjectType = objectType === 'contact' ? 'contacts' : 'companies';
+        const response = await fetch(`https://api.hubapi.com/crm/v3/properties/${hubspotObjectType}`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
@@ -90,8 +94,23 @@ export async function GET(request: NextRequest) {
       // Fall back to basic list if HubSpot fetch fails
     }
 
+    // Filter default rules based on object type
+    // When objectType === 'contact', exclude company-only default rules
+    // Keep: prefer_nonempty (*), source_preference (*)
+    // Exclude: never_downgrade (lifecyclestage), tld_disqualifier (domain)
+    const COMPANY_ONLY_RULE_TYPES = ['never_downgrade', 'tld_disqualifier'];
+
+    const defaultRules = enrichedRules.filter((r) => r.is_default);
+    const orgRules = enrichedRules.filter((r) => !r.is_default);
+
+    const filteredDefaultRules = objectType === 'contact'
+      ? defaultRules.filter(r => !COMPANY_ONLY_RULE_TYPES.includes(r.rule_type))
+      : defaultRules;
+
+    const filteredRules = [...filteredDefaultRules, ...orgRules];
+
     return NextResponse.json({
-      rules: enrichedRules,
+      rules: filteredRules,
       field_options: fieldOptions,
     });
   } catch (error) {
