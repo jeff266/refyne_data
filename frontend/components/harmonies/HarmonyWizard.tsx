@@ -58,6 +58,8 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const [field, setField] = useState('');
   const [fieldLabel, setFieldLabel] = useState('');
   const [fieldType, setFieldType] = useState<string>(''); // HubSpot field type (string, number, enumeration, etc.)
+  const [transformType, setTransformType] = useState<'format' | 'group'>('group');
+  const [formatFunction, setFormatFunction] = useState<string>('');
 
   // Step 2: Scan
   const [scanning, setScanning] = useState(false);
@@ -83,6 +85,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   // Multi-select state
   const [selectedValues, setSelectedValues] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+  const [batchGroupId, setBatchGroupId] = useState<string>('');
 
   // Step 4: Add Conditions (optional)
   const [conditionMode, setConditionMode] = useState<'all' | 'conditional'>('all');
@@ -110,7 +113,12 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   ];
 
   const canAdvance = () => {
-    if (step === 1) return name && field;
+    if (step === 1) {
+      if (transformType === 'format') {
+        return name && field && formatFunction;
+      }
+      return name && field;
+    }
     if (step === 2) return distinctValues.length > 0;
     if (step === 3) return groups.length > 0;
     if (step === 4) {
@@ -126,27 +134,54 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
 
   const handleNext = async () => {
     if (step === 1) {
-      // Create harmony and trigger scan
+      // Create harmony
       try {
         setSaving(true);
-        const res = await fetch('/api/harmonies', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name,
-            description,
-            category,
-            field,
-            approach: 'reference_list', // Default, will be set in step 3
-          }),
-        });
 
-        if (res.ok) {
-          const data = await res.json();
-          setHarmonyId(data.id);
-          setStep(2);
+        // Branch on transform type
+        if (transformType === 'format') {
+          // Format function: skip Steps 2 & 3, go directly to Step 4
+          const res = await fetch('/api/harmonies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              description,
+              category,
+              field,
+              approach: 'format',
+              transform_function: formatFunction,
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            setHarmonyId(data.id);
+            setStep(4); // Skip Steps 2 & 3
+          } else {
+            alert('Failed to create harmony');
+          }
         } else {
-          alert('Failed to create harmony');
+          // Group values: existing behavior
+          const res = await fetch('/api/harmonies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              description,
+              category,
+              field,
+              approach: 'reference_list', // Default, will be set in step 3
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            setHarmonyId(data.id);
+            setStep(2);
+          } else {
+            alert('Failed to create harmony');
+          }
         }
       } catch (err) {
         console.error('Failed to create harmony:', err);
@@ -250,6 +285,8 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
     setDescription('');
     setCategory('company');
     setField('');
+    setTransformType('group');
+    setFormatFunction('');
     setScanning(false);
     setScanProgress(0);
     setDistinctValues([]);
@@ -568,30 +605,37 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
         {/* Progress Bar */}
         <div style={{ padding: '16px 24px', borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'flex', gap: 8 }}>
-            {steps.map((s) => (
-              <div key={s.number} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div
-                  style={{
-                    height: 4,
-                    background: step >= s.number ? C.indigo : C.border,
-                    borderRadius: 2,
-                    transition: 'background 0.2s',
-                  }}
-                />
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: step >= s.number ? C.text : C.text3,
-                    textAlign: 'center',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    fontWeight: 600,
-                  }}
-                >
-                  {s.label}
+            {steps.map((s) => {
+              // Dim Steps 2 & 3 for format harmonies when on Step 4 or 5
+              const isSkipped = transformType === 'format' && step >= 4 && (s.number === 2 || s.number === 3);
+
+              return (
+                <div key={s.number} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div
+                    style={{
+                      height: 4,
+                      background: isSkipped ? C.border : (step >= s.number ? C.indigo : C.border),
+                      borderRadius: 2,
+                      transition: 'background 0.2s',
+                      opacity: isSkipped ? 0.3 : 1,
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: isSkipped ? C.text3 : (step >= s.number ? C.text : C.text3),
+                      textAlign: 'center',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      fontWeight: 600,
+                      opacity: isSkipped ? 0.4 : 1,
+                    }}
+                  >
+                    {s.label}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -695,6 +739,105 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                   The internal HubSpot property name (e.g., "industry", "company_size")
                 </p>
               </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>
+                  Transform Type *
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <label
+                    style={{
+                      padding: '12px 16px',
+                      background: transformType === 'format' ? C.indigoDim : C.surface,
+                      border: `1px solid ${transformType === 'format' ? C.indigoBrd : C.border}`,
+                      borderRadius: 0,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      value="format"
+                      checked={transformType === 'format'}
+                      onChange={(e) => setTransformType(e.target.value as 'format' | 'group')}
+                      style={{ marginTop: 2, cursor: 'pointer' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, color: C.text, marginBottom: 4 }}>
+                        Format function
+                      </div>
+                      <div style={{ fontSize: 12, color: C.text3 }}>
+                        Apply a built-in rule (phone, email, URL, name casing)
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    style={{
+                      padding: '12px 16px',
+                      background: transformType === 'group' ? C.indigoDim : C.surface,
+                      border: `1px solid ${transformType === 'group' ? C.indigoBrd : C.border}`,
+                      borderRadius: 0,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      value="group"
+                      checked={transformType === 'group'}
+                      onChange={(e) => setTransformType(e.target.value as 'format' | 'group')}
+                      style={{ marginTop: 2, cursor: 'pointer' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, color: C.text, marginBottom: 4 }}>
+                        Group values
+                      </div>
+                      <div style={{ fontSize: 12, color: C.text3 }}>
+                        Map raw values to canonical groups (lookup table)
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {transformType === 'format' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>
+                    Format Function *
+                  </label>
+                  <select
+                    value={formatFunction}
+                    onChange={(e) => setFormatFunction(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: 13,
+                      background: C.surface,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 0,
+                      color: C.text,
+                    }}
+                  >
+                    <option value="" disabled>Select a format function...</option>
+                    <option value="e164_phone">E.164 Phone</option>
+                    <option value="email_lowercase">Lowercase Email</option>
+                    <option value="linkedin_url">LinkedIn URL</option>
+                    <option value="smart_title_case">Smart Title Case</option>
+                    <option value="numeric_parse">Numeric Parse</option>
+                    <option value="url_canonical">Canonical URL</option>
+                  </select>
+                  <p style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>
+                    Built-in transformations for common data cleaning tasks
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1033,13 +1176,15 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                           </div>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             <select
+                              value={batchGroupId}
                               onChange={(e) => {
-                                if (e.target.value) {
-                                  handleBatchAddToGroup(e.target.value);
-                                  e.target.value = ''; // Reset dropdown
+                                const groupId = e.target.value;
+                                setBatchGroupId(groupId);
+                                if (groupId) {
+                                  handleBatchAddToGroup(groupId);
+                                  setBatchGroupId(''); // Reset dropdown
                                 }
                               }}
-                              defaultValue=""
                               style={{
                                 padding: '6px 8px',
                                 fontSize: 11,
@@ -1215,19 +1360,47 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                   padding: 16,
                 }}
               >
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 12 }}>
-                  {groups.length} groups, {groups.reduce((sum, g) => sum + g.values.length, 0)} rules
-                </div>
-                {groups.map((group) => (
-                  <div key={group.id} style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 4 }}>
-                      → {group.label}
+                {transformType === 'format' ? (
+                  // Format function preview
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 12 }}>
+                      Format function: {formatFunction === 'e164_phone' ? 'E.164 Phone' :
+                        formatFunction === 'email_lowercase' ? 'Lowercase Email' :
+                        formatFunction === 'linkedin_url' ? 'LinkedIn URL' :
+                        formatFunction === 'smart_title_case' ? 'Smart Title Case' :
+                        formatFunction === 'numeric_parse' ? 'Numeric Parse' :
+                        formatFunction === 'url_canonical' ? 'Canonical URL' : formatFunction}
                     </div>
-                    <div style={{ fontSize: 11, color: C.text3, fontFamily: F.mono, marginLeft: 16 }}>
-                      {group.values.join(', ')}
+                    <div style={{ fontSize: 11, color: C.text3, marginBottom: 12 }}>
+                      {formatFunction === 'e164_phone' && 'Transforms values like "(415) 555-1234" → "+14155551234"'}
+                      {formatFunction === 'email_lowercase' && 'Transforms values like "John.Doe@Example.COM" → "john.doe@example.com"'}
+                      {formatFunction === 'linkedin_url' && 'Transforms values like "linkedin.com/in/john-doe" → "https://linkedin.com/in/john-doe"'}
+                      {formatFunction === 'smart_title_case' && 'Transforms values like "JOHN DOE" → "John Doe"'}
+                      {formatFunction === 'numeric_parse' && 'Transforms values like "$1,234.56" → "1234.56"'}
+                      {formatFunction === 'url_canonical' && 'Transforms values like "example.com?utm=..." → "https://example.com"'}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.text2, fontFamily: F.mono }}>
+                      Applies to: {category}.{field}
                     </div>
                   </div>
-                ))}
+                ) : (
+                  // Group values preview
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 12 }}>
+                      {groups.length} groups, {groups.reduce((sum, g) => sum + g.values.length, 0)} rules
+                    </div>
+                    {groups.map((group) => (
+                      <div key={group.id} style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginBottom: 4 }}>
+                          → {group.label}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.text3, fontFamily: F.mono, marginLeft: 16 }}>
+                          {group.values.join(', ')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div
