@@ -45,13 +45,13 @@ export async function GET(
 
     const hubspotProperty = assignments[0].hubspot_property;
 
-    // Get recent changes (limit 10)
+    // Get recent changes (limit 10, including both written and failed)
     const { data, error } = await supabase
       .from('normalization_run_progress')
-      .select('hubspot_company_id, company_name, field_key, previous_value, new_value, written_at, normalization_runs!inner(org_id)')
+      .select('hubspot_company_id, company_name, field_key, previous_value, new_value, written_at, status, error_message, normalization_runs!inner(org_id)')
       .eq('field_key', hubspotProperty)
       .eq('normalization_runs.org_id', ctx.orgId)
-      .eq('status', 'written')
+      .in('status', ['written', 'failed'])
       .order('written_at', { ascending: false })
       .limit(10);
 
@@ -77,6 +77,8 @@ export async function GET(
       previousValue: row.previous_value || '',
       newValue: row.new_value || '',
       writtenAt: row.written_at,
+      status: row.status,
+      errorMessage: row.error_message,
     }));
 
     return NextResponse.json({

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Trash2, XCircle, CheckCircle } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, StatCard, Toggle, PrimaryBtn, GhostBtn, Chip } from '@/components/refyne';
 import { ReferenceDataTable } from '@/components/harmonies/ReferenceDataTable';
@@ -50,6 +50,8 @@ interface HarmonyChange {
   previousValue: string;
   newValue: string;
   writtenAt: string;
+  status?: 'written' | 'failed' | 'skipped';
+  errorMessage?: string | null;
 }
 
 interface HarmonyReference {
@@ -939,28 +941,54 @@ export default function HarmonyDetailPage() {
                   <th style={{ padding: '10px 20px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     New Value
                   </th>
+                  <th style={{ padding: '10px 20px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Status
+                  </th>
                   <th style={{ padding: '10px 20px', textAlign: 'right', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                     When
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {changes.map((change, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '10px 20px', fontSize: 13, color: C.text }}>
-                      {change.recordName}
-                    </td>
-                    <td style={{ padding: '10px 20px', fontSize: 13, fontFamily: F.mono, color: C.text3 }}>
-                      {change.previousValue || '(empty)'}
-                    </td>
-                    <td style={{ padding: '10px 20px', fontSize: 13, fontFamily: F.mono, color: C.green }}>
-                      {change.newValue}
-                    </td>
-                    <td style={{ padding: '10px 20px', fontSize: 12, color: C.text3, textAlign: 'right' }}>
-                      {formatRelativeTime(change.writtenAt)}
-                    </td>
-                  </tr>
-                ))}
+                {changes.map((change, i) => {
+                  const hasFailed = change.status === 'failed' && change.errorMessage;
+
+                  return (
+                    <React.Fragment key={i}>
+                      <tr style={{ borderBottom: hasFailed ? 'none' : `1px solid ${C.border}` }}>
+                        <td style={{ padding: '10px 20px', fontSize: 13, color: C.text }}>
+                          {change.recordName}
+                        </td>
+                        <td style={{ padding: '10px 20px', fontSize: 13, fontFamily: F.mono, color: C.text3 }}>
+                          {change.previousValue || '(empty)'}
+                        </td>
+                        <td style={{ padding: '10px 20px', fontSize: 13, fontFamily: F.mono, color: hasFailed ? C.text3 : C.green }}>
+                          {hasFailed ? '—' : change.newValue}
+                        </td>
+                        <td style={{ padding: '10px 20px', textAlign: 'center' }}>
+                          {change.status === 'failed' ? (
+                            <XCircle size={16} color={C.red} title="Write failed" />
+                          ) : (
+                            <CheckCircle size={16} color={C.green} title="Written successfully" />
+                          )}
+                        </td>
+                        <td style={{ padding: '10px 20px', fontSize: 12, color: C.text3, textAlign: 'right' }}>
+                          {formatRelativeTime(change.writtenAt)}
+                        </td>
+                      </tr>
+                      {hasFailed && (
+                        <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                          <td colSpan={5} style={{ padding: '8px 20px 12px', fontSize: 12, color: C.text3, background: C.redDim }}>
+                            <div style={{ display: 'flex', alignItems: 'start', gap: 8 }}>
+                              <span style={{ color: C.red, fontWeight: 600 }}>Error:</span>
+                              <span>{change.errorMessage}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

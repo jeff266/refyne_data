@@ -1,5 +1,31 @@
 # Enrichment Switcher - Claude Context
 
+## Future: Preview enum validation (Fix 3)
+
+**Status:** Deferred June 2026
+
+Before showing Apply in normalize preview, validate all proposed canonical values against HubSpot enum options for enumeration fields. Show warning banner per harmony with link to fix reference data.
+
+**Requirements:**
+- Map active harmonies → target fields → fetch properties from hubspot_properties_cache
+- Validate all preview records' proposed values against their field's enum options
+- Group invalid values by harmony
+- Show compact warning banner:
+  ```
+  ⚠️ {N} changes may fail
+  The {harmonyName} harmony would write "{invalidValue}" to {fieldLabel},
+  which is not a valid HubSpot option.
+  [Fix harmony reference data →]  [Apply anyway]
+  ```
+- "Fix harmony reference data →" links to `/harmonies/{harmonyId}#reference-data`
+- "Apply anyway" proceeds with apply (user's choice)
+
+**Complexity:** Multi-harmony coordination, parallel property fetching, compact UI without overwhelming the preview.
+
+**Current mitigation:** Fix 2 (enum validation in reference data) catches issues at the harmony configuration level before they reach the normalize preview.
+
+---
+
 ## Dormant Features
 
 ### Field Mappings (Removed June 2026)
