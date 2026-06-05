@@ -7,6 +7,8 @@ const VALID_TYPES = [
   'always_on_digest',
   'compliance_threshold_alert',
   'dedup_pairs_detected',
+  'enrich_run_complete',
+  'normalize_run_complete',
   'quarantine_submitted',
   'quarantine_decided',
   'credit_limit_warning',
