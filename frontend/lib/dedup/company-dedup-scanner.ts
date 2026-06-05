@@ -13,6 +13,7 @@ import { evaluateCompanyPair, type CompanyProperties, normalizeDomain } from './
 import type { FiredSignal, PairGrade } from './types';
 import { UnionFind } from './union-find';
 import { runDedupScan } from './incremental-scanner';
+import { sendDedupScanNotification } from './send-scan-notification';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -56,6 +57,9 @@ export interface CompanyDedupScanResult {
   pairsGradeB: number;
   pairsGradeC: number;
   pairsGradeD: number;
+  newClustersFound: number;
+  portalId: string;
+  portalName?: string;
   durationMs: number;
   completedAt: string;
 }
@@ -268,7 +272,7 @@ export async function runCompanyDedupScan(
   // Get portal ID from connection
   const { data: connection, error: connError } = await supabase
     .from('hubspot_connections')
-    .select('portal_id')
+    .select('portal_id, portal_name')
     .eq('id', connectionId)
     .single();
 
@@ -277,6 +281,7 @@ export async function runCompanyDedupScan(
   }
 
   const portalId = connection.portal_id;
+  const portalName = connection.portal_name;
 
   console.log(`[Company Dedup Scan] Starting scan for org ${orgId}, portal ${portalId}`);
 
@@ -534,6 +539,9 @@ export async function runCompanyDedupScan(
     pairsGradeB,
     pairsGradeC,
     pairsGradeD,
+    newClustersFound: 0, // Old full scan doesn't track new vs existing clusters
+    portalId,
+    portalName,
     durationMs,
     completedAt: new Date().toISOString(),
   };
@@ -666,7 +674,7 @@ async function processScanJob(
 
     const { data: connection, error: connError } = await supabase
       .from('hubspot_connections')
-      .select('portal_id')
+      .select('portal_id, portal_name')
       .eq('id', connectionId)
       .single();
 
@@ -675,6 +683,7 @@ async function processScanJob(
     }
 
     const portalId = connection.portal_id;
+    const portalName = connection.portal_name;
 
     // Fetch fresh access token inside worker (prevents stale token issues)
     const { getAccessToken } = await import('../hubspot/get-access-token');
@@ -713,6 +722,9 @@ async function processScanJob(
       pairsGradeB: result.gradeBreakdown.B,
       pairsGradeC: result.gradeBreakdown.C,
       pairsGradeD: result.gradeBreakdown.D,
+      newClustersFound: result.newClusterIds.length,
+      portalId,
+      portalName,
       durationMs,
       completedAt: new Date().toISOString(),
     };
@@ -751,13 +763,34 @@ export function startCompanyDedupScanWorker(): Worker<CompanyDedupScanJobData, C
     }
   );
 
-  scanWorker.on('completed', (job, result) => {
+  scanWorker.on('completed', async (job, result) => {
     const objectType = job.data.objectType || 'company';
     const objectLabel = objectType === 'contact' ? 'contacts' : 'companies';
     console.log(
       `[Company Dedup Worker] Job ${job.id} completed: ` +
       `${result.companiesScanned} ${objectLabel} scanned, ${result.pairsDetected} duplicates found in ${result.durationMs}ms`
     );
+
+    // Send email notification if new clusters found (nightly scans only)
+    if (job.data.initiatedBy === 'system:nightly-maintenance' && result.newClustersFound > 0) {
+      try {
+        await sendDedupScanNotification({
+          orgId: result.orgId,
+          portalId: result.portalId,
+          portalName: result.portalName,
+          newClustersFound: result.newClustersFound,
+          gradeBreakdown: {
+            A: result.pairsGradeA,
+            B: result.pairsGradeB,
+            C: result.pairsGradeC,
+            D: result.pairsGradeD,
+          },
+        });
+      } catch (notificationError) {
+        // Log error but don't fail the job
+        console.error('[Company Dedup Worker] Failed to send notification:', notificationError);
+      }
+    }
   });
 
   scanWorker.on('failed', (job, error) => {

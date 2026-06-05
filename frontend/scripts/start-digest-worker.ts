@@ -68,7 +68,6 @@ import { startTaxonomySuggestionWorker, stopTaxonomySuggestionWorker } from '../
 import { startCleanupWorker, getCleanupQueue } from '../lib/queue/cleanup-worker';
 import { createHarmonyScanWorker } from '../lib/queue/harmony-scan-queue';
 import { processHarmonyScan } from '../lib/queue/harmony-scan-processor';
-import { getAccessToken } from '../lib/hubspot/get-access-token';
 
 async function main() {
   console.log('═'.repeat(60));
@@ -299,15 +298,8 @@ async function main() {
 
           for (const connection of connections) {
             try {
-              const accessToken = await getAccessToken(connection.org_id);
-              if (!accessToken) {
-                console.warn(`[Nightly Dedup] No access token for org ${connection.org_id}`);
-                continue;
-              }
-
               const result = await enqueueCompanyDedupScan(
                 connection.org_id,
-                accessToken,
                 connection.id,
                 'system:nightly-maintenance',
                 false // auto-detect scan type (incremental on weekdays, full on Sundays)
