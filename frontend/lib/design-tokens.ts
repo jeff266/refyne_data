@@ -58,7 +58,8 @@ export const NAV = [
   { group: 'CONFIGURE' },
   { id: 'harmonies',   label: 'Harmonies',     icon: 'Sparkles' },
   { id: 'connections', label: 'Connections',   icon: 'Plug2' },
-  { id: 'mappings',    label: 'Field Mappings', icon: 'ArrowRightLeft' },
+  // Field Mappings removed June 2026 - dormant, replaced by harmony field assignments
+  // { id: 'mappings',    label: 'Field Mappings', icon: 'ArrowRightLeft' },
   { divider: true },
   { group: 'ACCOUNT' },
   { id: 'history',     label: 'History',       icon: 'Clock' },
@@ -78,7 +79,8 @@ export const PAGE_META: Record<string, { label: string; action: string | null }>
   // quarantine:   { label: 'Quarantine',     action: null },
   harmonies:    { label: 'Harmonies',      action: null },
   connections:  { label: 'Connections',    action: 'Add connection' },
-  mappings:     { label: 'Field Mappings', action: null },
+  // Field Mappings removed June 2026 - dormant, replaced by harmony field assignments
+  // mappings:     { label: 'Field Mappings', action: null },
   history:      { label: 'History',        action: null },
   settings:     { label: 'Settings',       action: null },
   profile:      { label: 'Profile',        action: null },

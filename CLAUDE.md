@@ -1,5 +1,30 @@
 # Enrichment Switcher - Claude Context
 
+## Dormant Features
+
+### Field Mappings (Removed June 2026)
+
+**Decision:** Removed Field Mappings from navigation. Route and table remain in place but are no longer accessible to users.
+
+**Why dormant:**
+- `field_mappings` table has 0 rows - feature was never used in production
+- Architectural duplication with `harmony_field_assignments` table
+- Harmonies already provide field-level mapping through assignments with better integration
+- Potential customer confusion between two similar features
+
+**What was removed:**
+- Navigation entry in sidebar (`lib/design-tokens.ts` NAV array)
+- Page metadata entry (`lib/design-tokens.ts` PAGE_META object)
+
+**What remains:**
+- Route file: `app/(dashboard)/mappings/page.tsx` (with dormancy comment)
+- Database table: `field_mappings` (with 0 rows)
+- API endpoints (if any)
+
+**Can be fully deleted in future cleanup sprint if confirmed unnecessary.**
+
+---
+
 ## Security Checklist for New Tables
 
 **Before creating any new table in a migration, follow this checklist:**

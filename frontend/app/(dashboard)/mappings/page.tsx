@@ -6,6 +6,22 @@ import { C, F } from '@/lib/design-tokens';
 import { Card, PrimaryBtn, GhostBtn } from '@/components/refyne';
 import { HubSpotPropertyPicker } from '@/components/harmonies/HubSpotPropertyPicker';
 
+/**
+ * DORMANT FEATURE - June 2026
+ *
+ * Field Mappings has been removed from navigation and is now dormant.
+ * Replaced by harmony field assignments which provide the same functionality
+ * with better integration into the harmony system.
+ *
+ * Reason for dormancy:
+ * - field_mappings table has 0 rows (never used in production)
+ * - Architectural duplication with harmony_field_assignments
+ * - Harmonies already support field-level mapping through assignments
+ *
+ * This route and table remain in place but are not accessible via navigation.
+ * Can be fully removed in a future cleanup sprint if confirmed unnecessary.
+ */
+
 interface FieldMapping {
   id: string;
   canonical_field: string;
