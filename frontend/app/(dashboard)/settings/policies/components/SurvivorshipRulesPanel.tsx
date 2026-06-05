@@ -167,8 +167,20 @@ export function SurvivorshipRulesPanel() {
     return field?.label || fieldKey;
   };
 
-  const defaultRules = rules.filter((r) => r.is_default);
-  const orgRules = rules.filter((r) => !r.is_default);
+  // Filter rules to only show those applicable to the current object type
+  const isRuleApplicable = (rule: SurvivorshipRule): boolean => {
+    // Wildcard rules apply to all object types
+    if (rule.field_key === '*') return true;
+
+    // TLD disqualifier is special case (applies to domain matching)
+    if (rule.rule_type === 'tld_disqualifier') return true;
+
+    // Check if the field exists in current object type's field options
+    return fieldOptions.some((f) => f.key === rule.field_key);
+  };
+
+  const defaultRules = rules.filter((r) => r.is_default && isRuleApplicable(r));
+  const orgRules = rules.filter((r) => !r.is_default && isRuleApplicable(r));
 
   if (isLoading) {
     return (
