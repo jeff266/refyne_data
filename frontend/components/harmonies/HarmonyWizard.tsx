@@ -57,6 +57,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const [category, setCategory] = useState<'company' | 'contact'>('company');
   const [field, setField] = useState('');
   const [fieldLabel, setFieldLabel] = useState('');
+  const [fieldType, setFieldType] = useState<string>(''); // HubSpot field type (string, number, enumeration, etc.)
 
   // Step 2: Scan
   const [scanning, setScanning] = useState(false);
@@ -73,6 +74,15 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null); // For click-to-add
   const [ungroupedSearch, setUngroupedSearch] = useState('');
   const [ungroupedSort, setUngroupedSort] = useState<'alpha' | 'count'>('alpha');
+
+  // Filter state
+  const [filterOperator, setFilterOperator] = useState<string>('contains');
+  const [filterValue, setFilterValue] = useState('');
+  const [filterValue2, setFilterValue2] = useState(''); // For "between" operator
+
+  // Multi-select state
+  const [selectedValues, setSelectedValues] = useState<Set<string>>(new Set());
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
 
   // Step 4: Add Conditions (optional)
   const [conditionMode, setConditionMode] = useState<'all' | 'conditional'>('all');
@@ -383,11 +393,43 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const getFilteredSortedUngrouped = () => {
     let filtered = ungrouped;
 
-    // Apply search filter
-    if (ungroupedSearch) {
-      filtered = filtered.filter((v) =>
-        v.toLowerCase().includes(ungroupedSearch.toLowerCase())
-      );
+    // Apply advanced filter
+    if (filterValue) {
+      const isNumber = fieldType === 'number';
+
+      filtered = filtered.filter((v) => {
+        if (isNumber) {
+          const numValue = parseFloat(v);
+          const filterNum = parseFloat(filterValue);
+          if (isNaN(numValue) || isNaN(filterNum)) return false;
+
+          switch (filterOperator) {
+            case '>': return numValue > filterNum;
+            case '<': return numValue < filterNum;
+            case '>=': return numValue >= filterNum;
+            case '<=': return numValue <= filterNum;
+            case '=': return numValue === filterNum;
+            case 'between': {
+              const filterNum2 = parseFloat(filterValue2);
+              if (isNaN(filterNum2)) return false;
+              return numValue >= filterNum && numValue <= filterNum2;
+            }
+            default: return true;
+          }
+        } else {
+          // String/enum filtering
+          const lowerValue = v.toLowerCase();
+          const lowerFilter = filterValue.toLowerCase();
+
+          switch (filterOperator) {
+            case 'contains': return lowerValue.includes(lowerFilter);
+            case 'starts with': return lowerValue.startsWith(lowerFilter);
+            case 'ends with': return lowerValue.endsWith(lowerFilter);
+            case 'is exactly': return lowerValue === lowerFilter;
+            default: return true;
+          }
+        }
+      });
     }
 
     // Apply sort
@@ -403,6 +445,61 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
     }
 
     return filtered;
+  };
+
+  // Multi-select handlers
+  const handleValueClick = (value: string, index: number, event: React.MouseEvent) => {
+    const filteredValues = getFilteredSortedUngrouped();
+
+    if (event.shiftKey && lastClickedIndex !== null) {
+      // Shift-click: select range
+      const start = Math.min(lastClickedIndex, index);
+      const end = Math.max(lastClickedIndex, index);
+      const newSelection = new Set(selectedValues);
+
+      for (let i = start; i <= end; i++) {
+        newSelection.add(filteredValues[i]);
+      }
+
+      setSelectedValues(newSelection);
+    } else {
+      // Regular click: toggle selection
+      const newSelection = new Set(selectedValues);
+      if (newSelection.has(value)) {
+        newSelection.delete(value);
+      } else {
+        newSelection.add(value);
+      }
+      setSelectedValues(newSelection);
+    }
+
+    setLastClickedIndex(index);
+  };
+
+  const handleSelectAllVisible = () => {
+    const filteredValues = getFilteredSortedUngrouped();
+    const newSelection = new Set(selectedValues);
+    filteredValues.forEach((v) => newSelection.add(v));
+    setSelectedValues(newSelection);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedValues(new Set());
+    setLastClickedIndex(null);
+  };
+
+  const handleBatchAddToGroup = (groupId: string) => {
+    // Move all selected values to the target group
+    selectedValues.forEach((value) => {
+      moveToGroup(value, groupId);
+    });
+    // Clear selection
+    handleClearSelection();
+  };
+
+  const clearFilter = () => {
+    setFilterValue('');
+    setFilterValue2('');
   };
 
   if (!open) return null;
@@ -587,9 +684,10 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                 <HubSpotPropertyPicker
                   objectType={category}
                   value={field}
-                  onChange={(propertyName, propertyLabel) => {
+                  onChange={(propertyName, propertyLabel, propertyType) => {
                     setField(propertyName);
                     setFieldLabel(propertyLabel);
+                    setFieldType(propertyType || 'string');
                   }}
                   placeholder="Select a HubSpot property..."
                 />
@@ -757,54 +855,224 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                         borderRadius: 6,
                         padding: 16,
                         marginTop: 12,
+                        position: 'relative',
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                         <div style={{ fontSize: 12, fontWeight: 600, color: C.text3 }}>
                           Ungrouped Values ({ungrouped.length})
                         </div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <input
-                            type="text"
-                            placeholder="Search values..."
-                            value={ungroupedSearch}
-                            onChange={(e) => setUngroupedSearch(e.target.value)}
-                            style={{
-                              padding: '4px 8px',
-                              fontSize: 11,
-                              background: C.bg,
-                              border: `1px solid ${C.border}`,
-                              borderRadius: 4,
-                              color: C.text,
-                              width: 180,
-                            }}
-                          />
+                        <select
+                          value={ungroupedSort}
+                          onChange={(e) => setUngroupedSort(e.target.value as 'alpha' | 'count')}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: 11,
+                            background: C.bg,
+                            border: `1px solid ${C.border}`,
+                            borderRadius: 4,
+                            color: C.text,
+                          }}
+                        >
+                          <option value="alpha">A-Z</option>
+                          <option value="count">By Count</option>
+                        </select>
+                      </div>
+
+                      {/* Filter Bar */}
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                           <select
-                            value={ungroupedSort}
-                            onChange={(e) => setUngroupedSort(e.target.value as 'alpha' | 'count')}
+                            value={filterOperator}
+                            onChange={(e) => setFilterOperator(e.target.value)}
                             style={{
-                              padding: '4px 8px',
+                              padding: '6px 8px',
                               fontSize: 11,
                               background: C.bg,
                               border: `1px solid ${C.border}`,
                               borderRadius: 4,
                               color: C.text,
+                              minWidth: 100,
                             }}
                           >
-                            <option value="alpha">A-Z</option>
-                            <option value="count">By Count</option>
+                            {fieldType === 'number' ? (
+                              <>
+                                <option value=">">{'>'}</option>
+                                <option value="<">{'<'}</option>
+                                <option value=">=">{'>='}</option>
+                                <option value="<=">{'<='}</option>
+                                <option value="=">=</option>
+                                <option value="between">between</option>
+                              </>
+                            ) : (
+                              <>
+                                <option value="contains">contains</option>
+                                <option value="starts with">starts with</option>
+                                <option value="ends with">ends with</option>
+                                <option value="is exactly">is exactly</option>
+                              </>
+                            )}
                           </select>
+                          <input
+                            type={fieldType === 'number' ? 'number' : 'text'}
+                            placeholder={fieldType === 'number' ? 'Value' : 'Filter...'}
+                            value={filterValue}
+                            onChange={(e) => setFilterValue(e.target.value)}
+                            style={{
+                              padding: '6px 8px',
+                              fontSize: 11,
+                              background: C.bg,
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 4,
+                              color: C.text,
+                              flex: 1,
+                            }}
+                          />
+                          {filterOperator === 'between' && (
+                            <input
+                              type="number"
+                              placeholder="Max"
+                              value={filterValue2}
+                              onChange={(e) => setFilterValue2(e.target.value)}
+                              style={{
+                                padding: '6px 8px',
+                                fontSize: 11,
+                                background: C.bg,
+                                border: `1px solid ${C.border}`,
+                                borderRadius: 4,
+                                color: C.text,
+                                width: 80,
+                              }}
+                            />
+                          )}
+                          {filterValue && (
+                            <button
+                              onClick={clearFilter}
+                              style={{
+                                padding: '6px 10px',
+                                fontSize: 11,
+                                background: C.bg,
+                                border: `1px solid ${C.border}`,
+                                borderRadius: 4,
+                                color: C.text3,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Clear
+                            </button>
+                          )}
                         </div>
+                        {filterValue && (
+                          <div style={{ fontSize: 10, color: C.text3 }}>
+                            Showing {getFilteredSortedUngrouped().length} of {ungrouped.length}
+                          </div>
+                        )}
                       </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {getFilteredSortedUngrouped().map((value) => (
+
+                      {/* Select All */}
+                      {getFilteredSortedUngrouped().length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.text2, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={getFilteredSortedUngrouped().every((v) => selectedValues.has(v))}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  handleSelectAllVisible();
+                                } else {
+                                  handleClearSelection();
+                                }
+                              }}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            Select all visible ({getFilteredSortedUngrouped().length})
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Values */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: selectedValues.size > 0 ? 56 : 0 }}>
+                        {getFilteredSortedUngrouped().map((value, index) => (
                           <DraggableValue
                             key={value}
                             value={value}
-                            onClick={() => handleUngroupedValueClick(value)}
+                            isSelected={selectedValues.has(value)}
+                            onClick={(e) => {
+                              if (activeGroupId) {
+                                // Original click-to-add behavior
+                                handleUngroupedValueClick(value);
+                              } else {
+                                // Multi-select behavior
+                                handleValueClick(value, index, e);
+                              }
+                            }}
                           />
                         ))}
                       </div>
+
+                      {/* Action Bar */}
+                      {selectedValues.size > 0 && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            background: C.indigoDim,
+                            border: `1px solid ${C.indigoBrd}`,
+                            borderRadius: '0 0 6px 6px',
+                            padding: '10px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                          }}
+                        >
+                          <div style={{ fontSize: 12, fontWeight: 500, color: C.indigo }}>
+                            Add {selectedValues.size} to group:
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <select
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleBatchAddToGroup(e.target.value);
+                                  e.target.value = ''; // Reset dropdown
+                                }
+                              }}
+                              defaultValue=""
+                              style={{
+                                padding: '6px 8px',
+                                fontSize: 11,
+                                background: C.bg,
+                                border: `1px solid ${C.border}`,
+                                borderRadius: 4,
+                                color: C.text,
+                                minWidth: 150,
+                              }}
+                            >
+                              <option value="" disabled>Select group...</option>
+                              {groups.map((g) => (
+                                <option key={g.id} value={g.id}>{g.label}</option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={handleClearSelection}
+                              style={{
+                                padding: '6px 10px',
+                                fontSize: 11,
+                                background: 'transparent',
+                                border: `1px solid ${C.indigo}`,
+                                borderRadius: 4,
+                                color: C.indigo,
+                                cursor: 'pointer',
+                                fontWeight: 500,
+                              }}
+                            >
+                              Clear selection
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1207,7 +1475,7 @@ function GroupContainer({
   );
 }
 
-function DraggableValue({ value, onClick }: { value: string; onClick?: () => void }) {
+function DraggableValue({ value, isSelected, onClick }: { value: string; isSelected?: boolean; onClick?: (e: React.MouseEvent) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: value,
   });
@@ -1216,20 +1484,21 @@ function DraggableValue({ value, onClick }: { value: string; onClick?: () => voi
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.5 : 1,
     padding: '6px 10px',
-    background: C.surface,
-    border: `1px solid ${C.border}`,
+    background: isSelected ? C.indigoDim : C.surface,
+    border: `1px solid ${isSelected ? C.indigo : C.border}`,
     borderRadius: 4,
     fontSize: 12,
     fontFamily: F.mono,
-    color: C.text,
+    color: isSelected ? C.indigo : C.text,
     cursor: 'pointer',
     transition: 'background 0.15s, border-color 0.15s',
+    fontWeight: isSelected ? 500 : 400,
   };
 
   const handleClick = (e: React.MouseEvent) => {
     // Only trigger click if not dragging
     if (!isDragging && onClick) {
-      onClick();
+      onClick(e);
     }
   };
 
@@ -1241,12 +1510,16 @@ function DraggableValue({ value, onClick }: { value: string; onClick?: () => voi
       {...listeners}
       onClick={handleClick}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = C.hover;
-        e.currentTarget.style.borderColor = C.border2;
+        if (!isSelected) {
+          e.currentTarget.style.background = C.hover;
+          e.currentTarget.style.borderColor = C.border2;
+        }
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = C.surface;
-        e.currentTarget.style.borderColor = C.border;
+        if (!isSelected) {
+          e.currentTarget.style.background = C.surface;
+          e.currentTarget.style.borderColor = C.border;
+        }
       }}
     >
       {value}

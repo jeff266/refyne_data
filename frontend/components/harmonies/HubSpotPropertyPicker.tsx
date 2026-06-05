@@ -8,7 +8,7 @@ import { C, F } from '@/lib/design-tokens';
 export interface HubSpotPropertyPickerProps {
   objectType: 'company' | 'contact';
   value: string | null;
-  onChange: (propertyName: string, propertyLabel: string) => void;
+  onChange: (propertyName: string, propertyLabel: string, propertyType?: string) => void;
   placeholder?: string;
   preferredField?: string; // Show this field at the top if it matches
 }
@@ -269,7 +269,7 @@ export function HubSpotPropertyPicker({
                         property={prop}
                         selected={value === prop.name}
                         onClick={() => {
-                          onChange(prop.name, prop.label);
+                          onChange(prop.name, prop.label, prop.type);
                           setOpen(false);
                           setSearch('');
                         }}
@@ -303,7 +303,7 @@ export function HubSpotPropertyPicker({
                         property={prop}
                         selected={value === prop.name}
                         onClick={() => {
-                          onChange(prop.name, prop.label);
+                          onChange(prop.name, prop.label, prop.type);
                           setOpen(false);
                           setSearch('');
                         }}
