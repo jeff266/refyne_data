@@ -163,7 +163,7 @@ export async function refyneSearch(
           sources: [],
           fromCache: true,
         })
-        await logUsage(orgId, lookupKey, fieldKey, true, c.confidence, 0, 0, 0, 0)
+        await logUsage(orgId, lookupKey, fieldKey, true, c.confidence, 0, false, 'cache', 0, 0, 0, 0, 0)
       } else {
         fieldsToSearch.push(fieldKey)
       }
@@ -244,6 +244,10 @@ export async function refyneSearch(
         false,
         0,
         serperCallCount,
+        jinaResults.length > 0,
+        null,
+        0,
+        0,
         0,
         0,
         0
@@ -269,6 +273,15 @@ export async function refyneSearch(
     outputTokens: 0,
     costUsd: 0,
   }
+
+  const modelUsed = (extraction as any)._model ?? null
+  const jinaFetched = jinaResults.length > 0
+
+  // Split tokens by model
+  const deepseekInputTokens = modelUsed === 'deepseek' ? usage.inputTokens : 0
+  const deepseekOutputTokens = modelUsed === 'deepseek' ? usage.outputTokens : 0
+  const haikuInputTokens = modelUsed === 'haiku' ? usage.inputTokens : 0
+  const haikuOutputTokens = modelUsed === 'haiku' ? usage.outputTokens : 0
 
   // Step 6: Store in cache
   if (lookupKey) {
@@ -305,8 +318,12 @@ export async function refyneSearch(
       false,
       confidence,
       serperCallCount,
-      usage.inputTokens,
-      usage.outputTokens,
+      jinaFetched,
+      modelUsed,
+      deepseekInputTokens,
+      deepseekOutputTokens,
+      haikuInputTokens,
+      haikuOutputTokens,
       usage.costUsd
     )
   }
@@ -321,24 +338,37 @@ async function logUsage(
   cacheHit: boolean,
   confidence: number,
   serperCalls: number,
-  inputTokens: number,
-  outputTokens: number,
+  jinaFetched: boolean,
+  modelUsed: string | null,
+  deepseekInputTokens: number,
+  deepseekOutputTokens: number,
+  haikuInputTokens: number,
+  haikuOutputTokens: number,
   costUsd: number
 ): Promise<void> {
   if (!supabase) return
 
-  await supabase
-    .from('refyne_search_usage')
-    .insert({
-      org_id: orgId,
-      domain,
-      field_key: fieldKey,
-      cache_hit: cacheHit,
-      confidence,
-      serper_calls: serperCalls,
-      deepseek_input_tokens: inputTokens,
-      deepseek_output_tokens: outputTokens,
-      cost_usd: costUsd,
-    })
-    .throwOnError()
+  try {
+    await supabase
+      .from('refyne_search_usage')
+      .insert({
+        org_id: orgId,
+        domain,
+        field_key: fieldKey,
+        cache_hit: cacheHit,
+        confidence,
+        serper_calls: serperCalls,
+        jina_fetched: jinaFetched,
+        model_used: modelUsed,
+        deepseek_input_tokens: deepseekInputTokens,
+        deepseek_output_tokens: deepseekOutputTokens,
+        haiku_input_tokens: haikuInputTokens,
+        haiku_output_tokens: haikuOutputTokens,
+        cost_usd: costUsd,
+      })
+      .throwOnError()
+  } catch (error) {
+    // Log error but don't fail enrichment if usage tracking fails
+    console.error('[Refyne Search] Failed to log usage:', error)
+  }
 }
