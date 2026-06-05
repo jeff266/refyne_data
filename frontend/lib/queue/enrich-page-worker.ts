@@ -13,6 +13,7 @@ import { getAccessToken } from '../hubspot/get-access-token';
 import { HubSpotClient } from '../hubspot/client';
 import { refyneSearch } from '../providers/refyne-search';
 import { classifyIndustry } from '../providers/refyne-search/industry-classifier';
+import { track } from '../telemetry/track';
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -644,6 +645,18 @@ export async function processApplyJob(
         completed_at: new Date().toISOString(),
       })
       .eq('id', runId);
+
+    // Track enrich_run_completed event
+    track({
+      event: 'enrich_run_completed',
+      orgId,
+      userId,
+      metadata: {
+        run_id: runId,
+        total_records: selectedResults.length,
+        successful_records: filled,
+      },
+    });
 
     await job.updateProgress({
       total: selectedResults.length,

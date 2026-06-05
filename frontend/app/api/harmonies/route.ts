@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { seedHarmonyLibrary } from '@/lib/harmonies/seed-library';
+import { track } from '@/lib/telemetry/track';
 
 /**
  * GET /api/harmonies
@@ -189,6 +190,19 @@ export async function POST(request: NextRequest) {
       console.error('[Create Harmony] Failed:', error);
       return NextResponse.json({ error: 'Failed to create harmony' }, { status: 500 });
     }
+
+    // Track harmony_created event
+    track({
+      event: 'harmony_created',
+      orgId: ctx.orgId,
+      userId: ctx.userId,
+      metadata: {
+        harmony_id: data.id,
+        field,
+        object_type: objectTypeValue,
+        transform_type: transform_type || 'lookup',
+      },
+    });
 
     return NextResponse.json({ id: data.id, success: true });
   } catch (error) {

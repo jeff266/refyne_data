@@ -14,6 +14,7 @@ import type { FiredSignal, PairGrade } from './types';
 import { UnionFind } from './union-find';
 import { runDedupScan } from './incremental-scanner';
 import { sendDedupScanNotification } from './send-scan-notification';
+import { track } from '../telemetry/track';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -709,6 +710,18 @@ async function processScanJob(
       message: `${result.scanType} scan complete: ${result.pairsFound} pairs found`,
       progress: 100,
       pairsFound: result.pairsFound,
+    });
+
+    // Track dedup_scan_completed event
+    track({
+      event: 'dedup_scan_completed',
+      orgId,
+      metadata: {
+        scan_type: result.scanType,
+        records_scanned: result.recordsScanned,
+        pairs_found: result.pairsFound,
+        object_type: objectType,
+      },
     });
 
     const durationMs = Date.now() - startTime;

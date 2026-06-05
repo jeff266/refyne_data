@@ -17,6 +17,7 @@ import { runNormalizationPreview } from '../harmonies/normalization-engine';
 import type { Harmony, HubSpotRecord } from '../harmonies/normalization-engine';
 import type { HubSpotCompany } from '../hubspot/types';
 import { getFieldAssignments, buildFieldMap } from '../harmonies/field-assignments';
+import { track } from '../telemetry/track';
 
 export interface NormalizeJobData {
   runId: string;
@@ -402,6 +403,18 @@ export function startNormalizeWorker() {
         records_changed: changed,
         records_failed: failed,
         completed_at: new Date().toISOString(),
+      });
+
+      // Track normalize_run_completed event
+      track({
+        event: 'normalize_run_completed',
+        orgId,
+        metadata: {
+          run_id: runId,
+          records_processed: companyIds.length,
+          records_changed: changed,
+          records_failed: failed,
+        },
       });
 
       // Step 10: Invalidate issue counts cache (force recalculation on next load)

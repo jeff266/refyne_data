@@ -5,6 +5,7 @@ import { HubSpotClient } from '@/lib/hubspot';
 import { seedFieldMappings } from '@/lib/field-mappings/auto-configure';
 import { encryptToken } from '@/lib/crypto/token-encryption';
 import { startTrial } from '@/lib/billing/trial';
+import { track } from '@/lib/telemetry/track';
 
 // Force dynamic rendering for OAuth callback
 export const dynamic = 'force-dynamic';
@@ -200,6 +201,13 @@ export async function GET(request: NextRequest) {
 
       console.log('[OAuth Callback] Connection created successfully');
     }
+
+    // Track hubspot_connected event
+    track({
+      event: 'hubspot_connected',
+      orgId: stateRecord.org_id,
+      metadata: { portal_id: portalId, scopes },
+    });
 
     // Auto-start trial on first HubSpot connection
     try {

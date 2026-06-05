@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '../db/supabase';
+import { track } from '../telemetry/track';
 
 export interface DedupPolicy {
   id: string;
@@ -457,6 +458,18 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
       console.log(`[Merge Executor] Applied ${Object.keys(mergedProperties).length} field updates`);
     }
   }
+
+  // Track dedup_merge_executed event
+  track({
+    event: 'dedup_merge_executed',
+    orgId,
+    metadata: {
+      master_id: masterId,
+      duplicate_ids: duplicateIds,
+      duplicate_count: duplicateIds.length,
+      fields_updated: Object.keys(mergedProperties).length,
+    },
+  });
 
   return {
     success: true,

@@ -5,6 +5,7 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js';
+import { track } from '@/lib/telemetry/track';
 
 export type TrialStatus =
   | 'active'         // trial in progress
@@ -138,6 +139,13 @@ export async function startTrial(
     );
 
   console.log(`[Trial] Started for org ${orgId}: expires ${trialEnds.toISOString()}`);
+
+  // Track trial_started event
+  track({
+    event: 'trial_started',
+    orgId,
+    metadata: { trial_ends_at: trialEnds.toISOString() },
+  });
 }
 
 /**

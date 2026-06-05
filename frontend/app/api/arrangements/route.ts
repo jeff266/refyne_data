@@ -3,6 +3,7 @@ import { getOrgContext, authError, requireOperatorOrAbove } from '@/lib/auth/cle
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { transformArray } from '@/lib/utils/transform';
+import { track } from '@/lib/telemetry/track';
 
 /**
  * GET /api/arrangements
@@ -210,6 +211,18 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Track arrangement_created event
+    track({
+      event: 'arrangement_created',
+      orgId: ctx.orgId,
+      userId: ctx.userId,
+      metadata: {
+        arrangement_id: arrangement.id,
+        source_type: body.source_type,
+        has_field_configs: !!fieldConfigs,
+      },
+    });
 
     return NextResponse.json({
       arrangement: transformArray([arrangement])[0]
