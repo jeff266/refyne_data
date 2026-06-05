@@ -185,95 +185,123 @@ export async function processPreviewJob(
       return labels[key] || key;
     }).join(', ');
 
-    for (let i = 0; i < companies.length; i++) {
-      const company = companies[i];
-      const companyDomain = company.properties.domain || null;
-      const companyName = company.properties.name || companyDomain || company.id;
+    const BATCH_SIZE = 10; // 10 concurrent companies
 
-      // Step 2: Enriching records (update every 10 records to reduce overhead)
-      if (i % 10 === 0 || i === companies.length - 1) {
-        await job.updateProgress({
-          step: 2,
-          stepName: `Querying ${providerName} for ${fieldNamesDisplay}`,
-          current: i,
-          total: companies.length,
-          completed: i,
-          percentage: Math.round((i / companies.length) * 100),
-          recordsProcessed: i,
-          currentCompany: companyName,
-        });
-      }
+    for (let i = 0; i < companies.length; i += BATCH_SIZE) {
+      const batch = companies.slice(i, i + BATCH_SIZE);
 
-      // Enrich via Refyne Search
-      const enrichmentResults = await refyneSearch(
-        orgId,
-        companyDomain,
-        companyName,
-        fieldKeys,
-        'preview' // Context for preview mode
+      const batchResults = await Promise.allSettled(
+        batch.map(async (company) => {
+          const companyDomain = company.properties.domain || null;
+          const companyName = company.properties.name || companyDomain || company.id;
+          const enrichmentResults = await refyneSearch(
+            orgId,
+            companyDomain,
+            companyName,
+            fieldKeys,
+            'preview'
+          );
+          return { company, companyName, companyDomain, enrichmentResults };
+        })
       );
 
-      // Build preview result
-      const previewResult: PreviewResult = {
-        hubspotCompanyId: company.id,
-        companyName,
-        domain: companyDomain,
-        fields: [],
-      };
+      for (const result of batchResults) {
+        if (result.status === 'fulfilled') {
+          const { company, companyName, companyDomain, enrichmentResults } = result.value;
 
-      for (const fieldKey of fieldKeys) {
-        const currentValue = company.properties[fieldKey] || null;
-        const enrichResult = enrichmentResults.find((r) => r.fieldKey === fieldKey);
+          // Build preview result
+          const previewResult: PreviewResult = {
+            hubspotCompanyId: company.id,
+            companyName,
+            domain: companyDomain,
+            fields: [],
+          };
 
-        if (!enrichResult) {
-          previewResult.fields.push({
-            fieldKey,
-            currentValue,
-            foundValue: null,
-            provider: providerId,
-            confidence: 0,
-            level: 'insufficient',
-            action: 'no_data',
-            evidence: 'No data found',
-          });
-          continue;
-        }
+          for (const fieldKey of fieldKeys) {
+            const currentValue = company.properties[fieldKey] || null;
+            const enrichResult = enrichmentResults.find((r) => r.fieldKey === fieldKey);
 
-        // Determine action
-        let action: PreviewResult['fields'][0]['action'];
-        if (!enrichResult.value) {
-          action = 'no_data';
-        } else if (enrichResult.requiresReview) {
-          action = 'requires_review';
-        } else if (!currentValue || currentValue.trim() === '') {
-          action = 'would_fill';
-        } else if (currentValue === String(enrichResult.value)) {
-          action = 'already_set';
+            if (!enrichResult) {
+              previewResult.fields.push({
+                fieldKey,
+                currentValue,
+                foundValue: null,
+                provider: providerId,
+                confidence: 0,
+                level: 'insufficient',
+                action: 'no_data',
+                evidence: 'No data found',
+              });
+              continue;
+            }
+
+            // Determine action
+            let action: PreviewResult['fields'][0]['action'];
+            if (!enrichResult.value) {
+              action = 'no_data';
+            } else if (enrichResult.requiresReview) {
+              action = 'requires_review';
+            } else if (!currentValue || currentValue.trim() === '') {
+              action = 'would_fill';
+            } else if (currentValue === String(enrichResult.value)) {
+              action = 'already_set';
+            } else {
+              action = 'would_override';
+            }
+
+            previewResult.fields.push({
+              fieldKey,
+              currentValue,
+              foundValue: enrichResult.value ? String(enrichResult.value) : null,
+              provider: providerId,
+              confidence: enrichResult.confidence,
+              level: enrichResult.level,
+              action,
+              evidence: enrichResult.evidence,
+              trustLevel: enrichResult.trustLevel,
+              requiresReview: enrichResult.requiresReview,
+            });
+          }
+
+          results.push(previewResult);
+
+          // Push partial result to Redis for progressive rendering
+          if (redis) {
+            await redis.rpush(`preview:${job.id}:partial`, JSON.stringify(previewResult));
+            await redis.expire(`preview:${job.id}:partial`, 600); // 10 min TTL
+          }
         } else {
-          action = 'would_override';
+          console.error('[Preview Job] Company enrichment failed:', result.reason);
+          // Push a failed result so progress stays accurate
+          results.push({
+            hubspotCompanyId: 'unknown',
+            companyName: 'Failed',
+            domain: null,
+            fields: fieldKeys.map((fieldKey) => ({
+              fieldKey,
+              currentValue: null,
+              foundValue: null,
+              provider: providerId,
+              confidence: 0,
+              level: 'insufficient' as const,
+              action: 'no_data' as const,
+              evidence: 'Enrichment failed',
+            })),
+          });
         }
-
-        previewResult.fields.push({
-          fieldKey,
-          currentValue,
-          foundValue: enrichResult.value ? String(enrichResult.value) : null,
-          provider: providerId,
-          confidence: enrichResult.confidence,
-          level: enrichResult.level,
-          action,
-          evidence: enrichResult.evidence,
-          trustLevel: enrichResult.trustLevel,
-          requiresReview: enrichResult.requiresReview,
-        });
       }
 
-      results.push(previewResult);
-
-      // Push partial result to Redis for progressive rendering
-      if (redis) {
-        await redis.rpush(`preview:${job.id}:partial`, JSON.stringify(previewResult));
-        await redis.expire(`preview:${job.id}:partial`, 600); // 10 min TTL
-      }
+      // Progress update after each batch
+      await job.updateProgress({
+        step: 2,
+        stepName: `Querying ${providerName} for ${fieldNamesDisplay}`,
+        current: Math.min(i + BATCH_SIZE, companies.length),
+        total: companies.length,
+        completed: Math.min(i + BATCH_SIZE, companies.length),
+        percentage: Math.round((Math.min(i + BATCH_SIZE, companies.length) / companies.length) * 100),
+        recordsProcessed: Math.min(i + BATCH_SIZE, companies.length),
+        currentCompany: `Batch ${Math.floor(i / BATCH_SIZE) + 1}`,
+      });
     }
 
     // Step 3: Preparing preview
