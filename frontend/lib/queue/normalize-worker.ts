@@ -289,6 +289,7 @@ export function startNormalizeWorker() {
         previous_value: string | null;
         new_value: string;
         status: string;
+        error_message?: string | null;
         written_at: string;
       }> = [];
 
@@ -296,12 +297,34 @@ export function startNormalizeWorker() {
         const batch = companyEntries.slice(i, i + batchSize);
 
         try {
-          await hubspot.batchUpdateRecords(
+          const { results, errors } = await hubspot.batchUpdateRecords(
             objectType,
             batch.map(([id, properties]) => ({ id, properties }))
           );
 
+          // Track which records failed by index
+          const failedIndices = new Set(errors.map(e => e.index - i)); // Adjust for batch offset
+          const errorsByCompanyId = new Map<string, string>();
+
+          // Map errors to company IDs
+          errors.forEach(err => {
+            const batchIndex = err.index - i;
+            if (batchIndex >= 0 && batchIndex < batch.length) {
+              const [companyId] = batch[batchIndex];
+              errorsByCompanyId.set(companyId, err.error);
+            }
+          });
+
           for (const [companyId, properties] of batch) {
+            const companyFailed = errorsByCompanyId.has(companyId);
+            const errorMessage = errorsByCompanyId.get(companyId);
+
+            if (companyFailed) {
+              failed++;
+            } else {
+              changed++;
+            }
+
             for (const [hubspotProp, newValue] of Object.entries(properties)) {
               // Get canonical field name from HubSpot property
               const canonicalField = propToCanonical.get(companyId)?.get(hubspotProp) || hubspotProp;
@@ -317,15 +340,37 @@ export function startNormalizeWorker() {
                 field_key: canonicalField,
                 previous_value: original?.before ?? null,
                 new_value: newValue,
-                status: 'written',
+                status: companyFailed ? 'failed' : 'written',
+                error_message: errorMessage || null,
+                written_at: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (err: any) {
+          console.error(`[Normalize Worker] Batch write failed:`, err.message);
+
+          // Mark all records in this batch as failed
+          for (const [companyId, properties] of batch) {
+            for (const [hubspotProp, newValue] of Object.entries(properties)) {
+              const canonicalField = propToCanonical.get(companyId)?.get(hubspotProp) || hubspotProp;
+              const original = toApply.find(
+                (c) => c.hubspotRecordId === companyId && c.field === canonicalField
+              );
+
+              progressItems.push({
+                run_id: runId,
+                hubspot_company_id: companyId,
+                company_name: recordNameMap.get(companyId) || companyId,
+                field_key: canonicalField,
+                previous_value: original?.before ?? null,
+                new_value: newValue,
+                status: 'failed',
+                error_message: err.message || 'Unknown error',
                 written_at: new Date().toISOString(),
               });
             }
           }
 
-          changed += batch.length;
-        } catch (err: any) {
-          console.error(`[Normalize Worker] Batch write failed:`, err.message);
           failed += batch.length;
         }
 
