@@ -4,6 +4,8 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { seedHarmonyLibrary } from '@/lib/harmonies/seed-library';
 import { track } from '@/lib/telemetry/track';
+import { logAuditEvent } from '@/lib/audit/logger';
+import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 
 /**
  * GET /api/harmonies
@@ -202,6 +204,25 @@ export async function POST(request: NextRequest) {
         object_type: objectTypeValue,
         transform_type: transform_type || 'lookup',
       },
+    });
+
+    // Log audit event
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      actorEmail: ctx.userEmail,
+      action: AUDIT_ACTIONS.HARMONY_CREATED,
+      objectType: 'harmony',
+      objectId: data.id,
+      objectLabel: name,
+      afterState: {
+        name,
+        field,
+        object_type: objectTypeValue,
+        transform_type: transform_type || 'lookup',
+        is_active: false,
+      },
+      request,
     });
 
     return NextResponse.json({ id: data.id, success: true });

@@ -8,6 +8,8 @@ import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { revalidatePath } from 'next/cache';
 import { loadRules, applyRules } from '@/lib/dedup/survivorship-rules';
 import { executeMerge } from '@/lib/dedup/merge-executor';
+import { logAuditEvent } from '@/lib/audit/logger';
+import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 
 interface MergeClusterRequest {
   masterId: string;
@@ -266,7 +268,33 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         // Don't fail merge if decision logging fails
       }
 
-      // Step 6: Invalidate cache
+      // Step 6: Log audit event
+      logAuditEvent({
+        orgId: ctx.orgId,
+        actorId: ctx.userId,
+        actorEmail: ctx.userEmail,
+        action: AUDIT_ACTIONS.DEDUP_MERGE_EXECUTED,
+        objectType: 'dedup_cluster',
+        objectId: id,
+        objectLabel: `Cluster ${clusterData.grade} (${clusterData.recordIds.length} records)`,
+        beforeState: {
+          status: 'pending',
+          recordCount: clusterData.recordIds.length,
+          grade: clusterData.grade,
+        },
+        afterState: {
+          status: 'merged',
+          masterId,
+          mergedCount: recordsToMerge.length,
+        },
+        metadata: {
+          merge_method: 'manual',
+          field_selections_count: body.fieldSelections ? Object.keys(body.fieldSelections).length : 0,
+        },
+        request,
+      });
+
+      // Step 7: Invalidate cache
       revalidatePath('/dedup');
 
       return NextResponse.json({ success: true, masterId });

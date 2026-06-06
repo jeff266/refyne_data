@@ -5,6 +5,8 @@ import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-featu
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { invalidateSummary } from '@/lib/ai/cache';
 import { getNormalizeQueue } from '@/lib/queue/normalize-worker';
+import { logAuditEvent } from '@/lib/audit/logger';
+import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 
 interface SelectedChange {
   companyId: string;
@@ -165,6 +167,24 @@ export async function POST(request: NextRequest) {
 
     // Invalidate AI summary cache after normalization run starts
     await invalidateSummary(`ai:compliance:${ctx.orgId}:all`);
+
+    // Log audit event
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      actorEmail: ctx.userEmail,
+      action: AUDIT_ACTIONS.NORMALIZE_APPLIED,
+      objectType: 'normalization_run',
+      objectId: run.id,
+      objectLabel: `Run ${run.id.substring(0, 8)}`,
+      metadata: {
+        harmony_count: body.harmonyIds?.length || 0,
+        change_count: body.selectedChanges?.length || 'all',
+        object_type: body.objectType ?? 'company',
+        scope: body.selectedChanges ? 'selected' : 'all',
+      },
+      request,
+    });
 
     return NextResponse.json({
       runId: run.id,

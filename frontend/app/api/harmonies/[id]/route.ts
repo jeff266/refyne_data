@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { ConditionGroups } from '@/lib/harmonies/condition-evaluator';
+import { logAuditEvent } from '@/lib/audit/logger';
+import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 
 /**
  * Validate condition_groups JSONB structure.
@@ -176,6 +178,14 @@ export async function PATCH(
     const body = await req.json();
     const { name, description, writePolicy, isActive, isArchived, conditionGroups, approach, rules } = body;
 
+    // Fetch current harmony state for audit log
+    const { data: beforeHarmony } = await supabase
+      .from('harmonies')
+      .select('name, description, write_policy, is_active, is_archived, condition_groups')
+      .eq('id', id)
+      .or(`org_id.is.null,org_id.eq.${ctx.orgId}`)
+      .single();
+
     // Build update object with only allowed fields
     const updates: any = {};
     if (name !== undefined) updates.name = name;
@@ -257,6 +267,23 @@ export async function PATCH(
         }
       }
     }
+
+    // Log audit event
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      actorEmail: ctx.userEmail,
+      action: AUDIT_ACTIONS.HARMONY_UPDATED,
+      objectType: 'harmony',
+      objectId: id,
+      objectLabel: name || beforeHarmony?.name || id,
+      beforeState: beforeHarmony || {},
+      afterState: updates,
+      metadata: {
+        rules_updated: rules !== undefined,
+      },
+      request: req,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

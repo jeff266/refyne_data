@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { logAuditEvent } from '@/lib/audit/logger';
+import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 
 /**
  * GET /api/settings/dedup-policies
@@ -104,10 +106,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if policy exists
+    // Check if policy exists (fetch full record for before state)
     const { data: existingPolicy } = await supabase
       .from('dedup_policies')
-      .select('id')
+      .select('*')
       .eq('org_id', ctx.orgId)
       .eq('is_active', true)
       .single();
@@ -133,6 +135,30 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to update policy' }, { status: 500 });
       }
 
+      // Log audit event
+      logAuditEvent({
+        orgId: ctx.orgId,
+        actorId: ctx.userId,
+        actorEmail: ctx.userEmail,
+        action: AUDIT_ACTIONS.DEDUP_POLICY_UPDATED,
+        objectType: 'dedup_policy',
+        objectId: existingPolicy.id,
+        objectLabel: name || existingPolicy.name,
+        beforeState: {
+          name: existingPolicy.name,
+          block_if_different_parent: existingPolicy.block_if_different_parent,
+          block_if_closed_won_deals: existingPolicy.block_if_closed_won_deals,
+          field_rules_count: existingPolicy.field_rules?.length || 0,
+        },
+        afterState: {
+          name,
+          block_if_different_parent,
+          block_if_closed_won_deals,
+          field_rules_count: field_rules?.length || 0,
+        },
+        request,
+      });
+
       return NextResponse.json({ policy: updated, updated: true });
     } else {
       // Create new policy
@@ -154,6 +180,27 @@ export async function POST(request: NextRequest) {
         console.error('[Dedup Policies] Failed to create policy:', error);
         return NextResponse.json({ error: 'Failed to create policy' }, { status: 500 });
       }
+
+      // Log audit event
+      logAuditEvent({
+        orgId: ctx.orgId,
+        actorId: ctx.userId,
+        actorEmail: ctx.userEmail,
+        action: AUDIT_ACTIONS.DEDUP_POLICY_UPDATED,
+        objectType: 'dedup_policy',
+        objectId: created.id,
+        objectLabel: name,
+        afterState: {
+          name,
+          block_if_different_parent,
+          block_if_closed_won_deals,
+          field_rules_count: field_rules?.length || 0,
+        },
+        metadata: {
+          created: true,
+        },
+        request,
+      });
 
       return NextResponse.json({ policy: created, created: true });
     }
