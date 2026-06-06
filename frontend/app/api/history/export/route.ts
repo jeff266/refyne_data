@@ -48,8 +48,8 @@ export async function GET(request: NextRequest) {
         id,
         arrangement_id,
         status,
-        records_processed,
-        records_total,
+        processed_records,
+        total_records,
         fields_filled,
         started_at,
         completed_at,
@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
         completedAt,
         durationSeconds,
         run.status,
-        run.records_processed || 0,
+        run.processed_records || 0,
         totalFilled,
       ].map((val) => `"${String(val).replace(/"/g, '""')}"`).join(','));
     });

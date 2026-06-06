@@ -167,11 +167,11 @@ export async function GET(request: NextRequest) {
     // Step 4: Calculate summary stats (all runs, not just current page)
     const { data: allRuns } = await supabase
       .from('arrangement_runs')
-      .select('records_processed, fields_filled')
+      .select('processed_records, fields_filled')
       .eq('org_id', ctx.orgId);
 
     const totalRuns = allRuns?.length || 0;
-    const totalRecords = allRuns?.reduce((sum, r) => sum + (r.records_processed || 0), 0) || 0;
+    const totalRecords = allRuns?.reduce((sum, r) => sum + (r.processed_records || 0), 0) || 0;
 
     let totalFilled = 0;
     if (allRuns) {
@@ -245,7 +245,7 @@ export async function GET(request: NextRequest) {
         status: run.status || 'unknown',
         providers: providers.length > 0 ? providers : ['unknown'],
         fields: fields.length > 0 ? fields : ['unknown'],
-        records_processed: run.records_processed || 0,
+        processed_records: run.processed_records || 0,
         fields_filled: totalFilledForRun,
       };
     });

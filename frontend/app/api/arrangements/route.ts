@@ -62,14 +62,14 @@ export async function GET(request: NextRequest) {
             total_runs: 0,
             last_run_at: null,
             last_run_stats: null,
-            total_records_processed: 0,
+            total_processed_records: 0,
             total_credits_used: 0,
           };
         }
 
         const { data: runs } = await supabase
           .from('arrangement_runs')
-          .select('id, status, records_processed, records_total, fields_filled, started_at, completed_at, duration')
+          .select('id, status, processed_records, total_records, fields_filled, started_at, completed_at, duration')
           .eq('arrangement_id', arr.id)
           .order('started_at', { ascending: false });
 
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
         const completedRuns = runs?.filter(r => r.status === 'completed') || [];
 
         // Calculate total records processed
-        const totalRecordsProcessed = completedRuns.reduce((sum, r) => sum + (r.records_processed || 0), 0);
+        const totalRecordsProcessed = completedRuns.reduce((sum, r) => sum + (r.processed_records || 0), 0);
 
         // Extract enrichment steps from field_configs (v2) or use enrichment_steps (v1)
         let enrichmentSteps: any[] = [];
@@ -114,10 +114,10 @@ export async function GET(request: NextRequest) {
         if (lastRun && lastRun.status === 'completed') {
           const fieldsFilled = lastRun.fields_filled || {};
           const totalFilled = Object.values(fieldsFilled).reduce((sum: number, count: any) => sum + (count || 0), 0);
-          const fillRate = lastRun.records_total > 0 ? totalFilled / (lastRun.records_total * Object.keys(fieldsFilled).length) : 0;
+          const fillRate = lastRun.total_records > 0 ? totalFilled / (lastRun.total_records * Object.keys(fieldsFilled).length) : 0;
 
           lastRunStats = {
-            records_enriched: lastRun.records_processed || 0,
+            records_enriched: lastRun.processed_records || 0,
             fill_rate: fillRate,
             duration_seconds: lastRun.duration || 0,
           };
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
           total_runs: totalRuns,
           last_run_at: lastRun?.started_at || null,
           last_run_stats: lastRunStats,
-          total_records_processed: totalRecordsProcessed,
+          total_processed_records: totalRecordsProcessed,
           total_credits_used: 0, // TODO: track credits
         };
       })
