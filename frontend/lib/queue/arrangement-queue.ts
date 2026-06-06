@@ -2108,7 +2108,16 @@ async function processFieldConfig(
     if (aggregation_strategy === 'waterfall') {
       // For waterfall, query providers in order until we get a value
       for (const step of steps.sort((a, b) => a.order - b.order)) {
-        const providerValue = await queryProvider(step.provider, record, field_key, mode, orgId);
+        let providerValue;
+        try {
+          providerValue = await queryProvider(step.provider, record, field_key, mode, orgId);
+        } catch (error) {
+          // Provider failed (e.g., missing API key) - log and continue to next provider
+          console.error(
+            `[Field Processing] ${step.provider} failed for ${field_key}: ${error instanceof Error ? error.message : String(error)}`
+          );
+          continue; // Skip to next provider in waterfall
+        }
 
         if (providerValue !== null && providerValue !== undefined && providerValue !== '') {
           providerValues.push({
