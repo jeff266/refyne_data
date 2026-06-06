@@ -236,6 +236,33 @@ async function main() {
     }
   }, 6 * 60 * 60 * 1000); // Check every 6 hours
 
+  // Trial expiry email notifier - runs daily at 9am UTC
+  console.log('✅ Starting trial expiry email notifier...');
+  console.log('Checking for trial warning/expiry emails daily at 9am UTC\n');
+
+  const trialExpiryInterval = setInterval(async () => {
+    try {
+      const now = new Date();
+      const currentHour = now.getUTCHours();
+      const currentMinute = now.getUTCMinutes();
+
+      // Run at 9:00 UTC (within 1 minute window)
+      if (currentHour === 9 && currentMinute === 0) {
+        const { checkAndSendTrialExpiryEmails } = await import('../lib/billing/trial-expiry-notifier');
+        const result = await checkAndSendTrialExpiryEmails();
+
+        console.log(
+          `[${new Date().toISOString()}] Trial expiry emails: ` +
+          `warning=${result.warningEmailsSent} ` +
+          `expiry=${result.expiryEmailsSent} ` +
+          `errors=${result.errors}`
+        );
+      }
+    } catch (error) {
+      console.error('Error in trial expiry email notifier:', error);
+    }
+  }, 60_000); // Check every minute
+
   // Rollback expiry + API counter resets - check once per day
   console.log('✅ Starting nightly maintenance tasks...');
   console.log('Expiring old rollback windows and resetting API counters daily\n');
@@ -333,6 +360,7 @@ async function main() {
     console.log('[Shutdown] Stopping cron intervals...');
     clearInterval(cronInterval);
     clearInterval(missedJobsInterval);
+    clearInterval(trialExpiryInterval);
     clearInterval(nightlyMaintenanceInterval);
 
     // Check for active arrangement jobs
