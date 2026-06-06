@@ -7,7 +7,7 @@
  * - Branching = separate harmonies with different conditions
  *
  * Features:
- * - 33 operators across 5 field types (string, number, enumeration, bool, date)
+ * - 36 operators across 5 field types (string: 11, number: 9, enum: 6, bool: 3, date: 7)
  * - Nested AND/OR logic (groups + conditions within groups)
  * - Case-insensitive string comparison
  * - Soft failure for missing fields (returns false, logs warning)

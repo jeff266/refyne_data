@@ -1,7 +1,7 @@
 /**
  * Tests for Condition Evaluator
  *
- * Comprehensive test coverage for all 31 operators across 5 field types.
+ * Comprehensive test coverage for all 36 operators across 5 field types.
  * Tests AND/OR logic, edge cases, null handling, and type coercion.
  */
 
@@ -1154,7 +1154,7 @@ describe('evaluateConditionGroups', () => {
       expect(OPERATORS_BY_TYPE.bool).toBeDefined();
       expect(OPERATORS_BY_TYPE.date).toBeDefined();
 
-      expect(OPERATORS_BY_TYPE.string.length).toBe(9);
+      expect(OPERATORS_BY_TYPE.string.length).toBe(11);
       expect(OPERATORS_BY_TYPE.number.length).toBe(9);
       expect(OPERATORS_BY_TYPE.enumeration.length).toBe(6);
       expect(OPERATORS_BY_TYPE.bool.length).toBe(3);
