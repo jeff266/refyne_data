@@ -19,6 +19,7 @@ const TABS: Tab[] = [
   { key: 'usage', label: 'Usage', path: '/settings/usage', roles: ['admin', 'operator'] },
   { key: 'billing', label: 'Billing', path: '/settings/billing', roles: ['admin'] },
   { key: 'team', label: 'Team', path: '/settings/team', roles: ['admin', 'operator'] },
+  { key: 'activity', label: 'Activity', path: '/settings/activity', roles: ['admin', 'operator', 'viewer'] },
 ];
 
 export default function SettingsLayout({

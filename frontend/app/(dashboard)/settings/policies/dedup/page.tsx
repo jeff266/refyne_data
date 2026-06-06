@@ -68,6 +68,7 @@ export default function DedupPoliciesPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const [policy, setPolicy] = useState<DedupPolicy | null>(null);
   const [isDefault, setIsDefault] = useState(false);
 
@@ -177,6 +178,7 @@ export default function DedupPoliciesPage() {
       const data = await res.json();
       setPolicy(data.policy);
       setIsDefault(false);
+      setJustSaved(true);
 
       addToast('success', data.created ? 'Policy created' : 'Policy updated');
     } catch (error) {
@@ -701,8 +703,22 @@ export default function DedupPoliciesPage() {
           paddingTop: 24,
           display: 'flex',
           justifyContent: 'flex-end',
+          alignItems: 'center',
+          gap: 16,
         }}
       >
+        {justSaved && (
+          <a
+            href="/settings/activity?action=dedup_policy.updated"
+            style={{
+              fontSize: 12,
+              color: C.indigo,
+              textDecoration: 'none',
+            }}
+          >
+            View in activity log →
+          </a>
+        )}
         <button
           onClick={savePolicy}
           disabled={saving}
