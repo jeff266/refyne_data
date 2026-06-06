@@ -102,38 +102,48 @@ export async function canPerformAction(
     return true;
   }
 
-  // Paid tiers: different logic per action
-  if (entitlements.subscription_tier === 'pro' || entitlements.subscription_tier === 'enterprise') {
-    switch (action) {
-      case 'merge':
-      case 'normalize_write':
-        // Unlimited for paid tiers
-        return true;
-
-      case 'enrich_credit':
-        // Check monthly allocation (if set)
-        const monthlyLimit =
-          entitlements.subscription_tier === 'pro'
-            ? entitlements.pro_monthly_enrich_credits
-            : entitlements.enterprise_monthly_enrich_credits;
-
-        if (monthlyLimit === null) {
-          // No limit set - allow
-          return true;
-        }
-
-        // Check current period usage
-        return entitlements.enrich_credits_last_30d + quantity <= monthlyLimit;
-    }
+  // Read-only check: cancelled status blocks all actions
+  if (entitlements.subscription_status === 'cancelled') {
+    return false;
   }
 
-  // Trial tier: check limits
+  // Paid tiers (starter, growth, scale): no hard limits, metering only
+  if (
+    entitlements.subscription_tier === 'starter' ||
+    entitlements.subscription_tier === 'growth' ||
+    entitlements.subscription_tier === 'scale'
+  ) {
+    // Allow if status is active or past_due (grace period)
+    if (
+      entitlements.subscription_status === 'active' ||
+      entitlements.subscription_status === 'past_due'
+    ) {
+      return true; // No hard limits yet, just metering
+    }
+
+    // Other statuses (paused, etc.) block usage
+    return false;
+  }
+
+  // Legacy paid tiers (pro, enterprise): keep backward compatibility
+  if (entitlements.subscription_tier === 'pro' || entitlements.subscription_tier === 'enterprise') {
+    if (
+      entitlements.subscription_status === 'active' ||
+      entitlements.subscription_status === 'past_due'
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  // Trial tier: check limits and expiration
   if (entitlements.subscription_tier === 'trial') {
-    // Check trial expiration
+    // Trial expired = read-only (Option C)
     if (entitlements.trial_days_remaining <= 0) {
       return false;
     }
 
+    // Trial still active: check limits
     switch (action) {
       case 'merge':
         return (entitlements.trial_merges_remaining ?? 0) >= quantity;
@@ -172,8 +182,31 @@ export async function getLimitStatus(
     return null;
   }
 
-  // Paid tiers
+  // Cancelled status
+  if (entitlements.subscription_status === 'cancelled') {
+    return 'Subscription cancelled. Upgrade to continue using Refyne.';
+  }
+
+  // New paid tiers (starter, growth, scale): no hard limits
+  if (
+    entitlements.subscription_tier === 'starter' ||
+    entitlements.subscription_tier === 'growth' ||
+    entitlements.subscription_tier === 'scale'
+  ) {
+    if (entitlements.subscription_status === 'past_due') {
+      return 'Payment past due. Please update your payment method.';
+    }
+
+    // No hard limits for paid tiers
+    return null;
+  }
+
+  // Legacy paid tiers (pro, enterprise): keep backward compatibility
   if (entitlements.subscription_tier === 'pro' || entitlements.subscription_tier === 'enterprise') {
+    if (entitlements.subscription_status === 'past_due') {
+      return 'Payment past due. Please update your payment method.';
+    }
+
     if (action === 'enrich_credit') {
       const monthlyLimit =
         entitlements.subscription_tier === 'pro'

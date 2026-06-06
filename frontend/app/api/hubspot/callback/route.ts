@@ -209,6 +209,30 @@ export async function GET(request: NextRequest) {
       metadata: { portal_id: portalId, scopes },
     });
 
+    // Auto-provision org_billing record on first HubSpot connection (trial start)
+    try {
+      const { data: existingBilling } = await supabase
+        .from('org_billing')
+        .select('org_id')
+        .eq('org_id', stateRecord.org_id)
+        .maybeSingle();
+
+      if (!existingBilling) {
+        await supabase.from('org_billing').insert({
+          org_id: stateRecord.org_id,
+          subscription_tier: 'trial',
+          subscription_status: 'active',
+          trial_start_date: new Date().toISOString(),
+          trial_end_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days
+        });
+
+        console.log(`[OAuth Callback] org_billing provisioned for org ${stateRecord.org_id}`);
+      }
+    } catch (billingError) {
+      console.error('[OAuth Callback] org_billing provisioning failed (non-fatal):', billingError);
+      // Don't fail the connection - billing provisioning is best-effort
+    }
+
     // Auto-start trial on first HubSpot connection
     try {
       await startTrial(supabase, stateRecord.org_id);

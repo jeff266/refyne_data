@@ -1,16 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { getBillingContext } from '@/lib/billing/check-feature';
-import { getPlanFeatures } from '@/lib/billing/plan-features';
+import { getEntitlements } from '@/lib/billing/entitlements';
 
 /**
  * GET /api/billing/status
  *
- * Get billing context and feature entitlements for current org.
+ * Returns billing status for the current organization.
+ * Used by UpgradeBanner to determine if upgrade prompt should show.
  *
- * Auth: any role
+ * Auth: Requires authenticated user
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   let ctx;
   try {
     ctx = await getOrgContext();
@@ -19,22 +19,27 @@ export async function GET() {
   }
 
   try {
-    const billing = await getBillingContext(ctx.orgId);
-    const features = getPlanFeatures(billing.plan, billing.alwaysOnAddon);
+    const entitlements = await getEntitlements(ctx.orgId);
 
+    if (!entitlements) {
+      return NextResponse.json(
+        { error: 'Billing status not found' },
+        { status: 404 }
+      );
+    }
+
+    // Return simplified billing status for UI
     return NextResponse.json({
-      plan: billing.plan,
-      status: billing.status,
-      alwaysOnAddon: billing.alwaysOnAddon,
-      creditsUsed: billing.creditsUsed,
-      creditsLimit: billing.creditsLimit,
-      creditsRemaining: Math.max(0, billing.creditsLimit - billing.creditsUsed),
-      trialEndsAt: billing.trialEndsAt?.toISOString() ?? null,
-      daysRemaining: billing.daysRemaining,
-      features,
+      subscription_tier: entitlements.subscription_tier,
+      subscription_status: entitlements.subscription_status,
+      trial_days_remaining: entitlements.trial_days_remaining,
+      trial_merges_remaining: entitlements.trial_merges_remaining,
+      trial_normalize_remaining: entitlements.trial_normalize_remaining,
+      trial_enrich_remaining: entitlements.trial_enrich_remaining,
+      current_period_end: entitlements.current_period_end,
     });
   } catch (error) {
-    console.error('[GET /api/billing/status] Error:', error);
+    console.error('[Billing Status] Error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch billing status' },
       { status: 500 }
