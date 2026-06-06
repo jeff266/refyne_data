@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
-import { supabase } from '@/lib/db/supabase';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 import Stripe from 'stripe';
 
-// Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
 let stripe: Stripe | null = null;
 
 function getStripeClient(): Stripe {
@@ -22,45 +21,36 @@ function getStripeClient(): Stripe {
  * POST /api/billing/portal
  *
  * Create Stripe customer portal session for subscription management.
+ * Returns { url } to redirect the user.
  *
- * Auth: org:admin
+ * Auth: any org member
  */
 export async function POST() {
   let ctx;
   try {
-    ctx = await requireAdmin();
+    ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
-  if (!supabase) {
-    return NextResponse.json(
-      { error: 'Database not configured' },
-      { status: 500 }
-    );
-  }
-
   try {
-    const { data: entitlements } = await supabase
-      .from('workspace_entitlements')
+    const { data: orgBilling } = await supabaseAdmin
+      .from('org_billing')
       .select('stripe_customer_id')
       .eq('org_id', ctx.orgId)
       .single();
 
-    if (!entitlements?.stripe_customer_id) {
-      return NextResponse.json(
-        { error: 'No Stripe customer found. Please subscribe first.' },
-        { status: 400 }
-      );
+    if (!orgBilling?.stripe_customer_id) {
+      return NextResponse.json({ error: 'no_subscription' }, { status: 400 });
     }
 
     const stripeClient = getStripeClient();
     const session = await stripeClient.billingPortal.sessions.create({
-      customer: entitlements.stripe_customer_id,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing`,
+      customer: orgBilling.stripe_customer_id,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.refynedata.com'}/settings/billing`,
     });
 
-    return NextResponse.json({ portalUrl: session.url });
+    return NextResponse.json({ url: session.url });
   } catch (error) {
     console.error('[POST /api/billing/portal] Error:', error);
     return NextResponse.json(

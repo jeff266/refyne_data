@@ -68,6 +68,7 @@ import { startTaxonomySuggestionWorker, stopTaxonomySuggestionWorker } from '../
 import { startCleanupWorker, getCleanupQueue } from '../lib/queue/cleanup-worker';
 import { createHarmonyScanWorker } from '../lib/queue/harmony-scan-queue';
 import { processHarmonyScan } from '../lib/queue/harmony-scan-processor';
+import { runTrialExpiryNotifier } from '../lib/queue/handlers/trial-expiry-notifier';
 
 async function main() {
   console.log('═'.repeat(60));
@@ -219,6 +220,23 @@ async function main() {
       await checkAndEnqueueDigests();
     } catch (error) {
       console.error('Error in digest scheduler:', error);
+    }
+  }, 60_000); // Check every minute
+
+  // Trial expiry email scheduler - runs daily at 9am UTC
+  let lastTrialExpiryRun: string | null = null;
+  setInterval(async () => {
+    const now = new Date();
+    const hour = now.getUTCHours();
+    const dateKey = now.toISOString().slice(0, 10);
+    if (hour === 9 && lastTrialExpiryRun !== dateKey) {
+      lastTrialExpiryRun = dateKey;
+      try {
+        console.log(`[${now.toISOString()}] Running trial expiry notifier`);
+        await runTrialExpiryNotifier();
+      } catch (err) {
+        console.error('Error in trial expiry notifier:', err);
+      }
     }
   }, 60_000); // Check every minute
 

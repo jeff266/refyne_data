@@ -9,18 +9,20 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 interface CreateCheckoutRequest {
-  priceId: string;
+  // Primary format: tier + billing_period
+  tier?: string;
+  billing_period?: string;
+  // Legacy format: direct price ID
+  priceId?: string;
 }
 
 /**
  * POST /api/billing/create-checkout
  *
- * Creates a Stripe checkout session for the selected price.
- * - Creates Stripe customer if needed
- * - Returns checkout URL to redirect user
- * - Webhook handles subscription creation
+ * Creates a Stripe checkout session for the selected plan.
+ * Accepts { tier, billing_period } (preferred) or { priceId } (legacy).
  *
- * Auth: Requires authenticated user
+ * Auth: any org member
  */
 export async function POST(request: NextRequest) {
   let ctx;
@@ -32,25 +34,52 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: CreateCheckoutRequest = await request.json();
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.refynedata.com';
 
-    if (!body.priceId) {
+    // Resolve the Stripe price ID
+    let resolvedPriceId: string;
+    let resolvedTier: string;
+    let resolvedPeriod: string;
+
+    if (body.tier && body.billing_period) {
+      // Look up price from stripe_prices table
+      const { data: priceData } = await supabaseAdmin
+        .from('stripe_prices')
+        .select('stripe_price_id, tier, billing_period, amount_cents')
+        .eq('tier', body.tier)
+        .eq('billing_period', body.billing_period)
+        .eq('is_active', true)
+        .single();
+
+      if (!priceData) {
+        return NextResponse.json(
+          { error: 'Price not found for this tier and billing period' },
+          { status: 400 }
+        );
+      }
+
+      resolvedPriceId = priceData.stripe_price_id;
+      resolvedTier = priceData.tier;
+      resolvedPeriod = priceData.billing_period;
+    } else if (body.priceId) {
+      // Legacy: validate direct price ID
+      const { data: priceData } = await supabaseAdmin
+        .from('stripe_prices')
+        .select('stripe_price_id, tier, billing_period')
+        .eq('stripe_price_id', body.priceId)
+        .eq('is_active', true)
+        .single();
+
+      if (!priceData) {
+        return NextResponse.json({ error: 'Invalid price ID' }, { status: 400 });
+      }
+
+      resolvedPriceId = priceData.stripe_price_id;
+      resolvedTier = priceData.tier;
+      resolvedPeriod = priceData.billing_period;
+    } else {
       return NextResponse.json(
-        { error: 'Missing priceId' },
-        { status: 400 }
-      );
-    }
-
-    // Validate price ID exists in database
-    const { data: priceData } = await supabaseAdmin
-      .from('stripe_prices')
-      .select('tier, billing_period, amount_cents')
-      .eq('stripe_price_id', body.priceId)
-      .eq('is_active', true)
-      .single();
-
-    if (!priceData) {
-      return NextResponse.json(
-        { error: 'Invalid price ID' },
+        { error: 'Provide either { tier, billing_period } or { priceId }' },
         { status: 400 }
       );
     }
@@ -62,7 +91,6 @@ export async function POST(request: NextRequest) {
       .eq('org_id', ctx.orgId)
       .single();
 
-    // Create org_billing record if it doesn't exist
     if (!orgBilling) {
       const { data: newOrgBilling, error: insertError } = await supabaseAdmin
         .from('org_billing')
@@ -90,46 +118,31 @@ export async function POST(request: NextRequest) {
 
     if (!customerId) {
       const customer = await stripe.customers.create({
-        metadata: {
-          org_id: ctx.orgId,
-        },
+        metadata: { org_id: ctx.orgId },
         email: ctx.userEmail,
       });
 
       customerId = customer.id;
 
-      // Update org_billing with customer ID
       await supabaseAdmin
         .from('org_billing')
-        .update({
-          stripe_customer_id: customerId,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ stripe_customer_id: customerId, updated_at: new Date().toISOString() })
         .eq('org_id', ctx.orgId);
-
-      console.log(`[Create Checkout] Created Stripe customer ${customerId} for org ${ctx.orgId}`);
     }
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
-      line_items: [
-        {
-          price: body.priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing/upgrade`,
+      line_items: [{ price: resolvedPriceId, quantity: 1 }],
+      success_url: `${APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_URL}/billing/upgrade`,
       metadata: {
         org_id: ctx.orgId,
-        tier: priceData.tier,
-        billing_period: priceData.billing_period,
+        tier: resolvedTier,
+        billing_period: resolvedPeriod,
       },
     });
-
-    console.log(`[Create Checkout] Created checkout session ${session.id} for org ${ctx.orgId}`);
 
     // Log billing event
     await supabaseAdmin.from('org_billing_events').insert({
@@ -138,24 +151,22 @@ export async function POST(request: NextRequest) {
       actor_id: ctx.userId,
       metadata: {
         session_id: session.id,
-        price_id: body.priceId,
-        tier: priceData.tier,
-        billing_period: priceData.billing_period,
+        price_id: resolvedPriceId,
+        tier: resolvedTier,
+        billing_period: resolvedPeriod,
       },
     });
 
     return NextResponse.json({
+      checkout_url: session.url,
+      // legacy field alias
       checkoutUrl: session.url,
-      sessionId: session.id,
     });
   } catch (error) {
     captureWithOrgContext(error, ctx.orgId, { route: '/api/billing/create-checkout' });
     console.error('[Create Checkout] Error:', error);
     return NextResponse.json(
-      {
-        error: 'Failed to create checkout session',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
+      { error: 'Failed to create checkout session' },
       { status: 500 }
     );
   }

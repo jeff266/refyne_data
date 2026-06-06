@@ -22,32 +22,21 @@ export function TrialBanner() {
         if (!res.ok) return;
 
         const data = await res.json();
+        const status = data.subscription_status;
+        const tier = data.subscription_tier;
+        const daysRemaining = data.trial_days_remaining !== null
+          ? Math.floor(data.trial_days_remaining)
+          : null;
 
-        if (data.status === 'past_due') {
-          setBannerState({
-            show: true,
-            type: 'past_due',
-            daysRemaining: null,
-          });
-        } else if (data.status === 'trial_expired') {
-          setBannerState({
-            show: true,
-            type: 'trial_expired',
-            daysRemaining: null,
-          });
-        } else if (
-          data.status === 'trialing' &&
-          data.daysRemaining !== null &&
-          data.daysRemaining <= 7
-        ) {
-          setBannerState({
-            show: true,
-            type: 'trial',
-            daysRemaining: data.daysRemaining,
-          });
+        if (status === 'past_due') {
+          setBannerState({ show: true, type: 'past_due', daysRemaining: null });
+        } else if (tier === 'trial' && daysRemaining !== null && daysRemaining <= 0) {
+          setBannerState({ show: true, type: 'trial_expired', daysRemaining: null });
+        } else if (tier === 'trial' && daysRemaining !== null && daysRemaining <= 7) {
+          setBannerState({ show: true, type: 'trial', daysRemaining });
         }
-      } catch (error) {
-        console.error('Failed to check trial status:', error);
+      } catch {
+        // silent - banner is non-critical
       }
     }
 
@@ -60,24 +49,12 @@ export function TrialBanner() {
 
   const getBannerStyle = () => {
     if (bannerState.type === 'past_due') {
-      return {
-        background: C.amberDim,
-        borderColor: 'rgba(245,158,11,0.3)',
-        textColor: C.text,
-      };
+      return { background: C.amberDim, borderColor: 'rgba(245,158,11,0.3)' };
     }
     if (bannerState.type === 'trial_expired') {
-      return {
-        background: C.redDim,
-        borderColor: 'rgba(239,68,68,0.3)',
-        textColor: C.text,
-      };
+      return { background: C.redDim, borderColor: 'rgba(239,68,68,0.3)' };
     }
-    return {
-      background: C.indigoDim,
-      borderColor: C.indigoBrd,
-      textColor: C.text,
-    };
+    return { background: C.indigoDim, borderColor: C.indigoBrd };
   };
 
   const style = getBannerStyle();
@@ -97,15 +74,6 @@ export function TrialBanner() {
     }. Upgrade to keep access.`;
   };
 
-  const getAction = () => {
-    if (bannerState.type === 'past_due') {
-      return { text: 'Update payment', href: '/api/billing/portal', external: true };
-    }
-    return { text: bannerState.type === 'trial_expired' ? 'Upgrade now' : 'See plans', href: '/settings/billing', external: false };
-  };
-
-  const action = getAction();
-
   return (
     <div
       style={{
@@ -119,16 +87,16 @@ export function TrialBanner() {
         fontFamily: F.sans,
       }}
     >
-      <span style={{ fontSize: 13, color: style.textColor, fontWeight: 500 }}>
+      <span style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>
         {getMessage()}
       </span>
-      {action.external ? (
+      {bannerState.type === 'past_due' ? (
         <button
           onClick={async () => {
             const res = await fetch('/api/billing/portal', { method: 'POST' });
             if (res.ok) {
               const data = await res.json();
-              window.location.href = data.portalUrl;
+              window.location.href = data.url;
             }
           }}
           style={{
@@ -140,14 +108,13 @@ export function TrialBanner() {
             fontSize: 12,
             fontWeight: 600,
             cursor: 'pointer',
-            letterSpacing: '-0.01em',
           }}
         >
-          {action.text} →
+          Update payment
         </button>
       ) : (
         <Link
-          href={action.href}
+          href="/billing/upgrade"
           style={{
             padding: '6px 14px',
             background: C.indigo,
@@ -156,10 +123,9 @@ export function TrialBanner() {
             fontSize: 12,
             fontWeight: 600,
             textDecoration: 'none',
-            letterSpacing: '-0.01em',
           }}
         >
-          {action.text} →
+          {bannerState.type === 'trial_expired' ? 'Upgrade now' : 'See plans'}
         </Link>
       )}
     </div>
