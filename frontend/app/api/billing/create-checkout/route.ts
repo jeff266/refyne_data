@@ -9,13 +9,15 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 interface CreateCheckoutRequest {
-  priceId: string;
+  tier: string;
+  billing_period: string;
 }
 
 /**
  * POST /api/billing/create-checkout
  *
- * Creates a Stripe checkout session for the selected price.
+ * Creates a Stripe checkout session for the selected tier and billing period.
+ * - Looks up price_id from stripe_prices table
  * - Creates Stripe customer if needed
  * - Returns checkout URL to redirect user
  * - Webhook handles subscription creation
@@ -33,24 +35,26 @@ export async function POST(request: NextRequest) {
   try {
     const body: CreateCheckoutRequest = await request.json();
 
-    if (!body.priceId) {
+    if (!body.tier || !body.billing_period) {
       return NextResponse.json(
-        { error: 'Missing priceId' },
+        { error: 'Missing tier or billing_period' },
         { status: 400 }
       );
     }
 
-    // Validate price ID exists in database
-    const { data: priceData } = await supabaseAdmin
+    // Look up price ID from tier and billing period
+    const { data: priceData, error: priceError } = await supabaseAdmin
       .from('stripe_prices')
-      .select('tier, billing_period, amount_cents')
-      .eq('stripe_price_id', body.priceId)
+      .select('stripe_price_id, tier, billing_period, amount_cents')
+      .eq('tier', body.tier)
+      .eq('billing_period', body.billing_period)
       .eq('is_active', true)
       .single();
 
-    if (!priceData) {
+    if (priceError || !priceData) {
+      console.error('[Create Checkout] Price lookup failed:', priceError);
       return NextResponse.json(
-        { error: 'Invalid price ID' },
+        { error: 'Invalid tier or billing period' },
         { status: 400 }
       );
     }
@@ -116,7 +120,7 @@ export async function POST(request: NextRequest) {
       mode: 'subscription',
       line_items: [
         {
-          price: body.priceId,
+          price: priceData.stripe_price_id,
           quantity: 1,
         },
       ],
@@ -138,14 +142,14 @@ export async function POST(request: NextRequest) {
       actor_id: ctx.userId,
       metadata: {
         session_id: session.id,
-        price_id: body.priceId,
+        price_id: priceData.stripe_price_id,
         tier: priceData.tier,
         billing_period: priceData.billing_period,
       },
     });
 
     return NextResponse.json({
-      checkoutUrl: session.url,
+      checkout_url: session.url,
       sessionId: session.id,
     });
   } catch (error) {

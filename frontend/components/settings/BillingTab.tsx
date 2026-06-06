@@ -1,36 +1,51 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { C, F } from '@/lib/design-tokens';
-import { PLAN_PRICING, getPlanFeatures } from '@/lib/billing/plan-features';
-import { PrimaryBtn } from '@/components/refyne/PrimaryBtn';
-import { GhostBtn } from '@/components/refyne/GhostBtn';
 
-interface BillingStatus {
-  plan: string;
-  status: string;
-  alwaysOnAddon: boolean;
-  creditsUsed: number;
-  creditsLimit: number;
-  creditsRemaining: number;
-  trialEndsAt: string | null;
-  daysRemaining: number | null;
+interface BillingEntitlements {
+  subscription_tier: string;
+  subscription_status: string;
+  trial_days_remaining: number | null;
+  trial_merges_used: number;
+  trial_merges_remaining: number;
+  trial_merge_limit: number;
+  trial_normalize_writes_used: number;
+  trial_normalize_remaining: number;
+  trial_normalize_limit: number;
+  trial_enrich_credits_used: number;
+  trial_enrich_remaining: number;
+  trial_enrich_limit: number;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  merges_last_30d: number;
+  normalize_writes_last_30d: number;
+  enrich_credits_last_30d: number;
+  pro_monthly_enrich_credits: number | null;
+  enterprise_monthly_enrich_credits: number | null;
+  events: BillingEvent[];
 }
 
-interface Usage {
-  credits: { used: number; limit: number; remaining: number; resetAt: string | null };
-  portals: { connected: number; limit: number };
-  seats: {
-    operators: number;
-    admins: number;
-    limits: { operators: number; admins: number };
-  };
+interface BillingEvent {
+  event_type: string;
+  metadata: Record<string, any>;
+  created_at: string;
+}
+
+interface PriceInfo {
+  stripe_price_id: string;
+  amount_cents: number;
+}
+
+interface Prices {
+  starter: { monthly?: PriceInfo; annual?: PriceInfo };
+  growth: { monthly?: PriceInfo; annual?: PriceInfo };
+  scale: { monthly?: PriceInfo; annual?: PriceInfo };
 }
 
 export function BillingTab() {
-  const [billing, setBilling] = useState<BillingStatus | null>(null);
-  const [usage, setUsage] = useState<Usage | null>(null);
+  const [billing, setBilling] = useState<BillingEntitlements | null>(null);
+  const [prices, setPrices] = useState<Prices | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,16 +54,16 @@ export function BillingTab() {
 
   async function fetchBillingData() {
     try {
-      const [statusRes, usageRes] = await Promise.all([
+      const [statusRes, pricesRes] = await Promise.all([
         fetch('/api/billing/status'),
-        fetch('/api/billing/usage'),
+        fetch('/api/billing/prices'),
       ]);
 
       if (statusRes.ok) {
         setBilling(await statusRes.json());
       }
-      if (usageRes.ok) {
-        setUsage(await usageRes.json());
+      if (pricesRes.ok) {
+        setPrices(await pricesRes.json());
       }
     } catch (error) {
       console.error('Failed to fetch billing data:', error);
@@ -62,7 +77,12 @@ export function BillingTab() {
       const res = await fetch('/api/billing/portal', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
-        window.location.href = data.portalUrl;
+        window.location.href = data.url;
+      } else {
+        const error = await res.json();
+        if (error.error === 'no_subscription') {
+          alert('No subscription found. Please upgrade first.');
+        }
       }
     } catch (error) {
       console.error('Failed to open portal:', error);
@@ -87,253 +107,336 @@ export function BillingTab() {
     );
   }
 
-  const getStatusBadge = (status: string) => {
-    const badges: Record<string, { color: string; text: string }> = {
-      trialing: { color: C.indigoLt, text: 'Trial' },
-      active: { color: C.green, text: 'Active' },
-      past_due: { color: C.amber, text: 'Past due' },
-      cancelled: { color: C.text3, text: 'Cancelled' },
-      trial_expired: { color: C.red, text: 'Trial expired' },
-    };
-    return badges[status] || { color: C.text3, text: status };
+  const isTrial = billing.subscription_tier === 'trial';
+  const isActive = billing.subscription_status === 'active';
+  const isPastDue = billing.subscription_status === 'past_due';
+  const isCancelled = billing.subscription_status === 'cancelled';
+  const hasStripeCustomer = billing.current_period_end !== null; // Proxy for stripe_customer_id
+
+  // Get tier pricing
+  const tierPricing = prices?.[billing.subscription_tier as keyof Prices]?.monthly;
+  const priceDisplay = tierPricing
+    ? `$${(tierPricing.amount_cents / 100).toFixed(0)} / month`
+    : 'Free trial';
+
+  // Status badge colors
+  const getStatusBadge = () => {
+    if (isActive && !isTrial) return { bg: C.steelBlue + '20', text: C.steelBlue, label: 'Active' };
+    if (isPastDue) return { bg: C.amber + '20', text: C.amber, label: 'Payment due' };
+    if (isCancelled) return { bg: C.red + '20', text: C.red, label: 'Cancelled' };
+    if (isTrial) return { bg: 'transparent', text: C.navy, label: 'Trial', border: `1px solid ${C.navy}` };
+    return { bg: C.text3 + '20', text: C.text3, label: billing.subscription_status };
   };
 
-  const statusBadge = getStatusBadge(billing.status);
-  const planInfo = PLAN_PRICING[billing.plan as keyof typeof PLAN_PRICING];
+  const statusBadge = getStatusBadge();
+
+  // Progress bar color based on percentage
+  const getProgressColor = (percentage: number) => {
+    if (percentage >= 100) return C.red;
+    if (percentage >= 80) return C.amber;
+    return C.steelBlue;
+  };
+
+  // Format date
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  // Event type labels
+  const getEventLabel = (event: BillingEvent) => {
+    const labels: Record<string, string> = {
+      trial_started: 'Trial started',
+      subscription_created: `Subscribed to ${event.metadata?.tier || ''} plan`,
+      subscription_updated: `Plan updated to ${event.metadata?.tier || ''}`,
+      subscription_cancelled: 'Subscription cancelled',
+      payment_failed: 'Payment failed - retrying',
+      payment_succeeded: 'Payment succeeded',
+      usage_limit_exceeded: `Usage limit reached (${event.metadata?.action || ''})`,
+    };
+    return labels[event.event_type] || event.event_type;
+  };
+
+  // Relative timestamp
+  const getRelativeTime = (dateStr: string) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return '1 day ago';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return `${Math.floor(diffDays / 30)} months ago`;
+  };
 
   return (
-    <div style={{ padding: 32, maxWidth: 800 }}>
-      {/* Current Plan */}
+    <div style={{ padding: 32, maxWidth: 900 }}>
+      {/* Section A: Current Plan */}
       <div
         style={{
-          background: C.surface,
+          background: C.offWhite,
           border: `1px solid ${C.border}`,
-          borderRadius: 12,
           padding: 24,
           marginBottom: 24,
         }}
       >
-        <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 16 }}>
-          Current Plan
-        </h3>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <div
-            style={{
-              padding: '6px 14px',
-              background: C.indigoDim,
-              border: `1px solid ${C.indigoBrd}`,
-              borderRadius: 8,
-              fontSize: 15,
-              fontWeight: 600,
-              color: C.indigoLt,
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          {/* Left: Plan info */}
+          <div>
+            <h2 style={{
+              fontSize: 24,
+              fontFamily: F.heading,
+              color: C.navy,
+              marginBottom: 8,
               textTransform: 'capitalize',
-            }}
-          >
-            {planInfo?.name || billing.plan}
-          </div>
-          <div
-            style={{
-              padding: '4px 10px',
-              background: statusBadge.color + '20',
-              borderRadius: 6,
-              fontSize: 12,
-              fontWeight: 500,
-              color: statusBadge.color,
-            }}
-          >
-            {statusBadge.text}
-          </div>
-        </div>
-
-        {billing.status === 'trialing' && billing.daysRemaining !== null && (
-          <p style={{ fontSize: 13, color: C.text2, marginBottom: 16 }}>
-            Trial ends in <strong>{billing.daysRemaining} days</strong>
-          </p>
-        )}
-
-        {billing.status === 'active' && (
-          <p style={{ fontSize: 13, color: C.text2, marginBottom: 16 }}>
-            Your subscription is active
-          </p>
-        )}
-
-        <GhostBtn onClick={handleManageSubscription}>Manage subscription →</GhostBtn>
-      </div>
-
-      {/* Usage this period */}
-      {usage && (
-        <div
-          style={{
-            background: C.surface,
-            border: `1px solid ${C.border}`,
-            borderRadius: 12,
-            padding: 24,
-            marginBottom: 24,
-          }}
-        >
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 20 }}>
-            Usage this period
-          </h3>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Enrich credits */}
-            <div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  marginBottom: 8,
-                }}
-              >
-                <span style={{ fontSize: 13, color: C.text2 }}>Enrich credits</span>
-                <span style={{ fontSize: 13, color: C.text, fontFamily: F.mono }}>
-                  {usage.credits.used} / {usage.credits.limit}
-                </span>
-              </div>
-              <div
-                style={{
-                  height: 8,
-                  background: C.border,
-                  borderRadius: 4,
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    height: '100%',
-                    background: C.indigo,
-                    width: `${Math.min(100, (usage.credits.used / usage.credits.limit) * 100)}%`,
-                    transition: 'width 0.3s',
-                  }}
-                />
-              </div>
+            }}>
+              {billing.subscription_tier}
+            </h2>
+            <div style={{ fontSize: 16, color: C.text2, marginBottom: 12 }}>
+              {priceDisplay}
             </div>
-
-            {/* Portals */}
-            <div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  marginBottom: 4,
-                }}
-              >
-                <span style={{ fontSize: 13, color: C.text2 }}>Connected portals</span>
-                <span style={{ fontSize: 13, color: C.text, fontFamily: F.mono }}>
-                  {usage.portals.connected} / {usage.portals.limit}
-                </span>
+            <div
+              style={{
+                display: 'inline-block',
+                padding: '4px 12px',
+                background: statusBadge.bg,
+                border: statusBadge.border || 'none',
+                color: statusBadge.text,
+                fontSize: 13,
+                fontWeight: 500,
+                marginBottom: 12,
+              }}
+            >
+              {statusBadge.label}
+            </div>
+            {billing.current_period_start && billing.current_period_end && !isTrial && (
+              <div style={{ fontSize: 13, color: C.text3 }}>
+                Current period: {formatDate(billing.current_period_start)} - {formatDate(billing.current_period_end)}
               </div>
-            </div>
-
-            {/* Seats */}
-            <div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  marginBottom: 4,
-                }}
-              >
-                <span style={{ fontSize: 13, color: C.text2 }}>Team members</span>
-                <span style={{ fontSize: 13, color: C.text, fontFamily: F.mono }}>
-                  {usage.seats.operators} / {usage.seats.limits.operators}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Always On add-on */}
-      {billing.plan !== 'scale' && billing.plan !== 'enterprise' && (
-        <div
-          style={{
-            background: C.indigoDim,
-            border: `2px solid ${C.indigo}`,
-            borderRadius: 12,
-            padding: 24,
-            marginBottom: 24,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              marginBottom: 16,
-            }}
-          >
-            <div>
-              <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 8 }}>
-                Always On Monitoring
-              </h3>
-              <p style={{ fontSize: 13, color: C.text2, lineHeight: 1.6 }}>
-                Get nightly digest emails with compliance changes, dedup alerts, and auto-merge
-                Grade A pairs.
-              </p>
-            </div>
-            {!billing.alwaysOnAddon && (
-              <div style={{ fontSize: 20, fontWeight: 600, color: C.text, textAlign: 'right' }}>
-                +$79<span style={{ fontSize: 14, fontWeight: 400, color: C.text2 }}>/mo</span>
+            )}
+            {isCancelled && billing.current_period_end && (
+              <div style={{ fontSize: 13, color: C.red }}>
+                Access ends: {formatDate(billing.current_period_end)}
               </div>
             )}
           </div>
 
-          {billing.alwaysOnAddon ? (
-            <div
-              style={{
-                padding: '6px 12px',
-                background: C.greenDim,
-                border: `1px solid ${C.greenBrd}`,
-                borderRadius: 6,
-                fontSize: 12,
-                fontWeight: 600,
-                color: C.green,
-                display: 'inline-block',
-              }}
-            >
-              Active · $79/mo
-            </div>
+          {/* Right: Action button */}
+          <div>
+            {hasStripeCustomer && (
+              <button
+                onClick={handleManageSubscription}
+                style={{
+                  padding: '10px 20px',
+                  background: C.navy,
+                  color: C.offWhite,
+                  border: 'none',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Manage subscription
+              </button>
+            )}
+            {isTrial && (
+              <a
+                href="/billing/upgrade"
+                style={{
+                  display: 'inline-block',
+                  padding: '10px 20px',
+                  background: C.steelBlue,
+                  color: '#fff',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                }}
+              >
+                Upgrade now
+              </a>
+            )}
+            {isPastDue && (
+              <button
+                onClick={handleManageSubscription}
+                style={{
+                  padding: '10px 20px',
+                  background: C.amber,
+                  color: '#fff',
+                  border: 'none',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Update payment
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Section B: Usage This Period */}
+      <div
+        style={{
+          background: C.offWhite,
+          border: `1px solid ${C.border}`,
+          padding: 24,
+          marginBottom: 24,
+        }}
+      >
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: C.navy, marginBottom: 20 }}>
+          Usage this period
+        </h3>
+
+        {/* Merges */}
+        <div style={{ marginBottom: 16 }}>
+          {isTrial ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 14, color: C.text2 }}>Merges</span>
+                <span style={{ fontSize: 14, color: C.text, fontFamily: F.mono }}>
+                  {billing.trial_merges_used} / {billing.trial_merge_limit}
+                </span>
+              </div>
+              <div style={{ height: 8, background: C.border, position: 'relative' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${Math.min(100, (billing.trial_merges_used / billing.trial_merge_limit) * 100)}%`,
+                    background: getProgressColor((billing.trial_merges_used / billing.trial_merge_limit) * 100),
+                  }}
+                />
+              </div>
+            </>
           ) : (
-            <GhostBtn onClick={handleManageSubscription}>Add Always On →</GhostBtn>
+            <div style={{ fontSize: 14, color: C.text2 }}>
+              Merges: <span style={{ color: C.text, fontFamily: F.mono }}>{billing.merges_last_30d.toLocaleString()}</span> this period
+            </div>
           )}
+        </div>
+
+        {/* Normalize Writes */}
+        <div style={{ marginBottom: 16 }}>
+          {isTrial ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 14, color: C.text2 }}>Normalize writes</span>
+                <span style={{ fontSize: 14, color: C.text, fontFamily: F.mono }}>
+                  {billing.trial_normalize_writes_used} / {billing.trial_normalize_limit}
+                </span>
+              </div>
+              <div style={{ height: 8, background: C.border, position: 'relative' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${Math.min(100, (billing.trial_normalize_writes_used / billing.trial_normalize_limit) * 100)}%`,
+                    background: getProgressColor((billing.trial_normalize_writes_used / billing.trial_normalize_limit) * 100),
+                  }}
+                />
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 14, color: C.text2 }}>
+              Normalize writes: <span style={{ color: C.text, fontFamily: F.mono }}>{billing.normalize_writes_last_30d.toLocaleString()}</span> this period
+            </div>
+          )}
+        </div>
+
+        {/* Enrich Credits */}
+        <div style={{ marginBottom: 16 }}>
+          {isTrial ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 14, color: C.text2 }}>Enrich credits</span>
+                <span style={{ fontSize: 14, color: C.text, fontFamily: F.mono }}>
+                  {billing.trial_enrich_credits_used} / {billing.trial_enrich_limit}
+                </span>
+              </div>
+              <div style={{ height: 8, background: C.border, position: 'relative' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${Math.min(100, (billing.trial_enrich_credits_used / billing.trial_enrich_limit) * 100)}%`,
+                    background: getProgressColor((billing.trial_enrich_credits_used / billing.trial_enrich_limit) * 100),
+                  }}
+                />
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 14, color: C.text2 }}>
+              Enrich credits: <span style={{ color: C.text, fontFamily: F.mono }}>{billing.enrich_credits_last_30d.toLocaleString()}</span> this period
+            </div>
+          )}
+        </div>
+
+        {/* Trial days remaining */}
+        {isTrial && billing.trial_days_remaining !== null && (
+          <div style={{
+            fontSize: 14,
+            color: billing.trial_days_remaining <= 3 ? C.amber : C.text3,
+            marginTop: 12,
+          }}>
+            {billing.trial_days_remaining <= 0
+              ? 'Your trial has ended'
+              : `${Math.ceil(billing.trial_days_remaining)} days remaining in your trial`
+            }
+          </div>
+        )}
+      </div>
+
+      {/* Section C: Billing Events */}
+      {billing.events && billing.events.length > 0 && (
+        <div
+          style={{
+            background: C.offWhite,
+            border: `1px solid ${C.border}`,
+            padding: 24,
+            marginBottom: 24,
+          }}
+        >
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: C.navy, marginBottom: 16 }}>
+            Recent billing activity
+          </h3>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {billing.events.map((event, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                  style={{
+                    width: 8,
+                    height: 8,
+                    background: C.steelBlue,
+                    flexShrink: 0,
+                  }}
+                />
+                <div style={{ flex: 1, fontSize: 14, color: C.text }}>
+                  {getEventLabel(event)}
+                </div>
+                <div style={{ fontSize: 13, color: C.text3 }}>
+                  {getRelativeTime(event.created_at)}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Upgrade path (for lower tiers) */}
-      {(billing.plan === 'trialing' || billing.plan === 'starter') && (
-        <div
-          style={{
-            background: C.surface,
-            border: `1px solid ${C.border}`,
-            borderRadius: 12,
-            padding: 24,
-          }}
-        >
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 12 }}>
-            Unlock more with an upgrade
-          </h3>
-          <p style={{ fontSize: 13, color: C.text2, marginBottom: 20, lineHeight: 1.6 }}>
-            Get more credits, portals, and seats by upgrading to Growth or Scale.
-          </p>
-          <Link
-            href="/pricing"
+      {/* Section D: Danger Zone */}
+      {(isActive || isPastDue) && hasStripeCustomer && (
+        <div style={{ padding: 24 }}>
+          <a
+            onClick={handleManageSubscription}
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '10px 20px',
-              background: `linear-gradient(to bottom, ${C.indigo}, ${C.indigoDk})`,
-              color: '#fff',
-              borderRadius: 8,
               fontSize: 13,
-              fontWeight: 600,
-              textDecoration: 'none',
-              boxShadow: '0 0 0 1px rgba(99,102,241,0.3), 0 1px 3px rgba(0,0,0,0.4)',
+              color: C.text3,
+              cursor: 'pointer',
+              textDecoration: 'underline',
             }}
           >
-            See upgrade options →
-          </Link>
+            Cancel subscription →
+          </a>
         </div>
       )}
     </div>

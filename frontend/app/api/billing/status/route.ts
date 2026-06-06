@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { getEntitlements } from '@/lib/billing/entitlements';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 
 /**
  * GET /api/billing/status
  *
- * Returns billing status for the current organization.
- * Used by UpgradeBanner to determine if upgrade prompt should show.
+ * Returns comprehensive billing status for the current organization.
+ * Includes entitlements, usage, and recent billing events.
  *
  * Auth: Requires authenticated user
  */
@@ -19,24 +20,43 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Get entitlements (from org_entitlements VIEW)
     const entitlements = await getEntitlements(ctx.orgId);
 
-    if (!entitlements) {
-      return NextResponse.json(
-        { error: 'Billing status not found' },
-        { status: 404 }
-      );
+    // Get recent billing events
+    const { data: events, error: eventsError } = await supabaseAdmin
+      .from('org_billing_events')
+      .select('*')
+      .eq('org_id', ctx.orgId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (eventsError) {
+      console.error('[Billing Status] Failed to fetch events:', eventsError);
     }
 
-    // Return simplified billing status for UI
+    // If no org_billing row exists, return trial defaults
+    if (!entitlements) {
+      return NextResponse.json({
+        subscription_tier: 'trial',
+        subscription_status: 'active',
+        trial_days_remaining: null,
+        trial_merges_remaining: null,
+        trial_normalize_remaining: null,
+        trial_enrich_remaining: null,
+        current_period_start: null,
+        current_period_end: null,
+        merges_last_30d: 0,
+        normalize_writes_last_30d: 0,
+        enrich_credits_last_30d: 0,
+        events: events || [],
+      });
+    }
+
+    // Return full entitlements + events
     return NextResponse.json({
-      subscription_tier: entitlements.subscription_tier,
-      subscription_status: entitlements.subscription_status,
-      trial_days_remaining: entitlements.trial_days_remaining,
-      trial_merges_remaining: entitlements.trial_merges_remaining,
-      trial_normalize_remaining: entitlements.trial_normalize_remaining,
-      trial_enrich_remaining: entitlements.trial_enrich_remaining,
-      current_period_end: entitlements.current_period_end,
+      ...entitlements,
+      events: events || [],
     });
   } catch (error) {
     console.error('[Billing Status] Error:', error);
