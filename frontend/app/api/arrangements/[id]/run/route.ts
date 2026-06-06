@@ -4,6 +4,8 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { enqueueLiveRunJob } from '@/lib/queue/arrangement-queue';
 import { estimateRunCost } from '@/lib/arrangements/estimate-cost';
+import { logAuditEvent } from '@/lib/audit/logger';
+import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 
 /**
  * POST /api/arrangements/:id/run
@@ -122,6 +124,23 @@ export async function POST(
         .update({ job_id: result.jobId })
         .eq('id', run.id);
     }
+
+    // Log audit event
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      actorEmail: ctx.userEmail,
+      action: AUDIT_ACTIONS.ENRICH_RUN_STARTED,
+      objectType: 'arrangement',
+      objectId: arrangement.id,
+      objectLabel: arrangement.name,
+      metadata: {
+        runId: run.id,
+        totalRecords,
+        estimatedCredits: estimate.total_credits,
+      },
+      request,
+    });
 
     return NextResponse.json({
       success: true,

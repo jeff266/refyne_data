@@ -18,6 +18,10 @@ export const AUDIT_ACTIONS = {
 
   // Policies
   DEDUP_POLICY_UPDATED: 'dedup_policy.updated',
+
+  // Enrichment
+  ENRICH_RUN_STARTED: 'enrich_run.started',
+  ENRICH_RUN_APPLIED: 'enrich_run.applied',
 } as const;
 
 export type AuditAction = typeof AUDIT_ACTIONS[keyof typeof AUDIT_ACTIONS];

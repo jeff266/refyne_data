@@ -3,6 +3,8 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { enqueueApplyJob } from '@/lib/queue/enrichment-queue';
 import { createClient } from 'redis';
+import { logAuditEvent } from '@/lib/audit/logger';
+import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -113,6 +115,23 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[Apply Enqueue] Job ${jobId} queued for run ${run.id}`);
+
+    // Log audit event
+    logAuditEvent({
+      orgId: ctx.orgId,
+      actorId: ctx.userId,
+      actorEmail: ctx.userEmail,
+      action: AUDIT_ACTIONS.ENRICH_RUN_APPLIED,
+      objectType: 'enrich_run',
+      objectId: run.id,
+      objectLabel: `Enrich run (${objectType})`,
+      metadata: {
+        objectType,
+        previewJobId,
+        recordCount: selectedRecordIds.length,
+      },
+      request: req,
+    });
 
     return NextResponse.json({
       jobId,
