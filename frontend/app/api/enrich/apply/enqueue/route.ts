@@ -5,6 +5,7 @@ import { enqueueApplyJob } from '@/lib/queue/enrichment-queue';
 import { createClient } from 'redis';
 import { logAuditEvent } from '@/lib/audit/logger';
 import { AUDIT_ACTIONS } from '@/lib/audit/actions';
+import { consumeUsage } from '@/lib/billing/enforce';
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -91,6 +92,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Failed to create run record' },
         { status: 500 }
+      );
+    }
+
+    // Billing enforcement: Consume enrich credit usage
+    const billingResult = await consumeUsage(ctx.orgId, 'enrich_credit', selectedRecordIds.length);
+    if (!billingResult.allowed) {
+      // Delete the run record if billing check failed
+      await supabase.from('arrangement_runs').delete().eq('id', run.id);
+
+      return NextResponse.json(
+        {
+          error: 'billing_limit_exceeded',
+          reason: billingResult.reason,
+          remaining: billingResult.remaining,
+        },
+        { status: 402 } // 402 Payment Required
       );
     }
 

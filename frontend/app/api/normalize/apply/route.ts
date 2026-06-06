@@ -7,6 +7,7 @@ import { invalidateSummary } from '@/lib/ai/cache';
 import { getNormalizeQueue } from '@/lib/queue/normalize-worker';
 import { logAuditEvent } from '@/lib/audit/logger';
 import { AUDIT_ACTIONS } from '@/lib/audit/actions';
+import { consumeUsage } from '@/lib/billing/enforce';
 
 interface SelectedChange {
   companyId: string;
@@ -123,6 +124,41 @@ export async function POST(request: NextRequest) {
           // Continue anyway - exclusions are best-effort
         }
       }
+    }
+
+    // Count writes for billing enforcement
+    let writeCount = 0;
+    if (body.selectedChanges && body.selectedChanges.length > 0) {
+      writeCount = body.selectedChanges.length;
+    } else {
+      // If applying all changes, count preview records
+      let countQuery = supabase
+        .from('normalized_records')
+        .select('record_id', { count: 'exact', head: true })
+        .eq('org_id', ctx.orgId)
+        .eq('record_type', 'company')
+        .not('normalized_value', 'is', null)
+        .not('raw_value', 'is', null);
+
+      if (body.harmonyIds && body.harmonyIds.length > 0) {
+        countQuery = countQuery.in('harmony_id', body.harmonyIds);
+      }
+
+      const { count } = await countQuery;
+      writeCount = count ?? 0;
+    }
+
+    // Billing enforcement: Consume normalize write usage
+    const billingResult = await consumeUsage(ctx.orgId, 'normalize_write', writeCount);
+    if (!billingResult.allowed) {
+      return NextResponse.json(
+        {
+          error: 'billing_limit_exceeded',
+          reason: billingResult.reason,
+          remaining: billingResult.remaining,
+        },
+        { status: 402 } // 402 Payment Required
+      );
     }
 
     // Create normalization run

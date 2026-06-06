@@ -10,6 +10,7 @@ import { loadRules, applyRules } from '@/lib/dedup/survivorship-rules';
 import { executeMerge } from '@/lib/dedup/merge-executor';
 import { logAuditEvent } from '@/lib/audit/logger';
 import { AUDIT_ACTIONS } from '@/lib/audit/actions';
+import { consumeUsage } from '@/lib/billing/enforce';
 
 interface MergeClusterRequest {
   masterId: string;
@@ -81,6 +82,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Merge all records into master
     const masterId = body.masterId;
     const recordsToMerge = clusterData.recordIds.filter((id) => id !== masterId);
+
+    // Billing enforcement: Consume merge usage
+    const billingResult = await consumeUsage(orgId, 'merge', recordsToMerge.length);
+    if (!billingResult.allowed) {
+      return NextResponse.json(
+        {
+          error: 'billing_limit_exceeded',
+          reason: billingResult.reason,
+          remaining: billingResult.remaining,
+        },
+        { status: 402 } // 402 Payment Required
+      );
+    }
 
     try {
       // Step 0: Fetch signals from highest-confidence pair
