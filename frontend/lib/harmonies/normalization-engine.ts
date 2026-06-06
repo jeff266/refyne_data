@@ -305,7 +305,8 @@ export async function applyLookupHarmony(
     const raw = record[hubspotProperty];
     if (!raw) continue;
 
-    const result = allMappings.get(raw.toLowerCase().trim());
+    const rawStr = String(raw ?? '').trim();
+    const result = allMappings.get(rawStr.toLowerCase());
     if (!result || result.matchType === 'none') continue;
     if (result.canonical === raw) continue;
 
@@ -313,7 +314,8 @@ export async function applyLookupHarmony(
     let finalValue = result.canonical;
 
     // Check if canonical value is JSON (structured output)
-    if (result.canonical && result.canonical.trim().startsWith('{')) {
+    const canonicalStr = String(result.canonical ?? '').trim();
+    if (result.canonical && canonicalStr.startsWith('{')) {
       try {
         const parsed = JSON.parse(result.canonical);
         if (harmony.outputFormatsAvailable && harmony.outputFormatsAvailable.length > 0) {
@@ -355,11 +357,14 @@ function normalizePhoneE164(phone: string, config?: Record<string, any>): string
   const defaultCountryCode = config?.default_country_code || '1';
   const stripExtensions = config?.strip_extensions ?? true;
 
+  // Safe string coercion
+  const phoneStr = String(phone ?? '');
+
   // Remove extension if enabled
-  let cleaned = phone;
+  let cleaned = phoneStr;
   if (stripExtensions) {
     // Remove common extension patterns (x123, ext 123, #123)
-    cleaned = phone.replace(/\s*(x|ext\.?|extension|#)\s*\d+$/i, '');
+    cleaned = phoneStr.replace(/\s*(x|ext\.?|extension|#)\s*\d+$/i, '');
   }
 
   const digits = cleaned.replace(/\D/g, '');
@@ -465,8 +470,9 @@ export function toSmartTitleCase(
   input: string,
   config?: { orgExceptions?: Set<string> }
 ): string {
-  if (!input?.trim()) return input;
-  const trimmed = input.trim();
+  const str = String(input ?? '').trim();
+  if (!str) return input;
+  const trimmed = str;
 
   // Rule 0: Org exception → return exact stored value (case-insensitive match)
   if (config?.orgExceptions) {
@@ -537,8 +543,8 @@ export function tokenize(input: string): string[] {
   if (!input) return [];
 
   // Old tokenization logic for backward compatibility with tests
-  return input
-    .trim()
+  const str = String(input ?? '').trim();
+  return str
     .split(/(\s+)|(\()|(\))|(\-)|([/&,.])/)
     .filter(token => token !== undefined && token.length > 0);
 }
@@ -686,20 +692,21 @@ const COMMON_COUNTRIES: Record<string, string> = {
 
 const FORMAT_FUNCTIONS: Record<string, FormatFn> = {
   'e164_phone': normalizePhoneE164,
-  'email_lowercase': (v) => v.toLowerCase().trim(),
+  'email_lowercase': (v) => String(v ?? '').toLowerCase().trim(),
   'linkedin_url': normalizeLinkedInUrl,
   'smart_title_case': applySmartTitleCase,
   'numeric_parse': normalizeNumeric,
   'url_canonical': (v: string) => {
     try {
-      const url = new URL(v.startsWith('http') ? v : `https://${v}`);
+      const str = String(v ?? '');
+      const url = new URL(str.startsWith('http') ? str : `https://${str}`);
       return url.toString();
     } catch {
       return null;
     }
   },
   // Tier 1 format functions
-  'trim_whitespace': (v: string) => v.trim().replace(/\s+/g, ' '),
+  'trim_whitespace': (v: string) => String(v ?? '').trim().replace(/\s+/g, ' '),
   'employee_range': (v: string) => {
     const n = parseInt(v.replace(/[^0-9]/g, ''));
     if (isNaN(n)) return v;
@@ -715,31 +722,34 @@ const FORMAT_FUNCTIONS: Record<string, FormatFn> = {
   },
   'extract_domain': (v: string) => {
     try {
-      const url = v.startsWith('http') ? v : `https://${v}`;
+      const str = String(v ?? '');
+      const url = str.startsWith('http') ? str : `https://${str}`;
       const domain = new URL(url).hostname
         .replace(/^www\./, '')
         .toLowerCase();
       return domain;
     } catch {
       // Not a URL, try treating as raw domain
-      return v.replace(/^www\./, '').toLowerCase().trim();
+      return String(v ?? '').replace(/^www\./, '').toLowerCase().trim();
     }
   },
   'state_abbreviate': (v: string) => {
-    const lower = v.toLowerCase().trim();
+    const str = String(v ?? '').trim();
+    const lower = str.toLowerCase();
     // Already a 2-letter code
-    if (/^[a-z]{2}$/.test(lower)) return v.toUpperCase();
+    if (/^[a-z]{2}$/.test(lower)) return str.toUpperCase();
     return US_STATES[lower] ?? v;
   },
   'country_code_iso2': (v: string) => {
-    const lower = v.toLowerCase().trim();
+    const str = String(v ?? '').trim();
+    const lower = str.toLowerCase();
     // Check map first (handles both full names and common abbreviations like 'uk' -> 'GB')
     const mapped = COMMON_COUNTRIES[lower];
     if (mapped) return mapped;
     // If already 2 letters and not in map, assume it's already ISO2
-    if (/^[a-z]{2}$/.test(lower)) return v.toUpperCase();
+    if (/^[a-z]{2}$/.test(lower)) return str.toUpperCase();
     // Unrecognized country, return as-is
-    return v;
+    return str;
   },
 };
 
@@ -787,8 +797,10 @@ export async function applyFormatHarmony(
     const raw = record[hubspotProperty];
     if (!raw) continue;
 
-    const formatted = formatFn(raw, config);
-    if (!formatted || formatted === raw) continue;
+    // Safe string coercion for format functions
+    const rawStr = String(raw ?? '');
+    const formatted = formatFn(rawStr, config);
+    if (!formatted || formatted === rawStr) continue;
 
     changes.push({
       hubspotRecordId: record.id,
