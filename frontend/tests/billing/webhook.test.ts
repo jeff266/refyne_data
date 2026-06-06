@@ -6,19 +6,26 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { POST } from '@/app/api/webhooks/stripe/route';
 import { NextRequest } from 'next/server';
-import Stripe from 'stripe';
+
+// Create shared mock using vi.hoisted to avoid initialization order issues
+const { mockConstructEvent } = vi.hoisted(() => {
+  return {
+    mockConstructEvent: vi.fn(),
+  };
+});
 
 // Mock Stripe
 vi.mock('stripe', () => {
-  const MockStripe = vi.fn().mockImplementation(() => ({
-    webhooks: {
-      constructEvent: vi.fn(),
+  return {
+    default: function MockStripe(_apiKey: string, _options: any) {
+      return {
+        webhooks: {
+          constructEvent: mockConstructEvent,
+        },
+      };
     },
-  }));
-
-  return { default: MockStripe };
+  };
 });
 
 // Mock Supabase
@@ -33,7 +40,16 @@ vi.mock('@/lib/monitoring/sentry', () => ({
   captureException: vi.fn(),
 }));
 
+// Mock next/headers
+const mockHeadersInstance = new Headers();
+vi.mock('next/headers', () => ({
+  headers: () => mockHeadersInstance,
+}));
+
+// Import after mocks
+import { POST } from '@/app/api/webhooks/stripe/route';
 import { supabaseAdmin } from '@/lib/db/admin-client';
+import Stripe from 'stripe';
 
 // Helper to create mock Stripe event
 function makeStripeEvent(type: string, data: any): Stripe.Event {
@@ -57,12 +73,8 @@ function makeStripeEvent(type: string, data: any): Stripe.Event {
 
 // Helper to create mock NextRequest
 function createMockRequest(body: string): NextRequest {
-  const headers = new Headers();
-  headers.set('stripe-signature', 'test_signature');
-
   return {
     text: vi.fn().mockResolvedValue(body),
-    headers,
   } as any;
 }
 
@@ -70,22 +82,21 @@ describe('POST /api/webhooks/stripe', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    // Reset and set stripe-signature header
+    mockHeadersInstance.delete('stripe-signature');
+    mockHeadersInstance.set('stripe-signature', 'test_signature');
+
     // Default Stripe mock behavior
-    const Stripe = require('stripe').default;
-    const mockStripeInstance = new Stripe();
-    (mockStripeInstance.webhooks.constructEvent as any).mockImplementation(() => {
+    mockConstructEvent.mockImplementation(() => {
       return makeStripeEvent('customer.subscription.created', {});
     });
   });
 
   it('rejects invalid signature', async () => {
-    const Stripe = require('stripe').default;
-    const mockStripeInstance = new Stripe();
-
     // Mock signature verification failure
     const signatureError = new Error('Invalid signature') as any;
     signatureError.type = 'StripeSignatureVerificationError';
-    (mockStripeInstance.webhooks.constructEvent as any).mockImplementation(() => {
+    mockConstructEvent.mockImplementation(() => {
       throw signatureError;
     });
 
@@ -105,9 +116,7 @@ describe('POST /api/webhooks/stripe', () => {
     });
     event.id = eventId;
 
-    const Stripe = require('stripe').default;
-    const mockStripeInstance = new Stripe();
-    (mockStripeInstance.webhooks.constructEvent as any).mockReturnValue(event);
+    mockConstructEvent.mockReturnValue(event);
 
     // Mock idempotency check - event already exists
     (supabaseAdmin.from as any).mockImplementation((table: string) => {
@@ -153,9 +162,7 @@ describe('POST /api/webhooks/stripe', () => {
       cancel_at_period_end: false,
     });
 
-    const Stripe = require('stripe').default;
-    const mockStripeInstance = new Stripe();
-    (mockStripeInstance.webhooks.constructEvent as any).mockReturnValue(event);
+    mockConstructEvent.mockReturnValue(event);
 
     let updateCalled = false;
     let insertCalled = false;
@@ -255,9 +262,7 @@ describe('POST /api/webhooks/stripe', () => {
       cancel_at_period_end: false,
     });
 
-    const Stripe = require('stripe').default;
-    const mockStripeInstance = new Stripe();
-    (mockStripeInstance.webhooks.constructEvent as any).mockReturnValue(event);
+    mockConstructEvent.mockReturnValue(event);
 
     let updatedTier: string | null = null;
 
@@ -330,9 +335,7 @@ describe('POST /api/webhooks/stripe', () => {
       canceled_at: 1234567890,
     });
 
-    const Stripe = require('stripe').default;
-    const mockStripeInstance = new Stripe();
-    (mockStripeInstance.webhooks.constructEvent as any).mockReturnValue(event);
+    mockConstructEvent.mockReturnValue(event);
 
     let updatedData: any = null;
 
@@ -395,9 +398,7 @@ describe('POST /api/webhooks/stripe', () => {
       attempt_count: 1,
     });
 
-    const Stripe = require('stripe').default;
-    const mockStripeInstance = new Stripe();
-    (mockStripeInstance.webhooks.constructEvent as any).mockReturnValue(event);
+    mockConstructEvent.mockReturnValue(event);
 
     let updatedStatus: string | null = null;
 
@@ -458,9 +459,7 @@ describe('POST /api/webhooks/stripe', () => {
       amount_paid: 2990,
     });
 
-    const Stripe = require('stripe').default;
-    const mockStripeInstance = new Stripe();
-    (mockStripeInstance.webhooks.constructEvent as any).mockReturnValue(event);
+    mockConstructEvent.mockReturnValue(event);
 
     let updatedStatus: string | null = null;
 
@@ -518,9 +517,7 @@ describe('POST /api/webhooks/stripe', () => {
       id: 'pi_123',
     });
 
-    const Stripe = require('stripe').default;
-    const mockStripeInstance = new Stripe();
-    (mockStripeInstance.webhooks.constructEvent as any).mockReturnValue(event);
+    mockConstructEvent.mockReturnValue(event);
 
     let dbWriteCalled = false;
 

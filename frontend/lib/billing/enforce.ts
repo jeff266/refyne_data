@@ -51,6 +51,14 @@ export async function consumeUsage(
       };
     }
 
+    // Cancelled status
+    if (entitlements.subscription_status === 'cancelled') {
+      return {
+        allowed: false,
+        reason: 'Subscription cancelled',
+      };
+    }
+
     // Trial expired
     if (entitlements.subscription_tier === 'trial' && entitlements.trial_days_remaining <= 0) {
       return {
