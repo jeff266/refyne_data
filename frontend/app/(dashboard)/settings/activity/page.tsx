@@ -436,7 +436,7 @@ export default function ActivityLogPage() {
                           marginTop: 12,
                           marginLeft: 44,
                           padding: 16,
-                          background: C.surface2,
+                          background: C.surface,
                           borderRadius: 4,
                           fontSize: 12,
                           fontFamily: F.mono,

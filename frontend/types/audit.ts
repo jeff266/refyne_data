@@ -146,7 +146,7 @@ export function getDiff(
 ): Array<{ key: string; before: any; after: any }> {
   const beforeObj = before ?? {};
   const afterObj = after ?? {};
-  const allKeys = new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]);
+  const allKeys = Array.from(new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]));
 
   const changed: Array<{ key: string; before: any; after: any }> = [];
 

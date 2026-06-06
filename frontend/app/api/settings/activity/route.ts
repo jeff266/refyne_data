@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { supabaseAdmin, isSupabaseConfigured } from '@/lib/db/admin-client';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import type { AuditLogEvent, ActivityLogResponse } from '@/types/audit';
 
@@ -28,13 +28,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    if (!isSupabaseConfigured() || !supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Database not configured' },
-        { status: 503 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
     const actor = searchParams.get('actor');

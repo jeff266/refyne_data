@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireOperatorOrAbove, authError } from '@/lib/auth/clerk-helpers';
-import { supabaseAdmin, isSupabaseConfigured } from '@/lib/db/admin-client';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { buildCSV } from '@/lib/utils/csv';
 
@@ -42,13 +42,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    if (!isSupabaseConfigured() || !supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Database not configured' },
-        { status: 503 }
-      );
-    }
-
     // Rate limiting: 5 second cooldown per org
     if (!checkExportRateLimit(ctx.orgId)) {
       return NextResponse.json(
