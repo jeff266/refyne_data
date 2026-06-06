@@ -18,7 +18,20 @@ export async function getOrgContext(): Promise<OrgContext> {
     throw new Error('UNAUTHENTICATED');
   }
 
-  const userEmail = sessionClaims?.email as string | undefined;
+  // Extract email from session claims
+  let userEmail = sessionClaims?.email as string | undefined;
+
+  // Fallback: If email not in session claims, fetch from Clerk users API
+  if (!userEmail) {
+    try {
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      userEmail = user.emailAddresses.find(e => e.id === user.primaryEmailAddressId)?.emailAddress;
+    } catch (err) {
+      console.warn('[getOrgContext] Failed to fetch user email from Clerk API:', err);
+      // Continue without email rather than failing the entire request
+    }
+  }
 
   // CRITICAL FIX: Clerk stores org in 'o' claim but doesn't populate orgId
   // Read directly from session claims - 'o' is an object with {id, rol, slg}
