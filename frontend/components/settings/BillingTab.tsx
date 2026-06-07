@@ -121,10 +121,10 @@ export function BillingTab() {
 
   // Status badge colors
   const getStatusBadge = () => {
-    if (isActive && !isTrial) return { bg: C.steelBlue + '20', text: C.steelBlue, label: 'Active' };
+    if (isActive && !isTrial) return { bg: C.indigo + '20', text: C.indigo, label: 'Active' };
     if (isPastDue) return { bg: C.amber + '20', text: C.amber, label: 'Payment due' };
     if (isCancelled) return { bg: C.red + '20', text: C.red, label: 'Cancelled' };
-    if (isTrial) return { bg: 'transparent', text: C.navy, label: 'Trial', border: `1px solid ${C.navy}` };
+    if (isTrial) return { bg: 'transparent', text: C.text, label: 'Trial', border: `1px solid ${C.text}` };
     return { bg: C.text3 + '20', text: C.text3, label: billing.subscription_status };
   };
 
@@ -134,7 +134,7 @@ export function BillingTab() {
   const getProgressColor = (percentage: number) => {
     if (percentage >= 100) return C.red;
     if (percentage >= 80) return C.amber;
-    return C.steelBlue;
+    return C.indigo;
   };
 
   // Format date
@@ -176,7 +176,7 @@ export function BillingTab() {
       {/* Section A: Current Plan */}
       <div
         style={{
-          background: C.offWhite,
+          background: C.surface,
           border: `1px solid ${C.border}`,
           padding: 24,
           marginBottom: 24,
@@ -187,8 +187,8 @@ export function BillingTab() {
           <div>
             <h2 style={{
               fontSize: 24,
-              fontFamily: F.heading,
-              color: C.navy,
+              fontFamily: F.sans,
+              color: C.text,
               marginBottom: 8,
               textTransform: 'capitalize',
             }}>
@@ -230,8 +230,8 @@ export function BillingTab() {
                 onClick={handleManageSubscription}
                 style={{
                   padding: '10px 20px',
-                  background: C.navy,
-                  color: C.offWhite,
+                  background: C.text,
+                  color: C.surface,
                   border: 'none',
                   fontSize: 14,
                   fontWeight: 500,
@@ -247,7 +247,7 @@ export function BillingTab() {
                 style={{
                   display: 'inline-block',
                   padding: '10px 20px',
-                  background: C.steelBlue,
+                  background: C.indigo,
                   color: '#fff',
                   fontSize: 14,
                   fontWeight: 500,
@@ -280,13 +280,13 @@ export function BillingTab() {
       {/* Section B: Usage This Period */}
       <div
         style={{
-          background: C.offWhite,
+          background: C.surface,
           border: `1px solid ${C.border}`,
           padding: 24,
           marginBottom: 24,
         }}
       >
-        <h3 style={{ fontSize: 16, fontWeight: 600, color: C.navy, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 20 }}>
           Usage this period
         </h3>
 
@@ -390,13 +390,13 @@ export function BillingTab() {
       {billing.events && billing.events.length > 0 && (
         <div
           style={{
-            background: C.offWhite,
+            background: C.surface,
             border: `1px solid ${C.border}`,
             padding: 24,
             marginBottom: 24,
           }}
         >
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: C.navy, marginBottom: 16 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 16 }}>
             Recent billing activity
           </h3>
 
@@ -407,7 +407,7 @@ export function BillingTab() {
                   style={{
                     width: 8,
                     height: 8,
-                    background: C.steelBlue,
+                    background: C.indigo,
                     flexShrink: 0,
                   }}
                 />

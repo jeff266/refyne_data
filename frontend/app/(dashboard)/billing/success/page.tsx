@@ -81,7 +81,7 @@ export default function BillingSuccessPage() {
                 width: 40,
                 height: 40,
                 border: `4px solid ${C.border}`,
-                borderTopColor: C.steelBlue,
+                borderTopColor: C.indigo,
                 animation: 'spin 1s linear infinite',
               }} />
             </div>
@@ -99,10 +99,10 @@ export default function BillingSuccessPage() {
               fill="none"
               style={{ margin: '0 auto 32px' }}
             >
-              <circle cx="40" cy="40" r="38" stroke={C.steelBlue} strokeWidth="4" />
+              <circle cx="40" cy="40" r="38" stroke={C.indigo} strokeWidth="4" />
               <path
                 d="M25 40 L35 50 L55 30"
-                stroke={C.steelBlue}
+                stroke={C.indigo}
                 strokeWidth="4"
                 strokeLinecap="square"
                 fill="none"
@@ -110,8 +110,8 @@ export default function BillingSuccessPage() {
             </svg>
             <h1 style={{
               fontSize: 36,
-              fontFamily: F.heading,
-              color: C.navy,
+              fontFamily: F.sans,
+              color: C.text,
               marginBottom: 16,
             }}>
               You're all set.
@@ -123,7 +123,7 @@ export default function BillingSuccessPage() {
               onClick={() => router.push('/dashboard')}
               style={{
                 padding: '12px 32px',
-                background: C.steelBlue,
+                background: C.indigo,
                 color: '#fff',
                 border: 'none',
                 fontSize: 16,
@@ -144,10 +144,10 @@ export default function BillingSuccessPage() {
               fill="none"
               style={{ margin: '0 auto 32px' }}
             >
-              <circle cx="40" cy="40" r="38" stroke={C.steelBlue} strokeWidth="4" />
+              <circle cx="40" cy="40" r="38" stroke={C.indigo} strokeWidth="4" />
               <path
                 d="M25 40 L35 50 L55 30"
-                stroke={C.steelBlue}
+                stroke={C.indigo}
                 strokeWidth="4"
                 strokeLinecap="square"
                 fill="none"
@@ -155,8 +155,8 @@ export default function BillingSuccessPage() {
             </svg>
             <h1 style={{
               fontSize: 36,
-              fontFamily: F.heading,
-              color: C.navy,
+              fontFamily: F.sans,
+              color: C.text,
               marginBottom: 16,
             }}>
               You're all set.
@@ -168,7 +168,7 @@ export default function BillingSuccessPage() {
               onClick={() => router.push('/dashboard')}
               style={{
                 padding: '12px 32px',
-                background: C.steelBlue,
+                background: C.indigo,
                 color: '#fff',
                 border: 'none',
                 fontSize: 16,

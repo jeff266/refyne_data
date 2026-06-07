@@ -175,8 +175,8 @@ export default function UpgradePage() {
       <div style={{ textAlign: 'center', marginBottom: 48 }}>
         <h1 style={{
           fontSize: 36,
-          fontFamily: F.heading,
-          color: C.navy,
+          fontFamily: F.sans,
+          color: C.indigo,
           marginBottom: 24,
         }}>
           Choose a plan
@@ -188,8 +188,8 @@ export default function UpgradePage() {
             onClick={() => setBillingPeriod('monthly')}
             style={{
               padding: '10px 20px',
-              background: billingPeriod === 'monthly' ? C.navy : 'transparent',
-              color: billingPeriod === 'monthly' ? C.offWhite : C.text2,
+              background: billingPeriod === 'monthly' ? C.indigo : 'transparent',
+              color: billingPeriod === 'monthly' ? C.text : C.text2,
               border: `1px solid ${C.border}`,
               fontSize: 14,
               fontWeight: 500,
@@ -202,8 +202,8 @@ export default function UpgradePage() {
             onClick={() => setBillingPeriod('annual')}
             style={{
               padding: '10px 20px',
-              background: billingPeriod === 'annual' ? C.navy : 'transparent',
-              color: billingPeriod === 'annual' ? C.offWhite : C.text2,
+              background: billingPeriod === 'annual' ? C.indigo : 'transparent',
+              color: billingPeriod === 'annual' ? C.text : C.text2,
               border: `1px solid ${C.border}`,
               fontSize: 14,
               fontWeight: 500,
@@ -225,8 +225,8 @@ export default function UpgradePage() {
             <div
               key={plan.tier}
               style={{
-                background: C.offWhite,
-                border: `2px solid ${plan.mostPopular ? C.steelBlue : C.border}`,
+                background: C.surface,
+                border: `2px solid ${plan.mostPopular ? C.indigo : C.border}`,
                 padding: 32,
                 position: 'relative',
               }}
@@ -240,7 +240,7 @@ export default function UpgradePage() {
                     left: '50%',
                     transform: 'translateX(-50%)',
                     padding: '4px 16px',
-                    background: C.steelBlue,
+                    background: C.indigo,
                     color: '#fff',
                     fontSize: 12,
                     fontWeight: 600,
@@ -253,8 +253,8 @@ export default function UpgradePage() {
               {/* Plan Name */}
               <h2 style={{
                 fontSize: 24,
-                fontFamily: F.heading,
-                color: C.navy,
+                fontFamily: F.sans,
+                color: C.indigo,
                 marginBottom: 16,
               }}>
                 {plan.name}
@@ -293,7 +293,7 @@ export default function UpgradePage() {
                       transform: 'translateY(-50%)',
                       width: 8,
                       height: 8,
-                      background: C.steelBlue,
+                      background: C.indigo,
                     }} />
                     {feature}
                   </li>
@@ -307,7 +307,7 @@ export default function UpgradePage() {
                 style={{
                   width: '100%',
                   padding: '12px 24px',
-                  background: buttonState.disabled ? C.border : C.steelBlue,
+                  background: buttonState.disabled ? C.border : C.indigo,
                   color: buttonState.disabled ? C.text3 : '#fff',
                   border: 'none',
                   fontSize: 14,

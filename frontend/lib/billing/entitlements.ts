@@ -14,7 +14,7 @@ import { supabaseAdmin } from '@/lib/db/admin-client';
 
 export interface OrgEntitlements {
   org_id: string;
-  subscription_tier: 'trial' | 'pro' | 'enterprise' | 'internal';
+  subscription_tier: 'trial' | 'starter' | 'growth' | 'scale' | 'internal';
   subscription_status: 'active' | 'past_due' | 'cancelled' | 'paused';
 
   // Trial limits
@@ -125,17 +125,6 @@ export async function canPerformAction(
     return false;
   }
 
-  // Legacy paid tiers (pro, enterprise): keep backward compatibility
-  if (entitlements.subscription_tier === 'pro' || entitlements.subscription_tier === 'enterprise') {
-    if (
-      entitlements.subscription_status === 'active' ||
-      entitlements.subscription_status === 'past_due'
-    ) {
-      return true;
-    }
-    return false;
-  }
-
   // Trial tier: check limits and expiration
   if (entitlements.subscription_tier === 'trial') {
     // Trial expired = read-only (Option C)
@@ -198,36 +187,6 @@ export async function getLimitStatus(
     }
 
     // No hard limits for paid tiers
-    return null;
-  }
-
-  // Legacy paid tiers (pro, enterprise): keep backward compatibility
-  if (entitlements.subscription_tier === 'pro' || entitlements.subscription_tier === 'enterprise') {
-    if (entitlements.subscription_status === 'past_due') {
-      return 'Payment past due. Please update your payment method.';
-    }
-
-    if (action === 'enrich_credit') {
-      const monthlyLimit =
-        entitlements.subscription_tier === 'pro'
-          ? entitlements.pro_monthly_enrich_credits
-          : entitlements.enterprise_monthly_enrich_credits;
-
-      if (monthlyLimit === null) {
-        return null; // No limit
-      }
-
-      const used = entitlements.enrich_credits_last_30d;
-      const remaining = monthlyLimit - used;
-
-      if (remaining <= 0) {
-        return `Monthly enrichment limit reached (${monthlyLimit} credits). Resets on period end.`;
-      }
-
-      return `${remaining} enrichment credits remaining this period (${used}/${monthlyLimit} used)`;
-    }
-
-    // Merges and normalize writes are unlimited
     return null;
   }
 

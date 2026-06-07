@@ -56,7 +56,7 @@ function makeStripeEvent(type: string, data: any): Stripe.Event {
   return {
     id: `evt_test_${Date.now()}`,
     object: 'event',
-    api_version: '2024-11-20.acacia',
+    api_version: '2026-04-22.dahlia',
     created: Date.now(),
     type,
     data: {

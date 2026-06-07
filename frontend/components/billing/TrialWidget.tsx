@@ -61,13 +61,13 @@ export function TrialWidget() {
   const getProgressColor = (percentage: number) => {
     if (percentage >= 100) return C.red;
     if (percentage >= 80) return C.amber;
-    return C.steelBlue;
+    return C.indigo;
   };
 
   return (
     <div
       style={{
-        background: C.offWhite,
+        background: C.surface,
         border: `1px solid ${C.border}`,
         padding: 16,
       }}
@@ -79,14 +79,14 @@ export function TrialWidget() {
         alignItems: 'center',
         marginBottom: 12,
       }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: C.navy }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
           Trial: {daysRemaining} days remaining
         </div>
         <Link
           href="/billing/upgrade"
           style={{
             fontSize: 12,
-            color: C.steelBlue,
+            color: C.indigo,
             textDecoration: 'none',
             fontWeight: 500,
           }}

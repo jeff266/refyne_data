@@ -6,7 +6,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/db/admin-client';
-import { clerkClient } from '@clerk/clerk-sdk-node';
+import { clerkClient } from '@clerk/nextjs/server';
 
 // Resend will be imported when implemented
 // For now, we'll log the emails that would be sent

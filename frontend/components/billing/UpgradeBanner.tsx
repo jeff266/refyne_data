@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import Link from 'next/link';
-import { C } from '@/lib/design-tokens';
+import { C, F } from '@/lib/design-tokens';
 
 interface BillingStatus {
   show: boolean;
@@ -131,7 +131,7 @@ export function UpgradeBanner() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        fontFamily: C.sans,
+        fontFamily: F.sans,
         fontSize: 13,
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
       }}

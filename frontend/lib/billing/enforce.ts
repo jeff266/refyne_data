@@ -294,11 +294,9 @@ export async function getUsageSummary(orgId: string): Promise<{
     };
   }
 
-  // Paid/internal tier
-  const enrichLimit =
-    entitlements.subscription_tier === 'pro'
-      ? entitlements.pro_monthly_enrich_credits
-      : entitlements.enterprise_monthly_enrich_credits;
+  // Paid/internal tier - use pro_monthly_enrich_credits as the primary limit
+  // (legacy columns retained for backward compatibility, actual limits defined per tier)
+  const enrichLimit = entitlements.pro_monthly_enrich_credits ?? entitlements.enterprise_monthly_enrich_credits;
 
   return {
     tier: entitlements.subscription_tier,

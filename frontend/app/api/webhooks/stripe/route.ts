@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/db/admin-client';
 import { captureException } from '@/lib/monitoring/sentry';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
+  apiVersion: '2026-04-22.dahlia',
 });
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -152,14 +152,15 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription): Prom
   const status = subscription.status === 'active' ? 'active' : 'past_due';
 
   // Update org_billing
+  const sub = subscription as any; // Type assertion for period fields
   const { error } = await supabaseAdmin
     .from('org_billing')
     .update({
       subscription_tier: tier,
       subscription_status: status,
       stripe_subscription_id: subscription.id,
-      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      current_period_start: new Date(sub.current_period_start * 1000).toISOString(),
+      current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
       cancel_at_period_end: subscription.cancel_at_period_end ?? false,
       updated_at: new Date().toISOString(),
     })
@@ -180,8 +181,8 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription): Prom
       stripe_subscription_id: subscription.id,
       tier,
       status,
-      period_start: subscription.current_period_start,
-      period_end: subscription.current_period_end,
+      period_start: sub.current_period_start,
+      period_end: sub.current_period_end,
     },
   });
 

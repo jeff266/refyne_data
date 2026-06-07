@@ -1,5 +1,8 @@
 import * as Sentry from '@sentry/nextjs';
 
+// Re-export commonly used Sentry functions
+export { captureException } from '@sentry/nextjs';
+
 /**
  * Capture an error with organization context.
  *
