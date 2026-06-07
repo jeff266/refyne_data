@@ -30,7 +30,7 @@ export function CreditsWidget() {
       });
   }, []);
 
-  if (loading || !usage) {
+  if (loading || !usage || !usage.metering) {
     return null;
   }
 
