@@ -64,3 +64,82 @@ All Day 1-4 deliverables complete and tested:
 - ✅ Auto-learning triggers
 - ✅ Tests (1,165/1,165 passing)
 - ✅ TypeScript build (no errors)
+
+---
+
+# Beta Feature Flags System - Complete ✅
+
+**Last Updated:** 2026-06-07
+**Test Count:** 1,165 passing (maintained baseline)
+
+## Overview
+
+Two-level feature flag system: self-serve org toggles + staff overrides for controlled rollouts.
+
+## Implementation
+
+### Migration 088 ✅
+- `org_feature_flags` table with RLS policies
+- Unique constraint on (org_id, flag)
+- Indexes for lookups and staff overrides
+- Seeded 3 flags for existing orgs: `beta_features`, `event_list_import`, `contact_dedup`
+
+### Core Library ✅ (`lib/features/flags.ts`)
+- `FEATURE_FLAGS` enum (3 flags)
+- `isFeatureEnabled()` - checks staff_override first, then enabled
+- `isBetaFeatureEnabled()` - requires master toggle + specific flag
+- `getFeatureFlags()` - batch check for efficiency
+- `enableFlag()` / `disableFlag()` - self-serve toggles
+- `staffOverrideFlag()` - admin override
+
+### Client Hook ✅ (`hooks/useFeatureFlags.ts`)
+- `useFeatureFlags(flags)` - React hook for multiple flags
+- `useFlag(flag)` - single flag convenience hook
+- Fetches from `/api/features/flags`
+
+### API Routes ✅ (3 endpoints)
+- `GET /api/features/flags` - returns flag states
+- `POST /api/features/flags` - admin enable/disable (auto-provisions on beta_features enable)
+- `POST /api/admin/features/override` - staff override (TODO: add isRefyneStaff check)
+
+### Settings UI ✅
+- `BetaTab.tsx` - master toggle + feature cards
+- Beta badges on features
+- Optimistic UI with error rollback
+- Staff override notice
+- Added to settings layout (admin-only)
+
+### Design Tokens ✅
+- Added steel blue colors for Beta badges
+
+### Integrations ✅
+- HubSpot callback auto-provisions flags for new orgs
+
+## Usage Pattern
+
+**Server-side gate:**
+```typescript
+import { isBetaFeatureEnabled, FEATURE_FLAGS } from '@/lib/features/flags';
+
+const enabled = await isBetaFeatureEnabled(ctx.orgId, FEATURE_FLAGS.EVENT_LIST_IMPORT);
+if (!enabled) {
+  return NextResponse.json(
+    { error: 'feature_not_enabled', message: 'Enable beta features in Settings.' },
+    { status: 403 }
+  );
+}
+```
+
+**Client-side check:**
+```typescript
+import { useFlag, FEATURE_FLAGS } from '@/lib/features/flags';
+
+const eventImportEnabled = useFlag(FEATURE_FLAGS.EVENT_LIST_IMPORT);
+if (!eventImportEnabled) return null;
+```
+
+## Notes
+- Master `beta_features` toggle must be ON for individual flags to work
+- Staff overrides bypass master toggle requirement
+- New orgs get all flags provisioned (disabled by default)
+- Tests maintained at 1,165 passing ✅
