@@ -8,6 +8,7 @@ import { getNormalizeQueue } from '@/lib/queue/normalize-worker';
 import { logAuditEvent } from '@/lib/audit/logger';
 import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 import { consumeUsage } from '@/lib/billing/enforce';
+import { requireAdmin } from '@/lib/auth/roles';
 
 interface SelectedChange {
   companyId: string;
@@ -35,6 +36,13 @@ export async function POST(request: NextRequest) {
     ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  try {
+    requireAdmin(ctx.orgRole);
+  } catch (e) {
+    if (e instanceof Response) return e;
+    throw e;
   }
 
   // Feature gate: normalize

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { requireAdmin } from '@/lib/auth/roles';
 
 /**
  * GET /api/dedup/auto-merge/settings
@@ -70,6 +71,8 @@ export async function PATCH(request: NextRequest) {
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  requireAdmin(ctx.orgRole);
 
   try {
     if (!isSupabaseConfigured() || !supabase) {

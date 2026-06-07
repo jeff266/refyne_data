@@ -18,6 +18,8 @@ import type { ClusterWithRecords } from '@/lib/dedup/cluster-types';
 import type { HubSpotCompany } from '@/lib/dedup/select-master';
 import { autoSelectFields } from '@/lib/dedup/select-master';
 import { MergeHistory } from '@/components/dedup/MergeHistory';
+import { useRole } from '@/hooks/useRole';
+import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
 import {
   DndContext,
   closestCenter,
@@ -589,6 +591,7 @@ function FieldPicker({
 export default function ClusterReviewPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isAdmin } = useRole();
   const [data, setData] = useState<ClusterWithRecords | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1501,26 +1504,30 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
       </Card>
 
       {/* Action buttons */}
-      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', alignItems: 'center' }}>
         <GhostBtn onClick={handleSkip} disabled={skipping || mergeState !== 'idle' || rejecting}>
-          {skipping ? 'Skipping...' : 'Skip'}
+          {skipping ? 'Skipping...' : 'Back to queue'}
         </GhostBtn>
         <GhostBtn onClick={handleReject} disabled={rejecting || mergeState !== 'idle' || skipping}>
           {rejecting ? 'Rejecting...' : 'Not duplicates'}
         </GhostBtn>
-        <PrimaryBtn
-          onClick={handleMerge}
-          disabled={!masterId || mergeState !== 'idle' || rejecting || skipping}
-        >
-          {mergeState === 'merging' ? (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Loader2 size={12} className="animate-spin" />
-              Merging...
-            </span>
-          ) : (
-            'Merge cluster'
-          )}
-        </PrimaryBtn>
+        {isAdmin ? (
+          <PrimaryBtn
+            onClick={handleMerge}
+            disabled={!masterId || mergeState !== 'idle' || rejecting || skipping}
+          >
+            {mergeState === 'merging' ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Loader2 size={12} className="animate-spin" />
+                Merging...
+              </span>
+            ) : (
+              'Merge cluster'
+            )}
+          </PrimaryBtn>
+        ) : (
+          <AdminOnlyNotice action="merge records" />
+        )}
       </div>
 
       {/* Merge success toast */}

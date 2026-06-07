@@ -14,6 +14,8 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Check, X } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { addToast } from '@/components/ui/toast';
+import { useRole } from '@/hooks/useRole';
+import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
 
 type WizardStep = 1 | 2 | 3;
 
@@ -55,6 +57,7 @@ const JOB_FUNCTIONS = [
 ];
 
 export function JobSegmentationWizard() {
+  const { isAdmin } = useRole();
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
 
@@ -380,13 +383,14 @@ export function JobSegmentationWizard() {
             </div>
 
             {/* Output Field Mapping */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: 'block', fontSize: 13, color: C.text2, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Output Field Mapping
-              </label>
-              <p style={{ fontSize: 13, color: C.text3, marginBottom: 12 }}>
-                Refyne will write to these HubSpot contact properties. Change to map to any existing property.
-              </p>
+            {isAdmin ? (
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', fontSize: 13, color: C.text2, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Output Field Mapping
+                </label>
+                <p style={{ fontSize: 13, color: C.text3, marginBottom: 12 }}>
+                  Refyne will write to these HubSpot contact properties. Change to map to any existing property.
+                </p>
 
               {/* Job Level Field */}
               <div style={{ marginBottom: 16 }}>
@@ -446,7 +450,15 @@ export function JobSegmentationWizard() {
                   ))}
                 </select>
               </div>
-            </div>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', fontSize: 13, color: C.text2, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Output Field Mapping
+                </label>
+                <AdminOnlyNotice action="configure output fields" />
+              </div>
+            )}
 
             {/* Write Policy */}
             <div style={{ marginBottom: 32 }}>
@@ -491,27 +503,33 @@ export function JobSegmentationWizard() {
               >
                 Cancel
               </button>
-              <button
-                onClick={handlePreview}
-                disabled={loadingPreview || !name}
-                style={{
-                  padding: '10px 20px',
-                  background: C.indigo,
-                  border: 'none',
-                  color: '#fff',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: loadingPreview || !name ? 'not-allowed' : 'pointer',
-                  opacity: loadingPreview || !name ? 0.5 : 1,
-                  fontFamily: F.sans,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                {loadingPreview ? 'Loading...' : 'Preview'}
-                {!loadingPreview && <ChevronRight size={16} />}
-              </button>
+              {isAdmin ? (
+                <button
+                  onClick={handlePreview}
+                  disabled={loadingPreview || !name}
+                  style={{
+                    padding: '10px 20px',
+                    background: C.indigo,
+                    border: 'none',
+                    color: '#fff',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: loadingPreview || !name ? 'not-allowed' : 'pointer',
+                    opacity: loadingPreview || !name ? 0.5 : 1,
+                    fontFamily: F.sans,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  {loadingPreview ? 'Loading...' : 'Preview'}
+                  {!loadingPreview && <ChevronRight size={16} />}
+                </button>
+              ) : (
+                <div style={{ padding: '10px 0' }}>
+                  <AdminOnlyNotice action="run segmentation" />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -667,25 +685,31 @@ export function JobSegmentationWizard() {
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={handleApply}
-                  style={{
-                    padding: '10px 20px',
-                    background: C.indigo,
-                    border: 'none',
-                    color: '#fff',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontFamily: F.sans,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                  }}
-                >
-                  Apply to all {totalContactsCount.toLocaleString()}
-                  <ChevronRight size={16} />
-                </button>
+                {isAdmin ? (
+                  <button
+                    onClick={handleApply}
+                    style={{
+                      padding: '10px 20px',
+                      background: C.indigo,
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontFamily: F.sans,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    Apply to all {totalContactsCount.toLocaleString()}
+                    <ChevronRight size={16} />
+                  </button>
+                ) : (
+                  <div style={{ padding: '10px 0' }}>
+                    <AdminOnlyNotice action="run segmentation" />
+                  </div>
+                )}
               </div>
             </div>
           </div>

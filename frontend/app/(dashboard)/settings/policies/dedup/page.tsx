@@ -6,6 +6,8 @@ import { addToast } from '@/components/ui/toast';
 import { C, F } from '@/lib/design-tokens';
 import { ChevronDown } from 'lucide-react';
 import { OrderEditor } from '../components/OrderEditor';
+import { useRole } from '@/hooks/useRole';
+import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
 
 interface FieldRule {
   field: string;
@@ -62,6 +64,7 @@ function getComplianceFieldLabel(field: string): string {
 }
 
 export default function DedupPoliciesPage() {
+  const { isAdmin } = useRole();
   // Phase 1: Object type support
   const searchParams = useSearchParams();
   const objectType = (searchParams.get('object') as 'company' | 'contact') || 'company';
@@ -304,6 +307,18 @@ export default function DedupPoliciesPage() {
     return (
       <div style={{ padding: 32 }}>
         <div style={{ fontSize: 14, color: C.text2 }}>Loading policy...</div>
+      </div>
+    );
+  }
+
+  // Member view - hide entire page
+  if (!isAdmin) {
+    return (
+      <div style={{ padding: 32 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+          Dedup Merge Policies
+        </h1>
+        <AdminOnlyNotice action="configure dedup policies" />
       </div>
     );
   }

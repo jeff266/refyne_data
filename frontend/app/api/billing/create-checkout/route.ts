@@ -3,6 +3,7 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { getStripeClient, isStripeTestMode } from '@/lib/billing/stripe-client';
+import { requireAdmin } from '@/lib/auth/roles';
 
 interface CreateCheckoutRequest {
   tier: string;
@@ -26,6 +27,13 @@ export async function POST(request: NextRequest) {
     ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  try {
+    requireAdmin(ctx.orgRole);
+  } catch (e) {
+    if (e instanceof Response) return e;
+    throw e;
   }
 
   try {

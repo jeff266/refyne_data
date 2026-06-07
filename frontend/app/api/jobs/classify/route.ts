@@ -22,6 +22,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { classifyJobTitleBatch } from '@/lib/harmonies/job-title-classifier';
+import { requireAdmin } from '@/lib/auth/roles';
 
 export async function POST(request: NextRequest) {
   // Auth check
@@ -30,6 +31,13 @@ export async function POST(request: NextRequest) {
     ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+
+  try {
+    requireAdmin(ctx.orgRole);
+  } catch (e) {
+    if (e instanceof Response) return e;
+    throw e;
   }
 
   try {

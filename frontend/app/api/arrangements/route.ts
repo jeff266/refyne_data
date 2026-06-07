@@ -4,6 +4,7 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { transformArray } from '@/lib/utils/transform';
 import { track } from '@/lib/telemetry/track';
+import { requireAdmin } from '@/lib/auth/roles';
 
 /**
  * GET /api/arrangements
@@ -158,10 +159,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   let ctx;
   try {
-    ctx = await requireOperatorOrAbove();
+    ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  requireAdmin(ctx.orgRole);
 
   try {
     if (!isSupabaseConfigured() || !supabase) {

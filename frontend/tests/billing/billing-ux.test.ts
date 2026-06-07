@@ -162,7 +162,7 @@ describe('POST /api/billing/portal', () => {
   });
 
   it('returns 400 when no stripe_customer_id', async () => {
-    (getOrgContext as any).mockResolvedValue({ orgId: 'org_123', userId: 'user_123' });
+    (getOrgContext as any).mockResolvedValue({ orgId: 'org_123', userId: 'user_123', orgRole: 'org:admin' });
 
     (supabaseAdmin.from as any).mockImplementation((table: string) => {
       if (table === 'org_billing') {

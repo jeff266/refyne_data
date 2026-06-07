@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { C, F } from '@/lib/design-tokens';
+import { useRole } from '@/hooks/useRole';
+import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
 
 interface BillingEntitlements {
   subscription_tier: string;
@@ -44,6 +46,7 @@ interface Prices {
 }
 
 export function BillingTab() {
+  const { isAdmin } = useRole();
   const [billing, setBilling] = useState<BillingEntitlements | null>(null);
   const [prices, setPrices] = useState<Prices | null>(null);
   const [loading, setLoading] = useState(true);
@@ -225,53 +228,59 @@ export function BillingTab() {
 
           {/* Right: Action button */}
           <div>
-            {hasStripeCustomer && (
-              <button
-                onClick={handleManageSubscription}
-                style={{
-                  padding: '10px 20px',
-                  background: C.text,
-                  color: C.surface,
-                  border: 'none',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                }}
-              >
-                Manage subscription
-              </button>
-            )}
-            {isTrial && (
-              <a
-                href="/billing/upgrade"
-                style={{
-                  display: 'inline-block',
-                  padding: '10px 20px',
-                  background: C.indigo,
-                  color: '#fff',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                }}
-              >
-                Upgrade now
-              </a>
-            )}
-            {isPastDue && (
-              <button
-                onClick={handleManageSubscription}
-                style={{
-                  padding: '10px 20px',
-                  background: C.amber,
-                  color: '#fff',
-                  border: 'none',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                }}
-              >
-                Update payment
-              </button>
+            {isAdmin ? (
+              <>
+                {hasStripeCustomer && (
+                  <button
+                    onClick={handleManageSubscription}
+                    style={{
+                      padding: '10px 20px',
+                      background: C.text,
+                      color: C.surface,
+                      border: 'none',
+                      fontSize: 14,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Manage subscription
+                  </button>
+                )}
+                {isTrial && (
+                  <a
+                    href="/billing/upgrade"
+                    style={{
+                      display: 'inline-block',
+                      padding: '10px 20px',
+                      background: C.indigo,
+                      color: '#fff',
+                      fontSize: 14,
+                      fontWeight: 500,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Upgrade now
+                  </a>
+                )}
+                {isPastDue && (
+                  <button
+                    onClick={handleManageSubscription}
+                    style={{
+                      padding: '10px 20px',
+                      background: C.amber,
+                      color: '#fff',
+                      border: 'none',
+                      fontSize: 14,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Update payment
+                  </button>
+                )}
+              </>
+            ) : (
+              <AdminOnlyNotice action="manage billing" />
             )}
           </div>
         </div>

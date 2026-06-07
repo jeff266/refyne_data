@@ -4,6 +4,7 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { transformArray } from '@/lib/utils/transform';
 import { cancelArrangementJobs } from '@/lib/queue/arrangement-queue';
+import { requireAdmin } from '@/lib/auth/roles';
 
 /**
  * GET /api/arrangements/:id
@@ -98,10 +99,12 @@ export async function PUT(
 ) {
   let ctx;
   try {
-    ctx = await requireOperatorOrAbove();
+    ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  requireAdmin(ctx.orgRole);
 
   try {
     if (!isSupabaseConfigured() || !supabase) {
@@ -169,10 +172,12 @@ export async function DELETE(
 ) {
   let ctx;
   try {
-    ctx = await requireOperatorOrAbove();
+    ctx = await getOrgContext();
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  requireAdmin(ctx.orgRole);
 
   try {
     if (!isSupabaseConfigured() || !supabase) {

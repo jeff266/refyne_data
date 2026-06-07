@@ -457,10 +457,12 @@ export default function ConnectionsPage() {
             Connect data sources and enrichment providers
           </p>
         </div>
-        <PrimaryBtn onClick={() => setShowAddDialog(true)}>
-          <Plus size={16} style={{ marginRight: 6 }} />
-          Add connection
-        </PrimaryBtn>
+        {isAdmin && (
+          <PrimaryBtn onClick={() => setShowAddDialog(true)}>
+            <Plus size={16} style={{ marginRight: 6 }} />
+            Add connection
+          </PrimaryBtn>
+        )}
       </div>
 
       {/* Connected Section */}

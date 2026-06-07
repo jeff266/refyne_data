@@ -17,8 +17,8 @@ const TABS: Tab[] = [
   { key: 'policies', label: 'Policies', path: '/settings/policies', roles: ['admin', 'operator'] },
   { key: 'notifications', label: 'Notifications', path: '/settings/notifications', roles: ['admin', 'operator', 'viewer'] },
   { key: 'usage', label: 'Usage', path: '/settings/usage', roles: ['admin', 'operator'] },
-  { key: 'billing', label: 'Billing', path: '/settings/billing', roles: ['admin'] },
-  { key: 'team', label: 'Team', path: '/settings/team', roles: ['admin', 'operator'] },
+  { key: 'billing', label: 'Billing', path: '/settings/billing', roles: ['admin', 'operator', 'viewer'] },
+  { key: 'team', label: 'Team', path: '/settings/team', roles: ['admin'] },
   { key: 'activity', label: 'Activity', path: '/settings/activity', roles: ['admin', 'operator', 'viewer'] },
 ];
 

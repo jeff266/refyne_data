@@ -330,7 +330,23 @@ function HarmonyRow({
                 Test
                 <ChevronDown size={12} style={{ transform: testExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </button>
-              <Toggle on={enabled} onToggle={onToggle} disabled={loading} />
+              {isAdmin ? (
+                <Toggle on={enabled} onToggle={onToggle} disabled={loading} />
+              ) : (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  color: enabled ? C.green : C.text3,
+                  background: enabled ? C.greenDim : C.surface,
+                  border: `1px solid ${enabled ? C.greenBrd : C.border}`,
+                  borderRadius: 4,
+                }}>
+                  {enabled ? 'Enabled' : 'Disabled'}
+                </div>
+              )}
 
               {/* Show "..." menu only for custom harmonies and only for admins */}
               {!h.isPreset && isAdmin && (

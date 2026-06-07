@@ -239,6 +239,8 @@ export async function DELETE(request: NextRequest) {
   try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
 
+  requireAdmin(ctx.orgRole);
+
   try {
     const orgId = ctx.orgId;
 

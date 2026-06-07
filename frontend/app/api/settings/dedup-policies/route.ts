@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { logAuditEvent } from '@/lib/audit/logger';
 import { AUDIT_ACTIONS } from '@/lib/audit/actions';
+import { requireAdmin } from '@/lib/auth/roles';
 
 /**
  * GET /api/settings/dedup-policies
@@ -74,6 +75,8 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  requireAdmin(ctx.orgRole);
 
   if (!isSupabaseConfigured() || !supabase) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });

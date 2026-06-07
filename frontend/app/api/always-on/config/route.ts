@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { AlwaysOnConfig } from '@/lib/always-on/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { requireAdmin } from '@/lib/auth/roles';
 
 /**
  * PUT /api/always-on/config
@@ -18,6 +19,8 @@ export async function PUT(request: NextRequest) {
   let ctx;
   try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
+  requireAdmin(ctx.orgRole);
 
   try {
     const orgId = ctx.orgId;

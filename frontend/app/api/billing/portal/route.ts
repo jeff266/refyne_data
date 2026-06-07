@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { getStripeClient } from '@/lib/billing/stripe-client';
+import { requireAdmin } from '@/lib/auth/roles';
 
 /**
  * POST /api/billing/portal
@@ -18,6 +19,8 @@ export async function POST() {
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  requireAdmin(ctx.orgRole);
 
   try {
     // Query org_billing for stripe_customer_id

@@ -7,6 +7,7 @@ import { C, F } from '@/lib/design-tokens';
 import { HowItWorksStrip } from '@/components/refyne';
 import { DedupSettings, ClusterQueue, MergeHistoryTab, PendingMergesTab } from '@/components/dedup';
 import { useObjectType, type ObjectType } from '@/hooks/useObjectType';
+import { useRole } from '@/hooks/useRole';
 
 // ─────────────────────────────────────────────────────────────
 // Tab type
@@ -22,6 +23,7 @@ export default function DedupPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [objectType] = useObjectType();
+  const { isAdmin } = useRole();
   const [tab, setTab] = useState<DedupTab>('queue');
   const hasTrackedVisit = useRef(false);
   const [showMergeBanner, setShowMergeBanner] = useState(false);
@@ -133,14 +135,16 @@ export default function DedupPage() {
             <History size={14} /> History
           </span>
         </button>
-        <button
-          style={tabStyle(tab === 'settings')}
-          onClick={() => setTab('settings')}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Settings size={14} /> Settings
-          </span>
-        </button>
+        {isAdmin && (
+          <button
+            style={tabStyle(tab === 'settings')}
+            onClick={() => setTab('settings')}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Settings size={14} /> Settings
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Settings tab content */}

@@ -12,6 +12,8 @@ import { SkippedList } from '@/components/normalize/SkippedList';
 import { addToast } from '@/components/ui/toast';
 import { useObjectType } from '@/hooks/useObjectType';
 import { validateEnumValue, type HubSpotProperty } from '@/lib/harmonies/enum-validator';
+import { useRole } from '@/hooks/useRole';
+import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
 
 // Harmony list is now dynamic based on issue-counts API response
 
@@ -41,6 +43,7 @@ type TabMode = 'preview' | 'skipped';
 
 export default function NormalizePage() {
   const [objectType] = useObjectType();
+  const { isAdmin } = useRole();
   const [active, setActive] = useState<string[]>([]);
   const toggle = (id: string) => setActive(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id]);
 
@@ -980,7 +983,7 @@ export default function NormalizePage() {
                   <span style={{ fontSize: 13, color: C.text2 }}>
                     {selectedChanges.size} change{selectedChanges.size !== 1 ? 's' : ''} selected
                   </span>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <button
                       onClick={handleDeselectAll}
                       style={{
@@ -997,23 +1000,27 @@ export default function NormalizePage() {
                     >
                       Cancel
                     </button>
-                    <button
-                      onClick={handleApplyClick}
-                      disabled={applyLoading}
-                      style={{
-                        padding: '8px 16px',
-                        background: C.indigo,
-                        border: 'none',
-                        borderRadius: 6,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: '#fff',
-                        cursor: applyLoading ? 'not-allowed' : 'pointer',
-                        opacity: applyLoading ? 0.6 : 1,
-                      }}
-                    >
-                      {applyLoading ? 'Applying...' : 'Apply Selected Changes →'}
-                    </button>
+                    {isAdmin ? (
+                      <button
+                        onClick={handleApplyClick}
+                        disabled={applyLoading}
+                        style={{
+                          padding: '8px 16px',
+                          background: C.indigo,
+                          border: 'none',
+                          borderRadius: 6,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: '#fff',
+                          cursor: applyLoading ? 'not-allowed' : 'pointer',
+                          opacity: applyLoading ? 0.6 : 1,
+                        }}
+                      >
+                        {applyLoading ? 'Applying...' : 'Apply Selected Changes →'}
+                      </button>
+                    ) : (
+                      <AdminOnlyNotice action="apply changes" />
+                    )}
                   </div>
                 </div>
               )}

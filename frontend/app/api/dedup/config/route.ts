@@ -9,6 +9,7 @@ import {
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { requireAdmin } from '@/lib/auth/roles';
 
 // Valid canonical fields for core_display_fields
 const VALID_CORE_FIELDS = new Set([
@@ -112,6 +113,8 @@ export async function PUT(request: NextRequest) {
   let ctx;
   try { ctx = await getOrgContext(); }
   catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
+
+  requireAdmin(ctx.orgRole);
 
   // Feature gate: dedup
   try {

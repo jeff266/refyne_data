@@ -15,6 +15,8 @@ import type { JobStatus } from '@/hooks/useJobPoller';
 import { useObjectType } from '@/hooks/useObjectType';
 import { ConditionBuilder } from '@/components/harmonies/ConditionBuilder';
 import type { ConditionGroups } from '@/lib/harmonies/condition-evaluator';
+import { useRole } from '@/hooks/useRole';
+import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
 
 interface FieldGap {
   field: string;
@@ -405,6 +407,7 @@ export default function EnrichPage() {
   const router = useRouter();
   const enrichRunContext = useEnrichRun();
   const { orgId } = useAuth();
+  const { isAdmin } = useRole();
   const [objectType] = useObjectType();
   const objectLabel = objectType === 'contact' ? 'contact' : 'company';
   const objectLabelPlural = objectType === 'contact' ? 'contacts' : 'companies';
@@ -3018,10 +3021,14 @@ export default function EnrichPage() {
               )}
 
               {/* Action buttons */}
-              <div style={{ display: 'flex', gap: 12 }}>
-                <PrimaryBtn onClick={applyPreviewResults} disabled={selectedRows.size === 0}>
-                  Apply selected ({selectedRows.size}) →
-                </PrimaryBtn>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                {isAdmin ? (
+                  <PrimaryBtn onClick={applyPreviewResults} disabled={selectedRows.size === 0}>
+                    Apply selected ({selectedRows.size}) →
+                  </PrimaryBtn>
+                ) : (
+                  <AdminOnlyNotice action="apply enrichments" />
+                )}
                 <button
                   onClick={startOver}
                   style={{

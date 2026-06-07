@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/db/supabase';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { requireAdmin } from '@/lib/auth/roles';
 
 /**
  * GET /api/org/policies
@@ -55,6 +56,8 @@ export async function PUT(request: NextRequest) {
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  requireAdmin(ctx.orgRole);
 
   const body = await request.json();
 

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, PrimaryBtn, GhostBtn } from '@/components/refyne';
+import { useRole } from '@/hooks/useRole';
+import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
 
 interface GeneralSettings {
   workspaceName: string | null;
@@ -30,6 +32,7 @@ const TIMEZONES = [
 ];
 
 export function GeneralTab() {
+  const { isAdmin } = useRole();
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -267,24 +270,25 @@ export function GeneralTab() {
       </div>
 
       {/* Always On Section */}
-      <div style={{ marginBottom: 32 }}>
-        <h2 style={{ fontSize: 14, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
-          Always On
-        </h2>
+      {isAdmin ? (
+        <div style={{ marginBottom: 32 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
+            Always On
+          </h2>
 
-        <Card>
-          <div style={{ padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 4 }}>
-                  Always On monitoring
+          <Card>
+            <div style={{ padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 4 }}>
+                    Always On monitoring
+                  </div>
+                  <div style={{ fontSize: 11, color: C.text3 }}>
+                    Enable daily compliance digest and monitoring
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: C.text3 }}>
-                  Enable daily compliance digest and monitoring
-                </div>
+                <Toggle on={digestEnabled} onToggle={() => setDigestEnabled(!digestEnabled)} />
               </div>
-              <Toggle on={digestEnabled} onToggle={() => setDigestEnabled(!digestEnabled)} />
-            </div>
 
             <div style={{ marginBottom: 20, paddingBottom: 20, borderBottom: `1px solid ${C.border}` }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 8 }}>
@@ -380,7 +384,8 @@ export function GeneralTab() {
             </div>
           </div>
         </Card>
-      </div>
+        </div>
+      ) : null}
 
       {/* Sync Configuration */}
       {connections.length > 0 && (
