@@ -152,12 +152,18 @@ export default function UpgradePage() {
     }
   }
 
-  function formatPrice(amountCents: number, period: 'monthly' | 'annual'): string {
-    const monthly = Math.floor(amountCents / 100);
+  function formatPrice(amountCents: number, period: 'monthly' | 'annual'): { primary: string; secondary?: string } {
     if (period === 'monthly') {
-      return `$${monthly}/mo`;
+      const monthly = Math.floor(amountCents / 100);
+      return { primary: `$${monthly}/mo` };
     } else {
-      return `$${monthly}/mo billed annually`;
+      // For annual: divide by 1200 (cents to dollars, then divide by 12 months)
+      const monthlyEquivalent = Math.floor(amountCents / 1200);
+      const annualTotal = Math.floor(amountCents / 100);
+      return {
+        primary: `$${monthlyEquivalent}/mo`,
+        secondary: `$${annualTotal.toLocaleString()} billed annually`
+      };
     }
   }
 
@@ -263,9 +269,16 @@ export default function UpgradePage() {
               {/* Price */}
               <div style={{ marginBottom: 24 }}>
                 {priceInfo ? (
-                  <div style={{ fontSize: 32, fontWeight: 600, color: C.text }}>
-                    {formatPrice(priceInfo.amount_cents, billingPeriod)}
-                  </div>
+                  <>
+                    <div style={{ fontSize: 32, fontWeight: 600, color: C.text }}>
+                      {formatPrice(priceInfo.amount_cents, billingPeriod).primary}
+                    </div>
+                    {formatPrice(priceInfo.amount_cents, billingPeriod).secondary && (
+                      <div style={{ fontSize: 14, color: C.text2, marginTop: 4 }}>
+                        {formatPrice(priceInfo.amount_cents, billingPeriod).secondary}
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div style={{ fontSize: 14, color: C.text3 }}>
                     Pricing not available
