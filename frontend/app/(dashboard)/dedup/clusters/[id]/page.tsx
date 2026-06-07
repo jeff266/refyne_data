@@ -745,9 +745,23 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
   };
 
   const navigateAfterAction = () => {
-    // Auto-advance to next cluster after merge/reject
-    if (currentIndex < clusterIds.length - 1 && clusterIds.length > 0) {
-      const nextId = clusterIds[currentIndex + 1];
+    // Remove current cluster from the list since it's now resolved
+    const updatedClusterIds = clusterIds.filter(id => id !== params.id);
+
+    // Update sessionStorage with the new list
+    if (updatedClusterIds.length > 0) {
+      sessionStorage.setItem('dedupClusterIds', JSON.stringify(updatedClusterIds));
+      setClusterIds(updatedClusterIds);
+      setTotalClusters(updatedClusterIds.length);
+    } else {
+      // Clear sessionStorage if no clusters left
+      sessionStorage.removeItem('dedupClusterIds');
+      sessionStorage.removeItem('dedupObjectType');
+    }
+
+    // Navigate to the next cluster (which is now at the same index)
+    if (currentIndex < updatedClusterIds.length && updatedClusterIds.length > 0) {
+      const nextId = updatedClusterIds[currentIndex];
       router.push(`/dedup/clusters/${nextId}?objectType=${navObjectType}`);
     } else {
       // If no more clusters, return to queue
