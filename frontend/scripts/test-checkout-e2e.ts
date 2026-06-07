@@ -22,8 +22,12 @@
  * 8. Logs org_billing and webhook events
  */
 
+// Load environment variables FIRST before any imports
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+
 import puppeteer, { Browser, Page } from 'puppeteer';
-import { supabaseAdmin } from '../lib/db/admin-client';
 
 const BASE_URL = 'http://localhost:3000';
 const TIMEOUT = 30000; // 30 seconds
@@ -84,6 +88,9 @@ async function pollBillingStatus(page: Page, maxAttempts = 5): Promise<any> {
 async function logDatabaseState(orgId: string) {
   console.log('\n💾 Database State:');
   console.log('═'.repeat(60));
+
+  // Dynamic import to avoid module-level initialization
+  const { supabaseAdmin } = await import('../lib/db/admin-client');
 
   // Get org_billing row
   const { data: billing, error: billingError } = await supabaseAdmin
@@ -308,6 +315,9 @@ async function runCheckoutTest() {
 
     if (statusResponse && statusResponse.ok()) {
       const statusData = await statusResponse.json();
+
+      // Dynamic import to avoid module-level initialization
+      const { supabaseAdmin } = await import('../lib/db/admin-client');
 
       // Try to extract org_id (it might be in the response or we can query it)
       // For now, we'll query the database to find the most recent org_billing update
