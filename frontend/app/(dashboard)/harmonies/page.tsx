@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Plus, AlertTriangle, ChevronDown, Database, Zap } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
+import { Plus, AlertTriangle, ChevronDown, Database, Zap, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, Chip, PrimaryBtn, GhostBtn, Tooltip } from '@/components/refyne';
 import { ReferenceDataTable } from '@/components/harmonies/ReferenceDataTable';
@@ -120,6 +122,8 @@ function HarmonyRow({
   expanded,
   onToggleExpand,
   issueCount,
+  isAdmin,
+  onDelete,
 }: {
   h: HarmonyItem;
   isRec?: boolean;
@@ -131,7 +135,10 @@ function HarmonyRow({
   expanded: boolean;
   onToggleExpand: () => void;
   issueCount?: number;
+  isAdmin: boolean;
+  onDelete: (harmonyId: string) => void;
 }) {
+  const router = useRouter();
   const [testInput, setTestInput] = useState('');
   const [testOutput, setTestOutput] = useState<{
     matched: boolean;
@@ -141,6 +148,7 @@ function HarmonyRow({
     explanation: string;
   } | null>(null);
   const [testing, setTesting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Debounced test API call
   useEffect(() => {
@@ -292,7 +300,7 @@ function HarmonyRow({
                     color: expanded ? C.indigo : C.text3,
                     background: expanded ? C.indigoDim : 'transparent',
                     border: `1px solid ${expanded ? C.indigoBrd : C.border}`,
-                    borderRadius: 4,
+                    borderRadius: 0,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -312,7 +320,7 @@ function HarmonyRow({
                   color: testExpanded ? C.indigo : C.text3,
                   background: testExpanded ? C.indigoDim : 'transparent',
                   border: `1px solid ${testExpanded ? C.indigoBrd : C.border}`,
-                  borderRadius: 4,
+                  borderRadius: 0,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -323,6 +331,116 @@ function HarmonyRow({
                 <ChevronDown size={12} style={{ transform: testExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </button>
               <Toggle on={enabled} onToggle={onToggle} disabled={loading} />
+
+              {/* Show "..." menu only for custom harmonies and only for admins */}
+              {!h.isPreset && isAdmin && (
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(!menuOpen);
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: 11,
+                      color: menuOpen ? C.indigo : C.text3,
+                      background: menuOpen ? C.indigoDim : 'transparent',
+                      border: `1px solid ${menuOpen ? C.indigoBrd : C.border}`,
+                      borderRadius: 0,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <MoreVertical size={14} />
+                  </button>
+
+                  {menuOpen && (
+                    <>
+                      {/* Backdrop */}
+                      <div
+                        onClick={() => setMenuOpen(false)}
+                        style={{
+                          position: 'fixed',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          zIndex: 998,
+                        }}
+                      />
+
+                      {/* Menu */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 0,
+                          marginTop: 4,
+                          background: C.bg,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 0,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                          zIndex: 999,
+                          minWidth: 140,
+                        }}
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpen(false);
+                            router.push(`/harmonies/${h.id}`);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            fontSize: 12,
+                            color: C.text,
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            textAlign: 'left',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = C.surface)}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <Edit size={12} />
+                          Edit
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpen(false);
+                            onDelete(h.id);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            fontSize: 12,
+                            color: C.red,
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            textAlign: 'left',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = C.surface)}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <Trash2 size={12} />
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -423,6 +541,8 @@ function getAlgorithmDescription(harmonyId: string): string {
 }
 
 export default function HarmoniesPage() {
+  const { orgRole } = useAuth();
+  const isAdmin = orgRole === 'org:admin';
   const [objectType] = useObjectType();
   const [harmonies, setHarmonies] = useState<HarmonyItem[]>([]);
   const [enabledIds, setEnabledIds] = useState<Set<string>>(new Set());
@@ -437,6 +557,8 @@ export default function HarmoniesPage() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [taxonomyWizardOpen, setTaxonomyWizardOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ harmonyId: string; harmonyName: string; fieldAssignment?: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Fetch harmonies and enabled state
   const fetchHarmonies = useCallback(async () => {
@@ -552,6 +674,74 @@ export default function HarmoniesPage() {
     }
   };
 
+  // Handle delete with confirmation and field assignment warning
+  const handleDeleteClick = async (harmonyId: string) => {
+    const harmony = harmonies.find(h => h.id === harmonyId);
+    if (!harmony) return;
+
+    // Check if harmony has field assignment
+    try {
+      const res = await fetch(`/api/harmonies/field-assignments?harmonyId=${harmonyId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const assignment = data.assignments?.[0];
+
+        setDeleteConfirm({
+          harmonyId,
+          harmonyName: harmony.name,
+          fieldAssignment: assignment?.hubspot_property,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to check field assignment:', err);
+      setDeleteConfirm({
+        harmonyId,
+        harmonyName: harmony.name,
+      });
+    }
+  };
+
+  // Execute delete
+  const executeDelete = async () => {
+    if (!deleteConfirm) return;
+
+    setDeleting(true);
+
+    try {
+      // Archive first
+      const archiveRes = await fetch(`/api/harmonies/${deleteConfirm.harmonyId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isArchived: true }),
+      });
+
+      if (!archiveRes.ok) {
+        throw new Error('Failed to archive harmony');
+      }
+
+      // Delete after 0ms delay (matches pattern from detail page)
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      const deleteRes = await fetch(`/api/harmonies/${deleteConfirm.harmonyId}`, {
+        method: 'DELETE',
+      });
+
+      if (!deleteRes.ok) {
+        const errorData = await deleteRes.json();
+        throw new Error(errorData.error || 'Failed to delete harmony');
+      }
+
+      // Refresh harmonies list
+      await fetchHarmonies();
+      setDeleteConfirm(null);
+    } catch (err) {
+      console.error('Failed to delete harmony:', err);
+      alert(err instanceof Error ? err.message : 'Failed to delete harmony');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // Group harmonies by category
   const companyHarmonies = harmonies.filter(h => h.category === 'company');
   const personHarmonies = harmonies.filter(h => h.category === 'person' || h.category === 'contact');
@@ -614,15 +804,19 @@ export default function HarmoniesPage() {
             outline: 'none',
           }}
         />
-        <PrimaryBtn onClick={() => setWizardOpen(true)}>
-          <Plus size={12} /> New harmony
-        </PrimaryBtn>
-        <PrimaryBtn onClick={() => setTaxonomyWizardOpen(true)}>
-          <Plus size={12} /> Add Taxonomy
-        </PrimaryBtn>
-        <GhostBtn onClick={() => alert('YAML import coming soon. You can currently manage reference data inline by clicking the "Data" button on lookup harmonies.')}>
-          Import YAML
-        </GhostBtn>
+        {isAdmin && (
+          <>
+            <PrimaryBtn onClick={() => setWizardOpen(true)}>
+              <Plus size={12} /> New harmony
+            </PrimaryBtn>
+            <PrimaryBtn onClick={() => setTaxonomyWizardOpen(true)}>
+              <Plus size={12} /> Add Taxonomy
+            </PrimaryBtn>
+            <GhostBtn onClick={() => alert('YAML import coming soon. You can currently manage reference data inline by clicking the "Data" button on lookup harmonies.')}>
+              Import YAML
+            </GhostBtn>
+          </>
+        )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {enrichedCompany.length > 0 && (
@@ -643,6 +837,8 @@ export default function HarmoniesPage() {
                 expanded={expandedHarmonyId === h.id}
                 onToggleExpand={() => setExpandedHarmonyId(expandedHarmonyId === h.id ? null : h.id)}
                 issueCount={issueCounts[h.id]}
+                isAdmin={isAdmin}
+                onDelete={handleDeleteClick}
               />
             ))}
           </Card>
@@ -664,6 +860,8 @@ export default function HarmoniesPage() {
                 expanded={expandedHarmonyId === h.id}
                 onToggleExpand={() => setExpandedHarmonyId(expandedHarmonyId === h.id ? null : h.id)}
                 issueCount={issueCounts[h.id]}
+                isAdmin={isAdmin}
+                onDelete={handleDeleteClick}
               />
             ))}
           </Card>
@@ -723,6 +921,90 @@ export default function HarmoniesPage() {
             fetchHarmonies(); // Refresh the harmonies list
           }}
         />
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => !deleting && setDeleteConfirm(null)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}
+          >
+            {/* Dialog */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: C.bg,
+                border: `1px solid ${C.border}`,
+                borderRadius: 0,
+                padding: 24,
+                maxWidth: 480,
+                width: '100%',
+                margin: '0 20px',
+              }}
+            >
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 12 }}>
+                Delete this harmony?
+              </h2>
+              <p style={{ fontSize: 13, color: C.text2, marginBottom: 16, lineHeight: 1.5 }}>
+                {deleteConfirm.fieldAssignment ? (
+                  <>
+                    This harmony is assigned to <strong>{deleteConfirm.fieldAssignment}</strong>. Deleting it will remove the assignment. This cannot be undone.
+                  </>
+                ) : (
+                  'This cannot be undone.'
+                )}
+              </p>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  disabled={deleting}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 12,
+                    color: C.text,
+                    background: 'transparent',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 0,
+                    cursor: deleting ? 'not-allowed' : 'pointer',
+                    opacity: deleting ? 0.5 : 1,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeDelete}
+                  disabled={deleting}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 12,
+                    color: C.bg,
+                    background: C.red,
+                    border: 'none',
+                    borderRadius: 0,
+                    cursor: deleting ? 'not-allowed' : 'pointer',
+                    opacity: deleting ? 0.5 : 1,
+                  }}
+                >
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

@@ -114,11 +114,16 @@ export async function GET(request: NextRequest) {
  * POST /api/harmonies
  *
  * Create a new custom harmony
+ * Requires org:admin role
  */
 export async function POST(request: NextRequest) {
   let ctx;
   try {
     ctx = await getOrgContext();
+    // Require admin role for creating harmonies
+    if (ctx.orgRole !== 'org:admin') {
+      return NextResponse.json({ error: 'Insufficient permissions. Admin role required.' }, { status: 403 });
+    }
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

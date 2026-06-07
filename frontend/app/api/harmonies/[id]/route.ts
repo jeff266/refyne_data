@@ -154,6 +154,7 @@ export async function GET(
  *
  * Updates harmony name, description, write_policy, and is_active.
  * Never allows updating transform_type, transform_function, or reference_table (library-defined).
+ * Requires org:admin role
  */
 export async function PATCH(
   req: NextRequest,
@@ -162,6 +163,10 @@ export async function PATCH(
   let ctx;
   try {
     ctx = await getOrgContext();
+    // Require admin role for updating harmonies
+    if (ctx.orgRole !== 'org:admin') {
+      return NextResponse.json({ error: 'Insufficient permissions. Admin role required.' }, { status: 403 });
+    }
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
@@ -303,6 +308,7 @@ export async function PATCH(
  * - Custom harmonies (is_preset = false)
  * - Already archived harmonies (is_archived = true)
  * - Owned by this org (org_id = ctx.orgId)
+ * Requires org:admin role
  */
 export async function DELETE(
   req: NextRequest,
@@ -311,6 +317,10 @@ export async function DELETE(
   let ctx;
   try {
     ctx = await getOrgContext();
+    // Require admin role for deleting harmonies
+    if (ctx.orgRole !== 'org:admin') {
+      return NextResponse.json({ error: 'Insufficient permissions. Admin role required.' }, { status: 403 });
+    }
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
