@@ -232,6 +232,59 @@ async function fireAlerts(
 // ─────────────────────────────────────────────────────────────
 
 /**
+ * Get recipient email addresses for compliance alerts.
+ * First checks notification_subscriptions, then falls back to org admin.
+ */
+async function getRecipientEmails(orgId: string): Promise<string[]> {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('[Alert Email] Supabase not configured');
+    return [];
+  }
+
+  // Check for users subscribed to compliance alert notifications
+  const { data: subscriptions, error: subError } = await supabase
+    .from('notification_subscriptions')
+    .select('user_email')
+    .eq('org_id', orgId)
+    .eq('notification_type', 'compliance_alert')
+    .eq('subscribed', true);
+
+  if (!subError && subscriptions && subscriptions.length > 0) {
+    return subscriptions.map(s => s.user_email);
+  }
+
+  // Fallback: Get admin user from Clerk
+  try {
+    const { clerkClient } = await import('@clerk/nextjs/server');
+    const client = await clerkClient();
+
+    // Get organization members with admin role
+    const { data: members } = await client.organizations.getOrganizationMembershipList({
+      organizationId: orgId,
+      limit: 100,
+    });
+
+    if (members && members.length > 0) {
+      // Find first admin
+      const adminMember = members.find(m => m.role === 'org:admin');
+
+      if (adminMember?.publicUserData?.identifier) {
+        return [adminMember.publicUserData.identifier];
+      }
+
+      // Fallback to first member if no admin found
+      if (members[0]?.publicUserData?.identifier) {
+        return [members[0].publicUserData.identifier];
+      }
+    }
+  } catch (clerkError) {
+    console.error('[Alert Email] Failed to fetch Clerk users:', clerkError);
+  }
+
+  return [];
+}
+
+/**
  * Send email alert using Resend.
  */
 async function sendEmailAlert(
@@ -253,10 +306,17 @@ async function sendEmailAlert(
     const deltaStr = delta !== null ? ` (${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%)` : '';
     const dashboardUrl = getDashboardUrl(orgId);
 
-    // Get org settings to find recipient
+    // Get org settings to check if email notifications are enabled
     const config = await getAlertConfig(orgId);
     if (!config?.notifyEmail) {
-      console.warn('[Alert Email] No recipient email configured');
+      console.log('[Alert Email] Email notifications disabled for org');
+      return;
+    }
+
+    // Get recipient email addresses
+    const recipients = await getRecipientEmails(orgId);
+    if (recipients.length === 0) {
+      console.warn('[Alert Email] No recipient emails found for org');
       return;
     }
 
@@ -286,26 +346,29 @@ async function sendEmailAlert(
       ${buildButton('View Compliance Dashboard', dashboardUrl)}
     `;
 
-    const unsubscribeUrl = buildUnsubscribeUrl(config.notifyEmail, orgId);
+    // Send to all recipients
+    for (const email of recipients) {
+      const unsubscribeUrl = buildUnsubscribeUrl(email, orgId);
 
-    const html = buildEmailTemplate({
-      title: 'Compliance Alert',
-      preheader: `Compliance score: ${score.score.toFixed(1)}%`,
-      content,
-      showUnsubscribe: true,
-      unsubscribeUrl,
-    });
+      const html = buildEmailTemplate({
+        title: 'Compliance Alert',
+        preheader: `Compliance score: ${score.score.toFixed(1)}%`,
+        content,
+        showUnsubscribe: true,
+        unsubscribeUrl,
+      });
 
-    await resend.emails.send({
-      from: 'Refyne <hello@refynedata.com>',
-      to: config.notifyEmail,
-      subject: `Refyne Compliance Alert: Score ${score.score.toFixed(1)}%`,
-      html,
-      headers: {
-        'List-Unsubscribe': `<${unsubscribeUrl}>`,
-        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-      },
-    });
+      await resend.emails.send({
+        from: 'Refyne <hello@refynedata.com>',
+        to: email,
+        subject: `Refyne Compliance Alert: Score ${score.score.toFixed(1)}%`,
+        html,
+        headers: {
+          'List-Unsubscribe': `<${unsubscribeUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
+      });
+    }
 
     console.log(`[Alert Email] Sent to ${config.notifyEmail} for org ${orgId}`);
   } catch (error) {
