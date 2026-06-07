@@ -32,6 +32,10 @@ export const C = {
   amberDim:  'rgba(245,158,11,0.08)',
   amberBrd:  'rgba(245,158,11,0.2)',
   yellow:    '#EAB308',
+  steel:     '#64748B',
+  blue:      '#3B82F6',
+  blueDim:   'rgba(59,130,246,0.08)',
+  blueBrd:   'rgba(59,130,246,0.2)',
 } as const;
 
 // Font tokens

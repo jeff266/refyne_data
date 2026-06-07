@@ -227,6 +227,20 @@ export async function GET(request: NextRequest) {
         });
 
         console.log(`[OAuth Callback] org_billing provisioned for org ${stateRecord.org_id}`);
+
+        // Provision feature flags for new org
+        const { FEATURE_FLAGS } = await import('@/lib/features/flags');
+        const flags = Object.values(FEATURE_FLAGS);
+        await supabase.from('org_feature_flags').upsert(
+          flags.map(flag => ({
+            org_id: stateRecord.org_id,
+            flag,
+            enabled: false
+          })),
+          { onConflict: 'org_id,flag', ignoreDuplicates: true }
+        );
+
+        console.log(`[OAuth Callback] Feature flags provisioned for org ${stateRecord.org_id}`);
       }
     } catch (billingError) {
       console.error('[OAuth Callback] org_billing provisioning failed (non-fatal):', billingError);
