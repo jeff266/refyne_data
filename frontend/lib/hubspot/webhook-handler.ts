@@ -15,6 +15,7 @@ import type { HubSpotClient, CompanyIndex } from './client';
 import type { RawRecord } from '../mcp/types';
 import type {
   HubSpotWebhookEvent,
+  HubSpotPropertyChange,
   WebhookEventRecord,
   WebhookEventStatus,
   WebhookProcessResult,
@@ -27,6 +28,10 @@ import type { FieldMapping } from './types';
 import { DEFAULT_COMPANY_PROPERTIES } from './types';
 import { processAndWriteRecordFields } from '../compliance/normalized-records-writer';
 import { supabase } from '../db/supabase';
+import { supabaseAdmin } from '../db/admin-client';
+import { queueForReview } from '../names/registry';
+import { normalizeCompanyName, normalizeContactToken, type NormalizeNameOptions } from '../names/normalizer';
+import { getRedisConnection } from '../queue/redis';
 
 // ─────────────────────────────────────────────────────────────
 // Signature Validation
@@ -188,6 +193,14 @@ export function recordEvent(
     return { isDuplicate: true, record: existing };
   }
 
+  // Serialize propertyValue if it's an object
+  let propertyValueStr: string | null = null;
+  if (event.propertyValue) {
+    propertyValueStr = typeof event.propertyValue === 'object'
+      ? JSON.stringify(event.propertyValue)
+      : String(event.propertyValue);
+  }
+
   // Create new record
   const record: WebhookEventRecord = {
     id: crypto.randomUUID(),
@@ -198,7 +211,7 @@ export function recordEvent(
     eventType: event.subscriptionType,
     status: 'pending',
     propertyName: event.propertyName || null,
-    propertyValue: event.propertyValue || null,
+    propertyValue: propertyValueStr,
     attemptNumber: event.attemptNumber,
     errorMessage: null,
     receivedAt: new Date().toISOString(),
@@ -255,6 +268,88 @@ function transformToRawRecord(company: {
     linkedin_url: company.properties.linkedin_company_page,
     description: company.properties.description,
   };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Normalization Options Cache
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Get org normalization options from settings and harmonies.
+ * Caches in Redis for 5 minutes.
+ * @param orgId - Organization ID
+ * @returns Normalization options
+ */
+async function getOrgNormalizationOptions(orgId: string): Promise<NormalizeNameOptions> {
+  const cacheKey = `norm:options:${orgId}`;
+
+  try {
+    // Try cache first
+    const redis = getRedisConnection();
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch (error) {
+    console.warn('Redis cache read failed for normalization options:', error);
+  }
+
+  // Fetch from database
+  const options: NormalizeNameOptions = {
+    orgId,
+    suffixTreatment: 'standardize',
+    casingPreference: 'title',
+    autoLearn: true,
+    learningThreshold: 0.85,
+  };
+
+  if (!supabaseAdmin) {
+    return options;
+  }
+
+  try {
+    // Read normalization_settings for org
+    const { data: settings } = await supabaseAdmin
+      .from('normalization_settings')
+      .select('mode')
+      .eq('org_id', orgId)
+      .single();
+
+    // Read company-name harmony transform_config if exists
+    const { data: harmonies } = await supabaseAdmin
+      .from('harmonies')
+      .select('transform_config')
+      .eq('org_id', orgId)
+      .eq('harmony_type', 'format')
+      .eq('is_active', true)
+      .limit(1);
+
+    // Map harmony config to options
+    if (harmonies && harmonies.length > 0) {
+      const config = harmonies[0].transform_config as Record<string, any> | null;
+      if (config) {
+        if (config.suffixTreatment) {
+          options.suffixTreatment = config.suffixTreatment;
+        }
+        if (config.casingPreference) {
+          options.casingPreference = config.casingPreference;
+        }
+      }
+    }
+
+    // Cache for 5 minutes
+    try {
+      const redis = getRedisConnection();
+      await redis.set(cacheKey, JSON.stringify(options), 'EX', 300);
+    } catch (error) {
+      console.warn('Redis cache write failed for normalization options:', error);
+    }
+
+    return options;
+  } catch (error) {
+    console.error('Error fetching org normalization options:', error);
+    return options;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -426,6 +521,118 @@ async function handleCompanyRestore(
 }
 
 /**
+ * Handle company.propertyChange event for name field.
+ * Compares human edit to what Refyne would have produced.
+ * If different, queues for review to learn from the edit.
+ */
+async function handleCompanyNameEdit(
+  orgId: string,
+  portalId: string,
+  companyId: string,
+  propertyChange: HubSpotPropertyChange
+): Promise<void> {
+  try {
+    const oldValue = propertyChange.previousValue;
+    const newValue = propertyChange.value;
+
+    // Skip if no change or missing values
+    if (!oldValue || !newValue || oldValue === newValue) {
+      return;
+    }
+
+    // Get org normalization options
+    const orgOptions = await getOrgNormalizationOptions(orgId);
+
+    // What would Refyne have produced?
+    const refyneOutput = await normalizeCompanyName(oldValue, {
+      ...orgOptions,
+      autoLearn: false, // Don't recurse
+    });
+
+    // If human edited to something different from what Refyne would produce, learn from it
+    if (newValue !== refyneOutput.output) {
+      await queueForReview(
+        orgId,
+        'company',
+        oldValue,
+        newValue,
+        'hubspot_edit',
+        {
+          record_id: companyId,
+          refyne_would_have_produced: refyneOutput.output,
+          refyne_confidence: refyneOutput.confidence,
+          portal_id: portalId,
+          edit_source: 'company.propertyChange webhook',
+        }
+      );
+
+      console.log(
+        `Queued company name edit for review: "${oldValue}" → "${newValue}" (Refyne would produce: "${refyneOutput.output}")`
+      );
+    }
+  } catch (error) {
+    console.error('Error handling company name edit:', error);
+  }
+}
+
+/**
+ * Handle contact.propertyChange event for firstname/lastname fields.
+ * Compares human edit to what Refyne would have produced.
+ * If different, queues for review to learn from the edit.
+ */
+async function handleContactNameEdit(
+  orgId: string,
+  portalId: string,
+  contactId: string,
+  propertyName: 'firstname' | 'lastname',
+  propertyChange: HubSpotPropertyChange
+): Promise<void> {
+  try {
+    const oldValue = propertyChange.previousValue;
+    const newValue = propertyChange.value;
+
+    // Skip if no change or missing values
+    if (!oldValue || !newValue || oldValue === newValue) {
+      return;
+    }
+
+    // Get org normalization options
+    const orgOptions = await getOrgNormalizationOptions(orgId);
+
+    // What would Refyne have produced?
+    const type = propertyName === 'firstname' ? 'first_name' : 'last_name';
+    const refyneOutput = await normalizeContactToken(oldValue, type, {
+      ...orgOptions,
+      autoLearn: false, // Don't recurse
+    });
+
+    // If human edited to something different from what Refyne would produce, learn from it
+    if (newValue !== refyneOutput.output) {
+      await queueForReview(
+        orgId,
+        propertyName === 'firstname' ? 'contact_first' : 'contact_last',
+        oldValue,
+        newValue,
+        'hubspot_edit',
+        {
+          record_id: contactId,
+          refyne_would_have_produced: refyneOutput.output,
+          refyne_confidence: refyneOutput.confidence,
+          portal_id: portalId,
+          edit_source: 'contact.propertyChange webhook',
+        }
+      );
+
+      console.log(
+        `Queued contact ${propertyName} edit for review: "${oldValue}" → "${newValue}" (Refyne would produce: "${refyneOutput.output}")`
+      );
+    }
+  } catch (error) {
+    console.error(`Error handling contact ${propertyName} edit:`, error);
+  }
+}
+
+/**
  * Process a single webhook event.
  *
  * Flow:
@@ -446,8 +653,37 @@ export async function processWebhookEvent(
 ): Promise<WebhookProcessResult> {
   const eventIdStr = String(event.eventId);
   const objectIdStr = String(event.objectId);
+  const portalIdStr = String(event.portalId);
 
   try {
+    // Handle property change events for auto-learning
+    if (event.subscriptionType === 'company.propertyChange' && event.propertyName === 'name') {
+      // Check if propertyValue is an object with previousValue
+      if (event.propertyValue && typeof event.propertyValue === 'object') {
+        await handleCompanyNameEdit(
+          orgId,
+          portalIdStr,
+          objectIdStr,
+          event.propertyValue as HubSpotPropertyChange
+        );
+      }
+    }
+
+    if (event.subscriptionType === 'contact.propertyChange') {
+      if (event.propertyName === 'firstname' || event.propertyName === 'lastname') {
+        // Check if propertyValue is an object with previousValue
+        if (event.propertyValue && typeof event.propertyValue === 'object') {
+          await handleContactNameEdit(
+            orgId,
+            portalIdStr,
+            objectIdStr,
+            event.propertyName,
+            event.propertyValue as HubSpotPropertyChange
+          );
+        }
+      }
+    }
+
     // Handle deletion events (placeholder - HubSpot doesn't currently support this webhook)
     // @ts-ignore - Future webhook type not yet in HubSpot API
     if (event.subscriptionType === 'company.deletion') {

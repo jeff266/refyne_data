@@ -228,7 +228,7 @@ export async function GET() {
   return NextResponse.json({
     status: 'ok',
     endpoint: '/api/webhooks/hubspot',
-    supportedEvents: ['company.creation', 'company.propertyChange'],
+    supportedEvents: ['company.creation', 'company.propertyChange', 'contact.propertyChange'],
     queue: {
       enabled: isRedisConfigured(),
       concurrency,

@@ -70,6 +70,95 @@ export async function lookupRegistry(
 }
 
 /**
+ * Batch lookup names in the registry for performance optimization
+ * Fetches all tokens at once instead of calling lookupRegistry() in a loop
+ * @param orgId - The organization ID
+ * @param type - The registry type (company, contact_first, contact_last, contact_token)
+ * @param tokens - Array of input tokens to look up
+ * @returns Map where key = input_token (original case), value = canonical_form
+ */
+export async function batchLookupRegistry(
+  orgId: string,
+  type: RegistryType,
+  tokens: string[]
+): Promise<Map<string, string>> {
+  const resultMap = new Map<string, string>();
+
+  try {
+    // Normalize all tokens to lowercase trimmed
+    const normalizedTokens = tokens
+      .map(token => token.toLowerCase().trim())
+      .filter(token => token.length > 0);
+
+    if (normalizedTokens.length === 0) {
+      return resultMap;
+    }
+
+    // Remove duplicates for efficient query
+    const uniqueTokens = Array.from(new Set(normalizedTokens));
+
+    // Step 1: Fetch org-specific entries first
+    const { data: orgData, error: orgError } = await supabaseAdmin
+      .from('name_registry')
+      .select('input_token, canonical_form')
+      .eq('org_id', orgId)
+      .eq('registry_type', type)
+      .eq('status', 'active')
+      .in('input_token', uniqueTokens);
+
+    if (orgError) {
+      console.error('Batch registry lookup error (org entries):', orgError);
+      // Continue to global lookup even if org lookup fails
+    }
+
+    // Build initial map from org entries
+    const orgTokensFound = new Set<string>();
+    if (orgData) {
+      for (const entry of orgData) {
+        resultMap.set(entry.input_token, entry.canonical_form);
+        orgTokensFound.add(entry.input_token);
+      }
+    }
+
+    // Step 2: Find tokens not found in org entries
+    const missingTokens = uniqueTokens.filter(token => !orgTokensFound.has(token));
+
+    if (missingTokens.length > 0) {
+      // Fetch global entries for missing tokens
+      const { data: globalData, error: globalError } = await supabaseAdmin
+        .from('name_registry')
+        .select('input_token, canonical_form')
+        .is('org_id', null)
+        .eq('registry_type', type)
+        .eq('status', 'active')
+        .in('input_token', missingTokens);
+
+      if (globalError) {
+        console.error('Batch registry lookup error (global entries):', globalError);
+      }
+
+      // Add global entries to map (org entries already added, so no override)
+      if (globalData) {
+        for (const entry of globalData) {
+          if (!resultMap.has(entry.input_token)) {
+            resultMap.set(entry.input_token, entry.canonical_form);
+          }
+        }
+      }
+    }
+
+    console.log(
+      `Batch registry lookup complete: ${resultMap.size}/${uniqueTokens.length} tokens found (type: ${type})`
+    );
+
+    return resultMap;
+  } catch (error) {
+    console.error('Batch registry lookup exception:', error);
+    return resultMap; // Return partial results if any
+  }
+}
+
+/**
  * Tokenize a company name into searchable variants
  * Handles: "IBM Corp" → ["ibm corp", "ibm", "international business machines", ...]
  * @param companyName - The company name to tokenize

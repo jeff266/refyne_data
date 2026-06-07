@@ -1274,20 +1274,18 @@ async function seedNameRegistry() {
 
     process.stdout.write(`\rProcessing batch ${batchNum}/${totalBatches}...`);
 
-    // Insert batch with ignoreDuplicates pattern
+    // Insert batch with ignoreDuplicates to skip conflicts without failing entire batch
     const { data, error } = await supabaseAdmin
       .from('name_registry')
-      .insert(batch)
+      .upsert(batch, {
+        onConflict: 'org_id,registry_type,input_token',
+        ignoreDuplicates: true
+      })
       .select();
 
     if (error) {
-      if (error.code === '23505') {
-        // Duplicate key - count as skipped
-        skippedCount += batch.length;
-      } else {
-        console.error(`\n[Error] Batch ${batchNum} failed:`, error);
-        // Continue to next batch
-      }
+      console.error(`\n[Error] Batch ${batchNum} failed:`, error);
+      // Continue to next batch
     } else {
       insertedCount += data?.length || 0;
       skippedCount += batch.length - (data?.length || 0);

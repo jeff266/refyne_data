@@ -14,11 +14,12 @@ interface Tab {
 
 const TABS: Tab[] = [
   { key: 'general', label: 'General', path: '/settings/general', roles: ['admin', 'operator'] },
-  { key: 'policies', label: 'Policies', path: '/settings/policies', roles: ['admin', 'operator'] },
-  { key: 'notifications', label: 'Notifications', path: '/settings/notifications', roles: ['admin', 'operator', 'viewer'] },
-  { key: 'usage', label: 'Usage', path: '/settings/usage', roles: ['admin', 'operator'] },
   { key: 'billing', label: 'Billing', path: '/settings/billing', roles: ['admin', 'operator', 'viewer'] },
   { key: 'team', label: 'Team', path: '/settings/team', roles: ['admin'] },
+  { key: 'policies', label: 'Policies', path: '/settings/policies', roles: ['admin', 'operator'] },
+  { key: 'name-registry', label: 'Name Registry', path: '/settings/name-registry', roles: ['admin'] },
+  { key: 'notifications', label: 'Notifications', path: '/settings/notifications', roles: ['admin', 'operator', 'viewer'] },
+  { key: 'usage', label: 'Usage', path: '/settings/usage', roles: ['admin', 'operator'] },
   { key: 'activity', label: 'Activity', path: '/settings/activity', roles: ['admin', 'operator', 'viewer'] },
 ];
 

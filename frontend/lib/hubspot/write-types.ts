@@ -142,6 +142,15 @@ export interface ReviewQueueItem {
 // ─────────────────────────────────────────────────────────────
 
 /**
+ * Property value change in HubSpot webhook.
+ */
+export interface HubSpotPropertyChange {
+  sourceId: string;
+  value: string;
+  previousValue?: string;
+}
+
+/**
  * HubSpot webhook event from payload.
  */
 export interface HubSpotWebhookEvent {
@@ -150,11 +159,11 @@ export interface HubSpotWebhookEvent {
   portalId: number;
   appId: number;
   occurredAt: number;
-  subscriptionType: 'company.creation' | 'company.propertyChange' | 'company.deletion';
+  subscriptionType: 'company.creation' | 'company.propertyChange' | 'company.deletion' | 'contact.propertyChange';
   attemptNumber: number;
   objectId: number;
   propertyName?: string;
-  propertyValue?: string;
+  propertyValue?: string | HubSpotPropertyChange;
 }
 
 /**

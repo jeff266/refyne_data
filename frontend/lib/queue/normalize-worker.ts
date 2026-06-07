@@ -18,6 +18,13 @@ import type { Harmony, HubSpotRecord } from '../harmonies/normalization-engine';
 import type { HubSpotCompany } from '../hubspot/types';
 import { getFieldAssignments, buildFieldMap } from '../harmonies/field-assignments';
 import { track } from '../telemetry/track';
+import {
+  batchLookupRegistry,
+  tokenizeCompanyName,
+  tokenizeContactName,
+  queueForReview
+} from '../names/registry';
+import { applyContactNameRules } from '../names/normalizer';
 
 export interface NormalizeJobData {
   runId: string;
@@ -25,7 +32,12 @@ export interface NormalizeJobData {
   portalId: string;
   connectionId: string;
   harmonyIds: string[];
-  selectedChanges: Array<{ companyId: string; field: string }>;
+  selectedChanges: Array<{
+    companyId: string;
+    field: string;
+    before?: string;  // Original value from HubSpot
+    after?: string;   // Admin's chosen value (overrides normalizer if present)
+  }>;
   objectType?: 'company' | 'contact';  // Optional for backward compatibility, defaults to 'company'
 }
 
@@ -190,10 +202,11 @@ export function startNormalizeWorker() {
 
       await job.updateProgress({
         percentage: 30,
-        stage: 'Re-running normalization engine',
+        stage: 'Checking name registry',
       });
 
-      // Step 4: Re-run normalization preview on fetched records
+      // Step 4: Batch lookup registry before running normalization
+      // Build HubSpot records with field mappings
       const hubspotRecords: HubSpotRecord[] = records.map((c: HubSpotCompany) => {
         const record: HubSpotRecord = {
           id: c.id,
@@ -210,6 +223,161 @@ export function startNormalizeWorker() {
 
         return record;
       });
+
+      // Collect unique tokens for batch registry lookup
+      const companyNameTokens = new Set<string>();
+      const firstNameTokens = new Set<string>();
+      const lastNameTokens = new Set<string>();
+
+      for (const record of hubspotRecords) {
+        // Company names
+        const companyName = record['company.name'] || record.name;
+        if (companyName && typeof companyName === 'string') {
+          const tokens = tokenizeCompanyName(companyName);
+          tokens.forEach(token => companyNameTokens.add(token));
+        }
+
+        // Contact names (if processing contacts)
+        if (objectType === 'contact') {
+          const firstName = record['contact.firstname'] || record.firstname;
+          const lastName = record['contact.lastname'] || record.lastname;
+
+          if (firstName && typeof firstName === 'string') {
+            const { firstTokens } = tokenizeContactName(firstName, undefined);
+            firstTokens.forEach(token => firstNameTokens.add(token));
+          }
+
+          if (lastName && typeof lastName === 'string') {
+            const { lastTokens } = tokenizeContactName(undefined, lastName);
+            lastTokens.forEach(token => lastNameTokens.add(token));
+          }
+        }
+      }
+
+      // Batch lookup all registries in parallel
+      console.log(`[Normalize Worker] Performing batch registry lookups:`,
+        `${companyNameTokens.size} company tokens,`,
+        `${firstNameTokens.size} first name tokens,`,
+        `${lastNameTokens.size} last name tokens`
+      );
+
+      const [
+        companyRegistryMap,
+        firstNameRegistryMap,
+        lastNameRegistryMap,
+        contactTokenFirstMap,
+        contactTokenLastMap
+      ] = await Promise.all([
+        batchLookupRegistry(orgId, 'company', Array.from(companyNameTokens)),
+        objectType === 'contact'
+          ? batchLookupRegistry(orgId, 'contact_first', Array.from(firstNameTokens))
+          : Promise.resolve(new Map<string, string>()),
+        objectType === 'contact'
+          ? batchLookupRegistry(orgId, 'contact_last', Array.from(lastNameTokens))
+          : Promise.resolve(new Map<string, string>()),
+        objectType === 'contact'
+          ? batchLookupRegistry(orgId, 'contact_token', Array.from(firstNameTokens))
+          : Promise.resolve(new Map<string, string>()),
+        objectType === 'contact'
+          ? batchLookupRegistry(orgId, 'contact_token', Array.from(lastNameTokens))
+          : Promise.resolve(new Map<string, string>())
+      ]);
+
+      // Track registry hits/misses per field type
+      const registryStats = {
+        company: { hits: 0, misses: 0 },
+        firstName: { hits: 0, misses: 0 },
+        lastName: { hits: 0, misses: 0 }
+      };
+      const registryOverrides = new Map<string, { field: string; value: string; source: string }>();
+
+      // Apply registry lookups to records
+      for (const record of hubspotRecords) {
+        // Company name lookup
+        const companyName = record['company.name'] || record.name;
+        if (companyName && typeof companyName === 'string') {
+          const normalizedToken = companyName.toLowerCase().trim();
+          const canonical = companyRegistryMap.get(normalizedToken);
+
+          if (canonical) {
+            registryStats.company.hits++;
+            registryOverrides.set(`${record.id}:company.name`, {
+              field: 'company.name',
+              value: canonical,
+              source: 'registry'
+            });
+          } else {
+            registryStats.company.misses++;
+          }
+        }
+
+        // Contact first name lookup (if processing contacts)
+        if (objectType === 'contact') {
+          const firstName = record['contact.firstname'] || record.firstname;
+          if (firstName && typeof firstName === 'string') {
+            const normalizedToken = firstName.toLowerCase().trim();
+            // Try contact_token first, then contact_first
+            const canonical = contactTokenFirstMap.get(normalizedToken) ||
+                            firstNameRegistryMap.get(normalizedToken);
+
+            if (canonical) {
+              registryStats.firstName.hits++;
+              registryOverrides.set(`${record.id}:contact.firstname`, {
+                field: 'contact.firstname',
+                value: canonical,
+                source: 'registry'
+              });
+            } else {
+              registryStats.firstName.misses++;
+            }
+          }
+
+          // Contact last name lookup
+          const lastName = record['contact.lastname'] || record.lastname;
+          if (lastName && typeof lastName === 'string') {
+            const normalizedToken = lastName.toLowerCase().trim();
+            // Try contact_token first, then contact_last
+            const canonical = contactTokenLastMap.get(normalizedToken) ||
+                            lastNameRegistryMap.get(normalizedToken);
+
+            if (canonical) {
+              registryStats.lastName.hits++;
+              registryOverrides.set(`${record.id}:contact.lastname`, {
+                field: 'contact.lastname',
+                value: canonical,
+                source: 'registry'
+              });
+            } else {
+              registryStats.lastName.misses++;
+            }
+          }
+        }
+      }
+
+      // Log registry results per field type
+      if (objectType === 'company' && registryStats.company.hits + registryStats.company.misses > 0) {
+        console.log(`[Normalize Worker] Registry: ${registryStats.company.hits} hits, ${registryStats.company.misses} misses for company names in batch`);
+      }
+
+      if (objectType === 'contact') {
+        if (registryStats.firstName.hits + registryStats.firstName.misses > 0) {
+          console.log(`[Normalize Worker] Registry: ${registryStats.firstName.hits} hits, ${registryStats.firstName.misses} misses for first names in batch`);
+        }
+        if (registryStats.lastName.hits + registryStats.lastName.misses > 0) {
+          console.log(`[Normalize Worker] Registry: ${registryStats.lastName.hits} hits, ${registryStats.lastName.misses} misses for last names in batch`);
+        }
+      }
+
+      // Calculate totals for telemetry
+      const registryHits = registryStats.company.hits + registryStats.firstName.hits + registryStats.lastName.hits;
+      const registryMisses = registryStats.company.misses + registryStats.firstName.misses + registryStats.lastName.misses;
+
+      await job.updateProgress({
+        percentage: 40,
+        stage: 'Re-running normalization engine',
+      });
+
+      // Step 5: Re-run normalization preview on fetched records
       const allChanges = await runNormalizationPreview(hubspotRecords, harmonies, orgId);
 
       console.log(`[Normalize Worker] Normalization found ${allChanges.length} total changes`);
@@ -223,14 +391,103 @@ export function startNormalizeWorker() {
       );
       console.log('[Normalize Worker] Selected set contents:', Array.from(selectedSet));
 
-      // Step 4: Filter to only what the user selected
-      const toApply = allChanges.filter(
-        (c) =>
-          selectedSet.has(`${c.hubspotRecordId}:${c.field}`) &&
-          c.after &&
-          c.after !== c.before &&
-          c.matchType !== 'none'
-      );
+      // Build map of admin corrections (if any)
+      const adminCorrections = new Map<string, string>();
+      for (const selected of selectedChanges) {
+        if (selected.after) {
+          adminCorrections.set(`${selected.companyId}:${selected.field}`, selected.after);
+        }
+      }
+
+      if (adminCorrections.size > 0) {
+        console.log(`[Normalize Worker] Found ${adminCorrections.size} admin corrections to apply`);
+      }
+
+      // Step 6: Apply admin corrections, registry overrides, and filter to selected changes
+      const toApply = allChanges
+        .map(change => {
+          const overrideKey = `${change.hubspotRecordId}:${change.field}`;
+
+          // Priority 1: Admin corrections (highest priority)
+          const adminCorrection = adminCorrections.get(overrideKey);
+          if (adminCorrection && selectedSet.has(overrideKey)) {
+            return {
+              ...change,
+              after: adminCorrection,
+              source: 'admin_correction',
+              confidence: 1.0,
+              matchType: 'exact' as const
+            };
+          }
+
+          // Priority 2: Registry overrides
+          const override = registryOverrides.get(overrideKey);
+          if (override && selectedSet.has(overrideKey)) {
+            return {
+              ...change,
+              after: override.value,
+              source: override.source,
+              confidence: 1.0,
+              matchType: 'exact' as const
+            };
+          }
+
+          // Priority 3: Normalizer output (default)
+          return change;
+        })
+        .filter(
+          (c) =>
+            selectedSet.has(`${c.hubspotRecordId}:${c.field}`) &&
+            c.after &&
+            c.after !== c.before &&
+            c.matchType !== 'none'
+        );
+
+      // Step 7: Queue low-confidence changes for review
+      let queuedCount = 0;
+      for (const change of toApply) {
+        // Skip registry hits (already have confidence = 1.0)
+        if ((change as any).source === 'registry' || (change as any).source === 'admin_correction') {
+          continue;
+        }
+
+        // Queue if confidence is below threshold (0.85)
+        const confidence = change.confidence ?? 0.85;
+        if (confidence < 0.85) {
+          queuedCount++;
+
+          // Determine registry type based on field
+          let registryType: 'company' | 'contact_first' | 'contact_last' | 'contact_token';
+          if (change.field === 'company.name') {
+            registryType = 'company';
+          } else if (change.field === 'contact.firstname') {
+            registryType = 'contact_first';
+          } else if (change.field === 'contact.lastname') {
+            registryType = 'contact_last';
+          } else {
+            registryType = 'contact_token';
+          }
+
+          await queueForReview(
+            orgId,
+            registryType,
+            change.before || '',
+            change.after || '',
+            'low_confidence',
+            {
+              hubspot_record_id: change.hubspotRecordId,
+              field: change.field,
+              confidence,
+              match_type: change.matchType,
+              run_id: runId
+            }
+          );
+        }
+      }
+
+      if (queuedCount > 0) {
+        console.log(`[Normalize Worker] Queued ${queuedCount} low-confidence changes for review`);
+      }
 
       console.log(`[Normalize Worker] After filtering: ${toApply.length} changes to apply`);
 
@@ -245,11 +502,11 @@ export function startNormalizeWorker() {
       }
 
       await job.updateProgress({
-        percentage: 40,
+        percentage: 50,
         stage: `Writing ${toApply.length} changes to HubSpot`,
       });
 
-      // Step 5: Group by company for batch update
+      // Step 8: Group by company for batch update
       const byCompany = new Map<string, Record<string, string>>();
       // Track mapping from HubSpot property -> canonical field for progress logging
       const propToCanonical = new Map<string, Map<string, string>>();
@@ -271,13 +528,13 @@ export function startNormalizeWorker() {
         propToCanonical.get(change.hubspotRecordId)!.set(hubspotProperty, change.field);
       }
 
-      // Step 6: Build record name lookup for progress logging
+      // Step 9: Build record name lookup for progress logging
       const recordNameMap = new Map<string, string>();
       for (const record of records) {
         recordNameMap.set(record.id, record.properties[displayField] || record.id);
       }
 
-      // Step 7: Write to HubSpot in batches of 100
+      // Step 10: Write to HubSpot in batches of 100
       const companyEntries = Array.from(byCompany.entries());
       const batchSize = 100;
       let changed = 0;
@@ -376,14 +633,14 @@ export function startNormalizeWorker() {
         }
 
         const pct =
-          40 + Math.round(((i + batch.length) / companyEntries.length) * 50);
+          50 + Math.round(((i + batch.length) / companyEntries.length) * 40);
         await job.updateProgress({
           percentage: pct,
           stage: `Written ${Math.min(i + batchSize, companyEntries.length)} of ${companyEntries.length} companies`,
         });
       }
 
-      // Step 8: Log to normalization_run_progress in bulk
+      // Step 11: Log to normalization_run_progress in bulk
       if (progressItems.length > 0 && supabase) {
         await supabase
           .from('normalization_run_progress')
@@ -397,7 +654,7 @@ export function startNormalizeWorker() {
           });
       }
 
-      // Step 9: Update run to completed
+      // Step 12: Update run to completed
       await updateRunStatus(runId, 'completed', {
         records_processed: companyIds.length,
         records_changed: changed,
@@ -414,10 +671,13 @@ export function startNormalizeWorker() {
           records_processed: companyIds.length,
           records_changed: changed,
           records_failed: failed,
+          registry_hits: registryHits,
+          registry_misses: registryMisses,
+          queued_for_review: queuedCount,
         },
       });
 
-      // Step 10: Invalidate issue counts cache (force recalculation on next load)
+      // Step 13: Invalidate issue counts cache (force recalculation on next load)
       if (isRedisConfigured()) {
         try {
           const redis = createRedisConnection();

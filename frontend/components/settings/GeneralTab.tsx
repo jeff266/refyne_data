@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, PrimaryBtn, GhostBtn } from '@/components/refyne';
 import { useRole } from '@/hooks/useRole';
@@ -33,6 +34,7 @@ const TIMEZONES = [
 
 export function GeneralTab() {
   const { isAdmin } = useRole();
+  const router = useRouter();
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -268,6 +270,35 @@ export function GeneralTab() {
           </div>
         </Card>
       </div>
+
+      {/* Normalization Calibration Section */}
+      {isAdmin && (
+        <div style={{ marginBottom: 32 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: C.text3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
+            Normalization
+          </h2>
+
+          <Card>
+            <div style={{ padding: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 6 }}>
+                    Recalibrate normalization settings
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text3, maxWidth: 500 }}>
+                    Adjust how Refyne formats your data
+                  </div>
+                </div>
+                <GhostBtn
+                  onClick={() => router.push('/onboarding/calibrate?mode=recalibrate')}
+                >
+                  Recalibrate
+                </GhostBtn>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Always On Section */}
       {isAdmin ? (

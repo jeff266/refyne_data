@@ -9,10 +9,13 @@ import { logAuditEvent } from '@/lib/audit/logger';
 import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 import { consumeUsage } from '@/lib/billing/enforce';
 import { requireAdmin } from '@/lib/auth/roles';
+import { addToRegistry, type RegistryType } from '@/lib/names/registry';
 
 interface SelectedChange {
   companyId: string;
   field: string;
+  before?: string;  // Original value from HubSpot
+  after?: string;   // Admin's chosen value (may differ from normalizer output)
 }
 
 interface ApplyRequest {
@@ -196,6 +199,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Detect admin corrections and learn from them
+    if (body.selectedChanges && body.selectedChanges.length > 0) {
+      await detectAndLearnCorrections(
+        ctx.orgId,
+        body.selectedChanges,
+        body.objectType ?? 'company',
+        run.id
+      );
+    }
+
     // Enqueue the normalize job
     const job = await getNormalizeQueue().add('normalize-apply', {
       runId: run.id,
@@ -243,5 +256,146 @@ export async function POST(request: NextRequest) {
       { error: 'Failed to apply normalization' },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * Detect admin corrections by comparing selected changes with normalizer output.
+ * Learn from corrections by adding them to the registry and propagating across batch.
+ */
+async function detectAndLearnCorrections(
+  orgId: string,
+  selectedChanges: SelectedChange[],
+  objectType: 'company' | 'contact',
+  runId: string
+) {
+  if (!supabase) {
+    console.error('[Registry] Supabase not configured, skipping correction detection');
+    return;
+  }
+
+  try {
+    // Build a map of record_id:field -> selected change for quick lookup
+    const selectedMap = new Map<string, SelectedChange>();
+    for (const change of selectedChanges) {
+      if (change.after && change.before) {
+        selectedMap.set(`${change.companyId}:${change.field}`, change);
+      }
+    }
+
+    if (selectedMap.size === 0) {
+      // No changes with both before/after values, nothing to detect
+      return;
+    }
+
+    // Fetch the normalizer's original output from normalized_records table
+    const recordIds = Array.from(new Set(selectedChanges.map(c => c.companyId)));
+    const { data: normalizedRecords, error: fetchError } = await supabase
+      .from('normalized_records')
+      .select('record_id, field, raw_value, normalized_value, harmony_id')
+      .eq('org_id', orgId)
+      .eq('record_type', objectType)
+      .in('record_id', recordIds);
+
+    if (fetchError) {
+      console.error('[Registry] Failed to fetch normalized records:', fetchError);
+      return;
+    }
+
+    if (!normalizedRecords || normalizedRecords.length === 0) {
+      console.log('[Registry] No normalized records found, skipping correction detection');
+      return;
+    }
+
+    // Track corrections to propagate
+    const correctionsByField = new Map<string, Map<string, string>>();
+    let totalCorrections = 0;
+
+    // Detect corrections by comparing admin's chosen value vs normalizer's output
+    for (const record of normalizedRecords) {
+      const key = `${record.record_id}:${record.field}`;
+      const selectedChange = selectedMap.get(key);
+
+      if (!selectedChange) {
+        continue; // Not in selected changes
+      }
+
+      const normalizerOutput = record.normalized_value;
+      const adminChosen = selectedChange.after;
+      const originalValue = selectedChange.before || record.raw_value;
+
+      // Detect correction: admin chose different value than normalizer suggested
+      if (normalizerOutput && adminChosen && normalizerOutput !== adminChosen) {
+        console.log(
+          `[Registry] Correction detected for ${record.record_id}.${record.field}: ` +
+          `normalizer suggested "${normalizerOutput}", admin chose "${adminChosen}"`
+        );
+
+        // Determine registry type based on field
+        let registryType: RegistryType;
+        if (record.field === 'name' || record.field === 'company.name') {
+          registryType = 'company';
+        } else if (record.field === 'firstname' || record.field === 'contact.firstname') {
+          registryType = 'contact_first';
+        } else if (record.field === 'lastname' || record.field === 'contact.lastname') {
+          registryType = 'contact_last';
+        } else {
+          // For other fields, use 'company' as default
+          registryType = 'company';
+        }
+
+        // Add to registry
+        await addToRegistry(
+          orgId,
+          registryType,
+          originalValue,
+          adminChosen,
+          'admin_correction',
+          {
+            record_id: record.record_id,
+            field: record.field,
+            normalizer_suggested: normalizerOutput,
+            run_id: runId,
+          }
+        );
+
+        totalCorrections++;
+
+        // Track for propagation
+        if (!correctionsByField.has(record.field)) {
+          correctionsByField.set(record.field, new Map());
+        }
+        correctionsByField.get(record.field)!.set(originalValue, adminChosen);
+      }
+    }
+
+    if (totalCorrections === 0) {
+      console.log('[Registry] No corrections detected');
+      return;
+    }
+
+    console.log(`[Registry] Added ${totalCorrections} corrections to registry`);
+
+    // Propagate corrections across the batch
+    let propagatedCount = 0;
+    for (const change of selectedChanges) {
+      const fieldCorrections = correctionsByField.get(change.field);
+      if (!fieldCorrections) continue;
+
+      const correctedValue = fieldCorrections.get(change.before || '');
+      if (correctedValue && change.after !== correctedValue) {
+        // Update the change to use the corrected value
+        change.after = correctedValue;
+        propagatedCount++;
+      }
+    }
+
+    if (propagatedCount > 0) {
+      console.log(`[Registry] Applied correction to ${propagatedCount} other records`);
+    }
+
+  } catch (error) {
+    console.error('[Registry] Error detecting corrections:', error);
+    // Don't throw - this is a best-effort feature
   }
 }

@@ -263,6 +263,30 @@ async function main() {
     }
   }, 60_000); // Check every minute
 
+  // Name registry updater - runs nightly at 2am UTC
+  console.log('✅ Starting name registry updater...');
+  console.log('Populating global name registry daily at 2am UTC\n');
+
+  const nameRegistryInterval = setInterval(async () => {
+    try {
+      const now = new Date();
+      const currentHour = now.getUTCHours();
+      const currentMinute = now.getUTCMinutes();
+
+      // Run at 2:00 UTC (within 1 minute window)
+      if (currentHour === 2 && currentMinute === 0) {
+        const { enqueueNameRegistryUpdate } = await import('../lib/queue/handlers/name-registry-updater');
+        await enqueueNameRegistryUpdate();
+
+        console.log(
+          `[${new Date().toISOString()}] Name registry update completed`
+        );
+      }
+    } catch (error) {
+      console.error('Error in name registry updater:', error);
+    }
+  }, 60_000); // Check every minute
+
   // Rollback expiry + API counter resets - check once per day
   console.log('✅ Starting nightly maintenance tasks...');
   console.log('Expiring old rollback windows and resetting API counters daily\n');
@@ -361,6 +385,7 @@ async function main() {
     clearInterval(cronInterval);
     clearInterval(missedJobsInterval);
     clearInterval(trialExpiryInterval);
+    clearInterval(nameRegistryInterval);
     clearInterval(nightlyMaintenanceInterval);
 
     // Check for active arrangement jobs
