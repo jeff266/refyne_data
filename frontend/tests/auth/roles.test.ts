@@ -88,8 +88,14 @@ describe('RBAC Roles', () => {
       expect(isMember(orgRole)).toBe(true);
     });
 
-    it('returns true when orgRole is org:member', () => {
-      const orgRole: OrgRole = 'org:member';
+    it('returns true when orgRole is org:operator', () => {
+      const orgRole: OrgRole = 'org:operator';
+
+      expect(isMember(orgRole)).toBe(true);
+    });
+
+    it('returns true when orgRole is org:viewer', () => {
+      const orgRole: OrgRole = 'org:viewer';
 
       expect(isMember(orgRole)).toBe(true);
     });

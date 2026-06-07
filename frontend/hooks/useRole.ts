@@ -1,5 +1,6 @@
 import { useOrganization } from '@clerk/nextjs';
-import { isAdmin, isMember, type OrgRole } from '@/lib/auth/roles';
+import { isAdmin, isMember } from '@/lib/auth/roles';
+import type { OrgRole } from '@/lib/auth/clerk-helpers';
 
 export function useRole() {
   const { membership } = useOrganization();

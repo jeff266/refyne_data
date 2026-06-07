@@ -1,7 +1,7 @@
 // Canonical RBAC definitions for Refyne
 // Conservative beta model: members read/preview, admins write/configure
 
-export type OrgRole = 'org:admin' | 'org:member' | undefined;
+import type { OrgRole } from './clerk-helpers';
 
 // Actions members CAN perform
 export const MEMBER_PERMITTED = [
@@ -59,5 +59,5 @@ export function isAdmin(orgRole: OrgRole): boolean {
 }
 
 export function isMember(orgRole: OrgRole): boolean {
-  return orgRole === 'org:member' || orgRole === 'org:admin';
+  return orgRole === 'org:admin' || orgRole === 'org:operator' || orgRole === 'org:viewer';
 }
