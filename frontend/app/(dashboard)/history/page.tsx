@@ -86,8 +86,12 @@ export default function HistoryPage() {
     window.open(`/api/history/export?${params}`, '_blank');
   };
 
-  const formatDate = (isoString: string) => {
+  const formatDate = (isoString: string | null | undefined) => {
+    if (!isoString) return 'N/A';
+
     const date = new Date(isoString);
+    if (isNaN(date.getTime())) return 'Invalid date';
+
     const now = new Date();
     const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
@@ -152,7 +156,7 @@ export default function HistoryPage() {
               Total runs
             </div>
             <div style={{ fontSize: 24, fontWeight: 700, color: C.text, fontFamily: F.sans }}>
-              {data.summary.totalRuns.toLocaleString()}
+              {(data.summary.totalRuns ?? 0).toLocaleString()}
             </div>
           </div>
           <div style={{ background: C.surface, padding: 16, border: `1px solid ${C.border}` }}>
@@ -160,7 +164,7 @@ export default function HistoryPage() {
               Records processed
             </div>
             <div style={{ fontSize: 24, fontWeight: 700, color: C.text, fontFamily: F.sans }}>
-              {data.summary.totalRecords.toLocaleString()}
+              {(data.summary.totalRecords ?? 0).toLocaleString()}
             </div>
           </div>
           <div style={{ background: C.surface, padding: 16, border: `1px solid ${C.border}` }}>
@@ -168,7 +172,7 @@ export default function HistoryPage() {
               Fields filled
             </div>
             <div style={{ fontSize: 24, fontWeight: 700, color: C.text, fontFamily: F.sans }}>
-              {data.summary.totalFilled.toLocaleString()}
+              {(data.summary.totalFilled ?? 0).toLocaleString()}
             </div>
           </div>
           <div style={{ background: C.surface, padding: 16, border: `1px solid ${C.border}` }}>
@@ -176,7 +180,7 @@ export default function HistoryPage() {
               Avg fills per run
             </div>
             <div style={{ fontSize: 24, fontWeight: 700, color: C.text, fontFamily: F.sans }}>
-              {data.summary.avgFillsPerRun}
+              {data.summary.avgFillsPerRun ?? 0}
             </div>
           </div>
         </div>
@@ -286,8 +290,8 @@ export default function HistoryPage() {
               {run.fields.slice(0, 3).join(', ')}
               {run.fields.length > 3 && ` +${run.fields.length - 3} more`}
             </div>
-            <div>{run.records_processed.toLocaleString()}</div>
-            <div>{run.fields_filled.toLocaleString()}</div>
+            <div>{(run.records_processed ?? 0).toLocaleString()}</div>
+            <div>{(run.fields_filled ?? 0).toLocaleString()}</div>
             <div>{STATUS_ICONS[run.status]}</div>
           </Link>
         ))}
