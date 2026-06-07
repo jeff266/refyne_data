@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
-import { getStripeClient } from '@/lib/billing/stripe-client';
-
-const stripe = getStripeClient();
+import { getStripeClient, isStripeTestMode } from '@/lib/billing/stripe-client';
 
 interface CreateCheckoutRequest {
   tier: string;
@@ -31,6 +29,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Initialize Stripe client inside handler to pick up current env vars
+    const stripe = getStripeClient();
+    const testMode = isStripeTestMode();
+    console.log(`[Create Checkout] Stripe mode: ${testMode ? 'TEST' : 'LIVE'}`);
+
     const body: CreateCheckoutRequest = await request.json();
 
     if (!body.tier || !body.billing_period) {
@@ -131,7 +134,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[Create Checkout] Created checkout session ${session.id} for org ${ctx.orgId}`);
+    console.log(`[Create Checkout] Created checkout session ${session.id} for org ${ctx.orgId} (mode: ${testMode ? 'TEST' : 'LIVE'})`);
 
     // Log billing event
     await supabaseAdmin.from('org_billing_events').insert({

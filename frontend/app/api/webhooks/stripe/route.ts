@@ -3,11 +3,7 @@ import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { captureException } from '@/lib/monitoring/sentry';
-import { getStripeClient } from '@/lib/billing/stripe-client';
-
-const stripe = getStripeClient();
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+import { getStripeClient, isStripeTestMode } from '@/lib/billing/stripe-client';
 
 /**
  * POST /api/webhooks/stripe
@@ -23,6 +19,13 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
  */
 export async function POST(req: NextRequest) {
   try {
+    // Initialize Stripe client inside handler to pick up current env vars
+    const stripe = getStripeClient();
+    const testMode = isStripeTestMode();
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+
+    console.log(`[Stripe Webhook] Mode: ${testMode ? 'TEST' : 'LIVE'}`);
+
     // Get raw body for signature verification
     const body = await req.text();
     const headersList = headers();
