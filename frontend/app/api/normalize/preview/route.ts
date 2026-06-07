@@ -14,6 +14,7 @@ export const maxDuration = 60;
 interface PreviewRecord {
   company: string;
   field: string;
+  harmonyId: string;
   before: string;
   beforeDisplay: string;
   after: string;
@@ -412,25 +413,44 @@ export async function GET(request: NextRequest) {
     });
 
     // Transform to preview format and filter exclusions
-    const preview: PreviewRecord[] = changes
-      .filter((change) => {
-        if (excludedCompanies.has(change.hubspotRecordId)) return false;
-        if (excludedFields.has(`${change.hubspotRecordId}:${change.field}`)) return false;
-        return true;
-      })
-      .map((change) => ({
-        company: recordNames[change.hubspotRecordId] || change.hubspotRecordId,
-        field: change.field,
-        before: change.before,
-        beforeDisplay: change.beforeDisplay,
-        after: change.after,
-        hubspotCompanyId: change.hubspotRecordId,
-        portalId: connection.portal_id,
-        matchType: change.matchType,
-        confidence: change.confidence,
-        requiresReview: change.requiresReview,
-        excludable: true,
-      }));
+    const filteredChanges = changes.filter((change) => {
+      if (excludedCompanies.has(change.hubspotRecordId)) return false;
+      if (excludedFields.has(`${change.hubspotRecordId}:${change.field}`)) return false;
+      return true;
+    });
+
+    // Deduplicate changes: if multiple harmonies produce the same change for the same record+field,
+    // keep only the first one. This handles cases where multiple harmonies incorrectly target
+    // the same field (e.g., company-domain and website-social-media both writing to company.domain).
+    const seenKeys = new Set<string>();
+    const deduplicatedChanges = filteredChanges.filter((change) => {
+      const key = `${change.hubspotRecordId}:${change.field}:${change.before}:${change.after}`;
+      if (seenKeys.has(key)) {
+        console.warn(
+          `[Normalize Preview] Duplicate change detected: harmony ${change.harmonyId} ` +
+          `modifies ${change.field} on record ${change.hubspotRecordId} ` +
+          `(${change.before} → ${change.after}), but another harmony already generated this change. Skipping.`
+        );
+        return false;
+      }
+      seenKeys.add(key);
+      return true;
+    });
+
+    const preview: PreviewRecord[] = deduplicatedChanges.map((change) => ({
+      company: recordNames[change.hubspotRecordId] || change.hubspotRecordId,
+      field: change.field,
+      harmonyId: change.harmonyId,
+      before: change.before,
+      beforeDisplay: change.beforeDisplay,
+      after: change.after,
+      hubspotCompanyId: change.hubspotRecordId,
+      portalId: connection.portal_id,
+      matchType: change.matchType,
+      confidence: change.confidence,
+      requiresReview: change.requiresReview,
+      excludable: true,
+    }));
     console.log(`[Normalize Preview] Filter and transform: ${Date.now() - filterStart}ms`);
 
     // Calculate summary stats

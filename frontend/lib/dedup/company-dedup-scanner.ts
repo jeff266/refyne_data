@@ -273,7 +273,7 @@ export async function runCompanyDedupScan(
   // Get portal ID from connection
   const { data: connection, error: connError } = await supabase
     .from('hubspot_connections')
-    .select('portal_id, portal_name')
+    .select('portal_id, friendly_name')
     .eq('id', connectionId)
     .single();
 
@@ -282,7 +282,7 @@ export async function runCompanyDedupScan(
   }
 
   const portalId = connection.portal_id;
-  const portalName = connection.portal_name;
+  const portalName = connection.friendly_name || connection.portal_id;
 
   console.log(`[Company Dedup Scan] Starting scan for org ${orgId}, portal ${portalId}`);
 
@@ -675,7 +675,7 @@ async function processScanJob(
 
     const { data: connection, error: connError } = await supabase
       .from('hubspot_connections')
-      .select('portal_id, portal_name')
+      .select('portal_id, friendly_name')
       .eq('id', connectionId)
       .single();
 
@@ -684,7 +684,7 @@ async function processScanJob(
     }
 
     const portalId = connection.portal_id;
-    const portalName = connection.portal_name;
+    const portalName = connection.friendly_name || connection.portal_id;
 
     // Fetch fresh access token inside worker (prevents stale token issues)
     const { getAccessToken } = await import('../hubspot/get-access-token');

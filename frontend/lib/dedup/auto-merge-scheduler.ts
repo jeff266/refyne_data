@@ -6,6 +6,12 @@
  */
 
 import { supabase } from '@/lib/db/supabase';
+import {
+  buildEmailTemplate,
+  buildHeading,
+  buildParagraph,
+  buildButton,
+} from '../emails/template';
 
 const AUTO_MERGE_CONFIDENCE_THRESHOLD = 0.97;
 
@@ -105,15 +111,37 @@ async function sendAutoMergeNotification(
   count: number,
   waitingHours: number
 ): Promise<void> {
-  const message = `${count} high-confidence duplicate ${
-    count === 1 ? 'cluster' : 'clusters'
-  } will auto-merge in ${waitingHours} hours. Review and cancel at app.refynedata.com/dedup`;
+  const dedupUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.refynedata.com'}/dedup`;
 
   // Email notification via Resend
   if (settings.notify_email) {
     try {
       const resendApiKey = process.env.RESEND_API_KEY;
       if (resendApiKey) {
+        const content = `
+          ${buildHeading(`${count} duplicate ${count === 1 ? 'cluster' : 'clusters'} scheduled for auto-merge`, 1)}
+
+          ${buildParagraph(
+            `${count} high-confidence duplicate ${
+              count === 1 ? 'cluster' : 'clusters'
+            } will auto-merge in ${waitingHours} hours.`
+          )}
+
+          ${buildButton('Review pending merges', dedupUrl)}
+
+          ${buildParagraph(
+            'You can cancel individual merges or disable auto-merge entirely from the dedup settings page.'
+          )}
+        `;
+
+        const html = buildEmailTemplate({
+          title: 'Duplicates Scheduled for Auto-Merge',
+          preheader: `${count} duplicate ${count === 1 ? 'cluster' : 'clusters'} will merge in ${waitingHours} hours`,
+          content,
+          showUnsubscribe: true,
+          unsubscribeUrl: `${dedupUrl}#settings`,
+        });
+
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -121,13 +149,10 @@ async function sendAutoMergeNotification(
             Authorization: `Bearer ${resendApiKey}`,
           },
           body: JSON.stringify({
-            from: 'Refyne Dedup <dedup@refynedata.com>',
+            from: 'Refyne <hello@refynedata.com>',
             to: [settings.notify_email],
-            subject: `🔁 ${count} duplicate${count === 1 ? '' : 's'} scheduled for auto-merge`,
-            html: `
-              <p>${message}</p>
-              <p><a href="https://app.refynedata.com/dedup">Review pending merges →</a></p>
-            `,
+            subject: `Refyne: ${count} duplicate${count === 1 ? '' : 's'} scheduled for auto-merge`,
+            html,
           }),
         });
         console.log(`[Auto-merge] Email notification sent to ${settings.notify_email}`);
@@ -140,11 +165,15 @@ async function sendAutoMergeNotification(
   // Slack notification via webhook
   if (settings.notify_slack_webhook) {
     try {
+      const message = `${count} high-confidence duplicate ${
+        count === 1 ? 'cluster' : 'clusters'
+      } will auto-merge in ${waitingHours} hours. Review and cancel at ${dedupUrl}`;
+
       await fetch(settings.notify_slack_webhook, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: `🔁 Refyne Dedup: ${message}`,
+          text: `Refyne Dedup: ${message}`,
         }),
       });
       console.log('[Auto-merge] Slack notification sent');

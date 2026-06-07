@@ -7,9 +7,13 @@
 
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { clerkClient } from '@clerk/nextjs/server';
-
-// Resend will be imported when implemented
-// For now, we'll log the emails that would be sent
+import {
+  buildEmailTemplate,
+  buildHeading,
+  buildParagraph,
+  buildButton,
+  buildDataRow,
+} from '../emails/template';
 
 interface TrialOrg {
   org_id: string;
@@ -127,25 +131,52 @@ async function sendTrialWarningEmail(org: TrialOrg): Promise<void> {
     }
 
     const daysRemaining = Math.ceil(org.trial_days_remaining || 0);
+    const upgradeUrl = `${process.env.NEXT_PUBLIC_APP_URL}/billing/upgrade`;
 
-    // TODO: Send via Resend when email infrastructure is ready
-    // For now, just log what would be sent
-    console.log(`[Trial Expiry] Would send warning email to ${adminEmail}`);
-    console.log(`Subject: Your Refyne trial ends in ${daysRemaining} days`);
-    console.log(`Body:`);
-    console.log(`  Hi,`);
-    console.log(``);
-    console.log(`  Your Refyne trial ends in ${daysRemaining} days.`);
-    console.log(``);
-    console.log(`  Here's what you've used so far:`);
-    console.log(`  - Merges: ${org.trial_merges_used} / 25`);
-    console.log(`  - Normalize writes: ${org.trial_normalize_writes_used} / 100`);
-    console.log(`  - Enrich credits: ${org.trial_enrich_credits_used} / 50`);
-    console.log(``);
-    console.log(`  Upgrade to keep your data pipeline running:`);
-    console.log(`  ${process.env.NEXT_PUBLIC_APP_URL}/billing/upgrade`);
-    console.log(``);
-    console.log(`  The Refyne team`);
+    // Build email content
+    const content = `
+      ${buildHeading('Your trial ends soon', 1)}
+
+      ${buildParagraph(`Your Refyne trial ends in ${daysRemaining} days.`)}
+
+      ${buildHeading("Here's what you've used so far")}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; border: 1px solid #e5e7eb; margin: 20px 0;">
+        <tbody>
+          ${buildDataRow('Merges', `${org.trial_merges_used} / 25`)}
+          ${buildDataRow('Normalize writes', `${org.trial_normalize_writes_used} / 100`)}
+          ${buildDataRow('Enrich credits', `${org.trial_enrich_credits_used} / 50`)}
+        </tbody>
+      </table>
+
+      ${buildButton('Upgrade now', upgradeUrl)}
+
+      ${buildParagraph('Upgrade to keep your data pipeline running without interruption.')}
+    `;
+
+    const html = buildEmailTemplate({
+      title: 'Your Refyne trial ends soon',
+      preheader: `Your trial ends in ${daysRemaining} days`,
+      content,
+      showUnsubscribe: false,
+    });
+
+    // Send via Resend
+    if (process.env.RESEND_API_KEY) {
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+
+      await resend.emails.send({
+        from: 'Refyne <hello@refynedata.com>',
+        to: adminEmail,
+        subject: `Your Refyne trial ends in ${daysRemaining} days`,
+        html,
+      });
+
+      console.log(`[Trial Expiry] Warning email sent to ${adminEmail}`);
+    } else {
+      console.warn('[Trial Expiry] RESEND_API_KEY not configured - email not sent');
+    }
 
     // Update org_billing to mark email as sent
     await supabaseAdmin
@@ -155,7 +186,7 @@ async function sendTrialWarningEmail(org: TrialOrg): Promise<void> {
       })
       .eq('org_id', org.org_id);
 
-    console.log(`[Trial Expiry] Warning email sent for org ${org.org_id}`);
+    console.log(`[Trial Expiry] Warning email processed for org ${org.org_id}`);
   } catch (error) {
     console.error(`[Trial Expiry] Failed to send warning email for org ${org.org_id}:`, error);
     throw error;
@@ -175,22 +206,48 @@ async function sendTrialExpiryEmail(org: TrialOrg): Promise<void> {
       return;
     }
 
-    // TODO: Send via Resend when email infrastructure is ready
-    // For now, just log what would be sent
-    console.log(`[Trial Expiry] Would send expiry email to ${adminEmail}`);
-    console.log(`Subject: Your Refyne trial has ended`);
-    console.log(`Body:`);
-    console.log(`  Hi,`);
-    console.log(``);
-    console.log(`  Your Refyne trial has ended.`);
-    console.log(``);
-    console.log(`  Your data is safe. Upgrade to continue normalizing,`);
-    console.log(`  deduping, and enriching your HubSpot records.`);
-    console.log(``);
-    console.log(`  Choose a plan:`);
-    console.log(`  ${process.env.NEXT_PUBLIC_APP_URL}/billing/upgrade`);
-    console.log(``);
-    console.log(`  The Refyne team`);
+    const upgradeUrl = `${process.env.NEXT_PUBLIC_APP_URL}/billing/upgrade`;
+
+    // Build email content
+    const content = `
+      ${buildHeading('Your trial has ended', 1)}
+
+      ${buildParagraph('Your Refyne trial has ended.')}
+
+      ${buildParagraph(
+        'Your data is safe. Upgrade to continue normalizing, deduping, and enriching your HubSpot records.'
+      )}
+
+      ${buildButton('Choose a plan', upgradeUrl)}
+
+      ${buildParagraph(
+        'Questions? Reply to this email or visit our <a href="https://refynedata.com/support" style="color: #2E6BA8; text-decoration: none;">support page</a>.'
+      )}
+    `;
+
+    const html = buildEmailTemplate({
+      title: 'Your Refyne trial has ended',
+      preheader: 'Upgrade to continue using Refyne',
+      content,
+      showUnsubscribe: false,
+    });
+
+    // Send via Resend
+    if (process.env.RESEND_API_KEY) {
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+
+      await resend.emails.send({
+        from: 'Refyne <hello@refynedata.com>',
+        to: adminEmail,
+        subject: 'Your Refyne trial has ended',
+        html,
+      });
+
+      console.log(`[Trial Expiry] Expiry email sent to ${adminEmail}`);
+    } else {
+      console.warn('[Trial Expiry] RESEND_API_KEY not configured - email not sent');
+    }
 
     // Update org_billing to mark email as sent
     await supabaseAdmin
@@ -200,7 +257,7 @@ async function sendTrialExpiryEmail(org: TrialOrg): Promise<void> {
       })
       .eq('org_id', org.org_id);
 
-    console.log(`[Trial Expiry] Expiry email sent for org ${org.org_id}`);
+    console.log(`[Trial Expiry] Expiry email processed for org ${org.org_id}`);
   } catch (error) {
     console.error(`[Trial Expiry] Failed to send expiry email for org ${org.org_id}:`, error);
     throw error;

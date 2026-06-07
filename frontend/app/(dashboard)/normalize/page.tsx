@@ -18,6 +18,7 @@ import { validateEnumValue, type HubSpotProperty } from '@/lib/harmonies/enum-va
 interface PreviewRecord {
   company: string;
   field: string;
+  harmonyId: string;
   before: string;
   after: string;
   hubspotCompanyId: string;
@@ -88,6 +89,9 @@ export default function NormalizePage() {
   const [hubspotProperties, setHubspotProperties] = useState<HubSpotProperty[]>([]);
   const [harmoniesMetadata, setHarmoniesMetadata] = useState<Map<string, { name: string; targetField: string }>>(new Map());
 
+  // Field assignments for harmony labels
+  const [fieldAssignmentLabels, setFieldAssignmentLabels] = useState<Map<string, string>>(new Map());
+
   // Fetch issue counts
   const fetchIssueCounts = async () => {
     try {
@@ -105,11 +109,39 @@ export default function NormalizePage() {
           setActive(harmonyIds);
           setSelectedHarmonyFilters(new Set(harmonyIds));
         }
+
+        // Fetch field assignment labels for each harmony
+        fetchFieldAssignmentLabels(harmonyIds);
       }
     } catch (error) {
       console.error('Failed to load issue counts:', error);
     } finally {
       setCountsLoading(false);
+    }
+  };
+
+  // Fetch field assignment labels for harmonies
+  const fetchFieldAssignmentLabels = async (harmonyIds: string[]) => {
+    try {
+      const labels = new Map<string, string>();
+
+      // Fetch field assignments from API
+      const response = await fetch(`/api/normalize/field-assignments?objectType=${objectType}`);
+      if (response.ok) {
+        const data = await response.json();
+        const assignments = data.assignments || [];
+
+        // Build map of harmony ID -> HubSpot property
+        for (const assignment of assignments) {
+          if (harmonyIds.includes(assignment.harmonyId)) {
+            labels.set(assignment.harmonyId, assignment.hubspotProperty);
+          }
+        }
+      }
+
+      setFieldAssignmentLabels(labels);
+    } catch (error) {
+      console.error('Failed to fetch field assignment labels:', error);
     }
   };
 
@@ -672,12 +704,22 @@ export default function NormalizePage() {
             <div style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Harmonies</div>
           </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            {Object.keys(issueCounts).map(id => (
-              <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', borderBottom: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 11, fontFamily: F.mono, color: active.includes(id) ? C.text : C.text3 }}>{id}</span>
-                <Toggle on={active.includes(id)} onToggle={() => toggle(id)} />
-              </div>
-            ))}
+            {Object.keys(issueCounts).map(id => {
+              const fieldLabel = fieldAssignmentLabels.get(id);
+              return (
+                <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 11, fontFamily: F.mono, color: active.includes(id) ? C.text : C.text3 }}>{id}</span>
+                    {fieldLabel && (
+                      <span style={{ fontSize: 9, fontFamily: F.mono, color: C.text3, opacity: 0.7 }}>
+                        writes to: {fieldLabel}
+                      </span>
+                    )}
+                  </div>
+                  <Toggle on={active.includes(id)} onToggle={() => toggle(id)} />
+                </div>
+              );
+            })}
           </div>
           <div style={{ padding: 12, borderTop: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 11, color: C.text3, marginBottom: 8 }}>

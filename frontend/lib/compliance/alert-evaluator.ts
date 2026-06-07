@@ -7,6 +7,14 @@
 
 import { supabase, isSupabaseConfigured } from '../db/supabase';
 import { getScore, getBreakdownByHarmony, getPreviousScore } from './compliance-score';
+import {
+  buildEmailTemplate,
+  buildHeading,
+  buildParagraph,
+  buildButton,
+  buildDataRow,
+} from '../emails/template';
+import { buildUnsubscribeUrl } from '../always-on/unsubscribe';
 import type {
   AlertConfig,
   AlertEvaluation,
@@ -225,7 +233,6 @@ async function fireAlerts(
 
 /**
  * Send email alert using Resend.
- * Currently a placeholder - implement when Resend is set up.
  */
 async function sendEmailAlert(
   orgId: string,
@@ -233,20 +240,77 @@ async function sendEmailAlert(
   reasons: AlertReason[],
   previousScore: number | null
 ): Promise<void> {
-  // TODO: Implement with Resend when available
-  // For now, log the alert
-  console.log(`[Alert Email] Org ${orgId}: Compliance alert triggered`);
-  console.log(`  Score: ${score.score}% (previous: ${previousScore ?? 'N/A'})`);
-  console.log(`  Reasons: ${reasons.map(formatReason).join(', ')}`);
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('[Alert Email] RESEND_API_KEY not configured - email not sent');
+    return;
+  }
 
-  // Placeholder for Resend implementation:
-  // const resend = new Resend(process.env.RESEND_API_KEY);
-  // await resend.emails.send({
-  //   from: 'alerts@enrichment-switcher.com',
-  //   to: 'admin@example.com', // Get from org settings
-  //   subject: `Compliance Alert: Score dropped to ${score.score}%`,
-  //   html: buildAlertEmailHtml(orgId, score, reasons, previousScore),
-  // });
+  try {
+    const { Resend } = await import('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    const delta = previousScore !== null ? score.score - previousScore : null;
+    const deltaStr = delta !== null ? ` (${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%)` : '';
+    const dashboardUrl = getDashboardUrl(orgId);
+
+    // Get org settings to find recipient
+    const config = await getAlertConfig(orgId);
+    if (!config?.notifyEmail) {
+      console.warn('[Alert Email] No recipient email configured');
+      return;
+    }
+
+    // Build reason list
+    const reasonsList = reasons.map(reason => `<li>${formatReason(reason)}</li>`).join('');
+
+    const content = `
+      ${buildHeading('Compliance Alert', 1)}
+
+      ${buildParagraph(
+        `Your compliance score has dropped below the configured threshold.`
+      )}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; border: 1px solid #e5e7eb; margin: 20px 0;">
+        <tbody>
+          ${buildDataRow('Current score', `${score.score.toFixed(1)}%${deltaStr}`)}
+          ${buildDataRow('Compliant records', score.compliant.toLocaleString())}
+          ${buildDataRow('Stale records', score.stale.toLocaleString())}
+          ${buildDataRow('Unprocessed records', score.unprocessed.toLocaleString())}
+          ${buildDataRow('Total records', score.total.toLocaleString())}
+        </tbody>
+      </table>
+
+      ${buildHeading('Triggered by')}
+      ${buildParagraph(`<ul style="margin: 0; padding-left: 20px;">${reasonsList}</ul>`)}
+
+      ${buildButton('View Compliance Dashboard', dashboardUrl)}
+    `;
+
+    const unsubscribeUrl = buildUnsubscribeUrl(config.notifyEmail, orgId);
+
+    const html = buildEmailTemplate({
+      title: 'Compliance Alert',
+      preheader: `Compliance score: ${score.score.toFixed(1)}%`,
+      content,
+      showUnsubscribe: true,
+      unsubscribeUrl,
+    });
+
+    await resend.emails.send({
+      from: 'Refyne <hello@refynedata.com>',
+      to: config.notifyEmail,
+      subject: `Refyne Compliance Alert: Score ${score.score.toFixed(1)}%`,
+      html,
+      headers: {
+        'List-Unsubscribe': `<${unsubscribeUrl}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    });
+
+    console.log(`[Alert Email] Sent to ${config.notifyEmail} for org ${orgId}`);
+  } catch (error) {
+    console.error('[Alert Email] Failed to send alert:', error);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────

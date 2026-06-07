@@ -8,6 +8,7 @@ import { SkipDropdown } from './SkipDropdown';
 interface PreviewRecord {
   company: string;
   field: string;
+  harmonyId: string;
   before: string;
   after: string;
   hubspotCompanyId: string;
@@ -206,6 +207,21 @@ export function ByCompanyView({ changes, selectedChanges, onToggle, onExclusionC
                         }}
                       >
                         {change.field}
+                      </span>
+
+                      {/* Harmony name pill */}
+                      <span
+                        style={{
+                          fontFamily: F.mono,
+                          fontSize: 9,
+                          color: C.text3,
+                          background: C.border2,
+                          padding: '2px 6px',
+                          borderRadius: 3,
+                          opacity: 0.7,
+                        }}
+                      >
+                        {change.harmonyId}
                       </span>
 
                       {/* Before value */}

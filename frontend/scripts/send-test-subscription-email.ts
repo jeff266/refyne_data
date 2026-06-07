@@ -43,7 +43,7 @@ async function sendTestEmail() {
   const userEmail = org.createdBy; // This is the user ID who created the org
 
   // For demo, use a fallback email
-  const testEmail = 'jeff@refynedata.com'; // Change to your email
+  const testEmail = 'jeff@revopsimpact.com';
 
   console.log('\n📧 Sending subscription confirmation email...\n');
 

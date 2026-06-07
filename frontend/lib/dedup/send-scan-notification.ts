@@ -6,6 +6,14 @@
 
 import { supabase } from '../db/supabase';
 import * as Sentry from '@sentry/node';
+import {
+  buildEmailTemplate,
+  buildHeading,
+  buildParagraph,
+  buildButton,
+  buildDataRow,
+} from '../emails/template';
+import { buildUnsubscribeUrl } from '../always-on/unsubscribe';
 
 interface ScanNotificationData {
   orgId: string;
@@ -43,7 +51,7 @@ export async function sendDedupScanNotification(data: ScanNotificationData): Pro
     }
 
     // Step 2: Send email via Resend
-    await sendEmail(recipients, {
+    await sendEmail(recipients, orgId, {
       portalName: portalName || 'HubSpot Portal',
       newClustersFound,
       gradeBreakdown,
@@ -128,6 +136,7 @@ async function getRecipientEmails(orgId: string): Promise<string[]> {
  */
 async function sendEmail(
   recipients: string[],
+  orgId: string,
   payload: {
     portalName: string;
     newClustersFound: number;
@@ -157,12 +166,18 @@ async function sendEmail(
 
   // Send to each recipient
   const sendPromises = recipients.map(async (email) => {
+    const unsubscribeUrl = buildUnsubscribeUrl(email, orgId);
+
     try {
       await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'Refyne <noreply@refyne.io>',
+        from: 'Refyne <hello@refynedata.com>',
         to: email,
-        subject: `[Refyne] ${payload.newClustersFound} new duplicate clusters found - ${payload.portalName}`,
+        subject: `Refyne: ${payload.newClustersFound} new duplicate clusters found - ${payload.portalName}`,
         html,
+        headers: {
+          'List-Unsubscribe': `<${unsubscribeUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
       });
     } catch (error) {
       console.error(`[Dedup Notification] Failed to send email to ${email}:`, error);
@@ -197,83 +212,39 @@ function buildEmailHtml(payload: {
   ]
     .filter(row => row.count > 0)
     .map(
-      row => `
-    <tr>
-      <td style="padding: 8px 12px; font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #1f2937;">
-        ${row.label}
-      </td>
-      <td style="padding: 8px 12px; font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #1f2937; text-align: right; font-weight: 600;">
-        ${row.count}
-      </td>
-    </tr>
-  `
+      row => buildDataRow(row.label, row.count.toString())
     )
     .join('');
 
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>New Duplicate Clusters Found</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: system-ui, -apple-system, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
-          <!-- Header -->
-          <tr>
-            <td style="padding: 32px 32px 24px 32px;">
-              <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #111827;">
-                ${newClustersFound} new duplicate cluster${newClustersFound === 1 ? '' : 's'} found
-              </h1>
-              <p style="margin: 8px 0 0 0; font-size: 14px; color: #6b7280;">
-                Your nightly dedup scan found new duplicates in ${portalName}
-              </p>
-            </td>
-          </tr>
+  const content = `
+    ${buildHeading(`${newClustersFound} new duplicate cluster${newClustersFound === 1 ? '' : 's'} found`, 1)}
 
-          <!-- CTA Button -->
-          <tr>
-            <td style="padding: 0 32px 24px 32px;">
-              <a href="${dedupUrl}" style="display: inline-block; padding: 12px 24px; background-color: #6366f1; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500;">
-                Review duplicates
-              </a>
-            </td>
-          </tr>
+    ${buildParagraph(`Your nightly dedup scan found new duplicates in ${portalName}`)}
 
-          <!-- Grade Breakdown -->
-          ${gradeRows ? `
-          <tr>
-            <td style="padding: 24px 32px; background-color: #f9fafb; border-top: 1px solid #e5e7eb;">
-              <h2 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #111827;">
-                Grade breakdown
-              </h2>
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden;">
-                ${gradeRows}
-              </table>
-            </td>
-          </tr>
-          ` : ''}
+    ${buildButton('Review duplicates', dedupUrl)}
 
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 24px 32px; border-top: 1px solid #e5e7eb;">
-              <p style="margin: 0; font-size: 12px; color: #6b7280;">
-                You're receiving this because you have nightly dedup notifications enabled.
-                <a href="${settingsUrl}" style="color: #6366f1; text-decoration: none;">Manage notifications</a>
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
+    ${gradeRows ? `
+      ${buildHeading('Grade breakdown')}
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; border: 1px solid #e5e7eb; margin: 20px 0;">
+        <tbody>
+          ${gradeRows}
+        </tbody>
+      </table>
+    ` : ''}
+
+    ${buildParagraph(
+      `You're receiving this because you have nightly dedup notifications enabled. <a href="${settingsUrl}" style="color: #2E6BA8; text-decoration: none;">Manage notifications</a>`
+    )}
   `;
+
+  return buildEmailTemplate({
+    title: 'New Duplicate Clusters Found',
+    preheader: `${newClustersFound} new duplicate cluster${newClustersFound === 1 ? '' : 's'} found in ${portalName}`,
+    content,
+    showUnsubscribe: true,
+    unsubscribeUrl: settingsUrl,
+  });
 }
 
 /**

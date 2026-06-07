@@ -8,6 +8,7 @@ import { SkipDropdown } from './SkipDropdown';
 interface PreviewRecord {
   company: string;
   field: string;
+  harmonyId: string;
   before: string;
   after: string;
   hubspotCompanyId: string;
