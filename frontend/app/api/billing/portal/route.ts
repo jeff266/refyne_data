@@ -1,22 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabaseAdmin } from '@/lib/db/admin-client';
-import Stripe from 'stripe';
-
-// Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
-let stripe: Stripe | null = null;
-
-function getStripeClient(): Stripe {
-  if (!stripe) {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error('STRIPE_SECRET_KEY is not configured');
-    }
-    stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2026-04-22.dahlia',
-    });
-  }
-  return stripe;
-}
+import { getStripeClient } from '@/lib/billing/stripe-client';
 
 /**
  * POST /api/billing/portal

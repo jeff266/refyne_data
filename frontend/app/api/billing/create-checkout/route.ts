@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
-import Stripe from 'stripe';
+import { getStripeClient } from '@/lib/billing/stripe-client';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-04-22.dahlia',
-});
+const stripe = getStripeClient();
 
 interface CreateCheckoutRequest {
   tier: string;

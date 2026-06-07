@@ -3,10 +3,9 @@ import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { captureException } from '@/lib/monitoring/sentry';
+import { getStripeClient } from '@/lib/billing/stripe-client';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-04-22.dahlia',
-});
+const stripe = getStripeClient();
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 

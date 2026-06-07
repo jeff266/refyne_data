@@ -3,21 +3,15 @@ import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 import { clerkClient } from '@clerk/nextjs/server';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { getStripeClient } from '@/lib/billing/stripe-client';
 import Stripe from 'stripe';
 
-// Lazy initialization to avoid build-time errors when STRIPE_SECRET_KEY is not set
-let stripe: Stripe | null = null;
-
-function getStripeClient(): Stripe | null {
-  if (!process.env.STRIPE_SECRET_KEY) {
+function getStripeClientSafe(): Stripe | null {
+  try {
+    return getStripeClient();
+  } catch {
     return null;
   }
-  if (!stripe) {
-    stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2026-04-22.dahlia',
-    });
-  }
-  return stripe;
 }
 
 /**
@@ -104,7 +98,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Step 1: Cancel Stripe subscription if exists
-    const stripeClient = getStripeClient();
+    const stripeClient = getStripeClientSafe();
     if (stripeClient) {
       try {
         const { data: subscriptions } = await stripeClient.subscriptions.list({
