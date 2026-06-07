@@ -895,7 +895,13 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
               clusters.map((cluster) => (
                 <div
                   key={cluster.id}
-                  onClick={() => router.push(`/dedup/clusters/${cluster.id}`)}
+                  onClick={() => {
+                    // Store cluster IDs in sessionStorage for navigation
+                    const clusterIds = clusters.map(c => c.id);
+                    sessionStorage.setItem('dedupClusterIds', JSON.stringify(clusterIds));
+                    sessionStorage.setItem('dedupObjectType', objectType);
+                    router.push(`/dedup/clusters/${cluster.id}?objectType=${objectType}`);
+                  }}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '40px 80px 1fr 120px',
@@ -1126,7 +1132,11 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              router.push(`/dedup/clusters/${cluster.id}`);
+                              // Store cluster IDs in sessionStorage for navigation
+                              const clusterIds = clusters.map(c => c.id);
+                              sessionStorage.setItem('dedupClusterIds', JSON.stringify(clusterIds));
+                              sessionStorage.setItem('dedupObjectType', objectType);
+                              router.push(`/dedup/clusters/${cluster.id}?objectType=${objectType}`);
                             }}
                           >
                             See more →

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Check,
@@ -9,6 +9,8 @@ import {
   X,
   Plus,
   GripVertical,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, GhostBtn, PrimaryBtn } from '@/components/refyne';
@@ -586,10 +588,17 @@ function FieldPicker({
 
 export default function ClusterReviewPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [data, setData] = useState<ClusterWithRecords | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [propertyLabels, setPropertyLabels] = useState<Record<string, string>>({});
+
+  // Cluster navigation state
+  const [clusterIds, setClusterIds] = useState<string[]>([]);
+  const [currentIndex, setCurrentIndex] = useState<number>(-1);
+  const [totalClusters, setTotalClusters] = useState<number>(0);
+  const [navObjectType, setNavObjectType] = useState<'company' | 'contact' | 'deal'>('company');
 
   // Selection state
   const [masterId, setMasterId] = useState<string | null>(null);
@@ -623,6 +632,51 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // Load cluster navigation list from sessionStorage or fetch from API
+  useEffect(() => {
+    const loadClusterList = async () => {
+      try {
+        // First, try to get from sessionStorage
+        const stored = sessionStorage.getItem('dedupClusterIds');
+        const storedObjectType = sessionStorage.getItem('dedupObjectType');
+
+        if (stored && storedObjectType) {
+          const ids = JSON.parse(stored);
+          setClusterIds(ids);
+          setTotalClusters(ids.length);
+          setNavObjectType(storedObjectType as 'company' | 'contact' | 'deal');
+
+          const index = ids.indexOf(params.id);
+          setCurrentIndex(index);
+          return;
+        }
+
+        // If not in sessionStorage, fetch from API
+        const urlObjectType = searchParams?.get('objectType') || 'company';
+        setNavObjectType(urlObjectType as 'company' | 'contact' | 'deal');
+
+        const res = await fetch(`/api/dedup/clusters?status=pending&objectType=${urlObjectType}`);
+        if (res.ok) {
+          const data = await res.json();
+          const ids = data.clusters.map((c: any) => c.id);
+          setClusterIds(ids);
+          setTotalClusters(data.total || ids.length);
+
+          const index = ids.indexOf(params.id);
+          setCurrentIndex(index);
+
+          // Store in sessionStorage for future navigation
+          sessionStorage.setItem('dedupClusterIds', JSON.stringify(ids));
+          sessionStorage.setItem('dedupObjectType', urlObjectType);
+        }
+      } catch (err) {
+        console.error('Failed to load cluster list:', err);
+      }
+    };
+
+    loadClusterList();
+  }, [params.id, searchParams]);
 
   // Load dedup display fields from API
   useEffect(() => {
@@ -672,6 +726,33 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         saveFieldsToAPI(newOrder);
         return newOrder;
       });
+    }
+  };
+
+  // Navigation handlers
+  const handlePrevious = () => {
+    if (currentIndex > 0 && clusterIds.length > 0) {
+      const prevId = clusterIds[currentIndex - 1];
+      router.push(`/dedup/clusters/${prevId}?objectType=${navObjectType}`);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentIndex < clusterIds.length - 1 && clusterIds.length > 0) {
+      const nextId = clusterIds[currentIndex + 1];
+      router.push(`/dedup/clusters/${nextId}?objectType=${navObjectType}`);
+    }
+  };
+
+  const navigateAfterAction = () => {
+    // Auto-advance to next cluster after merge/reject
+    if (currentIndex < clusterIds.length - 1 && clusterIds.length > 0) {
+      const nextId = clusterIds[currentIndex + 1];
+      router.push(`/dedup/clusters/${nextId}?objectType=${navObjectType}`);
+    } else {
+      // If no more clusters, return to queue
+      const url = navObjectType === 'contact' ? '/dedup?object=contact' : '/dedup';
+      router.push(url);
     }
   };
 
@@ -858,11 +939,16 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
       }, 600);
 
       setTimeout(() => {
-        router.push(
-          `/dedup?merged=true&rescued=${rescuedCount}&name=${encodeURIComponent(
-            getRecordDisplayName(masterRecord)
-          )}`
-        );
+        // Show merge banner on queue page or navigate to next cluster
+        if (currentIndex < clusterIds.length - 1 && clusterIds.length > 0) {
+          navigateAfterAction();
+        } else {
+          router.push(
+            `/dedup?merged=true&rescued=${rescuedCount}&name=${encodeURIComponent(
+              getRecordDisplayName(masterRecord)
+            )}`
+          );
+        }
       }, 1400);
     } catch (err) {
       setMergeState('idle');
@@ -885,7 +971,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         throw new Error(data.error || 'Failed to reject cluster');
       }
 
-      router.push('/dedup');
+      navigateAfterAction();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reject cluster');
     } finally {
@@ -1033,11 +1119,85 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
       `}</style>
 
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <GhostBtn onClick={() => router.push('/dedup')}>
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <GhostBtn onClick={() => {
+          const url = navObjectType === 'contact' ? '/dedup?object=contact' : '/dedup';
+          router.push(url);
+        }}>
           <ArrowLeft size={14} style={{ marginRight: 4 }} />
           Back to queue
         </GhostBtn>
+
+        {/* Navigation buttons */}
+        {clusterIds.length > 0 && currentIndex >= 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              onClick={handlePrevious}
+              disabled={currentIndex === 0}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 12px',
+                fontSize: 13,
+                fontWeight: 500,
+                color: currentIndex === 0 ? C.text3 : C.text,
+                background: 'transparent',
+                border: `1px solid ${currentIndex === 0 ? C.border : C.border2}`,
+                borderRadius: 0,
+                cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
+                opacity: currentIndex === 0 ? 0.5 : 1,
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                if (currentIndex !== 0) {
+                  e.currentTarget.style.background = C.hover;
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <ChevronLeft size={14} />
+              Previous
+            </button>
+
+            <span style={{ fontSize: 13, color: C.text3, fontFamily: F.mono }}>
+              {currentIndex + 1} of {totalClusters}
+            </span>
+
+            <button
+              onClick={handleNext}
+              disabled={currentIndex === clusterIds.length - 1}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 12px',
+                fontSize: 13,
+                fontWeight: 500,
+                color: currentIndex === clusterIds.length - 1 ? C.text3 : C.text,
+                background: 'transparent',
+                border: `1px solid ${currentIndex === clusterIds.length - 1 ? C.border : C.border2}`,
+                borderRadius: 0,
+                cursor: currentIndex === clusterIds.length - 1 ? 'not-allowed' : 'pointer',
+                opacity: currentIndex === clusterIds.length - 1 ? 0.5 : 1,
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                if (currentIndex !== clusterIds.length - 1) {
+                  e.currentTarget.style.background = C.hover;
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              Next
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: 24 }}>
