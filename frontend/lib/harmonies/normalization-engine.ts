@@ -17,6 +17,7 @@ import {
   getConditionFields,
   type ConditionGroups,
 } from './condition-evaluator';
+import { parsePhoneNumber } from 'libphonenumber-js';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -483,13 +484,41 @@ function normalizePhoneE164(phone: string, config?: Record<string, any>): string
   // Apply formatting based on config
   let result: string;
   if (format === 'e164_formatted') {
-    // Formatted international output
-    if (countryCode === '1' && nationalNumber.length === 10) {
-      // US format: +1 (XXX) XXX-XXXX
-      result = `+1 (${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
-    } else {
-      // International: use compact format with country code
-      result = `+${countryCode} ${nationalNumber}`;
+    // Formatted international output using libphonenumber-js for accurate country code detection
+    try {
+      let parsed;
+      // Try parsing the cleaned string first (preserves original + if present)
+      try {
+        parsed = parsePhoneNumber(cleaned.trim());
+      } catch {
+        // If that fails, try with digits prefixed with +
+        parsed = parsePhoneNumber(`+${digits}`);
+      }
+
+      if (parsed && parsed.isValid()) {
+        if (parsed.country === 'US' || parsed.country === 'CA') {
+          // US/Canada format: +1 (XXX) XXX-XXXX
+          const national = parsed.nationalNumber;
+          result = `+1 (${national.slice(0, 3)}) ${national.slice(3, 6)}-${national.slice(6)}`;
+        } else {
+          // Non-US: use country code from parser + compact national number (single space)
+          result = `+${parsed.countryCallingCode} ${parsed.nationalNumber}`;
+        }
+      } else {
+        // Fallback if parsing failed or invalid
+        if (countryCode === '1' && nationalNumber.length === 10) {
+          result = `+1 (${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
+        } else {
+          result = `+${countryCode} ${nationalNumber}`;
+        }
+      }
+    } catch (error) {
+      // Fallback on any error
+      if (countryCode === '1' && nationalNumber.length === 10) {
+        result = `+1 (${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
+      } else {
+        result = `+${countryCode} ${nationalNumber}`;
+      }
     }
   } else if (format === 'e164_dashes') {
     // International with dashes: +1 310-387-9598
