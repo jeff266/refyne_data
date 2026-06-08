@@ -228,3 +228,66 @@ Beta Feature Flags: 1,165 (maintained)
 Guided Onboarding: 1,165 → 1,180 (+15 new tests)
 
 **Current floor: 1,180 passing tests ✅**
+
+---
+
+# Phone Format Enhancement - Complete ✅
+
+**Last Updated:** 2026-06-07
+**Test Count:** 1,189 passing (+9 new tests)
+
+## Overview
+
+Added fourth phone format option to calibration wizard: "International with formatting" for human-readable phone numbers.
+
+## Implementation
+
+### New Format: `e164_formatted` ✅
+
+**US Numbers:** `+1 (562) 735-0870`
+**International:** `+[CC] [national number]` (e.g., "+44 2079460958")
+
+**Recommended for US teams** - includes country code with readable formatting.
+
+### Updates Made ✅
+
+**Phone Transform** (`lib/harmonies/normalization-engine.ts`):
+- Added `e164_formatted` format support
+- Enhanced international number detection (US, UK, AU, FR, DE)
+- US-specific formatting: `+1 (NXX) NXX-XXXX`
+- International: compact format with country code
+- Preserved extension stripping (x123, ext 456, #789)
+- Backward compatible with all existing formats
+
+**Calibration Wizard** (`app/(dashboard)/onboarding/calibrate/page.tsx`):
+- Added 4th option card with "Recommended" badge
+- Updated summary page examples
+- Updated preview table formatting
+- Added TypeScript type for new format
+
+**API Route** (`app/api/onboarding/calibration/route.ts`):
+- Added `'e164_formatted'` to allowed format values
+- Updated request body interface
+
+**Tests** (`lib/harmonies/phone-format.test.ts`):
+- 9 new comprehensive test cases
+- US number formatting validation
+- International number formatting
+- Extension stripping tests
+- Edge case handling
+
+## Phone Format Options
+
+Now 4 options available in calibration wizard:
+
+1. **International with formatting** (NEW) → `+1 (562) 735-0870` ⭐ Recommended
+2. **International (legacy)** → `+1 (415) 867-5309`
+3. **US national** → `(415) 867-5309`
+4. **E.164 compact** → `+14158675309`
+
+## Test Progression
+
+Guided Onboarding: 1,165 → 1,180 (+15)
+Phone Format Enhancement: 1,180 → 1,189 (+9)
+
+**Current floor: 1,189 passing tests ✅**
