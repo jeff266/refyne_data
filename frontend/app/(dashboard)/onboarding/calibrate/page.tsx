@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
 import { normalizeCompanyName } from '@/lib/names/normalizer';
+import { SearchableCountrySelect } from '@/components/SearchableCountrySelect';
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -590,31 +591,18 @@ export default function CalibratePage() {
                     <label style={{ display: 'block', fontSize: 12, color: C.text, marginBottom: 8 }}>
                       Primary country
                     </label>
-                    <select
+                    <SearchableCountrySelect
                       value={answers.phone.default_country_code}
-                      onChange={(e) =>
+                      onChange={(code) =>
                         setAnswers({
                           ...answers,
-                          phone: { ...answers.phone, default_country_code: e.target.value },
+                          phone: { ...answers.phone, default_country_code: code },
                         })
                       }
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        background: C.bg,
-                        border: `1px solid ${C.border2}`,
-                        color: C.text,
-                        fontSize: 13,
-                        fontFamily: F.sans,
-                      }}
-                    >
-                      <option value="1">United States (+1)</option>
-                      <option value="44">United Kingdom (+44)</option>
-                      <option value="61">Australia (+61)</option>
-                      <option value="1">Canada (+1)</option>
-                    </select>
-                    <div style={{ fontSize: 11, color: C.text3, marginTop: 8 }}>
-                      This sets the default country code for numbers that don't include one.
+                      style={{ fontSize: 13 }}
+                    />
+                    <div style={{ fontSize: 11, color: C.text3, marginTop: 8, lineHeight: 1.5 }}>
+                      Numbers already containing a country code (+44, +966, etc.) are preserved as-is. For numbers without a country code prefix, the default above is applied. If your data contains numbers from multiple countries without prefixes, consider normalizing them in HubSpot before importing.
                     </div>
                   </div>
                 </div>

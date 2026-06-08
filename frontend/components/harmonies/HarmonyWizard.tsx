@@ -6,6 +6,7 @@ import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn, GhostBtn } from '@/components/refyne';
 import { HubSpotPropertyPicker } from './HubSpotPropertyPicker';
 import { ConditionBuilder } from './ConditionBuilder';
+import { SearchableCountrySelect } from '@/components/SearchableCountrySelect';
 import type { ConditionGroups } from '@/lib/harmonies/condition-evaluator';
 import {
   DndContext,
@@ -64,7 +65,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   // Phone config state
   const [phoneConfig, setPhoneConfig] = useState({
     format: 'e164_formatted',
-    default_country_code: 'US'
+    default_country_code: '1'
   });
 
   // Step 2: Scan
@@ -973,24 +974,10 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                         <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>
                           Default country code
                         </div>
-                        <select
+                        <SearchableCountrySelect
                           value={phoneConfig.default_country_code}
-                          onChange={(e) => setPhoneConfig({ ...phoneConfig, default_country_code: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '6px 8px',
-                            fontSize: 11,
-                            border: `1px solid ${C.border2}`,
-                            borderRadius: 0
-                          }}
-                        >
-                          <option value="US">United States (+1)</option>
-                          <option value="GB">United Kingdom (+44)</option>
-                          <option value="AU">Australia (+61)</option>
-                          <option value="CA">Canada (+1)</option>
-                          <option value="FR">France (+33)</option>
-                          <option value="DE">Germany (+49)</option>
-                        </select>
+                          onChange={(code) => setPhoneConfig({ ...phoneConfig, default_country_code: code })}
+                        />
                         <div style={{ fontSize: 9, color: C.text3, marginTop: 4 }}>
                           Applied to numbers without a country code prefix
                         </div>
@@ -1008,8 +995,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                       }}>
                         <Info size={16} color={C.blue} style={{ flexShrink: 0, marginTop: 2 }} />
                         <div style={{ fontSize: 11, color: C.text2, lineHeight: 1.4 }}>
-                          Numbers with a country code (+44, +61, etc.) will preserve their country code.
-                          The default country code above applies only to numbers without a prefix.
+                          Numbers already containing a country code (+44, +966, etc.) are preserved as-is. For numbers without a country code prefix, the default above is applied. If your data contains numbers from multiple countries without prefixes, consider normalizing them in HubSpot before importing.
                         </div>
                       </div>
                     </div>
