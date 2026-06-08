@@ -9,6 +9,7 @@
 
 import { useState, useMemo } from 'react';
 import { ArrowRight, ArrowLeft, Search, X } from 'lucide-react';
+import { classifyJobTitleLevel, type JobLevel } from '@/lib/import/client-job-classifier';
 
 interface Column {
   name: string;
@@ -49,22 +50,57 @@ export function FilterStep({
 
     filterableColumns.forEach((col) => {
       counts[col.name] = {};
-      previewRows.forEach((row) => {
-        const value = row[col.name];
-        if (value && typeof value === 'string' && value.trim() !== '') {
-          counts[col.name][value] = (counts[col.name][value] || 0) + 1;
-        }
-      });
+
+      // For job title columns, group by level instead of individual titles
+      if (col.type === 'title') {
+        previewRows.forEach((row) => {
+          const title = row[col.name];
+          if (title) {
+            const level = classifyJobTitleLevel(title);
+            counts[col.name][level] = (counts[col.name][level] || 0) + 1;
+          }
+        });
+      } else {
+        // For other columns, count individual values
+        previewRows.forEach((row) => {
+          const value = row[col.name];
+          if (value && typeof value === 'string' && value.trim() !== '') {
+            counts[col.name][value] = (counts[col.name][value] || 0) + 1;
+          }
+        });
+      }
     });
 
     return counts;
   }, [filterableColumns, previewRows]);
 
-  // Get unique values for a column, sorted by count
-  const getColumnValues = (columnName: string) => {
+  // Get unique values for a column, sorted by count or level order
+  const getColumnValues = (columnName: string, columnType: string) => {
     const counts = columnValueCounts[columnName] || {};
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1]) // Sort by count descending
+    const entries = Object.entries(counts);
+
+    // For job title columns, sort by predefined level order
+    if (columnType === 'title') {
+      const levelOrder: JobLevel[] = [
+        'C-Suite',
+        'EVP / SVP',
+        'VP',
+        'Director',
+        'Manager',
+        'IC',
+        'Founder',
+        'Other',
+        'Needs Review',
+      ];
+
+      return levelOrder
+        .filter((level) => counts[level] && counts[level] > 0)
+        .map((level) => ({ value: level, count: counts[level] }));
+    }
+
+    // For other columns, sort by count descending
+    return entries
+      .sort((a, b) => b[1] - a[1])
       .map(([value, count]) => ({ value, count }));
   };
 
@@ -97,9 +133,21 @@ export function FilterStep({
       let matches = true;
       for (const [columnName, selectedValues] of Object.entries(filters)) {
         if (Array.isArray(selectedValues) && selectedValues.length > 0) {
-          if (!selectedValues.includes(row[columnName])) {
-            matches = false;
-            break;
+          // Check if this is a job title column
+          const column = filterableColumns.find((c) => c.name === columnName);
+          if (column?.type === 'title') {
+            // For job titles, classify and check if level matches
+            const level = classifyJobTitleLevel(row[columnName]);
+            if (!selectedValues.includes(level)) {
+              matches = false;
+              break;
+            }
+          } else {
+            // For other columns, check direct value match
+            if (!selectedValues.includes(row[columnName])) {
+              matches = false;
+              break;
+            }
           }
         }
       }
@@ -107,7 +155,7 @@ export function FilterStep({
     });
 
     return count;
-  }, [filters, previewRows, totalRows]);
+  }, [filters, previewRows, totalRows, filterableColumns]);
 
   return (
     <div>
@@ -121,10 +169,10 @@ export function FilterStep({
       {/* Row count */}
       <div className="mb-6 p-4 bg-zinc-800 border border-zinc-700 rounded-lg">
         <div className="text-2xl font-semibold text-white mb-1">
-          {filteredCount.toLocaleString()}
+          {filteredCount.toLocaleString()} {Object.keys(filters).length > 0 && `of ${totalRows.toLocaleString()}`}
         </div>
         <div className="text-sm text-zinc-400">
-          contacts loaded {Object.keys(filters).length > 0 && `(${totalRows.toLocaleString()} total)`}
+          contacts will be imported
         </div>
       </div>
 
@@ -132,7 +180,7 @@ export function FilterStep({
       {filterableColumns.length > 0 ? (
         <div className="space-y-6 mb-6">
           {filterableColumns.map((column) => {
-            const values = getColumnValues(column.name);
+            const values = getColumnValues(column.name, column.type);
             const selectedValues = filters[column.name] || [];
             const searchTerm = searchTerms[column.name] || '';
             const filteredValues = searchTerm
