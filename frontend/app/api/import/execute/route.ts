@@ -113,8 +113,8 @@ export async function POST(request: NextRequest) {
       const assignments = assignOwners(companyGroups, owner_assignment.owners);
 
       // Update rows with owner_id
-      const updatePromises: Promise<any>[] = [];
-      for (const [companyKey, ownerId] of assignments.entries()) {
+      const updatePromises: any[] = [];
+      for (const [companyKey, ownerId] of Array.from(assignments)) {
         const contactsInGroup = companyGroups.get(companyKey) || [];
 
         for (let i = 0; i < contactsInGroup.length; i++) {
@@ -124,16 +124,15 @@ export async function POST(request: NextRequest) {
           );
 
           if (rowIndex >= 0 && rows[rowIndex]) {
-            updatePromises.push(
-              supabaseAdmin
-                .from('event_import_rows')
-                .update({
-                  owner_id: ownerId,
-                  company_group_key: companyKey,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', rows[rowIndex].id)
-            );
+            const promise = supabaseAdmin
+              .from('event_import_rows')
+              .update({
+                owner_id: ownerId,
+                company_group_key: companyKey,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', rows[rowIndex].id);
+            updatePromises.push(promise);
           }
         }
       }

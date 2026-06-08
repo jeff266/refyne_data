@@ -399,7 +399,7 @@ export function groupByCompany(rows: ParsedRow[]): Map<string, ParsedRow[]> {
     // Priority 3: Fuzzy grouping (check if similar to existing groups)
     if (!groupKey && row.company) {
       const normalized = normalizeCompanyName(row.company);
-      for (const [existingKey, existingRows] of groups.entries()) {
+      for (const [existingKey, existingRows] of Array.from(groups.entries())) {
         if (existingKey.startsWith('name:')) {
           const existingName = existingKey.slice(5); // Remove 'name:' prefix
           const score = jaroWinkler(normalized, existingName);
