@@ -8,6 +8,7 @@ import { getAccessToken } from '@/lib/hubspot/get-access-token';
 import { HubSpotClient } from '@/lib/hubspot/client';
 import { matchContact, type ParsedRow, type Bucket } from '@/lib/import/matcher';
 import { cleanLastName, splitFullName, extractEmailDomain } from '@/lib/import/name-cleaner';
+import { classifyJobTitleLevel } from '@/lib/import/client-job-classifier';
 
 interface FilterConfig {
   [column: string]: any; // Filter configuration per column
@@ -91,8 +92,8 @@ export async function POST(request: NextRequest) {
 
     // Apply filters (if any)
     let workingSet = rows;
-    if (filters) {
-      workingSet = applyFilters(rows, filters);
+    if (filters && Object.keys(filters).length > 0) {
+      workingSet = applyFilters(rows, filters, field_mapping);
       console.log(`[Import Match] After filters: ${workingSet.length} rows`);
     }
 
@@ -242,7 +243,10 @@ export async function POST(request: NextRequest) {
 /**
  * Apply filters to rows
  */
-function applyFilters(rows: any[], filters: FilterConfig): any[] {
+function applyFilters(rows: any[], filters: FilterConfig, fieldMapping: FieldMapping): any[] {
+  // Determine if job_title column exists and what it's mapped to
+  const jobTitleColumn = fieldMapping.job_title;
+
   return rows.filter((row) => {
     const rawData = row.raw_data as Record<string, string>;
 
@@ -251,9 +255,20 @@ function applyFilters(rows: any[], filters: FilterConfig): any[] {
 
       // Handle different filter types
       if (Array.isArray(filterConfig)) {
-        // Multi-select filter (e.g., title or company list)
-        if (!filterConfig.includes(value)) {
-          return false;
+        // Multi-select filter
+
+        // Special case: job title level filtering
+        if (jobTitleColumn && column === jobTitleColumn) {
+          // Classify the job title to a level and check if it matches
+          const level = classifyJobTitleLevel(value);
+          if (!filterConfig.includes(level)) {
+            return false;
+          }
+        } else {
+          // Regular value filtering (company, location, etc.)
+          if (!filterConfig.includes(value)) {
+            return false;
+          }
         }
       } else if (typeof filterConfig === 'object' && filterConfig.contains) {
         // Contains filter
@@ -273,7 +288,7 @@ function applyFilters(rows: any[], filters: FilterConfig): any[] {
 }
 
 /**
- * Fetch all HubSpot contacts
+ * Fetch all HubSpot contacts with pagination
  */
 async function fetchAllContacts(client: HubSpotClient): Promise<any[]> {
   const properties = [
@@ -286,32 +301,70 @@ async function fetchAllContacts(client: HubSpotClient): Promise<any[]> {
     'jobtitle',
   ];
 
-  // Use search API to fetch all contacts
-  // In production, this should be paginated properly
-  const response = await client.request<{ results: any[] }>('/crm/v3/objects/contacts/search', {
-    method: 'POST',
-    body: JSON.stringify({
-      properties,
-      limit: 10000, // Max per request
-    }),
-  });
+  const allContacts: any[] = [];
+  let after: string | undefined;
+  let hasMore = true;
 
-  return response.results || [];
+  while (hasMore) {
+    const response = await client.request<{
+      results: any[];
+      paging?: { next?: { after: string } };
+    }>('/crm/v3/objects/contacts/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        properties,
+        limit: 200, // HubSpot max limit per request
+        after,
+      }),
+    });
+
+    allContacts.push(...(response.results || []));
+    after = response.paging?.next?.after;
+    hasMore = !!after;
+
+    // Safety limit: stop at 50,000 contacts
+    if (allContacts.length >= 50000) {
+      console.warn('[Import Match] Reached 50k contact limit, stopping fetch');
+      break;
+    }
+  }
+
+  return allContacts;
 }
 
 /**
- * Fetch all HubSpot companies
+ * Fetch all HubSpot companies with pagination
  */
 async function fetchAllCompanies(client: HubSpotClient): Promise<any[]> {
   const properties = ['name', 'domain'];
 
-  const response = await client.request<{ results: any[] }>('/crm/v3/objects/companies/search', {
-    method: 'POST',
-    body: JSON.stringify({
-      properties,
-      limit: 10000, // Max per request
-    }),
-  });
+  const allCompanies: any[] = [];
+  let after: string | undefined;
+  let hasMore = true;
 
-  return response.results || [];
+  while (hasMore) {
+    const response = await client.request<{
+      results: any[];
+      paging?: { next?: { after: string } };
+    }>('/crm/v3/objects/companies/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        properties,
+        limit: 200, // HubSpot max limit per request
+        after,
+      }),
+    });
+
+    allCompanies.push(...(response.results || []));
+    after = response.paging?.next?.after;
+    hasMore = !!after;
+
+    // Safety limit: stop at 50,000 companies
+    if (allCompanies.length >= 50000) {
+      console.warn('[Import Match] Reached 50k company limit, stopping fetch');
+      break;
+    }
+  }
+
+  return allCompanies;
 }
