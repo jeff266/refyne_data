@@ -52,6 +52,7 @@ export const NAV = [
   { group: 'CLEAN' },
   { id: 'normalize',   label: 'Normalize',     icon: 'ArrowUpDown' },
   { id: 'dedup',       label: 'Dedup',         icon: 'GitMerge' },
+  { id: 'import',      label: 'Import',        icon: 'Upload', betaGated: true },
   { divider: true },
   { group: 'ENRICH' },
   { id: 'enrich',      label: 'Enrich',        icon: 'Search' },
@@ -78,6 +79,7 @@ export const PAGE_META: Record<string, { label: string; action: string | null }>
   // prospect:     { label: 'Prospect',       action: null },
   normalize:    { label: 'Normalize',      action: null },
   dedup:        { label: 'Dedup',          action: 'Run scan' },
+  import:       { label: 'Import',         action: null },
   enrich:       { label: 'Enrich',         action: null },
   // Hidden: Prospect is a future product. Quarantine is undefined scope.
   // quarantine:   { label: 'Quarantine',     action: null },
@@ -91,8 +93,8 @@ export const PAGE_META: Record<string, { label: string; action: string | null }>
 };
 
 export type NavItem =
-  | { id: string; label: string; icon: string; divider?: never; group?: never }
-  | { divider: true; id?: never; label?: never; icon?: never; group?: never }
-  | { group: string; id?: never; label?: never; icon?: never; divider?: never };
+  | { id: string; label: string; icon: string; betaGated?: boolean; divider?: never; group?: never }
+  | { divider: true; id?: never; label?: never; icon?: never; group?: never; betaGated?: never }
+  | { group: string; id?: never; label?: never; icon?: never; divider?: never; betaGated?: never };
 
 export type ChipColor = 'indigo' | 'green' | 'red' | 'amber';
