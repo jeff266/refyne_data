@@ -641,7 +641,9 @@ export default function HarmoniesPage() {
       const res = await fetch('/api/harmonies/conflicts');
       if (res.ok) {
         const data = await res.json();
-        const conflictsMap = new Map(Object.entries(data.conflicts || {}));
+        const conflictsMap = new Map<string, Array<{ harmonyId: string; harmonyName: string; canonicalField: string }>>(
+          Object.entries(data.conflicts || {})
+        );
         setFieldConflicts(conflictsMap);
       }
     } catch (err) {

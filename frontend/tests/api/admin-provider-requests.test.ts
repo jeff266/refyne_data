@@ -20,7 +20,7 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: () => mockClerkClient(),
 }));
 
-vi.mock('@/lib/db/supabase', () => ({
+vi.mock('@/lib/db/admin-client', () => ({
   supabaseAdmin: {
     from: vi.fn(),
   },
@@ -29,7 +29,7 @@ vi.mock('@/lib/db/supabase', () => ({
 // Import routes after mocking
 import { GET } from '@/app/api/admin/provider-requests/route';
 import { PATCH } from '@/app/api/admin/provider-requests/[id]/route';
-import { supabaseAdmin } from '@/lib/db/supabase';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 
 describe('Admin Provider Requests API', () => {
   beforeEach(() => {
