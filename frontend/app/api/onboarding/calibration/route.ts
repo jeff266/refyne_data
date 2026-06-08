@@ -15,7 +15,7 @@ import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 interface CalibrationRequestBody {
   normalization_mode: 'implicit' | 'explicit';
   phone: {
-    format: 'e164_international' | 'national' | 'e164_compact';
+    format: 'e164_international' | 'national' | 'e164_compact' | 'e164_formatted';
     default_country_code: string; // e.g. 'US', 'GB'
   };
   company_name: {

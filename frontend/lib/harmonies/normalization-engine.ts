@@ -353,9 +353,10 @@ export async function applyLookupHarmony(
 // ── Format Harmony (Algorithmic) ───────────────────────────────────
 
 function normalizePhoneE164(phone: string, config?: Record<string, any>): string | null {
-  // E.164 normalization with configurable default country code
+  // E.164 normalization with configurable default country code and format
   const defaultCountryCode = config?.default_country_code || '1';
   const stripExtensions = config?.strip_extensions ?? true;
+  const format = config?.format || 'e164_compact';
 
   // Safe string coercion
   const phoneStr = String(phone ?? '');
@@ -369,24 +370,83 @@ function normalizePhoneE164(phone: string, config?: Record<string, any>): string
 
   const digits = cleaned.replace(/\D/g, '');
 
-  // Check if already in E.164 format (starts with + and has 7-15 digits)
-  // If so, return cleaned version without spaces/dashes
+  // Determine country code and national number
+  let countryCode = defaultCountryCode;
+  let nationalNumber = digits;
+
+  // Check if already has country code (starts with +)
   if (cleaned.trim().startsWith('+') && digits.length >= 7 && digits.length <= 15) {
-    return `+${digits}`;
+    // Extract country code based on known patterns
+    if (digits.startsWith('1') && digits.length === 11) {
+      // US/Canada: +1 XXXXXXXXXX
+      countryCode = '1';
+      nationalNumber = digits.slice(1);
+    } else if (digits.startsWith('44')) {
+      // UK: +44 XXXXXXXXXX
+      countryCode = '44';
+      nationalNumber = digits.slice(2);
+    } else if (digits.startsWith('61')) {
+      // Australia: +61 XXXXXXXXX
+      countryCode = '61';
+      nationalNumber = digits.slice(2);
+    } else if (digits.startsWith('33')) {
+      // France: +33 XXXXXXXXX
+      countryCode = '33';
+      nationalNumber = digits.slice(2);
+    } else if (digits.startsWith('49')) {
+      // Germany: +49 XXXXXXXXXX
+      countryCode = '49';
+      nationalNumber = digits.slice(2);
+    } else {
+      // Other international: try to detect country code length (1-3 digits)
+      // Assume single digit country code for simplicity
+      if (digits.length >= 8 && digits[0] !== '0') {
+        countryCode = digits[0];
+        nationalNumber = digits.slice(1);
+      } else {
+        // Can't determine, use as-is
+        nationalNumber = digits;
+      }
+    }
+  } else if (digits.length === 10) {
+    // 10-digit number → use default country code
+    nationalNumber = digits;
+  } else if (digits.length === 11 && digits[0] === defaultCountryCode[0]) {
+    // 11-digit number starting with country code
+    countryCode = defaultCountryCode;
+    nationalNumber = digits.slice(1);
+  } else if (digits.length < 7) {
+    // Invalid length
+    return null;
   }
 
-  // 10-digit number → add country code
-  if (digits.length === 10) {
-    return `+${defaultCountryCode}${digits}`;
+  // Apply formatting based on config
+  if (format === 'e164_formatted') {
+    // Formatted international output
+    if (countryCode === '1' && nationalNumber.length === 10) {
+      // US format: +1 (XXX) XXX-XXXX
+      return `+1 (${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
+    } else {
+      // International: use compact format with country code
+      return `+${countryCode} ${nationalNumber}`;
+    }
+  } else if (format === 'national') {
+    // National format (US only): (XXX) XXX-XXXX
+    if (nationalNumber.length === 10) {
+      return `(${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
+    }
+    return nationalNumber;
+  } else if (format === 'e164_international') {
+    // Legacy alias for e164_formatted
+    if (countryCode === '1' && nationalNumber.length === 10) {
+      return `+1 (${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
+    } else {
+      return `+${countryCode} ${nationalNumber}`;
+    }
+  } else {
+    // e164_compact (default): +CCXXXXXXXXXX
+    return `+${countryCode}${nationalNumber}`;
   }
-
-  // 11-digit number starting with country code
-  if (digits.length === 11 && digits[0] === defaultCountryCode[0]) {
-    return `+${digits}`;
-  }
-
-  // Invalid length or format
-  return null;
 }
 
 function normalizeLinkedInUrl(url: string): string | null {

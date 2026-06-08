@@ -42,7 +42,7 @@ interface SampleData {
 interface CalibrationAnswers {
   normalization_mode: 'implicit' | 'explicit';
   phone: {
-    format: 'e164_international' | 'national' | 'e164_compact';
+    format: 'e164_international' | 'national' | 'e164_compact' | 'e164_formatted';
     default_country_code: string;
   };
   company_name: {
@@ -534,6 +534,20 @@ export default function CalibratePage() {
                   </div>
 
                   <OptionCard
+                    selected={answers.phone.format === 'e164_formatted'}
+                    onClick={() =>
+                      setAnswers({
+                        ...answers,
+                        phone: { ...answers.phone, format: 'e164_formatted' },
+                      })
+                    }
+                    title="International with formatting"
+                    description="Includes country code, human-readable. Recommended for US teams."
+                    example="+1 (562) 735-0870"
+                    badge="Recommended"
+                  />
+
+                  <OptionCard
                     selected={answers.phone.format === 'e164_international'}
                     onClick={() =>
                       setAnswers({
@@ -541,8 +555,8 @@ export default function CalibratePage() {
                         phone: { ...answers.phone, format: 'e164_international' },
                       })
                     }
-                    title="International with formatting"
-                    description=""
+                    title="International (legacy)"
+                    description="Legacy format, same as formatted"
                     example="+1 (415) 867-5309"
                   />
 
@@ -1103,7 +1117,9 @@ export default function CalibratePage() {
                       <div style={{ marginBottom: 12 }}>
                         <span style={{ fontSize: 12, color: C.text3 }}>Phone: </span>
                         <span style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>
-                          {answers.phone.format === 'e164_international'
+                          {answers.phone.format === 'e164_formatted'
+                            ? '+1 (562) 735-0870 (Formatted International)'
+                            : answers.phone.format === 'e164_international'
                             ? '+1 (415) 867-5309 (International)'
                             : answers.phone.format === 'national'
                             ? '(415) 867-5309 (National)'
@@ -1209,7 +1225,9 @@ export default function CalibratePage() {
                               <td style={{ padding: '8px 0', color: C.text2 }}>Phone</td>
                               <td style={{ padding: '8px 0', color: C.text3 }}>{sampleData.phones[0]}</td>
                               <td style={{ padding: '8px 0', color: C.indigo, fontWeight: 600 }}>
-                                {answers.phone.format === 'e164_international'
+                                {answers.phone.format === 'e164_formatted'
+                                  ? '+1 (562) 735-0870'
+                                  : answers.phone.format === 'e164_international'
                                   ? '+1 (415) 867-5309'
                                   : answers.phone.format === 'national'
                                   ? '(415) 867-5309'
