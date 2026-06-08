@@ -17,17 +17,23 @@ const STEPS: OnboardingStep[] = [
     key: 'connected_hubspot',
     label: 'Connect HubSpot',
     description: 'Link your HubSpot portal to get started',
-    link: '/connections',
+    link: '/onboarding/connect',
   },
   {
-    key: 'viewed_dashboard',
-    label: 'View your compliance score',
-    description: 'Check your data quality baseline',
-    link: '/dashboard',
+    key: 'calibration_completed',
+    label: 'Configure normalization',
+    description: 'Set your formatting preferences',
+    link: '/onboarding/calibrate?mode=recalibrate',
+  },
+  {
+    key: 'ran_normalize',
+    label: 'Run your first normalize',
+    description: 'Apply normalizations to your data',
+    link: '/normalize',
   },
   {
     key: 'viewed_dedup',
-    label: 'Review dedup pairs',
+    label: 'Review dedup clusters',
     description: 'Discover and merge duplicate records',
     link: '/dedup',
   },
@@ -37,21 +43,17 @@ const STEPS: OnboardingStep[] = [
     description: 'Create a data normalization rule',
     link: '/harmonies',
   },
-  {
-    key: 'ran_normalize',
-    label: 'Run your first normalize',
-    description: 'Apply Harmonies to your data',
-    link: '/normalize',
-  },
 ];
 
 interface OnboardingChecklistProps {
   progress: {
     connected_hubspot: boolean;
-    viewed_dashboard: boolean;
+    calibration_completed: boolean;
     viewed_dedup: boolean;
     applied_harmony: boolean;
     ran_normalize: boolean;
+    first_normalize_at: string | null;
+    first_merge_at: string | null;
     completed_at: string | null;
     dismissed_at: string | null;
   };
@@ -61,8 +63,16 @@ interface OnboardingChecklistProps {
 export function OnboardingChecklist({ progress, onDismiss }: OnboardingChecklistProps) {
   const [isDismissing, setIsDismissing] = useState(false);
 
-  // Count completed steps
-  const completedCount = STEPS.filter((step) => progress[step.key as keyof typeof progress]).length;
+  // Count completed steps with special logic for certain steps
+  const completedCount = STEPS.filter((step) => {
+    if (step.key === 'ran_normalize') {
+      return progress.ran_normalize || !!progress.first_normalize_at;
+    }
+    if (step.key === 'viewed_dedup') {
+      return progress.viewed_dedup || !!progress.first_merge_at;
+    }
+    return progress[step.key as keyof typeof progress];
+  }).length;
   const totalSteps = STEPS.length;
   const allComplete = completedCount === totalSteps;
 
@@ -178,7 +188,16 @@ export function OnboardingChecklist({ progress, onDismiss }: OnboardingChecklist
       ) : (
         <div style={{ padding: '12px 20px' }}>
           {STEPS.map((step, index) => {
-            const isComplete = progress[step.key as keyof typeof progress];
+            // Special completion logic for certain steps
+            let isComplete = false;
+            if (step.key === 'ran_normalize') {
+              isComplete = progress.ran_normalize || !!progress.first_normalize_at;
+            } else if (step.key === 'viewed_dedup') {
+              isComplete = progress.viewed_dedup || !!progress.first_merge_at;
+            } else {
+              isComplete = progress[step.key as keyof typeof progress] as boolean;
+            }
+
             return (
               <div
                 key={step.key}
