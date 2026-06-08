@@ -20,7 +20,11 @@ export async function GET(request: NextRequest) {
   // Check if user is Refyne staff
   const user = await currentUser();
   const email = user?.emailAddresses?.[0]?.emailAddress;
-  const isRefyneStaff = email?.endsWith('@refynedata.com') || email?.endsWith('@refyne.com');
+  const isRefyneStaff =
+    email?.endsWith('@refynedata.com') ||
+    email?.endsWith('@refyne.com') ||
+    email?.endsWith('@revopsimpact.us') ||
+    email?.endsWith('@revopsimpact.com');
 
   if (!isRefyneStaff) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

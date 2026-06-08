@@ -124,6 +124,50 @@ describe('Admin Provider Requests API', () => {
 
       expect(response.status).toBe(200);
     });
+
+    it('accepts @revopsimpact.us email domain', async () => {
+      mockCurrentUser.mockResolvedValue({
+        emailAddresses: [{ emailAddress: 'admin@revopsimpact.us' }],
+      });
+
+      const mockSelect = vi.fn().mockReturnValue({
+        order: vi.fn().mockResolvedValue({
+          data: [],
+          error: null,
+        }),
+      } as any);
+
+      vi.mocked(supabaseAdmin.from).mockReturnValue({
+        select: mockSelect,
+      } as any);
+
+      const request = new NextRequest('http://localhost:3000/api/admin/provider-requests');
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
+    });
+
+    it('accepts @revopsimpact.com email domain', async () => {
+      mockCurrentUser.mockResolvedValue({
+        emailAddresses: [{ emailAddress: 'admin@revopsimpact.com' }],
+      });
+
+      const mockSelect = vi.fn().mockReturnValue({
+        order: vi.fn().mockResolvedValue({
+          data: [],
+          error: null,
+        }),
+      } as any);
+
+      vi.mocked(supabaseAdmin.from).mockReturnValue({
+        select: mockSelect,
+      } as any);
+
+      const request = new NextRequest('http://localhost:3000/api/admin/provider-requests');
+      const response = await GET(request);
+
+      expect(response.status).toBe(200);
+    });
   });
 
   describe('PATCH /api/admin/provider-requests/[id]', () => {
