@@ -203,7 +203,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
               description,
               category,
               field,
-              approach: 'format',
+              transform_type: 'format',
               transform_function: formatFunction,
               transform_config,
             }),
