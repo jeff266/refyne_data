@@ -899,7 +899,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                       padding: 16,
                       background: C.surface,
                       border: `1px solid ${C.border2}`,
-                      borderRadius: 4
+                      borderRadius: 0
                     }}>
                       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
                         Phone format
@@ -981,7 +981,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                             padding: '6px 8px',
                             fontSize: 11,
                             border: `1px solid ${C.border2}`,
-                            borderRadius: 4
+                            borderRadius: 0
                           }}
                         >
                           <option value="US">United States (+1)</option>
@@ -1002,7 +1002,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                         padding: 12,
                         background: C.blueDim,
                         border: `1px solid ${C.blueBrd}`,
-                        borderRadius: 4,
+                        borderRadius: 0,
                         display: 'flex',
                         gap: 8
                       }}>
