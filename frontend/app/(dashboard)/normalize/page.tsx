@@ -47,6 +47,9 @@ export default function NormalizePage() {
   const [active, setActive] = useState<string[]>([]);
   const toggle = (id: string) => setActive(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id]);
 
+  // Tooltip hover timeout tracking
+  const hoverTimeouts = useMemo(() => new Map<string, number>(), []);
+
   // Source filter state
   const [sourceType, setSourceType] = useState<'all' | 'issues' | 'list'>('issues');
   const [selectedHarmonyFilters, setSelectedHarmonyFilters] = useState<Set<string>>(new Set());
@@ -90,7 +93,16 @@ export default function NormalizePage() {
 
   // Enum validation state
   const [hubspotProperties, setHubspotProperties] = useState<HubSpotProperty[]>([]);
-  const [harmoniesMetadata, setHarmoniesMetadata] = useState<Map<string, { name: string; targetField: string }>>(new Map());
+  const [harmoniesMetadata, setHarmoniesMetadata] = useState<Map<string, {
+    name: string;
+    description: string;
+    targetField: string;
+    transform_function: string;
+    transform_config: Record<string, any>;
+  }>>(new Map());
+
+  // Tooltip state
+  const [tooltipVisible, setTooltipVisible] = useState<string | null>(null);
 
   // Field assignments for harmony labels
   const [fieldAssignmentLabels, setFieldAssignmentLabels] = useState<Map<string, string>>(new Map());
@@ -345,7 +357,13 @@ export default function NormalizePage() {
   // Fetch harmony metadata for active harmonies
   const fetchHarmoniesMetadata = async (harmonyIds: string[]) => {
     try {
-      const metadata = new Map<string, { name: string; targetField: string }>();
+      const metadata = new Map<string, {
+        name: string;
+        description: string;
+        targetField: string;
+        transform_function: string;
+        transform_config: Record<string, any>;
+      }>();
 
       // Fetch metadata for each harmony
       await Promise.all(
@@ -358,7 +376,10 @@ export default function NormalizePage() {
               if (targetField) {
                 metadata.set(harmonyId, {
                   name: harmony.name,
+                  description: harmony.description || '',
                   targetField,
+                  transform_function: harmony.transform_function || '',
+                  transform_config: harmony.transform_config || {},
                 });
               }
             }
@@ -662,6 +683,7 @@ export default function NormalizePage() {
                   Object.keys(issueCounts).map(harmonyId => {
                     const count = issueCounts[harmonyId] || 0;
                     const isChecked = selectedHarmonyFilters.has(harmonyId);
+                    const harmonyMeta = harmoniesMetadata.get(harmonyId);
 
                     return (
                       <label
@@ -672,6 +694,7 @@ export default function NormalizePage() {
                           gap: 6,
                           marginBottom: 6,
                           cursor: 'pointer',
+                          position: 'relative',
                         }}
                       >
                         <input
@@ -688,9 +711,82 @@ export default function NormalizePage() {
                           }}
                           style={{ cursor: 'pointer' }}
                         />
-                        <span style={{ fontSize: 10, fontFamily: F.mono, color: count > 0 ? C.text : C.text3 }}>
-                          {harmonyId}
-                        </span>
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                          <span
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              window.location.href = `/harmonies/${harmonyId}`;
+                            }}
+                            onMouseEnter={() => {
+                              const timeout = window.setTimeout(() => {
+                                setTooltipVisible(harmonyId);
+                              }, 300);
+                              hoverTimeouts.set(harmonyId, timeout);
+                            }}
+                            onMouseLeave={() => {
+                              const timeout = hoverTimeouts.get(harmonyId);
+                              if (timeout) {
+                                clearTimeout(timeout);
+                                hoverTimeouts.delete(harmonyId);
+                              }
+                              setTooltipVisible(null);
+                            }}
+                            style={{
+                              fontSize: 10,
+                              fontFamily: F.mono,
+                              color: count > 0 ? C.text : C.text3,
+                              cursor: 'pointer',
+                              textDecoration: tooltipVisible === harmonyId ? 'underline' : 'none'
+                            }}
+                          >
+                            {harmonyMeta?.name || harmonyId}
+                          </span>
+
+                          {tooltipVisible === harmonyId && harmonyMeta && (
+                            <div style={{
+                              position: 'absolute',
+                              bottom: '100%',
+                              left: 0,
+                              marginBottom: 8,
+                              background: C.indigoDk,
+                              color: C.text,
+                              padding: 12,
+                              borderRadius: 0,
+                              maxWidth: 250,
+                              fontSize: 11,
+                              lineHeight: 1.4,
+                              zIndex: 1000,
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                              pointerEvents: 'none',
+                            }}>
+                              <div style={{ fontWeight: 600, marginBottom: 6 }}>{harmonyMeta.name}</div>
+                              {harmonyMeta.description && (
+                                <div style={{ marginBottom: 8, opacity: 0.9 }}>{harmonyMeta.description}</div>
+                              )}
+                              {harmonyMeta.transform_function && (
+                                <div style={{ marginBottom: 4, opacity: 0.8 }}>
+                                  Function: {harmonyMeta.transform_function}
+                                </div>
+                              )}
+                              {Object.keys(harmonyMeta.transform_config).length > 0 && (
+                                <div style={{ marginBottom: 8, opacity: 0.8 }}>
+                                  Config: {JSON.stringify(harmonyMeta.transform_config, null, 2).slice(0, 100)}{JSON.stringify(harmonyMeta.transform_config, null, 2).length > 100 ? '...' : ''}
+                                </div>
+                              )}
+                              <a
+                                href={`/harmonies/${harmonyId}`}
+                                style={{
+                                  color: C.indigo,
+                                  textDecoration: 'underline',
+                                  fontSize: 10
+                                }}
+                              >
+                                View harmony →
+                              </a>
+                            </div>
+                          )}
+                        </div>
                         <span style={{ fontSize: 9, color: count > 0 ? C.amber : C.text3, fontWeight: 500 }}>
                           ({count})
                         </span>
@@ -709,10 +805,86 @@ export default function NormalizePage() {
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {Object.keys(issueCounts).map(id => {
               const fieldLabel = fieldAssignmentLabels.get(id);
+              const harmonyMeta = harmoniesMetadata.get(id);
+
               return (
                 <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', borderBottom: `1px solid ${C.border}` }}>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ fontSize: 11, fontFamily: F.mono, color: active.includes(id) ? C.text : C.text3 }}>{id}</span>
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <span
+                        onClick={(e) => {
+                          e.preventDefault();
+                          window.location.href = `/harmonies/${id}`;
+                        }}
+                        onMouseEnter={() => {
+                          const timeout = window.setTimeout(() => {
+                            setTooltipVisible(id);
+                          }, 300);
+                          hoverTimeouts.set(id, timeout);
+                        }}
+                        onMouseLeave={() => {
+                          const timeout = hoverTimeouts.get(id);
+                          if (timeout) {
+                            clearTimeout(timeout);
+                            hoverTimeouts.delete(id);
+                          }
+                          setTooltipVisible(null);
+                        }}
+                        style={{
+                          fontSize: 11,
+                          fontFamily: F.mono,
+                          color: active.includes(id) ? C.text : C.text3,
+                          cursor: 'pointer',
+                          textDecoration: tooltipVisible === id ? 'underline' : 'none'
+                        }}
+                      >
+                        {harmonyMeta?.name || id}
+                      </span>
+
+                      {tooltipVisible === id && harmonyMeta && (
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '100%',
+                          left: 0,
+                          marginBottom: 8,
+                          background: C.indigoDk,
+                          color: C.text,
+                          padding: 12,
+                          borderRadius: 0,
+                          maxWidth: 250,
+                          fontSize: 11,
+                          lineHeight: 1.4,
+                          zIndex: 1000,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                          pointerEvents: 'none',
+                        }}>
+                          <div style={{ fontWeight: 600, marginBottom: 6 }}>{harmonyMeta.name}</div>
+                          {harmonyMeta.description && (
+                            <div style={{ marginBottom: 8, opacity: 0.9 }}>{harmonyMeta.description}</div>
+                          )}
+                          {harmonyMeta.transform_function && (
+                            <div style={{ marginBottom: 4, opacity: 0.8 }}>
+                              Function: {harmonyMeta.transform_function}
+                            </div>
+                          )}
+                          {Object.keys(harmonyMeta.transform_config).length > 0 && (
+                            <div style={{ marginBottom: 8, opacity: 0.8 }}>
+                              Config: {JSON.stringify(harmonyMeta.transform_config, null, 2).slice(0, 100)}{JSON.stringify(harmonyMeta.transform_config, null, 2).length > 100 ? '...' : ''}
+                            </div>
+                          )}
+                          <a
+                            href={`/harmonies/${id}`}
+                            style={{
+                              color: C.indigo,
+                              textDecoration: 'underline',
+                              fontSize: 10
+                            }}
+                          >
+                            View harmony →
+                          </a>
+                        </div>
+                      )}
+                    </div>
                     {fieldLabel && (
                       <span style={{ fontSize: 9, fontFamily: F.mono, color: C.text3, opacity: 0.7 }}>
                         writes to: {fieldLabel}
