@@ -393,3 +393,68 @@ Phone Format Enhancement: 1,180 → 1,189 (+9)
 **Commit:** `b930d50` - "Fix phone harmony bugs: live tester and write policy"
 
 **Test Results:** 1,189/1,189 passing ✅
+
+---
+
+# Bug Fixes - Phone Normalizer Round 2 ✅
+
+**Last Updated:** 2026-06-07
+**Test Count:** 1,191 passing (+2 new tests)
+
+## Additional Bugs Fixed
+
+### Bug 1: "1 " Prefix Not Recognized ✅
+**Problem:** Input "1 (310) 387-9598" (US country code without + prefix) incorrectly returned "already normalized"
+
+**Fix:** Added pattern detection in `normalizePhoneE164()`
+- Detects "1 " or "1-" prefix before parsing
+- Prepends + to convert to standard format
+- Examples:
+  - "1 (310) 387-9598" → "+1 (310) 387-9598" ✅
+  - "1-310-387-9598" → "+1 (310) 387-9598" ✅
+
+**Tests Added:**
+- `normalizes numbers starting with "1 " prefix (Bug Fix)`
+- `normalizes numbers starting with "1-" prefix (Bug Fix)`
+
+**File Modified:**
+- `lib/harmonies/normalization-engine.ts` (prefix detection logic)
+
+### Bug 2: Description Mismatch with transform_config ✅
+**Problem:**
+- Description says "US format +1 (XXX) XXX-XXXX"
+- But transform_config was missing format field
+- Defaulted to compact E.164 (+15627350870)
+
+**Fix:** Three-part solution
+
+**1. Migration 091** (updates existing harmonies)
+```sql
+UPDATE harmonies
+SET transform_config = jsonb_set(
+  COALESCE(transform_config, '{}'::jsonb),
+  '{format}',
+  '"e164_formatted"'
+)
+WHERE id IN ('phone', 'contact-phone-e164')
+```
+
+**2. YAML Defaults Updated**
+- `phone.yaml`: added `format: e164_formatted`
+- `contact-phone-e164.yaml`: added `format: e164_formatted`
+
+**3. Result**
+- Old: "(562) 735-0870" → "+15627350870" (compact)
+- New: "(562) 735-0870" → "+1 (562) 735-0870" (formatted) ✅
+
+**Files Modified:**
+- `supabase/migrations/20260607000006_091_update_phone_harmony_format.sql` (new)
+- `lib/harmonies/library/phone.yaml` (added format)
+- `lib/harmonies/library/contact-phone-e164.yaml` (added format)
+- `lib/harmonies/phone-format.test.ts` (2 new tests)
+
+**Commit:** `9c5f297` - "Fix phone normalizer bugs: '1 ' prefix detection and format config"
+
+**Test Progression:** 1,189 → 1,191 passing (+2) ✅
+
+**New test floor: 1,191 passing tests**
