@@ -146,12 +146,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Return response
+    // Return response with all rows for client-side filtering
+    // (Max 10,000 rows enforced above, so safe to return all)
     return NextResponse.json({
       session_id: importSession.id,
       row_count: rows.length,
       columns,
-      preview_rows: rows.slice(0, 5),
+      preview_rows: rows, // Return all rows for accurate filter counts
     });
   } catch (error) {
     console.error('[Import Parse] Unexpected error:', error);
