@@ -9,7 +9,12 @@
  *   npx tsx scripts/set-refyne-staff.ts user_xxx
  */
 
-import { clerkClient } from '@clerk/nextjs/server';
+import { config } from 'dotenv';
+import { resolve } from 'path';
+import { createClerkClient } from '@clerk/backend';
+
+// Load .env.local from frontend directory
+config({ path: resolve(__dirname, '../.env.local') });
 
 async function setRefyneStaff() {
   // Get userId from env or command line
@@ -28,10 +33,17 @@ async function setRefyneStaff() {
     process.exit(1);
   }
 
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) {
+    console.error('Error: CLERK_SECRET_KEY not found in environment');
+    console.error('Make sure .env.local exists with CLERK_SECRET_KEY set');
+    process.exit(1);
+  }
+
   console.log(`Setting isRefyneStaff = true for ${userId}...`);
 
   try {
-    const client = await clerkClient();
+    const client = createClerkClient({ secretKey });
 
     // Update user metadata
     const user = await client.users.updateUser(userId, {
