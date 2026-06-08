@@ -458,3 +458,87 @@ WHERE id IN ('phone', 'contact-phone-e164')
 **Test Progression:** 1,189 → 1,191 passing (+2) ✅
 
 **New test floor: 1,191 passing tests**
+
+---
+
+# New Harmony Wizard Improvements ✅
+
+**Last Updated:** 2026-06-07
+**Test Count:** 1,191 passing (maintained)
+
+## Three UX Enhancements
+
+### 1. Dynamic Dropdown Filtering ✅
+**Feature:** Format function dropdown filters based on selected HubSpot field
+
+**Field-specific filtering:**
+- **Phone fields** (phone, mobilephone, fax) → Only "E.164 Phone"
+- **Email field** → Only "Lowercase Email"
+- **URL fields** (website, linkedin_company_page) → "LinkedIn URL", "Canonical URL"
+- **Name fields** (name, firstname, lastname, company) → Only "Smart Title Case"
+- **Numeric fields** (numberofemployees, annualrevenue) → Only "Numeric Parse"
+- **Other fields** → Show all 6 format functions
+
+**Behavior:**
+- Client-side filtering using `useMemo` hook
+- Reactive to HubSpotPropertyPicker selection
+- Auto-selects when only one option available
+
+### 2. E.164 Phone Format Sub-Options ✅
+**Feature:** When E.164 Phone selected, show configuration panel
+
+**Format options (radio buttons):**
+1. **+1 (310) 387-9598** - "International with formatting" (default)
+   - Recommended for US teams
+2. **+13103879598** - "E.164 compact"
+   - Best for dialers and APIs
+3. **(310) 387-9598** - "US national"
+   - No country code
+
+**Country code dropdown:**
+- 6 countries: US (default), UK, AU, CA, FR, DE
+- Helper text: "Applied to numbers without a country code prefix"
+
+**API integration:**
+- Writes to `transform_config`:
+  ```json
+  {
+    "format": "e164_formatted",
+    "default_country_code": "US"
+  }
+  ```
+- Included in POST /api/harmonies request
+
+### 3. International Handling Info Note ✅
+**Feature:** Blue info banner explaining country code preservation
+
+**Message:**
+"Numbers with a country code (+44, +61, etc.) will preserve their country code. The default country code above applies only to numbers without a prefix."
+
+**Design:**
+- Info icon from lucide-react
+- Blue background (`C.blueDim`), blue border (`C.blueBrd`)
+- Appears when E.164 Phone selected
+
+## Implementation
+
+**File Modified:**
+- `components/harmonies/HarmonyWizard.tsx` (+186 lines, -8 lines)
+
+**Key additions:**
+- `getAvailableFunctions()` - Field-based filtering logic
+- `phoneConfig` state - Format and country code
+- `availableFunctions` - Memoized filtered options
+- Auto-select useEffect
+- Phone config panel (122 lines)
+- Updated `handleNext()` to include `transform_config`
+
+**Design consistency:**
+- Uses existing design tokens (C.surface, C.indigo, C.blue)
+- Matches wizard panel styling
+- Consistent spacing and typography
+
+**Commit:** `2464778` - "Improve New Harmony wizard: dynamic dropdown, phone config, and international note"
+
+**Test Results:** 1,191/1,191 passing ✅
+**Build:** TypeScript clean, 227 static pages generated ✅
