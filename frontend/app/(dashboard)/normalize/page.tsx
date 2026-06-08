@@ -729,7 +729,7 @@ export default function NormalizePage() {
               Don't see a field you need?
             </div>
             <a
-              href="/normalize/harmonies/new"
+              href="/harmonies/new"
               style={{
                 display: 'block',
                 padding: '6px 12px',
