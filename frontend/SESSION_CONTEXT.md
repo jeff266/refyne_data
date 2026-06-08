@@ -538,7 +538,15 @@ WHERE id IN ('phone', 'contact-phone-e164')
 - Matches wizard panel styling
 - Consistent spacing and typography
 
-**Commit:** `2464778` - "Improve New Harmony wizard: dynamic dropdown, phone config, and international note"
+**Commits:**
+- Feature: `2464778` - "Improve New Harmony wizard: dynamic dropdown, phone config, and international note"
+- Fix: `61e6284` - "Fix design system violation: remove border-radius from phone config panel"
+
+**Design System Fix:**
+- Removed all border-radius values added in commit 2464778
+- Changed borderRadius: 4 → 0 (square corners)
+- Hard rule enforced: No border-radius anywhere in Refyne UI
+- Fixed 3 locations: config panel, dropdown, info note
 
 **Test Results:** 1,191/1,191 passing ✅
 **Build:** TypeScript clean, 227 static pages generated ✅
