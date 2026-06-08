@@ -19,6 +19,7 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
+import { FilterStep } from '@/components/import/FilterStep';
 
 export default function ImportPage() {
   const router = useRouter();
@@ -35,6 +36,7 @@ export default function ImportPage() {
   // Step 2: Filter
   const [columns, setColumns] = useState<any[]>([]);
   const [previewRows, setPreviewRows] = useState<any[]>([]);
+  const [rowCount, setRowCount] = useState<number>(0);
   const [filters, setFilters] = useState<Record<string, any>>({});
 
   // Step 3: Field mapping
@@ -89,6 +91,7 @@ export default function ImportPage() {
       setFilename(uploadFile.name);
       setColumns(data.columns);
       setPreviewRows(data.preview_rows);
+      setRowCount(data.row_count || data.preview_rows.length);
 
       // Auto-map fields based on detected types
       const autoMapping: any = {};
@@ -334,27 +337,17 @@ export default function ImportPage() {
         </div>
       )}
 
-      {/* Step 2: Filter (placeholder) */}
+      {/* Step 2: Filter */}
       {step === 2 && (
-        <div>
-          <h2 className="text-lg font-medium text-white mb-4">
-            Step 2: Filter Rows (Optional)
-          </h2>
-          <p className="text-zinc-400 mb-6">
-            Apply filters to narrow down which rows to import. Skip to import
-            all rows.
-          </p>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => setStep(3)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2"
-            >
-              Continue
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <FilterStep
+          columns={columns}
+          previewRows={previewRows}
+          totalRows={rowCount}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onBack={() => setStep(1)}
+          onContinue={() => setStep(3)}
+        />
       )}
 
       {/* Step 3: Map Fields */}
