@@ -540,13 +540,21 @@ WHERE id IN ('phone', 'contact-phone-e164')
 
 **Commits:**
 - Feature: `2464778` - "Improve New Harmony wizard: dynamic dropdown, phone config, and international note"
-- Fix: `61e6284` - "Fix design system violation: remove border-radius from phone config panel"
+- Fix (design): `61e6284` - "Fix design system violation: remove border-radius from phone config panel"
+- Fix (critical): `c59cd9a` - "Fix harmony creation bug: send transform_type instead of approach"
 
 **Design System Fix:**
 - Removed all border-radius values added in commit 2464778
 - Changed borderRadius: 4 → 0 (square corners)
 - Hard rule enforced: No border-radius anywhere in Refyne UI
 - Fixed 3 locations: config panel, dropdown, info note
+
+**Critical Bug Fix:**
+- Format harmony creation was failing with database constraint violation
+- Error: "harmonies_approach_check" constraint violated
+- Root cause: Wizard sent `approach: 'format'` but API expects `transform_type: 'format'`
+- Fix: Changed wizard to send correct field (line 206)
+- Database validates `transform_type`, not `approach`
 
 **Test Results:** 1,191/1,191 passing ✅
 **Build:** TypeScript clean, 227 static pages generated ✅
