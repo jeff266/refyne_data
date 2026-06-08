@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabaseAdmin } from '@/lib/db/supabase';
-import { currentUser } from '@clerk/nextjs/server';
+import { clerkClient } from '@clerk/nextjs/server';
 
 /**
  * PATCH /api/admin/provider-requests/[id]
@@ -19,16 +19,17 @@ export async function PATCH(
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
-  // Check if user is Refyne staff
-  const user = await currentUser();
-  const email = user?.emailAddresses?.[0]?.emailAddress;
-  const isRefyneStaff =
-    email?.endsWith('@refynedata.com') ||
-    email?.endsWith('@refyne.com') ||
-    email?.endsWith('@revopsimpact.us') ||
-    email?.endsWith('@revopsimpact.com');
+  // Check if user is Refyne staff via Clerk metadata
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(ctx.userId);
+    const isStaff = user.publicMetadata?.isRefyneStaff === true;
 
-  if (!isRefyneStaff) {
+    if (!isStaff) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+  } catch (error) {
+    console.error('[Admin Provider Requests] Failed to check staff status:', error);
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
