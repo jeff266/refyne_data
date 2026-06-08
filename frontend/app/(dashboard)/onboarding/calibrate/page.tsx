@@ -43,7 +43,7 @@ interface SampleData {
 interface CalibrationAnswers {
   normalization_mode: 'implicit' | 'explicit';
   phone: {
-    format: 'e164_international' | 'national' | 'e164_compact' | 'e164_formatted';
+    format: 'e164_international' | 'national' | 'e164_compact' | 'e164_formatted' | 'e164_dashes' | 'e164_spaces';
     default_country_code: string;
   };
   company_name: {
@@ -542,36 +542,36 @@ export default function CalibratePage() {
                         phone: { ...answers.phone, format: 'e164_formatted' },
                       })
                     }
-                    title="International with formatting"
-                    description="Includes country code, human-readable. Recommended for US teams."
-                    example="+1 (562) 735-0870"
+                    title="+1 (310) 387-9598"
+                    description="International with formatting"
+                    example="Recommended for US teams"
                     badge="Recommended"
                   />
 
                   <OptionCard
-                    selected={answers.phone.format === 'e164_international'}
+                    selected={answers.phone.format === 'e164_dashes'}
                     onClick={() =>
                       setAnswers({
                         ...answers,
-                        phone: { ...answers.phone, format: 'e164_international' },
+                        phone: { ...answers.phone, format: 'e164_dashes' },
                       })
                     }
-                    title="International (legacy)"
-                    description="Legacy format, same as formatted"
-                    example="+1 (415) 867-5309"
+                    title="+1 310-387-9598"
+                    description="International with dashes"
+                    example="Common in European exports"
                   />
 
                   <OptionCard
-                    selected={answers.phone.format === 'national'}
+                    selected={answers.phone.format === 'e164_spaces'}
                     onClick={() =>
                       setAnswers({
                         ...answers,
-                        phone: { ...answers.phone, format: 'national' },
+                        phone: { ...answers.phone, format: 'e164_spaces' },
                       })
                     }
-                    title="US national"
-                    description=""
-                    example="(415) 867-5309"
+                    title="+1 310 387 9598"
+                    description="International with spaces"
+                    example="ITU-T recommended spacing"
                   />
 
                   <OptionCard
@@ -582,9 +582,22 @@ export default function CalibratePage() {
                         phone: { ...answers.phone, format: 'e164_compact' },
                       })
                     }
-                    title="E.164 compact"
-                    description="Best for sales dialers and outreach tools"
-                    example="+14158675309"
+                    title="+13103879598"
+                    description="E.164 compact"
+                    example="Best for dialers and APIs"
+                  />
+
+                  <OptionCard
+                    selected={answers.phone.format === 'national'}
+                    onClick={() =>
+                      setAnswers({
+                        ...answers,
+                        phone: { ...answers.phone, format: 'national' },
+                      })
+                    }
+                    title="(310) 387-9598"
+                    description="National, no country code"
+                    example="Legacy US format"
                   />
 
                   <div style={{ marginTop: 24, padding: 16, background: C.surface, border: `1px solid ${C.border}` }}>
@@ -1106,12 +1119,16 @@ export default function CalibratePage() {
                         <span style={{ fontSize: 12, color: C.text3 }}>Phone: </span>
                         <span style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>
                           {answers.phone.format === 'e164_formatted'
-                            ? '+1 (562) 735-0870 (Formatted International)'
-                            : answers.phone.format === 'e164_international'
-                            ? '+1 (415) 867-5309 (International)'
+                            ? '+1 (310) 387-9598 (International with formatting)'
+                            : answers.phone.format === 'e164_dashes'
+                            ? '+1 310-387-9598 (International with dashes)'
+                            : answers.phone.format === 'e164_spaces'
+                            ? '+1 310 387 9598 (International with spaces)'
+                            : answers.phone.format === 'e164_compact'
+                            ? '+13103879598 (E.164 compact)'
                             : answers.phone.format === 'national'
-                            ? '(415) 867-5309 (National)'
-                            : '+14158675309 (E.164)'}
+                            ? '(310) 387-9598 (National)'
+                            : '+1 (310) 387-9598 (International)'}
                         </span>
                       </div>
                       <div style={{ marginBottom: 12 }}>
@@ -1214,12 +1231,16 @@ export default function CalibratePage() {
                               <td style={{ padding: '8px 0', color: C.text3 }}>{sampleData.phones[0]}</td>
                               <td style={{ padding: '8px 0', color: C.indigo, fontWeight: 600 }}>
                                 {answers.phone.format === 'e164_formatted'
-                                  ? '+1 (562) 735-0870'
-                                  : answers.phone.format === 'e164_international'
-                                  ? '+1 (415) 867-5309'
+                                  ? '+1 (310) 387-9598'
+                                  : answers.phone.format === 'e164_dashes'
+                                  ? '+1 310-387-9598'
+                                  : answers.phone.format === 'e164_spaces'
+                                  ? '+1 310 387 9598'
+                                  : answers.phone.format === 'e164_compact'
+                                  ? '+13103879598'
                                   : answers.phone.format === 'national'
-                                  ? '(415) 867-5309'
-                                  : '+14158675309'}
+                                  ? '(310) 387-9598'
+                                  : '+1 (310) 387-9598'}
                               </td>
                             </tr>
                           )}

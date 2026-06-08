@@ -124,6 +124,7 @@ function HarmonyRow({
   issueCount,
   isAdmin,
   onDelete,
+  conflicts,
 }: {
   h: HarmonyItem;
   isRec?: boolean;
@@ -137,6 +138,7 @@ function HarmonyRow({
   issueCount?: number;
   isAdmin: boolean;
   onDelete: (harmonyId: string) => void;
+  conflicts?: Array<{ harmonyId: string; harmonyName: string; canonicalField: string }>;
 }) {
   const router = useRouter();
   const [testInput, setTestInput] = useState('');
@@ -273,6 +275,15 @@ function HarmonyRow({
                 )}
                 {h.recordsAffected !== undefined && <span>• {h.recordsAffected} records affected</span>}
               </div>
+              {conflicts && conflicts.length > 0 && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 8px', background: C.amberDim, borderRadius: 0, border: `1px solid ${C.amberBrd}`, marginTop: 6 }}>
+                  <AlertTriangle size={10} color={C.amber} />
+                  <span style={{ fontSize: 10, color: C.amber }}>
+                    Conflict: shares {conflicts[0].canonicalField} with {conflicts[0].harmonyName}
+                    {conflicts.length > 1 && ` +${conflicts.length - 1} more`}
+                  </span>
+                </div>
+              )}
               {h.warning && (
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: C.amberDim, borderRadius: 6, border: `1px solid rgba(245,158,11,0.2)`, marginTop: 8 }}>
                   <AlertTriangle size={11} color={C.amber} />
@@ -575,6 +586,14 @@ export default function HarmoniesPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ harmonyId: string; harmonyName: string; fieldAssignment?: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [conflictModal, setConflictModal] = useState<{
+    harmonyId: string;
+    harmonyName: string;
+    conflicts: Array<{ harmonyId: string; harmonyName: string; canonicalField: string }>;
+  } | null>(null);
+  const [conflictResolution, setConflictResolution] = useState<'cancel' | 'disable-others' | 'both'>('cancel');
+  const [resolvingConflict, setResolvingConflict] = useState(false);
+  const [fieldConflicts, setFieldConflicts] = useState<Map<string, Array<{ harmonyId: string; harmonyName: string; canonicalField: string }>>>(new Map());
 
   // Fetch harmonies and enabled state
   const fetchHarmonies = useCallback(async () => {
@@ -606,12 +625,29 @@ export default function HarmoniesPage() {
         });
         setInsights(insightsMap);
       }
+
+      // Fetch field conflicts for visual indicators
+      await fetchFieldConflicts();
     } catch (err) {
       console.error('Failed to fetch harmonies:', err);
     } finally {
       setLoading(false);
     }
   }, [objectType]);
+
+  // Fetch field conflicts for all active harmonies
+  const fetchFieldConflicts = async () => {
+    try {
+      const res = await fetch('/api/harmonies/conflicts');
+      if (res.ok) {
+        const data = await res.json();
+        const conflictsMap = new Map(Object.entries(data.conflicts || {}));
+        setFieldConflicts(conflictsMap);
+      }
+    } catch (err) {
+      console.error('Failed to fetch field conflicts:', err);
+    }
+  };
 
   useEffect(() => {
     fetchHarmonies();
@@ -638,6 +674,30 @@ export default function HarmoniesPage() {
   // Toggle harmony with optimistic update
   const toggle = async (id: string) => {
     const wasEnabled = enabledIds.has(id);
+
+    // If turning ON, check for conflicts first
+    if (!wasEnabled) {
+      try {
+        const conflictRes = await fetch(`/api/harmonies/${id}/check-conflicts`);
+        if (conflictRes.ok) {
+          const conflictData = await conflictRes.json();
+          if (conflictData.conflicts && conflictData.conflicts.length > 0) {
+            // Show conflict modal
+            const harmony = harmonies.find(h => h.id === id);
+            setConflictModal({
+              harmonyId: id,
+              harmonyName: harmony?.name || id,
+              conflicts: conflictData.conflicts,
+            });
+            setConflictResolution('cancel');
+            return; // Don't proceed with toggle - wait for user decision
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check conflicts:', err);
+        // Continue with toggle even if conflict check fails
+      }
+    }
 
     // Optimistic update
     setTogglingId(id);
@@ -672,6 +732,8 @@ export default function HarmoniesPage() {
         const data = await res.json();
         // Confirm with server state
         setEnabledIds(new Set(data.harmonies || []));
+        // Refresh conflicts
+        await fetchFieldConflicts();
       }
     } catch (err) {
       // Revert on error
@@ -687,6 +749,50 @@ export default function HarmoniesPage() {
       console.error('Failed to toggle harmony:', err);
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  // Handle conflict resolution
+  const handleConflictResolve = async () => {
+    if (!conflictModal) return;
+
+    setResolvingConflict(true);
+
+    try {
+      if (conflictResolution === 'cancel') {
+        // Just close modal, don't activate
+        setConflictModal(null);
+        return;
+      }
+
+      if (conflictResolution === 'disable-others') {
+        // Disable all conflicting harmonies first
+        for (const conflict of conflictModal.conflicts) {
+          const conflictEnabled = enabledIds.has(conflict.harmonyId);
+          if (conflictEnabled) {
+            await fetch(`/api/harmonies/${conflict.harmonyId}/toggle`, {
+              method: 'POST',
+            });
+          }
+        }
+      }
+
+      // Now activate this harmony (for both 'disable-others' and 'both')
+      const res = await fetch(`/api/harmonies/${conflictModal.harmonyId}/toggle`, {
+        method: 'POST',
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEnabledIds(new Set(data.harmonies || []));
+        await fetchFieldConflicts();
+      }
+
+      setConflictModal(null);
+    } catch (err) {
+      console.error('Failed to resolve conflict:', err);
+    } finally {
+      setResolvingConflict(false);
     }
   };
 
@@ -855,6 +961,7 @@ export default function HarmoniesPage() {
                 issueCount={issueCounts[h.id]}
                 isAdmin={isAdmin}
                 onDelete={handleDeleteClick}
+                conflicts={fieldConflicts.get(h.id)}
               />
             ))}
           </Card>
@@ -878,6 +985,7 @@ export default function HarmoniesPage() {
                 issueCount={issueCounts[h.id]}
                 isAdmin={isAdmin}
                 onDelete={handleDeleteClick}
+                conflicts={fieldConflicts.get(h.id)}
               />
             ))}
           </Card>
@@ -937,6 +1045,172 @@ export default function HarmoniesPage() {
             fetchHarmonies(); // Refresh the harmonies list
           }}
         />
+      )}
+
+      {/* Conflict Resolution Modal */}
+      {conflictModal && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => !resolvingConflict && setConflictModal(null)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}
+          >
+            {/* Dialog */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: C.bg,
+                border: `1px solid ${C.border}`,
+                borderRadius: 0,
+                padding: 24,
+                maxWidth: 520,
+                width: '100%',
+                margin: '0 20px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+                <AlertTriangle size={24} color={C.amber} style={{ flexShrink: 0, marginTop: 2 }} />
+                <div style={{ flex: 1 }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+                    Field conflict detected
+                  </h2>
+                  <p style={{ fontSize: 13, color: C.text2, lineHeight: 1.5, marginBottom: 16 }}>
+                    <strong>{conflictModal.conflicts[0].harmonyName}</strong> already writes to{' '}
+                    <span style={{ fontFamily: F.mono, fontSize: 12 }}>{conflictModal.conflicts[0].canonicalField}</span>.
+                    Enabling <strong>{conflictModal.harmonyName}</strong> for the same field may cause conflicts.
+                  </p>
+
+                  <p style={{ fontSize: 13, color: C.text, marginBottom: 12, fontWeight: 500 }}>
+                    Which harmony should take priority?
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 10,
+                        padding: 10,
+                        border: `2px solid ${conflictResolution === 'cancel' ? C.indigo : C.border}`,
+                        borderRadius: 0,
+                        background: conflictResolution === 'cancel' ? C.indigoDim : 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="conflictResolution"
+                        value="cancel"
+                        checked={conflictResolution === 'cancel'}
+                        onChange={(e) => setConflictResolution(e.target.value as any)}
+                        style={{ marginTop: 2, cursor: 'pointer' }}
+                      />
+                      <div style={{ fontSize: 12, color: C.text }}>
+                        Keep <strong>{conflictModal.conflicts[0].harmonyName}</strong> active, cancel this activation
+                      </div>
+                    </label>
+
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 10,
+                        padding: 10,
+                        border: `2px solid ${conflictResolution === 'disable-others' ? C.indigo : C.border}`,
+                        borderRadius: 0,
+                        background: conflictResolution === 'disable-others' ? C.indigoDim : 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="conflictResolution"
+                        value="disable-others"
+                        checked={conflictResolution === 'disable-others'}
+                        onChange={(e) => setConflictResolution(e.target.value as any)}
+                        style={{ marginTop: 2, cursor: 'pointer' }}
+                      />
+                      <div style={{ fontSize: 12, color: C.text }}>
+                        Enable this one, disable <strong>{conflictModal.conflicts[0].harmonyName}</strong>
+                      </div>
+                    </label>
+
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 10,
+                        padding: 10,
+                        border: `2px solid ${conflictResolution === 'both' ? C.indigo : C.border}`,
+                        borderRadius: 0,
+                        background: conflictResolution === 'both' ? C.indigoDim : 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="conflictResolution"
+                        value="both"
+                        checked={conflictResolution === 'both'}
+                        onChange={(e) => setConflictResolution(e.target.value as any)}
+                        style={{ marginTop: 2, cursor: 'pointer' }}
+                      />
+                      <div style={{ fontSize: 12, color: C.text }}>
+                        Enable both (last harmony applied wins)
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setConflictModal(null)}
+                  disabled={resolvingConflict}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 12,
+                    color: C.text,
+                    background: 'transparent',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 0,
+                    cursor: resolvingConflict ? 'not-allowed' : 'pointer',
+                    opacity: resolvingConflict ? 0.5 : 1,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConflictResolve}
+                  disabled={resolvingConflict}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 12,
+                    color: C.bg,
+                    background: C.indigo,
+                    border: 'none',
+                    borderRadius: 0,
+                    cursor: resolvingConflict ? 'not-allowed' : 'pointer',
+                    opacity: resolvingConflict ? 0.5 : 1,
+                  }}
+                >
+                  {resolvingConflict ? 'Applying...' : 'Confirm'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Delete Confirmation Dialog */}

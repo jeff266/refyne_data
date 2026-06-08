@@ -61,6 +61,10 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const [fieldType, setFieldType] = useState<string>(''); // HubSpot field type (string, number, enumeration, etc.)
   const [transformType, setTransformType] = useState<'format' | 'group'>('group');
   const [formatFunction, setFormatFunction] = useState<string>('');
+  const [fieldConflictWarning, setFieldConflictWarning] = useState<{
+    harmonyName: string;
+    canonicalField: string;
+  } | null>(null);
 
   // Phone config state
   const [phoneConfig, setPhoneConfig] = useState({
@@ -164,6 +168,70 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
       setFormatFunction(availableFunctions[0]);
     }
   }, [transformType, availableFunctions, formatFunction]);
+
+  // Check for field conflicts when field is selected
+  useEffect(() => {
+    if (!field) {
+      setFieldConflictWarning(null);
+      return;
+    }
+
+    const checkFieldConflicts = async () => {
+      try {
+        const res = await fetch('/api/harmonies/conflicts');
+        if (res.ok) {
+          const data = await res.json();
+          const conflicts = data.conflicts || {};
+
+          // Check all active harmonies to see if any write to this field
+          const canonicalField = `${category}.${field}`;
+
+          for (const [harmonyId, harmonyConflicts] of Object.entries(conflicts)) {
+            const conflictArray = harmonyConflicts as any[];
+            const matchingConflict = conflictArray.find(
+              (c) => c.canonicalField === canonicalField
+            );
+
+            if (matchingConflict) {
+              setFieldConflictWarning({
+                harmonyName: matchingConflict.harmonyName,
+                canonicalField,
+              });
+              return;
+            }
+          }
+
+          // Also check field assignments directly
+          const assignRes = await fetch(`/api/harmonies/field-assignments?objectType=${category}`);
+          if (assignRes.ok) {
+            const assignData = await assignRes.json();
+            const assignments = assignData.assignments || [];
+            const existingAssignment = assignments.find(
+              (a: any) => a.hubspotProperty === field
+            );
+
+            if (existingAssignment) {
+              // Fetch harmony name
+              const harmonyRes = await fetch(`/api/harmonies/${existingAssignment.harmonyId}`);
+              if (harmonyRes.ok) {
+                const harmonyData = await harmonyRes.json();
+                setFieldConflictWarning({
+                  harmonyName: harmonyData.name,
+                  canonicalField,
+                });
+              }
+            } else {
+              setFieldConflictWarning(null);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check field conflicts:', err);
+      }
+    };
+
+    checkFieldConflicts();
+  }, [field, category]);
 
   const canAdvance = () => {
     if (step === 1) {
@@ -791,6 +859,24 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                   }}
                   placeholder="Select a HubSpot property..."
                 />
+                {fieldConflictWarning && (
+                  <div style={{
+                    marginTop: 8,
+                    padding: 10,
+                    background: C.amberDim,
+                    border: `1px solid ${C.amberBrd}`,
+                    borderRadius: 0,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                  }}>
+                    <AlertTriangle size={16} color={C.amber} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <div style={{ fontSize: 11, color: C.text, lineHeight: 1.4 }}>
+                      <strong>{fieldConflictWarning.harmonyName}</strong> already normalizes this field.
+                      Creating another harmony for the same field may cause conflicts.
+                    </div>
+                  </div>
+                )}
                 <p style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>
                   The internal HubSpot property name (e.g., "industry", "company_size")
                 </p>
@@ -936,6 +1022,46 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                         <input
                           type="radio"
                           name="phone-format"
+                          checked={phoneConfig.format === 'e164_dashes'}
+                          onChange={() => setPhoneConfig({ ...phoneConfig, format: 'e164_dashes' })}
+                        />
+                        <div>
+                          <div style={{ fontSize: 12, color: C.text }}>
+                            +1 310-387-9598
+                            <span style={{ marginLeft: 8, fontSize: 10, color: C.text2 }}>
+                              International with dashes
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>
+                            Common in European exports
+                          </div>
+                        </div>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 12, cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="phone-format"
+                          checked={phoneConfig.format === 'e164_spaces'}
+                          onChange={() => setPhoneConfig({ ...phoneConfig, format: 'e164_spaces' })}
+                        />
+                        <div>
+                          <div style={{ fontSize: 12, color: C.text }}>
+                            +1 310 387 9598
+                            <span style={{ marginLeft: 8, fontSize: 10, color: C.text2 }}>
+                              International with spaces
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>
+                            ITU-T recommended spacing
+                          </div>
+                        </div>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 12, cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="phone-format"
                           checked={phoneConfig.format === 'e164_compact'}
                           onChange={() => setPhoneConfig({ ...phoneConfig, format: 'e164_compact' })}
                         />
@@ -963,8 +1089,11 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                           <div style={{ fontSize: 12, color: C.text }}>
                             (310) 387-9598
                             <span style={{ marginLeft: 8, fontSize: 10, color: C.text2 }}>
-                              US national (no country code)
+                              National, no country code
                             </span>
+                          </div>
+                          <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>
+                            Legacy US format
                           </div>
                         </div>
                       </label>

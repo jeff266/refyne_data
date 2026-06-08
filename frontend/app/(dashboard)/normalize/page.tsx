@@ -45,7 +45,88 @@ export default function NormalizePage() {
   const [objectType] = useObjectType();
   const { isAdmin } = useRole();
   const [active, setActive] = useState<string[]>([]);
-  const toggle = (id: string) => setActive(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id]);
+  const [conflictModal, setConflictModal] = useState<{
+    harmonyId: string;
+    harmonyName: string;
+    conflicts: Array<{ harmonyId: string; harmonyName: string; canonicalField: string }>;
+  } | null>(null);
+  const [conflictResolution, setConflictResolution] = useState<'cancel' | 'disable-others' | 'both'>('cancel');
+  const [resolvingConflict, setResolvingConflict] = useState(false);
+
+  const toggle = async (id: string) => {
+    const wasActive = active.includes(id);
+
+    // If turning ON, check for conflicts first
+    if (!wasActive) {
+      try {
+        const conflictRes = await fetch(`/api/harmonies/${id}/check-conflicts`);
+        if (conflictRes.ok) {
+          const conflictData = await conflictRes.json();
+          if (conflictData.conflicts && conflictData.conflicts.length > 0) {
+            // Show conflict modal
+            const harmonyMeta = harmoniesMetadata.get(id);
+            setConflictModal({
+              harmonyId: id,
+              harmonyName: harmonyMeta?.name || id,
+              conflicts: conflictData.conflicts,
+            });
+            setConflictResolution('cancel');
+            return; // Don't proceed with toggle - wait for user decision
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check conflicts:', err);
+        // Continue with toggle even if conflict check fails
+      }
+    }
+
+    // Proceed with toggle
+    setActive(a => a.includes(id) ? a.filter(x => x !== id) : [...a, id]);
+  };
+
+  // Handle conflict resolution
+  const handleConflictResolve = async () => {
+    if (!conflictModal) return;
+
+    setResolvingConflict(true);
+
+    try {
+      if (conflictResolution === 'cancel') {
+        // Just close modal, don't activate
+        setConflictModal(null);
+        return;
+      }
+
+      if (conflictResolution === 'disable-others') {
+        // Disable all conflicting harmonies first
+        for (const conflict of conflictModal.conflicts) {
+          const conflictActive = active.includes(conflict.harmonyId);
+          if (conflictActive) {
+            // Toggle it off in the database
+            await fetch(`/api/harmonies/${conflict.harmonyId}/toggle`, {
+              method: 'POST',
+            });
+            // Remove from active list
+            setActive(a => a.filter(x => x !== conflict.harmonyId));
+          }
+        }
+      }
+
+      // Now activate this harmony (for both 'disable-others' and 'both')
+      // Toggle it on in the database
+      await fetch(`/api/harmonies/${conflictModal.harmonyId}/toggle`, {
+        method: 'POST',
+      });
+      // Add to active list
+      setActive(a => [...a, conflictModal.harmonyId]);
+
+      setConflictModal(null);
+    } catch (err) {
+      console.error('Failed to resolve conflict:', err);
+    } finally {
+      setResolvingConflict(false);
+    }
+  };
 
   // Tooltip hover timeout tracking
   const hoverTimeouts = useMemo(() => new Map<string, number>(), []);
@@ -1493,6 +1574,172 @@ export default function NormalizePage() {
               >
                 Apply
               </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Conflict Resolution Modal */}
+      {conflictModal && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => !resolvingConflict && setConflictModal(null)}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+            }}
+          >
+            {/* Dialog */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: C.bg,
+                border: `1px solid ${C.border}`,
+                borderRadius: 0,
+                padding: 24,
+                maxWidth: 520,
+                width: '100%',
+                margin: '0 20px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+                <AlertTriangle size={24} color={C.amber} style={{ flexShrink: 0, marginTop: 2 }} />
+                <div style={{ flex: 1 }}>
+                  <h2 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+                    Field conflict detected
+                  </h2>
+                  <p style={{ fontSize: 13, color: C.text2, lineHeight: 1.5, marginBottom: 16 }}>
+                    <strong>{conflictModal.conflicts[0].harmonyName}</strong> already writes to{' '}
+                    <span style={{ fontFamily: F.mono, fontSize: 12 }}>{conflictModal.conflicts[0].canonicalField}</span>.
+                    Enabling <strong>{conflictModal.harmonyName}</strong> for the same field may cause conflicts.
+                  </p>
+
+                  <p style={{ fontSize: 13, color: C.text, marginBottom: 12, fontWeight: 500 }}>
+                    Which harmony should take priority?
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 10,
+                        padding: 10,
+                        border: `2px solid ${conflictResolution === 'cancel' ? C.indigo : C.border}`,
+                        borderRadius: 0,
+                        background: conflictResolution === 'cancel' ? C.indigoDim : 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="conflictResolution"
+                        value="cancel"
+                        checked={conflictResolution === 'cancel'}
+                        onChange={(e) => setConflictResolution(e.target.value as any)}
+                        style={{ marginTop: 2, cursor: 'pointer' }}
+                      />
+                      <div style={{ fontSize: 12, color: C.text }}>
+                        Keep <strong>{conflictModal.conflicts[0].harmonyName}</strong> active, cancel this activation
+                      </div>
+                    </label>
+
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 10,
+                        padding: 10,
+                        border: `2px solid ${conflictResolution === 'disable-others' ? C.indigo : C.border}`,
+                        borderRadius: 0,
+                        background: conflictResolution === 'disable-others' ? C.indigoDim : 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="conflictResolution"
+                        value="disable-others"
+                        checked={conflictResolution === 'disable-others'}
+                        onChange={(e) => setConflictResolution(e.target.value as any)}
+                        style={{ marginTop: 2, cursor: 'pointer' }}
+                      />
+                      <div style={{ fontSize: 12, color: C.text }}>
+                        Enable this one, disable <strong>{conflictModal.conflicts[0].harmonyName}</strong>
+                      </div>
+                    </label>
+
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 10,
+                        padding: 10,
+                        border: `2px solid ${conflictResolution === 'both' ? C.indigo : C.border}`,
+                        borderRadius: 0,
+                        background: conflictResolution === 'both' ? C.indigoDim : 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="conflictResolution"
+                        value="both"
+                        checked={conflictResolution === 'both'}
+                        onChange={(e) => setConflictResolution(e.target.value as any)}
+                        style={{ marginTop: 2, cursor: 'pointer' }}
+                      />
+                      <div style={{ fontSize: 12, color: C.text }}>
+                        Enable both (last harmony applied wins)
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setConflictModal(null)}
+                  disabled={resolvingConflict}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 12,
+                    color: C.text,
+                    background: 'transparent',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 0,
+                    cursor: resolvingConflict ? 'not-allowed' : 'pointer',
+                    opacity: resolvingConflict ? 0.5 : 1,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConflictResolve}
+                  disabled={resolvingConflict}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 12,
+                    color: C.bg,
+                    background: C.indigo,
+                    border: 'none',
+                    borderRadius: 0,
+                    cursor: resolvingConflict ? 'not-allowed' : 'pointer',
+                    opacity: resolvingConflict ? 0.5 : 1,
+                  }}
+                >
+                  {resolvingConflict ? 'Applying...' : 'Confirm'}
+                </button>
+              </div>
             </div>
           </div>
         </>

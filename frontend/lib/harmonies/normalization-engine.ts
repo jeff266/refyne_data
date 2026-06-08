@@ -352,6 +352,33 @@ export async function applyLookupHarmony(
 
 // ── Format Harmony (Algorithmic) ───────────────────────────────────
 
+/**
+ * Format international national number with appropriate spacing.
+ * Handles common country-specific formatting patterns.
+ */
+function formatInternationalNational(countryCode: string, nationalNumber: string): string {
+  // UK: 20 7010 2000 (area code + local)
+  if (countryCode === '44' && nationalNumber.length === 10) {
+    return `${nationalNumber.slice(0, 2)} ${nationalNumber.slice(2, 6)} ${nationalNumber.slice(6)}`;
+  }
+  // Australia: 2 9374 4000
+  if (countryCode === '61' && nationalNumber.length === 9) {
+    return `${nationalNumber.slice(0, 1)} ${nationalNumber.slice(1, 5)} ${nationalNumber.slice(5)}`;
+  }
+  // Default: group in threes from the right
+  const groups: string[] = [];
+  let remaining = nationalNumber;
+  while (remaining.length > 0) {
+    if (remaining.length <= 4) {
+      groups.unshift(remaining);
+      break;
+    }
+    groups.unshift(remaining.slice(-3));
+    remaining = remaining.slice(0, -3);
+  }
+  return groups.join(' ');
+}
+
 function normalizePhoneE164(phone: string, config?: Record<string, any>): string | null {
   // E.164 normalization with configurable default country code and format
   const defaultCountryCode = config?.default_country_code || '1';
@@ -368,6 +395,25 @@ function normalizePhoneE164(phone: string, config?: Record<string, any>): string
     cleaned = phoneStr.replace(/\s*(x|ext\.?|extension|#)\s*\d+$/i, '');
   }
 
+  // CHECK 1: Vanity Number Translation
+  // If input contains letters (A-Z after stripping formatting), translate to digits
+  const VANITY_MAP: Record<string, string> = {
+    A: '2', B: '2', C: '2',
+    D: '3', E: '3', F: '3',
+    G: '4', H: '4', I: '4',
+    J: '5', K: '5', L: '5',
+    M: '6', N: '6', O: '6',
+    P: '7', Q: '7', R: '7', S: '7',
+    T: '8', U: '8', V: '8',
+    W: '9', X: '9', Y: '9', Z: '9',
+  };
+
+  if (/[A-Za-z]/.test(cleaned)) {
+    const original = cleaned;
+    cleaned = cleaned.toUpperCase().split('').map(char => VANITY_MAP[char] || char).join('');
+    console.log(`[Phone] Vanity number translated: ${original} → ${cleaned}`);
+  }
+
   // BUG FIX: Detect "1 " or "1-" prefix (US country code without +)
   // This handles inputs like "1 (310) 387-9598" or "1-310-387-9598"
   const trimmed = cleaned.trim();
@@ -376,6 +422,13 @@ function normalizePhoneE164(phone: string, config?: Record<string, any>): string
   }
 
   const digits = cleaned.replace(/\D/g, '');
+
+  // CHECK 2: Shortcode Detection
+  // If digit count < 7, skip normalization entirely (shortcodes like 911, 12345)
+  if (digits.length < 7) {
+    console.log(`[Phone] Shortcode detected, skipping: ${digits}`);
+    return null;
+  }
 
   // Determine country code and national number
   let countryCode = defaultCountryCode;
@@ -428,32 +481,71 @@ function normalizePhoneE164(phone: string, config?: Record<string, any>): string
   }
 
   // Apply formatting based on config
+  let result: string;
   if (format === 'e164_formatted') {
     // Formatted international output
     if (countryCode === '1' && nationalNumber.length === 10) {
       // US format: +1 (XXX) XXX-XXXX
-      return `+1 (${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
+      result = `+1 (${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
     } else {
       // International: use compact format with country code
-      return `+${countryCode} ${nationalNumber}`;
+      result = `+${countryCode} ${nationalNumber}`;
+    }
+  } else if (format === 'e164_dashes') {
+    // International with dashes: +1 310-387-9598
+    if (countryCode === '1' && nationalNumber.length === 10) {
+      // US format: +1 XXX-XXX-XXXX
+      result = `+1 ${nationalNumber.slice(0, 3)}-${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
+    } else {
+      // International: replace spaces with dashes in national part
+      // For non-US, format as: +CC national-with-dashes
+      const spacedNational = formatInternationalNational(countryCode, nationalNumber);
+      result = `+${countryCode} ${spacedNational.replace(/\s/g, '-')}`;
+    }
+  } else if (format === 'e164_spaces') {
+    // International with spaces: +1 310 387 9598
+    if (countryCode === '1' && nationalNumber.length === 10) {
+      // US format: +1 XXX XXX XXXX
+      result = `+1 ${nationalNumber.slice(0, 3)} ${nationalNumber.slice(3, 6)} ${nationalNumber.slice(6)}`;
+    } else {
+      // International: format with spaces
+      const spacedNational = formatInternationalNational(countryCode, nationalNumber);
+      result = `+${countryCode} ${spacedNational}`;
     }
   } else if (format === 'national') {
     // National format (US only): (XXX) XXX-XXXX
     if (nationalNumber.length === 10) {
-      return `(${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
+      result = `(${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
+    } else {
+      result = nationalNumber;
     }
-    return nationalNumber;
+    // National format doesn't need E.164 length validation (no + sign)
+    return result;
   } else if (format === 'e164_international') {
     // Legacy alias for e164_formatted
     if (countryCode === '1' && nationalNumber.length === 10) {
-      return `+1 (${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
+      result = `+1 (${nationalNumber.slice(0, 3)}) ${nationalNumber.slice(3, 6)}-${nationalNumber.slice(6)}`;
     } else {
-      return `+${countryCode} ${nationalNumber}`;
+      result = `+${countryCode} ${nationalNumber}`;
     }
   } else {
     // e164_compact (default): +CCXXXXXXXXXX
-    return `+${countryCode}${nationalNumber}`;
+    result = `+${countryCode}${nationalNumber}`;
   }
+
+  // CHECK 3: E.164 Length Validation
+  // E.164 max length: 16 characters total (+ sign + up to 15 digits)
+  // Only validate formats that start with + (skip national format)
+  if (result.startsWith('+')) {
+    const e164Digits = result.replace(/\D/g, '');
+    // E.164 allows max 15 digits (not counting the + sign)
+    if (e164Digits.length > 15) {
+      console.log(`[Phone] Invalid E.164 length (${e164Digits.length} digits), skipping: ${result}`);
+      return null;
+    }
+  }
+
+  return result;
 }
 
 function normalizeLinkedInUrl(url: string): string | null {
