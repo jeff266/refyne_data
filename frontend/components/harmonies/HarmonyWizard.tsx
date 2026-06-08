@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { X, ChevronRight, ChevronLeft, Loader2, Check, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { X, ChevronRight, ChevronLeft, Loader2, Check, AlertTriangle, Info } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 import { PrimaryBtn, GhostBtn } from '@/components/refyne';
 import { HubSpotPropertyPicker } from './HubSpotPropertyPicker';
@@ -61,6 +61,12 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   const [transformType, setTransformType] = useState<'format' | 'group'>('group');
   const [formatFunction, setFormatFunction] = useState<string>('');
 
+  // Phone config state
+  const [phoneConfig, setPhoneConfig] = useState({
+    format: 'e164_formatted',
+    default_country_code: 'US'
+  });
+
   // Step 2: Scan
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -112,6 +118,52 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
     { number: 5, label: 'Preview' },
   ];
 
+  // Map field types to allowed transform functions
+  const getAvailableFunctions = (fieldName: string): string[] => {
+    const fieldLower = fieldName.toLowerCase();
+
+    // Phone fields
+    if (['phone', 'mobilephone', 'fax'].includes(fieldLower)) {
+      return ['e164_phone'];
+    }
+
+    // Email fields
+    if (fieldLower === 'email') {
+      return ['email_lowercase'];
+    }
+
+    // URL fields
+    if (['website', 'linkedin_company_page', 'linkedin_url'].includes(fieldLower)) {
+      return ['linkedin_url', 'url_canonical'];
+    }
+
+    // Name fields
+    if (['name', 'firstname', 'lastname', 'company'].includes(fieldLower)) {
+      return ['smart_title_case'];
+    }
+
+    // Numeric fields
+    if (['numberofemployees', 'annualrevenue'].includes(fieldLower)) {
+      return ['numeric_parse'];
+    }
+
+    // Default: show all options
+    return ['e164_phone', 'email_lowercase', 'linkedin_url', 'smart_title_case', 'numeric_parse', 'url_canonical'];
+  };
+
+  // Filter dropdown options based on selected field
+  const availableFunctions = useMemo(() => {
+    if (!field) return ['e164_phone', 'email_lowercase', 'linkedin_url', 'smart_title_case', 'numeric_parse', 'url_canonical'];
+    return getAvailableFunctions(field);
+  }, [field]);
+
+  // Auto-select format function if only one option available
+  useEffect(() => {
+    if (transformType === 'format' && availableFunctions.length === 1 && !formatFunction) {
+      setFormatFunction(availableFunctions[0]);
+    }
+  }, [transformType, availableFunctions, formatFunction]);
+
   const canAdvance = () => {
     if (step === 1) {
       if (transformType === 'format') {
@@ -141,6 +193,8 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
         // Branch on transform type
         if (transformType === 'format') {
           // Format function: skip Steps 2 & 3, go directly to Step 4
+          const transform_config = formatFunction === 'e164_phone' ? phoneConfig : undefined;
+
           const res = await fetch('/api/harmonies', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -151,6 +205,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
               field,
               approach: 'format',
               transform_function: formatFunction,
+              transform_config,
             }),
           });
 
@@ -826,16 +881,139 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                     }}
                   >
                     <option value="" disabled>Select a format function...</option>
-                    <option value="e164_phone">E.164 Phone</option>
-                    <option value="email_lowercase">Lowercase Email</option>
-                    <option value="linkedin_url">LinkedIn URL</option>
-                    <option value="smart_title_case">Smart Title Case</option>
-                    <option value="numeric_parse">Numeric Parse</option>
-                    <option value="url_canonical">Canonical URL</option>
+                    {availableFunctions.includes('e164_phone') && <option value="e164_phone">E.164 Phone</option>}
+                    {availableFunctions.includes('email_lowercase') && <option value="email_lowercase">Lowercase Email</option>}
+                    {availableFunctions.includes('linkedin_url') && <option value="linkedin_url">LinkedIn URL</option>}
+                    {availableFunctions.includes('smart_title_case') && <option value="smart_title_case">Smart Title Case</option>}
+                    {availableFunctions.includes('numeric_parse') && <option value="numeric_parse">Numeric Parse</option>}
+                    {availableFunctions.includes('url_canonical') && <option value="url_canonical">Canonical URL</option>}
                   </select>
                   <p style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>
                     Built-in transformations for common data cleaning tasks
                   </p>
+
+                  {/* Phone format sub-options */}
+                  {formatFunction === 'e164_phone' && (
+                    <div style={{
+                      marginTop: 16,
+                      padding: 16,
+                      background: C.surface,
+                      border: `1px solid ${C.border2}`,
+                      borderRadius: 4
+                    }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
+                        Phone format
+                      </div>
+
+                      {/* Format options */}
+                      <label style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 12, cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="phone-format"
+                          checked={phoneConfig.format === 'e164_formatted'}
+                          onChange={() => setPhoneConfig({ ...phoneConfig, format: 'e164_formatted' })}
+                        />
+                        <div>
+                          <div style={{ fontSize: 12, color: C.text }}>
+                            +1 (310) 387-9598
+                            <span style={{
+                              marginLeft: 8,
+                              fontSize: 10,
+                              color: C.indigo,
+                              fontWeight: 600
+                            }}>
+                              International with formatting
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>
+                            Recommended for US teams
+                          </div>
+                        </div>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 12, cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="phone-format"
+                          checked={phoneConfig.format === 'e164_compact'}
+                          onChange={() => setPhoneConfig({ ...phoneConfig, format: 'e164_compact' })}
+                        />
+                        <div>
+                          <div style={{ fontSize: 12, color: C.text }}>
+                            +13103879598
+                            <span style={{ marginLeft: 8, fontSize: 10, color: C.text2 }}>
+                              E.164 compact
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>
+                            Best for dialers and APIs
+                          </div>
+                        </div>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'start', gap: 8, marginBottom: 16, cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="phone-format"
+                          checked={phoneConfig.format === 'national'}
+                          onChange={() => setPhoneConfig({ ...phoneConfig, format: 'national' })}
+                        />
+                        <div>
+                          <div style={{ fontSize: 12, color: C.text }}>
+                            (310) 387-9598
+                            <span style={{ marginLeft: 8, fontSize: 10, color: C.text2 }}>
+                              US national (no country code)
+                            </span>
+                          </div>
+                        </div>
+                      </label>
+
+                      {/* Country code dropdown */}
+                      <div style={{ marginTop: 16 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>
+                          Default country code
+                        </div>
+                        <select
+                          value={phoneConfig.default_country_code}
+                          onChange={(e) => setPhoneConfig({ ...phoneConfig, default_country_code: e.target.value })}
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            fontSize: 11,
+                            border: `1px solid ${C.border2}`,
+                            borderRadius: 4
+                          }}
+                        >
+                          <option value="US">United States (+1)</option>
+                          <option value="GB">United Kingdom (+44)</option>
+                          <option value="AU">Australia (+61)</option>
+                          <option value="CA">Canada (+1)</option>
+                          <option value="FR">France (+33)</option>
+                          <option value="DE">Germany (+49)</option>
+                        </select>
+                        <div style={{ fontSize: 9, color: C.text3, marginTop: 4 }}>
+                          Applied to numbers without a country code prefix
+                        </div>
+                      </div>
+
+                      {/* International handling info note */}
+                      <div style={{
+                        marginTop: 12,
+                        padding: 12,
+                        background: C.blueDim,
+                        border: `1px solid ${C.blueBrd}`,
+                        borderRadius: 4,
+                        display: 'flex',
+                        gap: 8
+                      }}>
+                        <Info size={16} color={C.blue} style={{ flexShrink: 0, marginTop: 2 }} />
+                        <div style={{ fontSize: 11, color: C.text2, lineHeight: 1.4 }}>
+                          Numbers with a country code (+44, +61, etc.) will preserve their country code.
+                          The default country code above applies only to numbers without a prefix.
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
