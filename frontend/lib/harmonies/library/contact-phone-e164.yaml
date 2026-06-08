@@ -9,6 +9,7 @@ category: contact-fields
 author: revops-impact
 transformFunction: e164_phone
 transformConfig:
+  format: e164_formatted
   default_country_code: "1"
   strip_extensions: true
 

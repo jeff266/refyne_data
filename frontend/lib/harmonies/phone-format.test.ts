@@ -291,4 +291,58 @@ describe('Phone Formatting - Edge Cases', () => {
     // Should skip because already formatted
     expect(results).toHaveLength(0);
   });
+
+  test('normalizes numbers starting with "1 " prefix (Bug Fix)', async () => {
+    const harmony: Harmony = {
+      id: 'phone',
+      name: 'Phone Formatter',
+      field: 'person.phone',
+      objectType: 'contact',
+      transformType: 'format',
+      transformFunction: 'e164_phone',
+      transformConfig: {
+        format: 'e164_formatted',
+        default_country_code: '1',
+        strip_extensions: true,
+      },
+      isActive: true,
+    };
+
+    const records: HubSpotRecord[] = [
+      { id: '1', phone: '1 (310) 387-9598' },
+    ];
+
+    const results = await applyFormatHarmony(records, harmony, 'org-123');
+
+    expect(results).toHaveLength(1);
+    expect(results[0].after).toBe('+1 (310) 387-9598');
+  });
+
+  test('normalizes numbers starting with "1-" prefix (Bug Fix)', async () => {
+    const harmony: Harmony = {
+      id: 'phone',
+      name: 'Phone Formatter',
+      field: 'person.phone',
+      objectType: 'contact',
+      transformType: 'format',
+      transformFunction: 'e164_phone',
+      transformConfig: {
+        format: 'e164_formatted',
+        default_country_code: '1',
+        strip_extensions: true,
+      },
+      isActive: true,
+    };
+
+    const records: HubSpotRecord[] = [
+      { id: '1', phone: '1-310-387-9598' },
+      { id: '2', phone: '1-562-735-0870' },
+    ];
+
+    const results = await applyFormatHarmony(records, harmony, 'org-123');
+
+    expect(results).toHaveLength(2);
+    expect(results[0].after).toBe('+1 (310) 387-9598');
+    expect(results[1].after).toBe('+1 (562) 735-0870');
+  });
 });

@@ -368,6 +368,13 @@ function normalizePhoneE164(phone: string, config?: Record<string, any>): string
     cleaned = phoneStr.replace(/\s*(x|ext\.?|extension|#)\s*\d+$/i, '');
   }
 
+  // BUG FIX: Detect "1 " or "1-" prefix (US country code without +)
+  // This handles inputs like "1 (310) 387-9598" or "1-310-387-9598"
+  const trimmed = cleaned.trim();
+  if (trimmed.startsWith('1 ') || trimmed.startsWith('1-')) {
+    cleaned = '+' + trimmed;
+  }
+
   const digits = cleaned.replace(/\D/g, '');
 
   // Determine country code and national number
