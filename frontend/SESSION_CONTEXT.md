@@ -291,3 +291,48 @@ Guided Onboarding: 1,165 → 1,180 (+15)
 Phone Format Enhancement: 1,180 → 1,189 (+9)
 
 **Current floor: 1,189 passing tests ✅**
+
+---
+
+# UX Enhancements - Complete ✅
+
+**Last Updated:** 2026-06-07
+**Test Count:** 1,189 passing (maintained)
+
+## Normalize Page Improvements ✅
+
+### 1. Link Fix - "Add custom rule" button
+**Fixed broken link:** `/normalize/harmonies/new` (404) → `/harmonies/new`
+- Button now correctly opens harmony creation flow
+- Matches behavior of "+ New harmony" button on Harmonies page
+
+### 2. Harmony Tooltips + Clickable Names
+**Hover tooltip on harmony name:**
+- Shows harmony description, transform function, config
+- "View harmony →" link to `/harmonies/[id]`
+- Navy background (`C.indigoDk`), off-white text (`C.text`)
+- Square corners, 250px max width
+- 300ms delay before showing (prevents flicker)
+- Positioned above name
+
+**Clickable harmony name:**
+- `cursor: pointer` on harmony name text
+- onClick: navigate to `/harmonies/[id]`
+- Subtle underline on hover when tooltip visible
+- Only name text clickable (toggle remains independent)
+
+**Implementation:**
+- Expanded `harmoniesMetadata` to store full harmony details
+- Updated `fetchHarmoniesMetadata` to fetch complete data
+- Added `tooltipVisible` state and `hoverTimeouts` Map
+- Applied to both "Companies with issues" section and main Harmonies list
+- Proper timeout cleanup prevents memory leaks
+
+**Files Modified:**
+- `app/(dashboard)/normalize/page.tsx` (+178 lines, -6 lines)
+
+**Commits:**
+- Link fix: `7ea2508`
+- Tooltips: `be71943`
+
+**Test Results:** 1,189/1,189 passing ✅
