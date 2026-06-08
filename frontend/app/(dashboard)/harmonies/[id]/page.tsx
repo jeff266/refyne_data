@@ -883,6 +883,21 @@ export default function HarmonyDetailPage() {
                   );
                 }
 
+                // Check if output equals input (already normalized)
+                if (testOutput && testOutput.output && testOutput.output === testInput.trim()) {
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ color: C.green }}>{testOutput.output} ✓</span>
+                        <span style={{ fontSize: 10, color: C.green }}>already normalized</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: C.text3, marginTop: 2 }}>
+                        Input is already in the correct format
+                      </div>
+                    </div>
+                  );
+                }
+
                 // Otherwise show normal test output
                 return testOutput ? (
                   testOutput.matched ? (

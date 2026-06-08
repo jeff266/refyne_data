@@ -78,6 +78,13 @@ export async function seedHarmonyLibrary(): Promise<{
       const transformType = spec.transformType || 'format';
       const referenceTable = spec.referenceTable || null;
 
+      // Determine default write_policy based on harmony type
+      // Format harmonies (phone, linkedin-url) need 'always_overwrite' to normalize dirty values
+      // Lookup harmonies default to 'fill_empty'
+      const isFormatHarmony = transformType === 'format';
+      const isPhoneOrLinkedIn = ['phone', 'contact-phone-e164', 'linkedin-url'].includes(spec.id);
+      const defaultWritePolicy = (isFormatHarmony && isPhoneOrLinkedIn) ? 'always_overwrite' : 'fill_empty';
+
       return {
         id: spec.id,
         org_id: null, // Preset harmonies have null org_id
@@ -97,6 +104,7 @@ export async function seedHarmonyLibrary(): Promise<{
         examples: examples.length > 0 ? examples : null,
         output_format: 'default',
         output_formats_available: spec.output_formats || null,
+        write_policy: defaultWritePolicy,
       };
     });
 
@@ -118,10 +126,10 @@ export async function seedHarmonyLibrary(): Promise<{
         return {
           ...row,
           is_active: existing.is_active,
-          write_policy: existing.write_policy || 'fill_empty',
+          write_policy: existing.write_policy, // Keep existing write_policy (migration will fix if needed)
         };
       }
-      // New harmony - use defaults from YAML
+      // New harmony - use defaults computed above (includes write_policy)
       return row;
     });
 
