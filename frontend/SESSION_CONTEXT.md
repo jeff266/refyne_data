@@ -143,3 +143,88 @@ if (!eventImportEnabled) return null;
 - Staff overrides bypass master toggle requirement
 - New orgs get all flags provisioned (disabled by default)
 - Tests maintained at 1,165 passing ✅
+
+---
+
+# Guided Onboarding Flow - Complete ✅
+
+**Last Updated:** 2026-06-07
+**Test Count:** 1,180 passing (+15 new tests)
+
+## Overview
+
+7-step guided onboarding wizard for new customers with middleware-based routing, personalized completion, and dashboard checklist integration.
+
+## Implementation
+
+### Migration 089 ✅
+- Added `use_cases TEXT[]` - tracks selected use cases (clean, enrich, both)
+- Added flow timestamps: `welcome_completed_at`, `use_case_selected_at`, `invited_team_at`, `onboarding_flow_completed_at`, `onboarding_flow_skipped_at`
+- Added workspace context: `workspace_name`, `user_role`
+
+### API Routes ✅ (2 new + 1 updated)
+- `GET /api/onboarding/progress` - Returns full progress with Redis cache (60s TTL)
+- `PATCH /api/onboarding/progress` - Updates progress (admin-only, field whitelist, cache invalidation)
+- `GET /api/onboarding/status` - Fixed to check actual `hubspot_connections` table
+
+### Onboarding Layout ✅
+- New `(onboarding)` route group with dedicated layout
+- Navy header with Refyne logo, off-white background
+- No sidebar/nav for distraction-free experience
+
+### 7-Step Wizard ✅
+
+1. **Welcome** (`/onboarding`) - Workspace name + user role capture
+2. **Use Case** (`/onboarding/use-case`) - Multi-select cards (clean/enrich/both)
+3. **Connect** (`/onboarding/connect`) - HubSpot OAuth wrapper
+4. **Calibrate** (uses existing `/onboarding/calibrate`) - Settings wizard or smart defaults
+5. **First Run** (`/onboarding/first-run`) - Normalize preview with stats
+6. **Invite** (`/onboarding/invite`) - Simplified team invite step
+7. **Complete** (`/onboarding/complete`) - Celebration with personalized CTAs
+
+### Middleware Redirect Logic ✅
+- Cookie-based completion check: `refyne_onboarding_complete=true`
+- Redirects admins to `/onboarding` if not complete
+- Prevents returning to `/onboarding` once complete
+- Skips for org:member, API routes, public routes
+- Fast performance: cookie check avoids DB query on every request
+
+### Dashboard Checklist Fix ✅
+**Fixed critical bug:** HubSpot connect step now checks `hubspot_connections` table for actual active connection (not just `connected_hubspot` boolean)
+
+**Updated 5 steps:**
+1. Connect HubSpot → `/onboarding/connect`
+2. Configure normalization → `/onboarding/calibrate?mode=recalibrate` (NEW)
+3. Run your first normalize → `/normalize`
+4. Review dedup clusters → `/dedup`
+5. Apply your first Harmony → `/harmonies`
+
+**Behavior:**
+- Admin-only (members don't see checklist)
+- Dismissible (sets `dismissed_at`, never shown again)
+- Progress bar shows N of 5 complete
+- Completed steps: strikethrough + green checkmark
+- Incomplete steps: show CTA link
+
+### Tests ✅
+- `tests/onboarding/flow.test.ts` - 15 new tests
+- Covers middleware redirects, API validation, checklist logic, connection checks
+- All edge cases tested (member skip, admin redirect, field whitelisting)
+
+## Features
+
+- **Admin-only flow** - org:member users skip entirely
+- **Redis caching** - 60s TTL on progress API for performance
+- **Field whitelisting** - Security on PATCH endpoint
+- **Personalized completion** - CTAs based on selected use cases
+- **Cookie-based routing** - Fast middleware without DB queries
+- **Smart defaults** - One-click normalization config
+- **Reuses Day 2 wizard** - Calibration wizard from Name Registry Day 2
+
+## Test Progression
+
+Name Registry Days 1-4: 1,057 → 1,076 → 1,141 → 1,165
+Beta Feature Flags: 1,165 (maintained)
+Guided Onboarding: 1,165 → 1,180 (+15 new tests)
+
+**Current floor: 1,180 passing tests ✅**
