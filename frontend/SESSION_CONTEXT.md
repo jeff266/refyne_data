@@ -336,3 +336,60 @@ Phone Format Enhancement: 1,180 → 1,189 (+9)
 - Tooltips: `be71943`
 
 **Test Results:** 1,189/1,189 passing ✅
+
+---
+
+# Bug Fixes - Phone Harmony ✅
+
+**Last Updated:** 2026-06-07
+**Test Count:** 1,189 passing (maintained)
+
+## Bugs Fixed During Verification Sprint
+
+### Bug 1: Live Tester "Already Normalized" Detection ✅
+**Problem:** Input "+1 (310) 387-9598" showed "No match" instead of recognizing it's already in canonical format
+
+**Fix:** Added detection logic in harmony detail page
+- Checks if `output === input.trim()`
+- Shows green checkmark with "already normalized" badge
+- Displays explanation: "Input is already in the correct format"
+- Works for all harmonies (phone, LinkedIn, email, etc.)
+
+**File Modified:**
+- `app/(dashboard)/harmonies/[id]/page.tsx` (lines 886-899)
+
+### Bug 2: Write Policy Default for Format Harmonies ✅
+**Problem:** Phone and LinkedIn harmonies defaulted to "Fill Empty" which only writes to empty fields - useless for normalizing dirty values
+
+**Fix:** Updated default write_policy to "Always Overwrite"
+- Phone harmonies need to normalize existing dirty values
+- LinkedIn URL harmonies need to fix malformed URLs
+- Format harmonies must overwrite to be useful
+
+**Migration 090:**
+- Updates `harmony_field_assignments.write_policy = 'always_overwrite'`
+- Affects: phone, contact-phone-e164, linkedin-url harmonies
+- Only updates records currently set to 'fill_empty'
+- Preserves custom overrides
+
+**Seed Library Update:**
+- Phone/LinkedIn harmonies now default to 'always_overwrite'
+- Other harmonies keep 'fill_empty' default
+- Ensures new harmonies get correct policy
+
+**Files Modified:**
+- `supabase/migrations/20260607000005_090_fix_phone_linkedin_write_policy.sql` (new)
+- `lib/harmonies/seed-library.ts` (default write_policy logic)
+
+### Bug 3: Not a Bug ✓
+**Observation:** Existing orgs still using compact format instead of e164_formatted
+
+**Explanation:** This is expected behavior
+- Calibration wizard adds e164_formatted as new option
+- Existing orgs haven't recalibrated yet
+- Organizations need to recalibrate to get formatted output
+- No fix needed - working as designed
+
+**Commit:** `b930d50` - "Fix phone harmony bugs: live tester and write policy"
+
+**Test Results:** 1,189/1,189 passing ✅
