@@ -181,7 +181,21 @@ export async function PATCH(
 
     const { id } = params;
     const body = await req.json();
-    const { name, description, writePolicy, isActive, isArchived, conditionGroups, approach, rules } = body;
+    console.log('[Harmony PATCH] Received body:', body);
+
+    // Accept both camelCase and snake_case field names for compatibility
+    const {
+      name,
+      description,
+      writePolicy,
+      isActive,
+      is_active,
+      isArchived,
+      is_archived,
+      conditionGroups,
+      approach,
+      rules
+    } = body;
 
     // Fetch current harmony state for audit log
     const { data: beforeHarmony } = await supabase
@@ -196,8 +210,17 @@ export async function PATCH(
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
     if (writePolicy !== undefined) updates.write_policy = writePolicy;
-    if (isActive !== undefined) updates.is_active = isActive;
-    if (isArchived !== undefined) updates.is_archived = isArchived;
+
+    // Accept both camelCase and snake_case for isActive
+    if (isActive !== undefined || is_active !== undefined) {
+      updates.is_active = isActive !== undefined ? isActive : is_active;
+    }
+
+    // Accept both camelCase and snake_case for isArchived
+    if (isArchived !== undefined || is_archived !== undefined) {
+      updates.is_archived = isArchived !== undefined ? isArchived : is_archived;
+    }
+
     if (approach !== undefined) updates.approach = approach;
 
     // Validate and add condition_groups if provided
@@ -207,15 +230,25 @@ export async function PATCH(
         updates.condition_groups = conditionGroups;
       } catch (validationError: any) {
         return NextResponse.json(
-          { error: `Invalid condition_groups: ${validationError.message}` },
+          {
+            error: 'validation_failed',
+            message: `Invalid condition_groups: ${validationError.message}`,
+            details: validationError.message
+          },
           { status: 400 }
         );
       }
     }
 
+    console.log('[Harmony PATCH] Updates:', updates);
+
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
-        { error: 'No valid fields to update' },
+        {
+          error: 'no_fields',
+          message: 'No valid fields to update. Expected: name, description, writePolicy, isActive (or is_active), isArchived (or is_archived), conditionGroups, approach, or rules',
+          received: Object.keys(body)
+        },
         { status: 400 }
       );
     }

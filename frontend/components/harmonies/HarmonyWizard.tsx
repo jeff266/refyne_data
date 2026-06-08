@@ -107,6 +107,8 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
 
   // Error handling
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activateError, setActivateError] = useState<string | null>(null);
+  const [conditionsSaveError, setConditionsSaveError] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -354,6 +356,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
       // Save conditions and proceed to preview
       try {
         setSaving(true);
+        setConditionsSaveError(null);
         const res = await fetch(`/api/harmonies/${harmonyId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -365,11 +368,14 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
         if (res.ok) {
           setStep(5);
         } else {
-          alert('Failed to save conditions');
+          const errorData = await res.json().catch(() => ({}));
+          const message = errorData.message || errorData.error || `Failed to save conditions (${res.status})`;
+          console.error('Failed to save conditions:', message, errorData);
+          setConditionsSaveError(message);
         }
       } catch (err) {
         console.error('Failed to save conditions:', err);
-        alert('Failed to save conditions');
+        setConditionsSaveError(err instanceof Error ? err.message : 'Failed to save conditions. Please try again.');
       } finally {
         setSaving(false);
       }
@@ -377,6 +383,7 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
       // Final step - activate and close
       try {
         setSaving(true);
+        setActivateError(null);
         const res = await fetch(`/api/harmonies/${harmonyId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -387,11 +394,14 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
           onSuccess?.();
           handleClose();
         } else {
-          alert('Failed to activate harmony');
+          const errorData = await res.json().catch(() => ({}));
+          const message = errorData.message || errorData.error || `Failed to activate harmony (${res.status})`;
+          console.error('Failed to activate harmony:', message, errorData);
+          setActivateError(message);
         }
       } catch (err) {
         console.error('Failed to activate harmony:', err);
-        alert('Failed to activate harmony');
+        setActivateError(err instanceof Error ? err.message : 'Failed to activate harmony. Please try again.');
       } finally {
         setSaving(false);
       }
@@ -399,6 +409,10 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
   };
 
   const handleBack = () => {
+    // Clear error messages when going back
+    setConditionsSaveError(null);
+    setActivateError(null);
+    setErrorMessage(null);
     setStep(Math.max(1, step - 1));
   };
 
@@ -419,6 +433,9 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
     setGroups([]);
     setUngrouped([]);
     setHarmonyId(null);
+    setErrorMessage(null);
+    setConditionsSaveError(null);
+    setActivateError(null);
     onClose();
   };
 
@@ -1631,6 +1648,27 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                   />
                 </div>
               )}
+
+              {/* Conditions save error */}
+              {conditionsSaveError && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 12,
+                    background: C.amberDim,
+                    border: `1px solid ${C.amberBrd}`,
+                    borderRadius: 0,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                  }}
+                >
+                  <AlertTriangle size={16} color={C.amber} style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.4 }}>
+                    <strong>Error:</strong> {conditionsSaveError}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1708,6 +1746,27 @@ export function HarmonyWizard({ open, onClose, onSuccess }: HarmonyWizardProps) 
                   <strong>Note:</strong> This harmony will be activated immediately. You can deactivate it anytime from the Harmonies page.
                 </p>
               </div>
+
+              {/* Activation error */}
+              {activateError && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 12,
+                    background: C.amberDim,
+                    border: `1px solid ${C.amberBrd}`,
+                    borderRadius: 0,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                  }}
+                >
+                  <AlertTriangle size={16} color={C.amber} style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.4 }}>
+                    <strong>Error:</strong> {activateError}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
