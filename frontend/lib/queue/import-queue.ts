@@ -8,7 +8,7 @@
 import { Queue, Worker, Job } from 'bullmq';
 import { createRedisConnection, isRedisConfigured } from './redis';
 import { supabaseAdmin } from '../db/admin-client';
-import { getAccessToken } from '../hubspot/oauth';
+import { getAccessToken } from '../hubspot/get-access-token';
 import { HubSpotClient } from '../hubspot/client';
 
 // ─────────────────────────────────────────────────────────────
