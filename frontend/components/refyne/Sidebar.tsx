@@ -21,11 +21,14 @@ import {
   Users,
   Shield,
   Workflow,
+  Upload,
 } from 'lucide-react';
 import { C, F, NAV } from '@/lib/design-tokens';
 import { RefyneLogo } from './RefyneLogo';
 import { useEnrichRun } from '@/context/EnrichRunContext';
 import { CreditsWidget } from './CreditsWidget';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { FEATURE_FLAGS } from '@/lib/features/flags';
 
 const ICONS: Record<string, React.ElementType> = {
   LayoutDashboard,
@@ -33,6 +36,7 @@ const ICONS: Record<string, React.ElementType> = {
   Clock,
   ArrowUpDown,
   GitMerge,
+  Upload,
   Sparkles,
   ArrowRightLeft,
   Plug2,
@@ -50,9 +54,24 @@ export function Sidebar() {
   const [showHelpMenu, setShowHelpMenu] = useState(false);
   const enrichRunContext = useEnrichRun();
 
+  // Fetch feature flags for beta-gated nav items
+  const { isEnabled } = useFeatureFlags([FEATURE_FLAGS.EVENT_LIST_IMPORT]);
+
   // Preserve ?object= param across navigation
   const objectType = searchParams.get('object');
   const queryString = objectType ? `?object=${objectType}` : '';
+
+  // Filter nav items based on beta gates
+  const visibleNavItems = NAV.filter(item => {
+    if (!('betaGated' in item) || !item.betaGated) return true;
+
+    // Map nav item ID to feature flag
+    if (item.id === 'import') {
+      return isEnabled(FEATURE_FLAGS.EVENT_LIST_IMPORT);
+    }
+
+    return false;
+  });
 
   return (
     <div
@@ -102,7 +121,7 @@ export function Sidebar() {
       </div>
 
       <nav style={{ flex: 1, padding: '8px 8px', overflowY: 'auto' }}>
-        {NAV.map((item, i) => {
+        {visibleNavItems.map((item, i) => {
           if ('divider' in item && item.divider) {
             return (
               <div
