@@ -1290,7 +1290,7 @@ export default function NormalizePage() {
       </div>
 
       {/* Run history panel */}
-      <div style={{ borderTop: `1px solid ${C.border}`, background: C.sidebar }}>
+      <div style={{ borderTop: `1px solid ${C.border}`, background: C.sidebar, position: 'relative', zIndex: 1 }}>
         {/* Header */}
         <button
           onClick={() => setHistoryExpanded(!historyExpanded)}
@@ -1314,7 +1314,7 @@ export default function NormalizePage() {
 
         {/* History content */}
         {historyExpanded && (
-          <div style={{ maxHeight: 400, overflowY: 'auto', borderTop: `1px solid ${C.border}` }}>
+          <div style={{ maxHeight: 400, overflowY: 'auto', borderTop: `1px solid ${C.border}`, position: 'relative' }}>
             {runsLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
                 <Loader2 size={20} color={C.text3} style={{ animation: 'spin 1s linear infinite' }} />
@@ -1360,12 +1360,13 @@ export default function NormalizePage() {
                             </button>
                           </td>
                           <td style={{ padding: '10px 24px', color: C.text2, fontSize: 11 }}>
-                            {run.created_at ? new Date(run.created_at).toLocaleDateString('en-US', {
+                            {run.created_at ? new Date(run.created_at).toLocaleString('en-US', {
                               month: 'short',
                               day: 'numeric',
+                              year: 'numeric',
                               hour: 'numeric',
                               minute: '2-digit',
-                            }) : 'Pending'}
+                            }).replace(',', ' at') : '—'}
                           </td>
                           <td style={{ padding: '10px 24px', fontFamily: F.mono, color: C.text, fontSize: 11 }}>
                             {(run.records_changed ?? 0).toLocaleString()}
