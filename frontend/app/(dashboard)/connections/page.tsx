@@ -65,7 +65,6 @@ const PROVIDERS: Provider[] = [
   { id: 'serper', name: 'Serper', description: 'Web search API', category: 'research', managed: true, managedCredits: 'Credits included in your plan' },
   { id: 'graphiq', name: 'GraphIQ', description: 'AI-powered company search', category: 'research', managed: true, managedCredits: 'Credits included in your plan' },
   { id: 'tinyfish', name: 'TinyFish', description: 'Web agent automation', category: 'research' },
-  { id: 'proxycurl', name: 'ProxyCurl', description: 'LinkedIn company data', category: 'enrichment' },
   { id: 'clearbit', name: 'Clearbit', description: 'Real-time enrichment', category: 'enrichment' },
 ];
 
@@ -157,6 +156,11 @@ export default function ConnectionsPage() {
   const [providerConnections, setProviderConnections] = useState<Array<{ provider: string; status: string; hint: string; last_tested_at: string | null }>>([]);
   const [connectingProvider, setConnectingProvider] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [showProviderRequestModal, setShowProviderRequestModal] = useState(false);
+  const [providerRequestName, setProviderRequestName] = useState('');
+  const [providerRequestReason, setProviderRequestReason] = useState('');
+  const [submittingProviderRequest, setSubmittingProviderRequest] = useState(false);
+  const [providerRequestSuccess, setProviderRequestSuccess] = useState(false);
   const searchParams = useSearchParams();
 
   const isAdmin = orgRole === 'org:admin';
@@ -441,6 +445,38 @@ export default function ConnectionsPage() {
     } catch (err) {
       showToast('Failed to start sync', 'error');
       setSyncing({ ...syncing, [connectionId]: false });
+    }
+  }
+
+  async function handleSubmitProviderRequest() {
+    if (submittingProviderRequest || !providerRequestName.trim()) return;
+
+    setSubmittingProviderRequest(true);
+    try {
+      const res = await fetch('/api/provider-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider_name: providerRequestName,
+          reason: providerRequestReason || null,
+        }),
+      });
+
+      if (res.ok) {
+        setProviderRequestSuccess(true);
+        setTimeout(() => {
+          setShowProviderRequestModal(false);
+          setProviderRequestName('');
+          setProviderRequestReason('');
+          setProviderRequestSuccess(false);
+        }, 2000);
+      } else {
+        showToast('Failed to submit request', 'error');
+      }
+    } catch (err) {
+      showToast('Failed to submit request', 'error');
+    } finally {
+      setSubmittingProviderRequest(false);
     }
   }
 
@@ -1043,6 +1079,139 @@ export default function ConnectionsPage() {
                   })}
                 </div>
               )}
+            </div>
+
+            {/* Provider request section */}
+            <div style={{ marginTop: 48, paddingTop: 32, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: C.text3, marginBottom: 12 }}>
+                  Don't see your provider?
+                </div>
+                <button
+                  onClick={() => setShowProviderRequestModal(true)}
+                  style={{
+                    padding: '8px 16px',
+                    background: C.surface,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 0,
+                    fontSize: 12,
+                    color: C.text,
+                    cursor: 'pointer',
+                    fontFamily: F.sans,
+                    fontWeight: 500,
+                  }}
+                >
+                  Request a provider
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Provider Request Modal */}
+      {showProviderRequestModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            background: C.bg,
+            padding: 24,
+            maxWidth: 480,
+            width: '90%',
+            borderRadius: 0,
+            border: `1px solid ${C.border}`,
+          }}>
+            <h3 style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, color: C.text }}>
+              Request a provider integration
+            </h3>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 6, color: C.text }}>
+                Provider name <span style={{ color: C.red }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={providerRequestName}
+                onChange={(e) => setProviderRequestName(e.target.value)}
+                placeholder="e.g., Clearbit, 6sense"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 0,
+                  fontSize: 13,
+                  color: C.text,
+                  fontFamily: F.sans,
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 6, color: C.text }}>
+                Why do you use it?
+              </label>
+              <textarea
+                value={providerRequestReason}
+                onChange={(e) => setProviderRequestReason(e.target.value)}
+                placeholder="Help us prioritize by sharing your use case"
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  background: C.surface,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 0,
+                  fontSize: 13,
+                  color: C.text,
+                  fontFamily: F.sans,
+                  resize: 'vertical',
+                }}
+              />
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>
+                Help us prioritize by sharing your use case
+              </div>
+            </div>
+
+            {providerRequestSuccess && (
+              <div style={{
+                padding: '8px 12px',
+                background: C.greenDim,
+                border: `1px solid ${C.greenBrd}`,
+                borderRadius: 0,
+                fontSize: 12,
+                color: C.green,
+                marginBottom: 16,
+              }}>
+                Thanks! We'll review your request and reach out if we add {providerRequestName}.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <GhostBtn onClick={() => {
+                setShowProviderRequestModal(false);
+                setProviderRequestName('');
+                setProviderRequestReason('');
+                setProviderRequestSuccess(false);
+              }}>
+                Cancel
+              </GhostBtn>
+              <PrimaryBtn
+                onClick={handleSubmitProviderRequest}
+                disabled={submittingProviderRequest || !providerRequestName.trim() || providerRequestSuccess}
+              >
+                {submittingProviderRequest ? 'Submitting...' : 'Submit request'}
+              </PrimaryBtn>
             </div>
           </div>
         </div>

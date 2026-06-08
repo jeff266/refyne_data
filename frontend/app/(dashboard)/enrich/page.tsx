@@ -436,6 +436,7 @@ export default function EnrichPage() {
   const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
   const [harmonyPreviews, setHarmonyPreviews] = useState<HarmonyPreview[]>([]);
   const [loadingHarmonies, setLoadingHarmonies] = useState(false);
+  const [waterfallArrangement, setWaterfallArrangement] = useState<{ id: string; name: string } | null>(null);
 
   // Test mode state
   const [testMode, setTestMode] = useState(false);
@@ -826,9 +827,26 @@ export default function EnrichPage() {
       }
     }
 
+    async function fetchWaterfallArrangement() {
+      try {
+        const res = await fetch('/api/arrangements');
+        if (res.ok) {
+          const data = await res.json();
+          // Find the first arrangement with field_configs (waterfall v2)
+          const waterfall = data.arrangements?.find((arr: any) => arr.field_configs && arr.field_configs.length > 0);
+          if (waterfall) {
+            setWaterfallArrangement({ id: waterfall.id, name: waterfall.name });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch arrangements:', error);
+      }
+    }
+
     fetchConnections();
     fetchHubSpotLists();
     fetchPortalId();
+    fetchWaterfallArrangement();
   }, []);
 
   // Fetch enrichment history when objectType changes
@@ -1972,6 +1990,27 @@ export default function EnrichPage() {
                   );
                 })}
               </div>
+            </div>
+
+            {/* Waterfall mode indicator */}
+            <div style={{
+              marginTop: 12,
+              padding: '8px 12px',
+              background: C.surface,
+              borderRadius: 0,
+              fontSize: 11,
+              color: C.text3,
+              lineHeight: 1.5
+            }}>
+              {waterfallArrangement ? (
+                <>
+                  Using arrangement: <Link href={`/arrangements/${waterfallArrangement.id}`} style={{ color: C.text, textDecoration: 'underline' }}>{waterfallArrangement.name}</Link> · <Link href="/arrangements" style={{ color: C.text, textDecoration: 'underline' }}>Edit</Link>
+                </>
+              ) : (
+                <>
+                  Running providers in parallel. Want to configure priority order? <Link href="/arrangements" style={{ color: C.text, textDecoration: 'underline' }}>Set up a waterfall arrangement</Link>
+                </>
+              )}
             </div>
 
             {/* Enrichment mode (only for Refyne Search) */}

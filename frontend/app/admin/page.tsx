@@ -39,7 +39,7 @@ interface Config {
   providers: Record<string, Provider>;
 }
 
-type Tab = 'segments' | 'providers' | 'compare' | 'settings';
+type Tab = 'segments' | 'providers' | 'compare' | 'settings' | 'requests';
 
 interface CascadeStep {
   providerId: string;
@@ -47,6 +47,18 @@ interface CascadeStep {
   triggerConfig?: Record<string, any>;
   timeoutMs?: number;
   retryCount?: number;
+}
+
+interface ProviderRequest {
+  id: string;
+  org_id: string;
+  requested_by: string;
+  provider_name: string;
+  reason: string | null;
+  status: 'pending' | 'reviewing' | 'shipped' | 'declined';
+  admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function AdminPage() {
@@ -58,10 +70,14 @@ export default function AdminPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [cascadeEditorSegmentId, setCascadeEditorSegmentId] = useState<string | null>(null);
   const [isProviderWizardOpen, setIsProviderWizardOpen] = useState(false);
+  const [providerRequests, setProviderRequests] = useState<ProviderRequest[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [updatingRequestId, setUpdatingRequestId] = useState<string | null>(null);
 
   // Fetch config on mount
   useEffect(() => {
     fetchConfig();
+    fetchProviderRequests();
   }, []);
 
   const fetchConfig = async () => {
@@ -163,16 +179,52 @@ export default function AdminPage() {
     saveConfig(newConfig);
   };
 
+  const fetchProviderRequests = async () => {
+    try {
+      setLoadingRequests(true);
+      const res = await fetch('/api/admin/provider-requests');
+      if (res.ok) {
+        const data = await res.json();
+        setProviderRequests(data.requests || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch provider requests:', err);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const handleUpdateRequestStatus = async (requestId: string, status: string) => {
+    try {
+      setUpdatingRequestId(requestId);
+      const res = await fetch(`/api/admin/provider-requests/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        await fetchProviderRequests();
+      }
+    } catch (err) {
+      console.error('Failed to update request:', err);
+    } finally {
+      setUpdatingRequestId(null);
+    }
+  };
+
   // Get the segment being edited in the cascade editor
   const cascadeEditorSegment = cascadeEditorSegmentId
     ? config?.segments.find((s) => s.id === cascadeEditorSegmentId)
     : null;
+
+  const pendingCount = providerRequests.filter(r => r.status === 'pending').length;
 
   const tabs = [
     { id: 'segments' as Tab, label: 'Segments', icon: Layers },
     { id: 'providers' as Tab, label: 'Providers', icon: Database },
     { id: 'compare' as Tab, label: 'Compare', icon: Swords },
     { id: 'settings' as Tab, label: 'Settings', icon: Settings },
+    { id: 'requests' as Tab, label: `Provider requests${pendingCount > 0 ? ` (${pendingCount})` : ''}`, icon: Database },
   ];
 
   if (loading) {
@@ -343,6 +395,96 @@ export default function AdminPage() {
               onReload={fetchConfig}
               onSave={saveConfig}
             />
+          </div>
+        )}
+
+        {activeTab === 'requests' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-lg font-medium text-black">Provider requests</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Customer requests for new provider integrations
+              </p>
+            </div>
+
+            {loadingRequests ? (
+              <div className="text-gray-500">Loading requests...</div>
+            ) : providerRequests.length === 0 ? (
+              <div className="text-gray-500">No requests yet</div>
+            ) : (
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Org ID</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Provider name</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Requested</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {providerRequests.map((request) => {
+                      const statusColors = {
+                        pending: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+                        reviewing: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+                        shipped: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+                        declined: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+                      };
+                      const statusStyle = statusColors[request.status];
+
+                      return (
+                        <tr key={request.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900 font-mono">{request.org_id.slice(0, 12)}...</td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{request.provider_name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">{request.reason || '—'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                              {request.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {new Date(request.created_at).toLocaleDateString()}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-2">
+                              {request.status !== 'reviewing' && (
+                                <button
+                                  onClick={() => handleUpdateRequestStatus(request.id, 'reviewing')}
+                                  disabled={updatingRequestId === request.id}
+                                  className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                  Mark reviewing
+                                </button>
+                              )}
+                              {request.status !== 'shipped' && (
+                                <button
+                                  onClick={() => handleUpdateRequestStatus(request.id, 'shipped')}
+                                  disabled={updatingRequestId === request.id}
+                                  className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                  Mark shipped
+                                </button>
+                              )}
+                              {request.status !== 'declined' && (
+                                <button
+                                  onClick={() => handleUpdateRequestStatus(request.id, 'declined')}
+                                  disabled={updatingRequestId === request.id}
+                                  className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                  Mark declined
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </main>
