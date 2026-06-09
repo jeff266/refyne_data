@@ -71,11 +71,24 @@ export function AssignOwnersStep({
   const [saveRuleSetDescription, setSaveRuleSetDescription] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Preview state
+  const [previewResults, setPreviewResults] = useState<any>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [hasRunPreview, setHasRunPreview] = useState(false);
+
   // Fetch HubSpot owners on mount
   useEffect(() => {
     fetchOwners();
     fetchSavedRuleSets();
   }, []);
+
+  // Invalidate preview when rules or fallback change
+  useEffect(() => {
+    if (hasRunPreview) {
+      setHasRunPreview(false);
+      setPreviewResults(null);
+    }
+  }, [rules, fallback]);
 
   const fetchOwners = async () => {
     setLoading(true);
@@ -185,13 +198,28 @@ export function AssignOwnersStep({
     });
   }, [sampleRows, fieldMapping]);
 
-  // Live preview of assignments
-  const preview = useMemo(() => {
+  // Manual preview calculation (triggered by button)
+  const runPreview = () => {
     if (mappedContacts.length === 0) {
-      return { byOwner: {}, unassigned: 0 };
+      return;
     }
-    return previewAssignments(mappedContacts, rules, fallback);
-  }, [mappedContacts, rules, fallback]);
+
+    setPreviewLoading(true);
+
+    // Use setTimeout to allow UI to update with loading state
+    setTimeout(() => {
+      try {
+        const results = previewAssignments(mappedContacts, rules, fallback);
+        setPreviewResults(results);
+        setHasRunPreview(true);
+      } catch (err) {
+        console.error('[AssignOwnersStep] Preview calculation failed:', err);
+        alert('Failed to calculate preview');
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 100);
+  };
 
   // Owner name lookup for preview
   const getOwnerName = (ownerId: string) => {
@@ -436,8 +464,24 @@ export function AssignOwnersStep({
             </label>
           </div>
 
+          {/* Preview button */}
+          <div className="mb-6">
+            <button
+              onClick={runPreview}
+              disabled={previewLoading || sampleRows.length === 0}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white text-sm transition-colors"
+            >
+              {previewLoading ? 'Calculating...' : 'Preview assignments'}
+            </button>
+            {!hasRunPreview && sampleRows.length > 0 && (
+              <p className="mt-2 text-sm text-zinc-400">
+                Click to preview how contacts will be assigned based on your rules
+              </p>
+            )}
+          </div>
+
           {/* Assignment preview */}
-          {sampleRows.length > 0 && (Object.keys(preview.byOwner).length > 0 || preview.unassigned > 0) && (
+          {hasRunPreview && previewResults && (
             <div className="mb-6 p-4 bg-zinc-900 border border-zinc-700">
               <h3 className="text-sm font-medium text-white mb-3">Assignment Preview</h3>
               <div className="overflow-x-auto">
@@ -451,7 +495,7 @@ export function AssignOwnersStep({
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.entries(preview.byOwner).map(([ownerId, counts]) => (
+                    {Object.entries(previewResults.byOwner).map(([ownerId, counts]: [string, any]) => (
                       <tr key={ownerId} className="border-b border-zinc-800">
                         <td className="py-2 text-white">{getOwnerName(ownerId)}</td>
                         <td className="py-2 text-right text-zinc-300">
@@ -470,10 +514,10 @@ export function AssignOwnersStep({
                     <tr className="border-t border-zinc-700">
                       <td className="py-2 text-white font-medium">Total</td>
                       <td className="py-2 text-right text-zinc-300">
-                        {Object.values(preview.byOwner).reduce((sum, c) => sum + c.rules, 0)}
+                        {Object.values(previewResults.byOwner).reduce((sum: number, c: any) => sum + c.rules, 0)}
                       </td>
                       <td className="py-2 text-right text-zinc-300">
-                        {Object.values(preview.byOwner).reduce((sum, c) => sum + c.fallback, 0)}
+                        {Object.values(previewResults.byOwner).reduce((sum: number, c: any) => sum + c.fallback, 0)}
                       </td>
                       <td className="py-2 text-right text-white font-medium">
                         {sampleRows.length}
@@ -483,9 +527,9 @@ export function AssignOwnersStep({
                 </table>
               </div>
 
-              {preview.unassigned > 0 && (
+              {previewResults.unassigned > 0 && (
                 <div className="mt-3 text-sm text-zinc-400">
-                  Note: {preview.unassigned} contacts have no owner (unassigned fallback)
+                  Note: {previewResults.unassigned} contacts have no owner (unassigned fallback)
                 </div>
               )}
             </div>
