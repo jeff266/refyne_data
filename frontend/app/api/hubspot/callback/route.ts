@@ -25,13 +25,17 @@ export const dynamic = 'force-dynamic';
  * Auth: public (called by HubSpot)
  */
 export async function GET(request: NextRequest) {
+  console.log('[OAuth Callback] START - Received callback from HubSpot');
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
     const state = searchParams.get('state');
     const hubId = searchParams.get('hub_id');
 
+    console.log('[OAuth Callback] Params:', { hasCode: !!code, hasState: !!state, hubId });
+
     if (!code || !state) {
+      console.error('[OAuth Callback] Missing required params');
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=missing_params`
       );
@@ -53,15 +57,22 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (stateError || !stateRecord) {
-      console.error('Invalid OAuth state:', stateError);
+      console.error('[OAuth Callback] Invalid OAuth state:', stateError);
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=invalid_state`
       );
     }
 
+    console.log('[OAuth Callback] State validated:', {
+      orgId: stateRecord.org_id,
+      returnTo: stateRecord.return_to,
+      used: stateRecord.used,
+      expiresAt: stateRecord.expires_at
+    });
+
     // Check if state is already used
     if (stateRecord.used) {
-      console.error('OAuth state already used');
+      console.error('[OAuth Callback] OAuth state already used');
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=state_reused`
       );
@@ -69,12 +80,13 @@ export async function GET(request: NextRequest) {
 
     // Check if state is expired
     if (new Date(stateRecord.expires_at) < new Date()) {
-      console.error('OAuth state expired');
+      console.error('[OAuth Callback] OAuth state expired');
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=state_expired`
       );
     }
 
+    console.log('[OAuth Callback] Marking state as used');
     // Mark state as used immediately
     await supabaseAdmin
       .from('hubspot_oauth_states')
@@ -82,11 +94,13 @@ export async function GET(request: NextRequest) {
       .eq('state', state);
 
     // Exchange code for tokens
+    console.log('[OAuth Callback] Exchanging code for tokens');
     const clientId = process.env.HUBSPOT_CLIENT_ID;
     const clientSecret = process.env.HUBSPOT_CLIENT_SECRET;
     const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/hubspot/callback`;
 
     if (!clientId || !clientSecret) {
+      console.error('[OAuth Callback] Missing OAuth credentials');
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=oauth_not_configured`
       );
@@ -108,7 +122,7 @@ export async function GET(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.text();
-      console.error('Token exchange failed:', errorData);
+      console.error('[OAuth Callback] Token exchange failed:', errorData);
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=token_exchange_failed`
       );
@@ -121,22 +135,30 @@ export async function GET(request: NextRequest) {
       expires_in,
     } = tokenData;
 
+    console.log('[OAuth Callback] Token exchange successful, expires_in:', expires_in);
+
     // Calculate token expiry
     const expiresAt = new Date(Date.now() + expires_in * 1000);
 
     // Get portal info to determine scopes
+    console.log('[OAuth Callback] Fetching portal info');
     const portalInfoResponse = await fetch('https://api.hubapi.com/oauth/v1/access-tokens/' + access_token);
     const portalInfo = await portalInfoResponse.json();
 
     const scopes = portalInfo.scopes || [];
     const portalId = hubId || portalInfo.hub_id?.toString() || '';
 
+    console.log('[OAuth Callback] Portal info:', { portalId, scopeCount: scopes.length });
+
     // Check if connection exists
+    console.log('[OAuth Callback] Checking for existing connection');
     const { data: existingConnection } = await supabaseAdmin
       .from('hubspot_connections')
       .select('id, encrypted_token, scopes, has_export_scope')
       .eq('org_id', stateRecord.org_id)
       .maybeSingle();
+
+    console.log('[OAuth Callback] Existing connection:', existingConnection ? 'found' : 'not found');
 
     // Update existing connection with OAuth tokens
     if (existingConnection) {
@@ -316,6 +338,8 @@ export async function GET(request: NextRequest) {
     // Read return_to from state record (persisted in database)
     let returnTo = stateRecord.return_to || null;
 
+    console.log('[OAuth Callback] return_to from state:', returnTo);
+
     // Validate return_to is a relative path (security)
     if (returnTo && (!returnTo.startsWith('/') || returnTo.includes('://'))) {
       console.warn('[OAuth Callback] Invalid return_to rejected:', returnTo);
@@ -323,7 +347,7 @@ export async function GET(request: NextRequest) {
     }
 
     const redirectPath = returnTo || '/connections';
-    console.log('[OAuth Callback] Redirecting to:', redirectPath);
+    console.log('[OAuth Callback] Final redirect path:', redirectPath);
 
     // Update onboarding progress if returning to onboarding flow
     if (returnTo?.includes('/onboarding')) {
@@ -346,9 +370,11 @@ export async function GET(request: NextRequest) {
     redirectUrl.searchParams.set('connected', 'true');
     redirectUrl.searchParams.set('__clerk_org', stateRecord.org_id);
 
+    console.log('[OAuth Callback] SUCCESS - Redirecting to:', redirectUrl.toString());
+
     return NextResponse.redirect(redirectUrl.toString());
   } catch (error) {
-    console.error('OAuth callback error:', error);
+    console.error('[OAuth Callback] FATAL ERROR:', error);
     return NextResponse.redirect(
       `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=unknown`
     );
