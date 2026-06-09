@@ -20,6 +20,7 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
 import { FilterStep } from '@/components/import/FilterStep';
+import { MatchResultsStep } from '@/components/import/MatchResultsStep';
 
 export default function ImportPage() {
   const router = useRouter();
@@ -390,45 +391,16 @@ export default function ImportPage() {
       )}
 
       {/* Step 4: Match Results */}
-      {step === 4 && matchSummary && (
-        <div>
-          <h2 className="text-lg font-medium text-white mb-4">
-            Step 4: Match Results
-          </h2>
-
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            {Object.entries(matchSummary).map(([bucket, count]) => (
-              <div
-                key={bucket}
-                className="p-4 bg-zinc-800 border border-zinc-700 rounded-lg"
-              >
-                <div className="text-2xl font-semibold text-white mb-1">
-                  {count as number}
-                </div>
-                <div className="text-sm text-zinc-400 capitalize">
-                  {bucket.replace(/_/g, ' ')}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => setStep(3)}
-              className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </button>
-            <button
-              onClick={() => setStep(5)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2"
-            >
-              Continue
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+      {step === 4 && matchSummary && sampleRows && sessionId && (
+        <MatchResultsStep
+          sessionId={sessionId}
+          matchSummary={matchSummary}
+          sampleRows={sampleRows}
+          totalRows={rowCount}
+          filteredRows={rowCount}
+          onBack={() => setStep(3)}
+          onContinue={() => setStep(5)}
+        />
       )}
 
       {/* Step 5: Configure */}
