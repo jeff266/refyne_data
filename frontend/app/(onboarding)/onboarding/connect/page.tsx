@@ -46,7 +46,7 @@ export default function ConnectPage() {
 
   const handleConnect = () => {
     // Redirect to HubSpot OAuth with return_to parameter
-    window.location.href = '/api/hubspot/connect?return_to=/onboarding/calibrate';
+    window.location.href = '/api/hubspot/connect?return_to=/onboarding/first-run';
   };
 
   const handleContinue = () => {
