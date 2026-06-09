@@ -168,8 +168,21 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('[Onboarding Progress] Update error:', error);
-      return NextResponse.json({ error: 'Failed to update progress' }, { status: 500 });
+      console.error('[Onboarding Progress] Update error:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      });
+      console.error('[Onboarding Progress] Attempted update:', updates);
+
+      // Return more helpful error message
+      let errorMessage = 'Failed to update progress';
+      if (error.message && error.message.includes('user_role_check')) {
+        errorMessage = 'Invalid role value. Please leave role blank or use a different value.';
+      }
+
+      return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 
     // Invalidate Redis cache

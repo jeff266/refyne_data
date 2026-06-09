@@ -14,7 +14,7 @@ export default function OnboardingLayout({
     <div
       style={{
         minHeight: '100vh',
-        background: '#FAFAFA', // Off-white background
+        background: '#162944', // Dark navy background
         fontFamily: F.sans,
         display: 'flex',
         flexDirection: 'column',

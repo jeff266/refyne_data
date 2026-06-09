@@ -12,6 +12,7 @@ export default function WelcomePage() {
   const [userName, setUserName] = useState('');
   const [userRole, setUserRole] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Pre-fill workspace name from Clerk org on mount
   useEffect(() => {
@@ -24,8 +25,10 @@ export default function WelcomePage() {
   }, []);
 
   const handleSubmit = async () => {
+    setError(null);
+
     if (!workspaceName.trim()) {
-      alert('Please enter a workspace name');
+      setError('Please enter a workspace name');
       return;
     }
 
@@ -43,13 +46,14 @@ export default function WelcomePage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save progress');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save progress');
       }
 
       router.push('/onboarding/use-case');
-    } catch (error) {
-      console.error('Failed to save welcome step:', error);
-      alert('Failed to save progress. Please try again.');
+    } catch (err: any) {
+      console.error('Failed to save welcome step:', err);
+      setError('Failed to save. Please try again.');
       setIsSubmitting(false);
     }
   };
@@ -71,7 +75,7 @@ export default function WelcomePage() {
             fontSize: 36,
             fontFamily: 'Lora, serif',
             fontWeight: 600,
-            color: '#1E293B',
+            color: '#F1F5F9',
             marginBottom: 12,
             textAlign: 'center',
           }}
@@ -81,7 +85,7 @@ export default function WelcomePage() {
         <p
           style={{
             fontSize: 15,
-            color: '#64748B',
+            color: '#94A3B8',
             textAlign: 'center',
             marginBottom: 48,
             lineHeight: 1.6,
@@ -97,7 +101,7 @@ export default function WelcomePage() {
               display: 'block',
               fontSize: 13,
               fontWeight: 600,
-              color: '#1E293B',
+              color: '#F1F5F9',
               marginBottom: 8,
             }}
           >
@@ -113,16 +117,16 @@ export default function WelcomePage() {
               padding: '12px 16px',
               fontSize: 14,
               fontFamily: F.sans,
-              color: '#1E293B',
-              background: '#fff',
-              border: '1px solid #CBD5E1',
+              color: '#F1F5F9',
+              background: '#1E293B',
+              border: '1px solid #334155',
               borderRadius: 6,
               outline: 'none',
             }}
             onFocus={(e) => (e.currentTarget.style.borderColor = C.indigo)}
-            onBlur={(e) => (e.currentTarget.style.borderColor = '#CBD5E1')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = '#334155')}
           />
-          <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 6 }}>
+          <p style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
             You can change this later in settings.
           </p>
         </div>
@@ -136,7 +140,7 @@ export default function WelcomePage() {
                 display: 'block',
                 fontSize: 13,
                 fontWeight: 600,
-                color: '#1E293B',
+                color: '#F1F5F9',
                 marginBottom: 8,
               }}
             >
@@ -152,14 +156,14 @@ export default function WelcomePage() {
                 padding: '12px 16px',
                 fontSize: 14,
                 fontFamily: F.sans,
-                color: '#1E293B',
-                background: '#fff',
-                border: '1px solid #CBD5E1',
+                color: '#F1F5F9',
+                background: '#1E293B',
+                border: '1px solid #334155',
                 borderRadius: 6,
                 outline: 'none',
               }}
               onFocus={(e) => (e.currentTarget.style.borderColor = C.indigo)}
-              onBlur={(e) => (e.currentTarget.style.borderColor = '#CBD5E1')}
+              onBlur={(e) => (e.currentTarget.style.borderColor = '#334155')}
             />
           </div>
 
@@ -170,7 +174,7 @@ export default function WelcomePage() {
                 display: 'block',
                 fontSize: 13,
                 fontWeight: 600,
-                color: '#1E293B',
+                color: '#F1F5F9',
                 marginBottom: 8,
               }}
             >
@@ -186,14 +190,14 @@ export default function WelcomePage() {
                 padding: '12px 16px',
                 fontSize: 14,
                 fontFamily: F.sans,
-                color: '#1E293B',
-                background: '#fff',
-                border: '1px solid #CBD5E1',
+                color: '#F1F5F9',
+                background: '#1E293B',
+                border: '1px solid #334155',
                 borderRadius: 6,
                 outline: 'none',
               }}
               onFocus={(e) => (e.currentTarget.style.borderColor = C.indigo)}
-              onBlur={(e) => (e.currentTarget.style.borderColor = '#CBD5E1')}
+              onBlur={(e) => (e.currentTarget.style.borderColor = '#334155')}
             />
           </div>
         </div>
@@ -227,6 +231,20 @@ export default function WelcomePage() {
         >
           {isSubmitting ? 'Saving...' : 'Get started →'}
         </button>
+
+        {/* Error message */}
+        {error && (
+          <p
+            style={{
+              marginTop: 12,
+              fontSize: 13,
+              color: '#F59E0B',
+              textAlign: 'center',
+            }}
+          >
+            {error}
+          </p>
+        )}
       </div>
     </div>
   );
