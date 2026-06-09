@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
       invites.map(async (invite) => {
         await clerkClient.organizations.createOrganizationInvitation({
           organizationId: ctx.orgId,
+          inviterUserId: ctx.userId,
           emailAddress: invite.email,
           role: invite.role,
           redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
