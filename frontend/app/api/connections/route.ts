@@ -50,9 +50,12 @@ export async function GET() {
         return {
           orgId: conn.org_id,
           portalId: conn.portal_id,
+          portal_id: conn.portal_id,
           name: conn.friendly_name || `Portal ${conn.portal_id}`,
           companyCount: count || 0,
           lastSync,
+          provider: 'hubspot',
+          status: 'connected',
         };
       })
     );
