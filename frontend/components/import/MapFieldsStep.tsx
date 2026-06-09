@@ -12,8 +12,8 @@
  * - Pre-select based on auto-detection
  */
 
-import { useState, useEffect } from 'react';
-import { ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ArrowRight, ArrowLeft, AlertCircle, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
 interface Column {
   name: string;
@@ -120,12 +120,85 @@ export function MapFieldsStep({
   // Check if email is mapped
   const emailMapped = Object.values(mapping).includes('email');
 
+  // Calculate validation statistics
+  const validationStats = useMemo(() => {
+    const stats: {
+      emptyValueWarnings: Array<{ field: string; csvColumn: string; emptyCount: number }>;
+      rowsWithoutEmail: number;
+      isActivityExport: boolean;
+    } = {
+      emptyValueWarnings: [],
+      rowsWithoutEmail: 0,
+      isActivityExport: false,
+    };
+
+    // Check for activity export indicators
+    const activityIndicators = ['Call Result', 'Call Duration', 'Subject', 'Activity Type'];
+    stats.isActivityExport = columns.some((col) =>
+      activityIndicators.some((indicator) =>
+        col.name.toLowerCase().includes(indicator.toLowerCase())
+      )
+    );
+
+    // Count empty values for each mapped field
+    for (const [csvColumn, hubspotField] of Object.entries(mapping)) {
+      if (!hubspotField) continue; // Skip unmapped columns
+
+      let emptyCount = 0;
+      for (const row of previewRows) {
+        const value = row[csvColumn];
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          emptyCount++;
+        }
+      }
+
+      // Warn if > 10% empty
+      const emptyPercentage = (emptyCount / previewRows.length) * 100;
+      if (emptyPercentage > 10) {
+        const fieldLabel = HUBSPOT_FIELDS.find((f) => f.value === hubspotField)?.label || hubspotField;
+        stats.emptyValueWarnings.push({
+          field: fieldLabel,
+          csvColumn,
+          emptyCount,
+        });
+      }
+    }
+
+    // Count rows without email
+    if (emailColumn) {
+      for (const row of previewRows) {
+        const emailValue = row[emailColumn];
+        if (!emailValue || (typeof emailValue === 'string' && emailValue.trim() === '')) {
+          stats.rowsWithoutEmail++;
+        }
+      }
+    }
+
+    return stats;
+  }, [mapping, emailColumn, previewRows, columns]);
+
   return (
     <div>
       <h2 className="text-lg font-medium text-white mb-4">Step 3: Map Fields</h2>
       <p className="text-zinc-400 mb-6">
         Map your CSV columns to HubSpot fields. Email is required.
       </p>
+
+      {/* Warning if activity export detected */}
+      {validationStats.isActivityExport && (
+        <div className="mb-6 p-4 bg-amber-900/20 border border-amber-700/50 flex gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <div className="text-amber-500 font-medium mb-1">
+              This looks like an activity export, not a contact list
+            </div>
+            <div className="text-sm text-amber-400/80">
+              Import works best with contact CSV files containing email addresses.
+              Activity exports may not contain the necessary contact information.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Warning if email not mapped */}
       {!emailMapped && (
@@ -197,6 +270,62 @@ export function MapFieldsStep({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Validation Summary */}
+      <div className="mb-6 p-4 bg-zinc-900 border border-zinc-700">
+        <h3 className="text-sm font-medium text-white mb-3">Validation Summary</h3>
+
+        {/* Email mapping check */}
+        <div className="mb-3">
+          {emailMapped && emailColumn ? (
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+              <span className="text-green-400">
+                Email mapped to "{emailColumn}"
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-sm">
+              <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <span className="text-red-400">
+                Email is required. Map a column to Email to continue.
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Empty value warnings */}
+        {validationStats.emptyValueWarnings.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {validationStats.emptyValueWarnings.map((warning) => (
+              <div key={warning.csvColumn} className="flex items-start gap-2 text-sm">
+                <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <span className="text-amber-400">
+                  {warning.field}: {warning.emptyCount} rows have no value (will be imported
+                  without {warning.field.toLowerCase()})
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Row skip preview */}
+        {validationStats.rowsWithoutEmail > 0 && (
+          <div className="flex items-start gap-2 text-sm">
+            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <span className="text-amber-400">
+              {validationStats.rowsWithoutEmail} rows will be skipped (no email address)
+            </span>
+          </div>
+        )}
+
+        {/* All good message */}
+        {emailMapped &&
+          validationStats.emptyValueWarnings.length === 0 &&
+          validationStats.rowsWithoutEmail === 0 && (
+            <div className="text-sm text-zinc-400">All validations passed.</div>
+          )}
       </div>
 
       {/* Navigation buttons */}
