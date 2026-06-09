@@ -169,17 +169,10 @@ export function AssignOwnersStep({
   // Transform raw CSV rows using field mapping
   const mappedContacts = useMemo(() => {
     if (!fieldMapping || sampleRows.length === 0) {
-      console.warn('[AssignOwnersStep] Cannot map contacts:', {
-        hasFieldMapping: !!fieldMapping,
-        sampleRowsCount: sampleRows.length,
-      });
       return [];
     }
 
-    console.log('[AssignOwnersStep] Field mapping:', fieldMapping);
-    console.log('[AssignOwnersStep] First sample row keys:', Object.keys(sampleRows[0] || {}));
-
-    const mapped = sampleRows.map((row) => {
+    return sampleRows.map((row) => {
       const mapped: any = {};
 
       // Map fields from CSV columns to expected field names
@@ -203,16 +196,11 @@ export function AssignOwnersStep({
 
       return mapped;
     });
-
-    console.log('[AssignOwnersStep] Mapped contacts sample:', mapped.slice(0, 2));
-
-    return mapped;
   }, [sampleRows, fieldMapping]);
 
   // Manual preview calculation (triggered by button)
   const runPreview = () => {
     if (mappedContacts.length === 0) {
-      console.warn('[AssignOwnersStep] No mapped contacts available for preview');
       return;
     }
 
@@ -221,20 +209,7 @@ export function AssignOwnersStep({
     // Use setTimeout to allow UI to update with loading state
     setTimeout(() => {
       try {
-        console.log('[AssignOwnersStep] Running preview with:', {
-          sampleRowsCount: sampleRows.length,
-          mappedContactsCount: mappedContacts.length,
-          fieldMapping,
-          firstMappedContact: mappedContacts[0],
-          firstRawRow: sampleRows[0],
-          rulesCount: rules.length,
-          fallback,
-        });
-
         const results = previewAssignments(mappedContacts, rules, fallback);
-
-        console.log('[AssignOwnersStep] Preview results:', results);
-
         setPreviewResults(results);
         setHasRunPreview(true);
       } catch (err) {
