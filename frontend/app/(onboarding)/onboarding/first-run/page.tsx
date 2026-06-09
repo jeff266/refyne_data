@@ -4,10 +4,23 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
 
+interface NormalizePreview {
+  changes: Array<{
+    company_id: string;
+    changes: Array<{ field: string; old_value: any; new_value: any }>;
+  }>;
+  summary: {
+    total_records: number;
+    records_with_changes: number;
+    total_changes: number;
+  };
+}
+
 export default function FirstRunPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [preview, setPreview] = useState<any>(null);
+  const [preview, setPreview] = useState<NormalizePreview | null>(null);
+  const [previewError, setPreviewError] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [useCases, setUseCases] = useState<string[]>([]);
 
@@ -31,17 +44,22 @@ export default function FirstRunPage() {
   const loadPreview = async () => {
     try {
       setIsLoading(true);
-      // Mock preview data - in real implementation would call normalize preview API
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      setPreviewError(false);
 
-      setPreview({
-        totalRecords: 1247,
-        phoneChanges: 342,
-        companyNameChanges: 189,
-        linkedinChanges: 76,
+      const response = await fetch('/api/normalize/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       });
+
+      if (!response.ok) {
+        throw new Error('Preview failed');
+      }
+
+      const data: NormalizePreview = await response.json();
+      setPreview(data);
     } catch (error) {
       console.error('Failed to load preview:', error);
+      setPreviewError(true);
     } finally {
       setIsLoading(false);
     }
@@ -51,8 +69,22 @@ export default function FirstRunPage() {
     setIsApplying(true);
 
     try {
-      // In real implementation: POST /api/normalize/apply
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Apply the normalization changes
+      const applyResponse = await fetch('/api/normalize/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: false }),
+      });
+
+      if (!applyResponse.ok) {
+        throw new Error('Failed to apply changes');
+      }
+
+      const applyResult = await applyResponse.json();
+
+      if (!applyResult.success) {
+        throw new Error('Apply operation failed');
+      }
 
       // Update onboarding progress
       await fetch('/api/onboarding/progress', {
@@ -60,7 +92,6 @@ export default function FirstRunPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ran_normalize: true,
-          first_normalize_at: new Date().toISOString(),
         }),
       });
 
@@ -76,11 +107,7 @@ export default function FirstRunPage() {
     router.push('/onboarding/invite');
   };
 
-  const hasChanges = preview && (
-    preview.phoneChanges > 0 ||
-    preview.companyNameChanges > 0 ||
-    preview.linkedinChanges > 0
-  );
+  const hasChanges = preview && preview.summary.records_with_changes > 0;
 
   return (
     <div
@@ -159,6 +186,45 @@ export default function FirstRunPage() {
               />
             </div>
           </div>
+        ) : previewError ? (
+          <>
+            {/* Error state - unable to scan */}
+            <div
+              style={{
+                padding: 48,
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                textAlign: 'center',
+                marginBottom: 48,
+              }}
+            >
+              <div style={{ fontSize: 16, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#F9F8F5', marginBottom: 8 }}>
+                We'll scan your records after setup
+              </div>
+              <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>
+                Unable to preview changes right now. You can run normalization from the dashboard after completing setup.
+              </div>
+            </div>
+
+            {/* Navigation - Skip only */}
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button
+                onClick={handleSkip}
+                style={{
+                  padding: '12px 32px',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  fontFamily: "'Jost', system-ui, sans-serif",
+                  color: '#F9F8F5',
+                  background: '#2E6BA8',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Continue →
+              </button>
+            </div>
+          </>
         ) : hasChanges ? (
           <>
             {/* Summary stats */}
@@ -177,36 +243,23 @@ export default function FirstRunPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>
-                    {preview.totalRecords.toLocaleString()} records scanned
+                    {preview.summary.total_records.toLocaleString()} records scanned
                   </span>
                 </div>
 
-                {preview.phoneChanges > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>Phone numbers</span>
-                    <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8' }}>
-                      {preview.phoneChanges} to reformat
-                    </span>
-                  </div>
-                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>Records with changes</span>
+                  <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8' }}>
+                    {preview.summary.records_with_changes.toLocaleString()}
+                  </span>
+                </div>
 
-                {preview.companyNameChanges > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>Company names</span>
-                    <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8' }}>
-                      {preview.companyNameChanges} to standardize
-                    </span>
-                  </div>
-                )}
-
-                {preview.linkedinChanges > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>LinkedIn URLs</span>
-                    <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8' }}>
-                      {preview.linkedinChanges} to canonicalize
-                    </span>
-                  </div>
-                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>Total field changes</span>
+                  <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8' }}>
+                    {preview.summary.total_changes.toLocaleString()}
+                  </span>
+                </div>
               </div>
             </div>
 
