@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation';
 import { Upload, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
 import { FilterStep } from '@/components/import/FilterStep';
 import { MatchResultsStep } from '@/components/import/MatchResultsStep';
+import { AssignOwnersStep } from '@/components/import/AssignOwnersStep';
 
 export default function ImportPage() {
   const router = useRouter();
@@ -57,7 +58,7 @@ export default function ImportPage() {
 
   // Step 6: Owner assignment
   const [ownerAssignmentEnabled, setOwnerAssignmentEnabled] = useState(false);
-  const [owners, setOwners] = useState<Array<{ id: string; weight: number }>>([]);
+  const [ownerAssignments, setOwnerAssignments] = useState<Array<{ id: string; ownerId: string; weight: number }>>([]);
 
   // Step 7: HubSpot list
   const [hubspotListEnabled, setHubspotListEnabled] = useState(false);
@@ -212,7 +213,7 @@ export default function ImportPage() {
           owner_assignment: ownerAssignmentEnabled
             ? {
                 enabled: true,
-                owners,
+                assignments: ownerAssignments,
               }
             : undefined,
         }),
@@ -493,33 +494,25 @@ export default function ImportPage() {
         </div>
       )}
 
-      {/* Step 6: Owner Assignment (placeholder) */}
-      {step === 6 && (
-        <div>
-          <h2 className="text-lg font-medium text-white mb-4">
-            Step 6: Owner Assignment (Optional)
-          </h2>
-          <p className="text-zinc-400 mb-6">
-            Assign contacts to HubSpot owners. Skip to leave unassigned.
-          </p>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => setStep(5)}
-              className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </button>
-            <button
-              onClick={() => setStep(7)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2"
-            >
-              Continue
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+      {/* Step 6: Owner Assignment */}
+      {step === 6 && matchSummary && sessionId && (
+        <AssignOwnersStep
+          sessionId={sessionId}
+          totalContacts={
+            matchSummary.customer +
+            matchSummary.open_deal +
+            matchSummary.former_customer +
+            matchSummary.known_contact +
+            matchSummary.new_contact +
+            matchSummary.needs_review
+          }
+          onBack={() => setStep(5)}
+          onContinue={(enabled, assignments) => {
+            setOwnerAssignmentEnabled(enabled);
+            setOwnerAssignments(assignments);
+            setStep(7);
+          }}
+        />
       )}
 
       {/* Step 7: Confirm */}
