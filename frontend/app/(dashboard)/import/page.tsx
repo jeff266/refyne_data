@@ -177,7 +177,17 @@ export default function ImportPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Matching failed');
+        const errorMessage = errorData.error || 'Matching failed';
+
+        // Better error message for rate limiting
+        if (errorMessage.includes('Rate limit') || errorMessage.includes('secondly limit')) {
+          throw new Error(
+            'HubSpot rate limit exceeded. Please wait a few seconds and try again. ' +
+            'If this persists, you may need to reduce the number of contacts in your CSV or contact support.'
+          );
+        }
+
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -353,6 +363,7 @@ export default function ImportPage() {
           columns={columns}
           previewRows={previewRows}
           initialMapping={fieldMapping}
+          loading={uploading}
           onBack={() => setStep(2)}
           onContinue={(mapping) => {
             setFieldMapping(mapping);

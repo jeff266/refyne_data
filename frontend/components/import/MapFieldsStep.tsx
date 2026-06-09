@@ -24,6 +24,7 @@ interface MapFieldsStepProps {
   columns: Column[];
   previewRows: any[];
   initialMapping: Record<string, string>;
+  loading?: boolean;
   onBack: () => void;
   onContinue: (mapping: Record<string, string>) => void;
 }
@@ -46,6 +47,7 @@ export function MapFieldsStep({
   columns,
   previewRows,
   initialMapping,
+  loading = false,
   onBack,
   onContinue,
 }: MapFieldsStepProps) {
@@ -339,11 +341,11 @@ export function MapFieldsStep({
         </button>
         <button
           onClick={handleContinue}
-          disabled={!emailMapped}
+          disabled={!emailMapped || loading}
           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Continue
-          <ArrowRight className="w-4 h-4" />
+          {loading ? 'Matching contacts...' : 'Continue'}
+          {!loading && <ArrowRight className="w-4 h-4" />}
         </button>
       </div>
     </div>
