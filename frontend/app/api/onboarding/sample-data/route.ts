@@ -54,7 +54,8 @@ export async function GET() {
       const cached = await redis.get(cacheKey);
       if (cached) {
         console.log("[Sample Data] Cache hit");
-        return NextResponse.json(JSON.parse(cached as string));
+        // Upstash Redis automatically deserializes JSON, no need to parse
+        return NextResponse.json(cached);
       }
     }
 
