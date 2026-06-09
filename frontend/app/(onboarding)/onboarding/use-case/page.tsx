@@ -81,7 +81,7 @@ export default function UseCasePage() {
         {/* Progress indicator */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <span style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.5)', fontWeight: 500 }}>
-            Step 2 of 5
+            Step 2 of 6
           </span>
         </div>
 
