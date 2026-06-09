@@ -310,11 +310,45 @@ export async function GET(request: NextRequest) {
       // Don't fail the connection - auto-scan is best-effort
     }
 
-    // Redirect to connections page with success, preserving org context
-    const redirectUrl = new URL('/connections', process.env.NEXT_PUBLIC_APP_URL);
+    // Read return_to from cookie (if present and valid)
+    const returnToCookie = request.cookies.get('oauth_return_to')?.value;
+    let returnTo = returnToCookie ? decodeURIComponent(returnToCookie) : null;
+
+    // Validate return_to is a relative path (security)
+    if (returnTo && (!returnTo.startsWith('/') || returnTo.includes('://'))) {
+      console.warn('[OAuth Callback] Invalid return_to rejected:', returnTo);
+      returnTo = null;
+    }
+
+    const redirectPath = returnTo || '/connections';
+    console.log('[OAuth Callback] Redirecting to:', redirectPath);
+
+    // Update onboarding progress if returning to onboarding flow
+    if (returnTo?.includes('/onboarding')) {
+      try {
+        await supabase
+          .from('onboarding_progress')
+          .upsert({
+            org_id: stateRecord.org_id,
+            connected_hubspot: true,
+          }, { onConflict: 'org_id' });
+        console.log('[OAuth Callback] Updated onboarding_progress.connected_hubspot');
+      } catch (err) {
+        console.error('[OAuth Callback] Failed to update onboarding progress (non-fatal):', err);
+        // Non-fatal, continue
+      }
+    }
+
+    // Redirect with success, preserving org context
+    const redirectUrl = new URL(redirectPath, process.env.NEXT_PUBLIC_APP_URL);
     redirectUrl.searchParams.set('connected', 'true');
     redirectUrl.searchParams.set('__clerk_org', stateRecord.org_id);
-    return NextResponse.redirect(redirectUrl.toString());
+
+    // Clear cookie after reading
+    const headers = new Headers();
+    headers.append('Set-Cookie', 'oauth_return_to=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+
+    return NextResponse.redirect(redirectUrl.toString(), { headers });
   } catch (error) {
     console.error('OAuth callback error:', error);
     return NextResponse.redirect(

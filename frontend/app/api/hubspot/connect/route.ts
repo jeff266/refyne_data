@@ -15,9 +15,12 @@ import { encryptToken } from '@/lib/crypto/token-encryption';
  * Initiates HubSpot OAuth flow by generating a CSRF state token
  * and redirecting to HubSpot's authorization URL.
  *
+ * Query params:
+ * - return_to: Optional relative path to redirect after OAuth (e.g., /onboarding/connect)
+ *
  * Auth: admin only
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   let ctx;
   try {
     ctx = await getOrgContext();
@@ -121,8 +124,21 @@ export async function GET() {
     authUrl.searchParams.set('scope', scopes.join(' '));
     authUrl.searchParams.set('state', state);
 
+    // Store return_to in cookie if provided and valid
+    const returnTo = request.nextUrl.searchParams.get('return_to');
+    const headers = new Headers();
+
+    if (returnTo && returnTo.startsWith('/') && !returnTo.includes('://')) {
+      // Valid relative path - store in HttpOnly cookie with 10 minute expiry
+      headers.append(
+        'Set-Cookie',
+        `oauth_return_to=${encodeURIComponent(returnTo)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`
+      );
+      console.log('[HubSpot Connect] Stored return_to in cookie:', returnTo);
+    }
+
     // Redirect to HubSpot
-    return NextResponse.redirect(authUrl.toString());
+    return NextResponse.redirect(authUrl.toString(), headers.size > 0 ? { headers } : undefined);
   } catch (error) {
     console.error('OAuth connect error:', error);
     return NextResponse.json(
