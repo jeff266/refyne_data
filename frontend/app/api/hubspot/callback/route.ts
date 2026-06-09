@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     // and hubspot_oauth_states has RLS that requires org_id from auth
     const { data: stateRecord, error: stateError } = await supabaseAdmin
       .from('hubspot_oauth_states')
-      .select('id, state, org_id, created_by, used_at, created_at, return_to, expires_at, used')
+      .select('state, org_id, created_by, created_at, return_to, expires_at, used')
       .eq('state', state)
       .single();
 
