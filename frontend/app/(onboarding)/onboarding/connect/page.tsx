@@ -46,11 +46,11 @@ export default function ConnectPage() {
 
   const handleConnect = () => {
     // Redirect to HubSpot OAuth
-    window.location.href = '/api/hubspot/oauth/start';
+    window.location.href = '/api/hubspot/connect';
   };
 
   const handleContinue = () => {
-    router.push('/onboarding/calibrate');
+    router.push('/onboarding/first-run');
   };
 
   return (
@@ -66,7 +66,7 @@ export default function ConnectPage() {
       <div style={{ width: '100%', maxWidth: 540 }}>
         {/* Progress indicator */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>
+          <span style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.5)', fontWeight: 500 }}>
             Step 3 of 7
           </span>
         </div>
@@ -77,7 +77,7 @@ export default function ConnectPage() {
             fontSize: 32,
             fontFamily: 'Lora, serif',
             fontWeight: 600,
-            color: '#1E293B',
+            color: '#F9F8F5',
             marginBottom: 12,
             textAlign: 'center',
           }}
@@ -87,7 +87,8 @@ export default function ConnectPage() {
         <p
           style={{
             fontSize: 15,
-            color: '#64748B',
+            fontFamily: "'Jost', system-ui, sans-serif",
+            color: 'rgba(249,248,245,0.7)',
             textAlign: 'center',
             marginBottom: 48,
             lineHeight: 1.6,
@@ -97,7 +98,7 @@ export default function ConnectPage() {
         </p>
 
         {isLoading ? (
-          <div style={{ textAlign: 'center', padding: 48, color: '#94A3B8' }}>
+          <div style={{ textAlign: 'center', padding: 48, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.6)' }}>
             Checking connection...
           </div>
         ) : isConnected && connectionInfo ? (
@@ -106,9 +107,8 @@ export default function ConnectPage() {
             <div
               style={{
                 padding: 32,
-                background: '#F0FDF4',
-                border: '2px solid #86EFAC',
-                borderRadius: 8,
+                background: 'rgba(34,197,94,0.15)',
+                border: '1px solid rgba(34,197,94,0.3)',
                 textAlign: 'center',
                 marginBottom: 48,
               }}
@@ -117,6 +117,7 @@ export default function ConnectPage() {
                 style={{
                   fontSize: 48,
                   marginBottom: 16,
+                  color: '#22C55E',
                 }}
               >
                 ✓
@@ -124,14 +125,15 @@ export default function ConnectPage() {
               <div
                 style={{
                   fontSize: 16,
+                  fontFamily: "'Jost', system-ui, sans-serif",
                   fontWeight: 600,
-                  color: '#166534',
+                  color: '#F9F8F5',
                   marginBottom: 8,
                 }}
               >
                 HubSpot connected
               </div>
-              <div style={{ fontSize: 13, color: '#15803D' }}>
+              <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>
                 {connectionInfo.name} ({connectionInfo.portalId})
               </div>
             </div>
@@ -144,11 +146,10 @@ export default function ConnectPage() {
                   padding: '12px 24px',
                   fontSize: 14,
                   fontWeight: 500,
-                  fontFamily: F.sans,
-                  color: '#64748B',
-                  background: '#fff',
-                  border: '1px solid #CBD5E1',
-                  borderRadius: 6,
+                  fontFamily: "'Jost', system-ui, sans-serif",
+                  color: '#F9F8F5',
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.2)',
                   cursor: 'pointer',
                 }}
               >
@@ -161,11 +162,10 @@ export default function ConnectPage() {
                   padding: '12px 32px',
                   fontSize: 14,
                   fontWeight: 600,
-                  fontFamily: F.sans,
-                  color: '#fff',
-                  background: C.steel,
+                  fontFamily: "'Jost', system-ui, sans-serif",
+                  color: '#F9F8F5',
+                  background: '#2E6BA8',
                   border: 'none',
-                  borderRadius: 6,
                   cursor: 'pointer',
                 }}
               >
@@ -179,9 +179,8 @@ export default function ConnectPage() {
             <div
               style={{
                 padding: 24,
-                background: '#fff',
-                border: '1px solid #E2E8F0',
-                borderRadius: 8,
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
                 marginBottom: 24,
               }}
             >
@@ -192,11 +191,10 @@ export default function ConnectPage() {
                   padding: '14px 24px',
                   fontSize: 14,
                   fontWeight: 600,
-                  fontFamily: F.sans,
+                  fontFamily: "'Jost', system-ui, sans-serif",
                   color: '#fff',
                   background: '#FF7A59',
                   border: 'none',
-                  borderRadius: 6,
                   cursor: 'pointer',
                   marginBottom: 16,
                 }}
@@ -204,10 +202,10 @@ export default function ConnectPage() {
                 Connect HubSpot
               </button>
 
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#F9F8F5', marginBottom: 12 }}>
                 Refyne needs access to:
               </div>
-              <ul style={{ fontSize: 12, color: '#64748B', lineHeight: 2, paddingLeft: 20 }}>
+              <ul style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', lineHeight: 2, paddingLeft: 20 }}>
                 <li>Read and write company records</li>
                 <li>Read and write contact records</li>
                 <li>Access property definitions</li>
@@ -222,11 +220,10 @@ export default function ConnectPage() {
                   padding: '12px 24px',
                   fontSize: 14,
                   fontWeight: 500,
-                  fontFamily: F.sans,
-                  color: '#64748B',
-                  background: '#fff',
-                  border: '1px solid #CBD5E1',
-                  borderRadius: 6,
+                  fontFamily: "'Jost', system-ui, sans-serif",
+                  color: '#F9F8F5',
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.2)',
                   cursor: 'pointer',
                 }}
               >

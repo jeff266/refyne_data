@@ -10,6 +10,7 @@ export default function UseCasePage() {
   const router = useRouter();
   const [selectedUseCases, setSelectedUseCases] = useState<UseCase[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const toggleUseCase = (useCase: UseCase) => {
     if (useCase === 'both') {
@@ -37,11 +38,12 @@ export default function UseCasePage() {
 
   const handleContinue = async () => {
     if (selectedUseCases.length === 0) {
-      alert('Please select at least one option');
+      setError('Please select at least one option');
       return;
     }
 
     setIsSubmitting(true);
+    setError(null);
 
     try {
       const response = await fetch('/api/onboarding/progress', {
@@ -60,7 +62,7 @@ export default function UseCasePage() {
       router.push('/onboarding/connect');
     } catch (error) {
       console.error('Failed to save use case selection:', error);
-      alert('Failed to save progress. Please try again.');
+      setError('Failed to save progress. Please try again.');
       setIsSubmitting(false);
     }
   };
@@ -78,7 +80,7 @@ export default function UseCasePage() {
       <div style={{ width: '100%', maxWidth: 640 }}>
         {/* Progress indicator */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>
+          <span style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.5)', fontWeight: 500 }}>
             Step 2 of 7
           </span>
         </div>
@@ -89,7 +91,7 @@ export default function UseCasePage() {
             fontSize: 32,
             fontFamily: 'Lora, serif',
             fontWeight: 600,
-            color: '#1E293B',
+            color: '#F9F8F5',
             marginBottom: 12,
             textAlign: 'center',
           }}
@@ -99,7 +101,8 @@ export default function UseCasePage() {
         <p
           style={{
             fontSize: 15,
-            color: '#64748B',
+            fontFamily: "'Jost', system-ui, sans-serif",
+            color: 'rgba(249,248,245,0.7)',
             textAlign: 'center',
             marginBottom: 48,
             lineHeight: 1.6,
@@ -115,38 +118,36 @@ export default function UseCasePage() {
             onClick={() => toggleUseCase('clean')}
             style={{
               padding: 24,
-              background: '#fff',
+              background: selectedUseCases.includes('clean')
+                ? 'rgba(46,107,168,0.15)'
+                : 'rgba(255,255,255,0.05)',
               border: selectedUseCases.includes('clean')
-                ? `2px solid ${C.indigo}`
-                : '1px solid #E2E8F0',
-              borderRadius: 8,
+                ? '1px solid #2E6BA8'
+                : '1px solid rgba(255,255,255,0.1)',
               cursor: 'pointer',
               transition: 'all 0.2s',
             }}
             onMouseEnter={(e) => {
               if (!selectedUseCases.includes('clean')) {
-                e.currentTarget.style.borderColor = '#CBD5E1';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
               }
             }}
             onMouseLeave={(e) => {
               if (!selectedUseCases.includes('clean')) {
-                e.currentTarget.style.borderColor = '#E2E8F0';
-                e.currentTarget.style.boxShadow = 'none';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
               }
             }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-              {/* Checkbox */}
+              {/* Custom Checkbox */}
               <div
                 style={{
-                  minWidth: 20,
-                  height: 20,
-                  borderRadius: 4,
+                  minWidth: 18,
+                  height: 18,
                   border: selectedUseCases.includes('clean')
-                    ? `2px solid ${C.indigo}`
-                    : '2px solid #CBD5E1',
-                  background: selectedUseCases.includes('clean') ? C.indigo : '#fff',
+                    ? 'none'
+                    : '1px solid rgba(255,255,255,0.3)',
+                  background: selectedUseCases.includes('clean') ? '#2E6BA8' : 'transparent',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -154,7 +155,7 @@ export default function UseCasePage() {
                 }}
               >
                 {selectedUseCases.includes('clean') && (
-                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 700 }}>✓</span>
+                  <span style={{ fontSize: 12, color: '#F9F8F5', fontWeight: 700 }}>✓</span>
                 )}
               </div>
 
@@ -163,14 +164,15 @@ export default function UseCasePage() {
                 <div
                   style={{
                     fontSize: 16,
+                    fontFamily: "'Jost', system-ui, sans-serif",
                     fontWeight: 600,
-                    color: '#1E293B',
+                    color: '#F9F8F5',
                     marginBottom: 6,
                   }}
                 >
                   Clean up existing data
                 </div>
-                <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
+                <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', lineHeight: 1.6 }}>
                   Normalize formats, remove duplicates, and fix inconsistencies in your current HubSpot records.
                 </div>
               </div>
@@ -182,38 +184,36 @@ export default function UseCasePage() {
             onClick={() => toggleUseCase('enrich')}
             style={{
               padding: 24,
-              background: '#fff',
+              background: selectedUseCases.includes('enrich')
+                ? 'rgba(46,107,168,0.15)'
+                : 'rgba(255,255,255,0.05)',
               border: selectedUseCases.includes('enrich')
-                ? `2px solid ${C.indigo}`
-                : '1px solid #E2E8F0',
-              borderRadius: 8,
+                ? '1px solid #2E6BA8'
+                : '1px solid rgba(255,255,255,0.1)',
               cursor: 'pointer',
               transition: 'all 0.2s',
             }}
             onMouseEnter={(e) => {
               if (!selectedUseCases.includes('enrich')) {
-                e.currentTarget.style.borderColor = '#CBD5E1';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
               }
             }}
             onMouseLeave={(e) => {
               if (!selectedUseCases.includes('enrich')) {
-                e.currentTarget.style.borderColor = '#E2E8F0';
-                e.currentTarget.style.boxShadow = 'none';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
               }
             }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-              {/* Checkbox */}
+              {/* Custom Checkbox */}
               <div
                 style={{
-                  minWidth: 20,
-                  height: 20,
-                  borderRadius: 4,
+                  minWidth: 18,
+                  height: 18,
                   border: selectedUseCases.includes('enrich')
-                    ? `2px solid ${C.indigo}`
-                    : '2px solid #CBD5E1',
-                  background: selectedUseCases.includes('enrich') ? C.indigo : '#fff',
+                    ? 'none'
+                    : '1px solid rgba(255,255,255,0.3)',
+                  background: selectedUseCases.includes('enrich') ? '#2E6BA8' : 'transparent',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -221,7 +221,7 @@ export default function UseCasePage() {
                 }}
               >
                 {selectedUseCases.includes('enrich') && (
-                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 700 }}>✓</span>
+                  <span style={{ fontSize: 12, color: '#F9F8F5', fontWeight: 700 }}>✓</span>
                 )}
               </div>
 
@@ -230,14 +230,15 @@ export default function UseCasePage() {
                 <div
                   style={{
                     fontSize: 16,
+                    fontFamily: "'Jost', system-ui, sans-serif",
                     fontWeight: 600,
-                    color: '#1E293B',
+                    color: '#F9F8F5',
                     marginBottom: 6,
                   }}
                 >
                   Enrich records with missing data
                 </div>
-                <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
+                <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', lineHeight: 1.6 }}>
                   Fill in missing company details like industry, employee count, and LinkedIn using data providers.
                 </div>
               </div>
@@ -249,25 +250,24 @@ export default function UseCasePage() {
             onClick={() => toggleUseCase('both')}
             style={{
               padding: 24,
-              background: '#fff',
+              background: selectedUseCases.includes('both')
+                ? 'rgba(46,107,168,0.15)'
+                : 'rgba(255,255,255,0.05)',
               border: selectedUseCases.includes('both')
-                ? `2px solid ${C.indigo}`
-                : '1px solid #E2E8F0',
-              borderRadius: 8,
+                ? '1px solid #2E6BA8'
+                : '1px solid rgba(255,255,255,0.1)',
               cursor: 'pointer',
               transition: 'all 0.2s',
               position: 'relative',
             }}
             onMouseEnter={(e) => {
               if (!selectedUseCases.includes('both')) {
-                e.currentTarget.style.borderColor = '#CBD5E1';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
               }
             }}
             onMouseLeave={(e) => {
               if (!selectedUseCases.includes('both')) {
-                e.currentTarget.style.borderColor = '#E2E8F0';
-                e.currentTarget.style.boxShadow = 'none';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
               }
             }}
           >
@@ -278,27 +278,26 @@ export default function UseCasePage() {
                 top: -10,
                 right: 16,
                 padding: '4px 12px',
-                background: C.indigo,
-                color: '#fff',
+                background: '#2E6BA8',
+                color: '#F9F8F5',
                 fontSize: 11,
+                fontFamily: "'Jost', system-ui, sans-serif",
                 fontWeight: 600,
-                borderRadius: 4,
               }}
             >
               Most popular
             </div>
 
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-              {/* Checkbox */}
+              {/* Custom Checkbox */}
               <div
                 style={{
-                  minWidth: 20,
-                  height: 20,
-                  borderRadius: 4,
+                  minWidth: 18,
+                  height: 18,
                   border: selectedUseCases.includes('both')
-                    ? `2px solid ${C.indigo}`
-                    : '2px solid #CBD5E1',
-                  background: selectedUseCases.includes('both') ? C.indigo : '#fff',
+                    ? 'none'
+                    : '1px solid rgba(255,255,255,0.3)',
+                  background: selectedUseCases.includes('both') ? '#2E6BA8' : 'transparent',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -306,7 +305,7 @@ export default function UseCasePage() {
                 }}
               >
                 {selectedUseCases.includes('both') && (
-                  <span style={{ fontSize: 12, color: '#fff', fontWeight: 700 }}>✓</span>
+                  <span style={{ fontSize: 12, color: '#F9F8F5', fontWeight: 700 }}>✓</span>
                 )}
               </div>
 
@@ -315,20 +314,36 @@ export default function UseCasePage() {
                 <div
                   style={{
                     fontSize: 16,
+                    fontFamily: "'Jost', system-ui, sans-serif",
                     fontWeight: 600,
-                    color: '#1E293B',
+                    color: '#F9F8F5',
                     marginBottom: 6,
                   }}
                 >
                   Both - full data quality pipeline
                 </div>
-                <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
+                <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', lineHeight: 1.6 }}>
                   Start clean and keep it that way. The complete Refyne experience.
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <p
+            style={{
+              marginBottom: 16,
+              fontSize: 13,
+              fontFamily: "'Jost', system-ui, sans-serif",
+              color: '#F59E0B',
+              textAlign: 'center',
+            }}
+          >
+            {error}
+          </p>
+        )}
 
         {/* Navigation buttons */}
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
@@ -338,11 +353,10 @@ export default function UseCasePage() {
               padding: '12px 24px',
               fontSize: 14,
               fontWeight: 500,
-              fontFamily: F.sans,
-              color: '#64748B',
-              background: '#fff',
-              border: '1px solid #CBD5E1',
-              borderRadius: 6,
+              fontFamily: "'Jost', system-ui, sans-serif",
+              color: '#F9F8F5',
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.2)',
               cursor: 'pointer',
             }}
           >
@@ -356,14 +370,13 @@ export default function UseCasePage() {
               padding: '12px 32px',
               fontSize: 14,
               fontWeight: 600,
-              fontFamily: F.sans,
-              color: '#fff',
-              background: C.steel,
+              fontFamily: "'Jost', system-ui, sans-serif",
+              color: '#F9F8F5',
+              background: '#2E6BA8',
               border: 'none',
-              borderRadius: 6,
               cursor:
                 isSubmitting || selectedUseCases.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: isSubmitting || selectedUseCases.length === 0 ? 0.5 : 1,
+              opacity: isSubmitting || selectedUseCases.length === 0 ? 0.4 : 1,
             }}
           >
             {isSubmitting ? 'Saving...' : 'Continue →'}

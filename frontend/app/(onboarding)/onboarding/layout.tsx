@@ -15,7 +15,7 @@ export default function OnboardingLayout({
       style={{
         minHeight: '100vh',
         background: '#162944', // Dark navy background
-        fontFamily: F.sans,
+        fontFamily: "'Jost', system-ui, sans-serif",
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -37,7 +37,6 @@ export default function OnboardingLayout({
               width: 28,
               height: 28,
               background: `linear-gradient(135deg, ${C.indigo}, ${C.indigoLt})`,
-              borderRadius: 4,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -48,7 +47,7 @@ export default function OnboardingLayout({
           >
             R
           </div>
-          <span style={{ fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>
+          <span style={{ fontSize: 18, fontWeight: 700, color: '#F9F8F5', letterSpacing: '-0.02em' }}>
             Refyne
           </span>
         </div>

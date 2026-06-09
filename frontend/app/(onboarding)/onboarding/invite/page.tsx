@@ -42,7 +42,7 @@ export default function InvitePage() {
       <div style={{ width: '100%', maxWidth: 540 }}>
         {/* Progress indicator */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>
+          <span style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.5)', fontWeight: 500 }}>
             Step 6 of 7
           </span>
         </div>
@@ -53,7 +53,7 @@ export default function InvitePage() {
             fontSize: 32,
             fontFamily: 'Lora, serif',
             fontWeight: 600,
-            color: '#1E293B',
+            color: '#F9F8F5',
             marginBottom: 12,
             textAlign: 'center',
           }}
@@ -63,7 +63,8 @@ export default function InvitePage() {
         <p
           style={{
             fontSize: 15,
-            color: '#64748B',
+            fontFamily: "'Jost', system-ui, sans-serif",
+            color: 'rgba(249,248,245,0.7)',
             textAlign: 'center',
             marginBottom: 48,
             lineHeight: 1.6,
@@ -76,14 +77,13 @@ export default function InvitePage() {
         <div
           style={{
             padding: 32,
-            background: '#fff',
-            border: '1px solid #E2E8F0',
-            borderRadius: 8,
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
             textAlign: 'center',
             marginBottom: 48,
           }}
         >
-          <div style={{ fontSize: 14, color: '#64748B', marginBottom: 8, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 14, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', marginBottom: 8, lineHeight: 1.6 }}>
             You can invite your team from Settings → Team after setup.
           </div>
         </div>
@@ -97,11 +97,10 @@ export default function InvitePage() {
               padding: '12px 24px',
               fontSize: 14,
               fontWeight: 500,
-              fontFamily: F.sans,
-              color: '#64748B',
-              background: '#fff',
-              border: '1px solid #CBD5E1',
-              borderRadius: 6,
+              fontFamily: "'Jost', system-ui, sans-serif",
+              color: '#F9F8F5',
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.2)',
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
               opacity: isSubmitting ? 0.5 : 1,
             }}
@@ -116,13 +115,12 @@ export default function InvitePage() {
               padding: '12px 32px',
               fontSize: 14,
               fontWeight: 600,
-              fontFamily: F.sans,
-              color: '#fff',
-              background: C.steel,
+              fontFamily: "'Jost', system-ui, sans-serif",
+              color: '#F9F8F5',
+              background: '#2E6BA8',
               border: 'none',
-              borderRadius: 6,
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              opacity: isSubmitting ? 0.5 : 1,
+              opacity: isSubmitting ? 0.4 : 1,
             }}
           >
             {isSubmitting ? 'Continuing...' : 'Continue →'}

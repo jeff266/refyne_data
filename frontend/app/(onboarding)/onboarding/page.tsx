@@ -75,7 +75,7 @@ export default function WelcomePage() {
             fontSize: 36,
             fontFamily: 'Lora, serif',
             fontWeight: 600,
-            color: '#F1F5F9',
+            color: '#F9F8F5',
             marginBottom: 12,
             textAlign: 'center',
           }}
@@ -85,7 +85,8 @@ export default function WelcomePage() {
         <p
           style={{
             fontSize: 15,
-            color: '#94A3B8',
+            fontFamily: "'Jost', system-ui, sans-serif",
+            color: 'rgba(249,248,245,0.7)',
             textAlign: 'center',
             marginBottom: 48,
             lineHeight: 1.6,
@@ -100,8 +101,9 @@ export default function WelcomePage() {
             style={{
               display: 'block',
               fontSize: 13,
+              fontFamily: "'Jost', system-ui, sans-serif",
               fontWeight: 600,
-              color: '#F1F5F9',
+              color: '#F9F8F5',
               marginBottom: 8,
             }}
           >
@@ -116,17 +118,16 @@ export default function WelcomePage() {
               width: '100%',
               padding: '12px 16px',
               fontSize: 14,
-              fontFamily: F.sans,
-              color: '#F1F5F9',
-              background: '#1E293B',
-              border: '1px solid #334155',
-              borderRadius: 6,
+              fontFamily: "'Jost', system-ui, sans-serif",
+              color: '#F9F8F5',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
               outline: 'none',
             }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = C.indigo)}
-            onBlur={(e) => (e.currentTarget.style.borderColor = '#334155')}
+            onFocus={(e) => (e.currentTarget.style.borderColor = '#2E6BA8')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
           />
-          <p style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
+          <p style={{ fontSize: 11, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.5)', marginTop: 6 }}>
             You can change this later in settings.
           </p>
         </div>
@@ -139,8 +140,9 @@ export default function WelcomePage() {
               style={{
                 display: 'block',
                 fontSize: 13,
+                fontFamily: "'Jost', system-ui, sans-serif",
                 fontWeight: 600,
-                color: '#F1F5F9',
+                color: '#F9F8F5',
                 marginBottom: 8,
               }}
             >
@@ -155,15 +157,14 @@ export default function WelcomePage() {
                 width: '100%',
                 padding: '12px 16px',
                 fontSize: 14,
-                fontFamily: F.sans,
-                color: '#F1F5F9',
-                background: '#1E293B',
-                border: '1px solid #334155',
-                borderRadius: 6,
+                fontFamily: "'Jost', system-ui, sans-serif",
+                color: '#F9F8F5',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
                 outline: 'none',
               }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = C.indigo)}
-              onBlur={(e) => (e.currentTarget.style.borderColor = '#334155')}
+              onFocus={(e) => (e.currentTarget.style.borderColor = '#2E6BA8')}
+              onBlur={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
             />
           </div>
 
@@ -173,8 +174,9 @@ export default function WelcomePage() {
               style={{
                 display: 'block',
                 fontSize: 13,
+                fontFamily: "'Jost', system-ui, sans-serif",
                 fontWeight: 600,
-                color: '#F1F5F9',
+                color: '#F9F8F5',
                 marginBottom: 8,
               }}
             >
@@ -189,15 +191,14 @@ export default function WelcomePage() {
                 width: '100%',
                 padding: '12px 16px',
                 fontSize: 14,
-                fontFamily: F.sans,
-                color: '#F1F5F9',
-                background: '#1E293B',
-                border: '1px solid #334155',
-                borderRadius: 6,
+                fontFamily: "'Jost', system-ui, sans-serif",
+                color: '#F9F8F5',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
                 outline: 'none',
               }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = C.indigo)}
-              onBlur={(e) => (e.currentTarget.style.borderColor = '#334155')}
+              onFocus={(e) => (e.currentTarget.style.borderColor = '#2E6BA8')}
+              onBlur={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
             />
           </div>
         </div>
@@ -211,22 +212,21 @@ export default function WelcomePage() {
             padding: '14px 24px',
             fontSize: 14,
             fontWeight: 600,
-            fontFamily: F.sans,
-            color: '#fff',
-            background: C.steel,
+            fontFamily: "'Jost', system-ui, sans-serif",
+            color: '#F9F8F5',
+            background: '#2E6BA8',
             border: 'none',
-            borderRadius: 6,
             cursor: isSubmitting || !workspaceName.trim() ? 'not-allowed' : 'pointer',
-            opacity: isSubmitting || !workspaceName.trim() ? 0.5 : 1,
+            opacity: isSubmitting || !workspaceName.trim() ? 0.4 : 1,
             transition: 'all 0.2s',
           }}
           onMouseEnter={(e) => {
             if (!isSubmitting && workspaceName.trim()) {
-              e.currentTarget.style.background = '#475569';
+              e.currentTarget.style.background = '#245388';
             }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = C.steel;
+            e.currentTarget.style.background = '#2E6BA8';
           }}
         >
           {isSubmitting ? 'Saving...' : 'Get started →'}
@@ -238,6 +238,7 @@ export default function WelcomePage() {
             style={{
               marginTop: 12,
               fontSize: 13,
+              fontFamily: "'Jost', system-ui, sans-serif",
               color: '#F59E0B',
               textAlign: 'center',
             }}
