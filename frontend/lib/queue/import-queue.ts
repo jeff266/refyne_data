@@ -249,6 +249,7 @@ async function processImportJob(job: Job<ImportJobData>): Promise<ImportJobResul
     const contactsToCreate: any[] = [];
     const contactsToUpdate: any[] = [];
     const contactsForList: string[] = [];
+    const newContactBuckets: string[] = []; // Track buckets for new contacts
 
     for (const row of rows) {
       const rawData = row.raw_data as Record<string, string>;
@@ -306,6 +307,7 @@ async function processImportJob(job: Job<ImportJobData>): Promise<ImportJobResul
       } else {
         // CREATE new contact
         contactsToCreate.push({ properties });
+        newContactBuckets.push(bucket); // Track bucket for this new contact
       }
     }
 
@@ -315,6 +317,7 @@ async function processImportJob(job: Job<ImportJobData>): Promise<ImportJobResul
 
       for (let i = 0; i < contactsToCreate.length; i += HUBSPOT_BATCH_SIZE) {
         const batch = contactsToCreate.slice(i, i + HUBSPOT_BATCH_SIZE);
+        const batchBuckets = newContactBuckets.slice(i, i + HUBSPOT_BATCH_SIZE);
 
         const createResponse = await hubspot.request<{ results: Array<{ id: string }> }>(
           '/crm/v3/objects/contacts/batch/create',
@@ -326,10 +329,14 @@ async function processImportJob(job: Job<ImportJobData>): Promise<ImportJobResul
 
         createdCount += createResponse.results.length;
 
-        // Track for list addition
+        // Track for list addition (only if bucket is in allowed buckets)
         if (listId && hubspotList) {
-          const createdIds = createResponse.results.map((r) => r.id);
-          contactsForList.push(...createdIds);
+          createResponse.results.forEach((result, idx) => {
+            const bucket = batchBuckets[idx];
+            if (hubspotList.buckets.includes(bucket)) {
+              contactsForList.push(result.id);
+            }
+          });
         }
 
         console.log(`[Import Job] Created batch ${i / HUBSPOT_BATCH_SIZE + 1}: ${createResponse.results.length} contacts`);
@@ -359,20 +366,30 @@ async function processImportJob(job: Job<ImportJobData>): Promise<ImportJobResul
 
     // Add contacts to list
     if (listId && contactsForList.length > 0) {
-      console.log(`[Import Job] Adding ${contactsForList.length} contacts to list ${listId}`);
+      console.log(`[Import] Adding ${contactsForList.length} contacts to list ${listId}`);
 
-      for (let i = 0; i < contactsForList.length; i += HUBSPOT_BATCH_SIZE) {
-        const batch = contactsForList.slice(i, i + HUBSPOT_BATCH_SIZE);
+      try {
+        for (let i = 0; i < contactsForList.length; i += HUBSPOT_BATCH_SIZE) {
+          const batch = contactsForList.slice(i, i + HUBSPOT_BATCH_SIZE);
 
-        await hubspot.request(
-          `/crm/v3/lists/${listId}/memberships/add`,
-          {
-            method: 'POST',
-            body: JSON.stringify(batch.map((contactId) => ({ id: contactId }))),
-          }
-        );
+          await hubspot.request(
+            `/crm/v3/lists/${listId}/memberships/add`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                recordIdsToAdd: batch,
+              }),
+            }
+          );
 
-        console.log(`[Import Job] Added batch ${i / HUBSPOT_BATCH_SIZE + 1} to list: ${batch.length} contacts`);
+          console.log(`[Import] List membership batch ${i / HUBSPOT_BATCH_SIZE + 1}: ${batch.length} contacts added`);
+        }
+
+        console.log(`[Import] List membership complete: ${contactsForList.length} contacts added to list ${listId}`);
+      } catch (error) {
+        console.error(`[Import] Failed to add contacts to list ${listId}:`, error);
+        // Don't throw - we still want the import to be marked as successful
+        // since the contacts were created/updated. Just log the list error.
       }
     }
 
