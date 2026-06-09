@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Layers, Database, Swords, Plus, ArrowLeft } from 'lucide-react';
+import { Settings, Layers, Database, Swords, Plus, ArrowLeft, FileText } from 'lucide-react';
 import Link from 'next/link';
 import SegmentList from '@/components/admin/SegmentList';
 import ProviderStatus from '@/components/admin/ProviderStatus';
@@ -39,7 +39,7 @@ interface Config {
   providers: Record<string, Provider>;
 }
 
-type Tab = 'segments' | 'providers' | 'compare' | 'settings' | 'requests';
+type Tab = 'segments' | 'providers' | 'compare' | 'blog' | 'settings' | 'requests';
 
 interface CascadeStep {
   providerId: string;
@@ -223,6 +223,7 @@ export default function AdminPage() {
     { id: 'segments' as Tab, label: 'Segments', icon: Layers },
     { id: 'providers' as Tab, label: 'Providers', icon: Database },
     { id: 'compare' as Tab, label: 'Compare', icon: Swords },
+    { id: 'blog' as Tab, label: 'Blog', icon: FileText },
     { id: 'settings' as Tab, label: 'Settings', icon: Settings },
     { id: 'requests' as Tab, label: `Provider requests${pendingCount > 0 ? ` (${pendingCount})` : ''}`, icon: Database },
   ];
@@ -379,6 +380,31 @@ export default function AdminPage() {
               </p>
             </div>
             <ProviderShowdown providers={config.providers} />
+          </div>
+        )}
+
+        {activeTab === 'blog' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-lg font-medium text-black">Blog Management</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Create and manage blog posts for blog.refynedata.com
+              </p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
+              <FileText size={48} className="mx-auto mb-4 text-gray-400" />
+              <h3 className="text-lg font-medium text-black mb-2">Blog Admin</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Manage blog posts, create new content, and publish to the blog.
+              </p>
+              <Link
+                href="/blog-admin"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors"
+              >
+                <FileText size={16} />
+                Go to Blog Admin
+              </Link>
+            </div>
           </div>
         )}
 
