@@ -20,6 +20,7 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react';
 import { FilterStep } from '@/components/import/FilterStep';
+import { MapFieldsStep } from '@/components/import/MapFieldsStep';
 import { MatchResultsStep } from '@/components/import/MatchResultsStep';
 import { AssignOwnersStep } from '@/components/import/AssignOwnersStep';
 
@@ -348,41 +349,16 @@ export default function ImportPage() {
 
       {/* Step 3: Map Fields */}
       {step === 3 && (
-        <div>
-          <h2 className="text-lg font-medium text-white mb-4">
-            Step 3: Map Fields
-          </h2>
-          <p className="text-zinc-400 mb-6">
-            Verify the field mappings detected automatically.
-          </p>
-
-          <div className="space-y-4 mb-6">
-            {Object.entries(fieldMapping).map(([key, value]) => (
-              <div key={key} className="flex items-center gap-4">
-                <span className="text-sm text-zinc-400 w-32">{key}:</span>
-                <span className="text-sm text-white">{value as string}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => setStep(2)}
-              className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </button>
-            <button
-              onClick={runMatching}
-              disabled={uploading}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2 disabled:opacity-50"
-            >
-              {uploading ? 'Matching...' : 'Run Matching'}
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <MapFieldsStep
+          columns={columns}
+          previewRows={previewRows}
+          initialMapping={fieldMapping}
+          onBack={() => setStep(2)}
+          onContinue={(mapping) => {
+            setFieldMapping(mapping);
+            runMatching();
+          }}
+        />
       )}
 
       {/* Step 4: Match Results */}
