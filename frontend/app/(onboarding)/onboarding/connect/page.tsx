@@ -66,7 +66,7 @@ export default function ConnectPage() {
       <div style={{ width: '100%', maxWidth: 540 }}>
         {/* Progress indicator */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <span style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.5)', fontWeight: 500 }}>
+          <span style={{ fontSize: 12, fontFamily: F.sans, color: C.text3, fontWeight: 500 }}>
             Step 3 of 6
           </span>
         </div>
@@ -77,7 +77,7 @@ export default function ConnectPage() {
             fontSize: 32,
             fontFamily: 'Lora, serif',
             fontWeight: 600,
-            color: '#F9F8F5',
+            color: C.text,
             marginBottom: 12,
             textAlign: 'center',
           }}
@@ -87,8 +87,8 @@ export default function ConnectPage() {
         <p
           style={{
             fontSize: 15,
-            fontFamily: "'Jost', system-ui, sans-serif",
-            color: 'rgba(249,248,245,0.7)',
+            fontFamily: F.sans,
+            color: C.text2,
             textAlign: 'center',
             marginBottom: 48,
             lineHeight: 1.6,
@@ -98,7 +98,7 @@ export default function ConnectPage() {
         </p>
 
         {isLoading ? (
-          <div style={{ textAlign: 'center', padding: 48, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.6)' }}>
+          <div style={{ textAlign: 'center', padding: 48, fontFamily: F.sans, color: C.text2 }}>
             Checking connection...
           </div>
         ) : isConnected && connectionInfo ? (
@@ -107,8 +107,8 @@ export default function ConnectPage() {
             <div
               style={{
                 padding: 32,
-                background: 'rgba(34,197,94,0.15)',
-                border: '1px solid rgba(34,197,94,0.3)',
+                background: C.greenDim,
+                border: `1px solid ${C.greenBrd}`,
                 textAlign: 'center',
                 marginBottom: 48,
               }}
@@ -117,7 +117,7 @@ export default function ConnectPage() {
                 style={{
                   fontSize: 48,
                   marginBottom: 16,
-                  color: '#22C55E',
+                  color: C.green,
                 }}
               >
                 ✓
@@ -125,15 +125,15 @@ export default function ConnectPage() {
               <div
                 style={{
                   fontSize: 16,
-                  fontFamily: "'Jost', system-ui, sans-serif",
+                  fontFamily: F.sans,
                   fontWeight: 600,
-                  color: '#F9F8F5',
+                  color: C.text,
                   marginBottom: 8,
                 }}
               >
                 HubSpot connected
               </div>
-              <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>
+              <div style={{ fontSize: 13, fontFamily: F.sans, color: C.text2 }}>
                 {connectionInfo.name} ({connectionInfo.portalId})
               </div>
             </div>
@@ -146,10 +146,10 @@ export default function ConnectPage() {
                   padding: '12px 24px',
                   fontSize: 14,
                   fontWeight: 500,
-                  fontFamily: "'Jost', system-ui, sans-serif",
-                  color: '#F9F8F5',
+                  fontFamily: F.sans,
+                  color: C.text,
                   background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.2)',
+                  border: `1px solid ${C.border2}`,
                   cursor: 'pointer',
                 }}
               >
@@ -162,9 +162,9 @@ export default function ConnectPage() {
                   padding: '12px 32px',
                   fontSize: 14,
                   fontWeight: 600,
-                  fontFamily: "'Jost', system-ui, sans-serif",
-                  color: '#F9F8F5',
-                  background: '#2E6BA8',
+                  fontFamily: F.sans,
+                  color: C.text,
+                  background: C.indigo,
                   border: 'none',
                   cursor: 'pointer',
                 }}
@@ -179,8 +179,8 @@ export default function ConnectPage() {
             <div
               style={{
                 padding: 24,
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: C.surface,
+                border: `1px solid ${C.border2}`,
                 marginBottom: 24,
               }}
             >
@@ -191,7 +191,7 @@ export default function ConnectPage() {
                   padding: '14px 24px',
                   fontSize: 14,
                   fontWeight: 600,
-                  fontFamily: "'Jost', system-ui, sans-serif",
+                  fontFamily: F.sans,
                   color: '#fff',
                   background: '#FF7A59',
                   border: 'none',
@@ -202,10 +202,10 @@ export default function ConnectPage() {
                 Connect HubSpot
               </button>
 
-              <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#F9F8F5', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontFamily: F.sans, fontWeight: 600, color: C.text, marginBottom: 12 }}>
                 Refyne needs access to:
               </div>
-              <ul style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', lineHeight: 2, paddingLeft: 20 }}>
+              <ul style={{ fontSize: 12, fontFamily: F.sans, color: C.text2, lineHeight: 2, paddingLeft: 20 }}>
                 <li>Read and write company records</li>
                 <li>Read and write contact records</li>
                 <li>Access property definitions</li>
@@ -220,10 +220,10 @@ export default function ConnectPage() {
                   padding: '12px 24px',
                   fontSize: 14,
                   fontWeight: 500,
-                  fontFamily: "'Jost', system-ui, sans-serif",
-                  color: '#F9F8F5',
+                  fontFamily: F.sans,
+                  color: C.text,
                   background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.2)',
+                  border: `1px solid ${C.border2}`,
                   cursor: 'pointer',
                 }}
               >

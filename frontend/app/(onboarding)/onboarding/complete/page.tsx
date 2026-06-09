@@ -58,8 +58,8 @@ export default function CompletePage() {
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: 'calc(100vh - 64px)',
-          fontFamily: "'Jost', system-ui, sans-serif",
-          color: 'rgba(249,248,245,0.7)',
+          fontFamily: F.sans,
+          color: C.text2,
         }}
       >
         Finalizing setup...
@@ -84,12 +84,12 @@ export default function CompletePage() {
             width: 120,
             height: 120,
             margin: '0 auto 32px',
-            border: `4px solid #2E6BA8`,
+            border: `4px solid ${C.indigo}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: 64,
-            color: '#2E6BA8',
+            color: C.indigo,
           }}
         >
           ✓
@@ -101,7 +101,7 @@ export default function CompletePage() {
             fontSize: 36,
             fontFamily: 'Lora, serif',
             fontWeight: 600,
-            color: '#F9F8F5',
+            color: C.text,
             marginBottom: 16,
           }}
         >
@@ -110,8 +110,8 @@ export default function CompletePage() {
         <p
           style={{
             fontSize: 15,
-            fontFamily: "'Jost', system-ui, sans-serif",
-            color: 'rgba(249,248,245,0.7)',
+            fontFamily: F.sans,
+            color: C.text2,
             marginBottom: 64,
             lineHeight: 1.6,
             maxWidth: 480,
@@ -129,26 +129,28 @@ export default function CompletePage() {
               onClick={() => router.push('/dedup')}
               style={{
                 padding: 20,
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: C.surface,
+                border: `1px solid ${C.border2}`,
                 cursor: 'pointer',
                 textAlign: 'left',
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+                e.currentTarget.style.borderColor = C.border2;
+                e.currentTarget.style.background = C.hover;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                e.currentTarget.style.borderColor = C.border2;
+                e.currentTarget.style.background = C.surface;
               }}
             >
-              <div style={{ fontSize: 14, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#F9F8F5', marginBottom: 4 }}>
+              <div style={{ fontSize: 14, fontFamily: F.sans, fontWeight: 600, color: C.text, marginBottom: 4 }}>
                 Review dedup clusters
               </div>
-              <div style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontFamily: F.sans, color: C.text2, marginBottom: 12 }}>
                 You have potential duplicates to review.
               </div>
-              <div style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8' }}>
+              <div style={{ fontSize: 12, fontFamily: F.sans, fontWeight: 600, color: C.indigo }}>
                 Go to Dedup →
               </div>
             </div>
@@ -160,26 +162,28 @@ export default function CompletePage() {
               onClick={() => router.push('/enrich')}
               style={{
                 padding: 20,
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: C.surface,
+                border: `1px solid ${C.border2}`,
                 cursor: 'pointer',
                 textAlign: 'left',
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+                e.currentTarget.style.borderColor = C.border2;
+                e.currentTarget.style.background = C.hover;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                e.currentTarget.style.borderColor = C.border2;
+                e.currentTarget.style.background = C.surface;
               }}
             >
-              <div style={{ fontSize: 14, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#F9F8F5', marginBottom: 4 }}>
+              <div style={{ fontSize: 14, fontFamily: F.sans, fontWeight: 600, color: C.text, marginBottom: 4 }}>
                 Start enriching
               </div>
-              <div style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontFamily: F.sans, color: C.text2, marginBottom: 12 }}>
                 Add missing data to your HubSpot records.
               </div>
-              <div style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8' }}>
+              <div style={{ fontSize: 12, fontFamily: F.sans, fontWeight: 600, color: C.indigo }}>
                 Go to Enrich →
               </div>
             </div>
@@ -190,26 +194,28 @@ export default function CompletePage() {
             onClick={() => router.push('/dashboard')}
             style={{
               padding: 20,
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: C.surface,
+              border: `1px solid ${C.border2}`,
               cursor: 'pointer',
               textAlign: 'left',
               transition: 'all 0.2s',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+              e.currentTarget.style.borderColor = C.border2;
+              e.currentTarget.style.background = C.hover;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+              e.currentTarget.style.borderColor = C.border2;
+              e.currentTarget.style.background = C.surface;
             }}
           >
-            <div style={{ fontSize: 14, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#F9F8F5', marginBottom: 4 }}>
+            <div style={{ fontSize: 14, fontFamily: F.sans, fontWeight: 600, color: C.text, marginBottom: 4 }}>
               Explore your dashboard
             </div>
-            <div style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontFamily: F.sans, color: C.text2, marginBottom: 12 }}>
               See your data quality score and recent activity.
             </div>
-            <div style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8' }}>
+            <div style={{ fontSize: 12, fontFamily: F.sans, fontWeight: 600, color: C.indigo }}>
               Go to Dashboard →
             </div>
           </div>
@@ -222,9 +228,9 @@ export default function CompletePage() {
             padding: '14px 32px',
             fontSize: 14,
             fontWeight: 600,
-            fontFamily: "'Jost', system-ui, sans-serif",
-            color: '#F9F8F5',
-            background: '#2E6BA8',
+            fontFamily: F.sans,
+            color: C.text,
+            background: C.indigo,
             border: 'none',
             cursor: 'pointer',
           }}

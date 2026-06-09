@@ -148,8 +148,8 @@ export default function InvitePage() {
           <span
             style={{
               fontSize: 12,
-              fontFamily: "'Jost', system-ui, sans-serif",
-              color: 'rgba(249,248,245,0.5)',
+              fontFamily: F.sans,
+              color: C.text3,
               fontWeight: 500,
             }}
           >
@@ -163,7 +163,7 @@ export default function InvitePage() {
             fontSize: 32,
             fontFamily: 'Lora, serif',
             fontWeight: 600,
-            color: '#F9F8F5',
+            color: C.text,
             marginBottom: 12,
             textAlign: 'center',
           }}
@@ -173,8 +173,8 @@ export default function InvitePage() {
         <p
           style={{
             fontSize: 15,
-            fontFamily: "'Jost', system-ui, sans-serif",
-            color: 'rgba(249,248,245,0.7)',
+            fontFamily: F.sans,
+            color: C.text2,
             textAlign: 'center',
             marginBottom: 48,
             lineHeight: 1.6,
@@ -189,8 +189,8 @@ export default function InvitePage() {
             style={{
               display: 'block',
               fontSize: 13,
-              fontFamily: "'Jost', system-ui, sans-serif",
-              color: '#F9F8F5',
+              fontFamily: F.sans,
+              color: C.text,
               marginBottom: 8,
               fontWeight: 500,
             }}
@@ -213,10 +213,10 @@ export default function InvitePage() {
                 flex: 1,
                 padding: '10px 12px',
                 fontSize: 14,
-                fontFamily: "'Jost', system-ui, sans-serif",
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                color: '#F9F8F5',
+                fontFamily: F.sans,
+                background: C.surface,
+                border: `1px solid ${C.border2}`,
+                color: C.text,
                 outline: 'none',
               }}
             />
@@ -227,9 +227,9 @@ export default function InvitePage() {
                 padding: '10px 20px',
                 fontSize: 14,
                 fontWeight: 600,
-                fontFamily: "'Jost', system-ui, sans-serif",
-                background: email.trim() ? '#2E6BA8' : 'rgba(255,255,255,0.1)',
-                color: '#F9F8F5',
+                fontFamily: F.sans,
+                background: email.trim() ? C.indigo : C.surface,
+                color: C.text,
                 border: 'none',
                 cursor: email.trim() ? 'pointer' : 'not-allowed',
                 opacity: email.trim() ? 1 : 0.5,
@@ -243,8 +243,8 @@ export default function InvitePage() {
               style={{
                 marginTop: 8,
                 fontSize: 12,
-                color: '#F59E0B',
-                fontFamily: "'Jost', system-ui, sans-serif",
+                color: C.amber,
+                fontFamily: F.sans,
               }}
             >
               {error}
@@ -258,8 +258,8 @@ export default function InvitePage() {
             <div
               style={{
                 fontSize: 12,
-                fontFamily: "'Jost', system-ui, sans-serif",
-                color: 'rgba(249,248,245,0.5)',
+                fontFamily: F.sans,
+                color: C.text3,
                 marginBottom: 12,
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
@@ -276,16 +276,16 @@ export default function InvitePage() {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '10px 12px',
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: C.surface,
+                    border: `1px solid ${C.border2}`,
                   }}
                 >
                   <div>
                     <div
                       style={{
                         fontSize: 13,
-                        color: '#F9F8F5',
-                        fontFamily: "'Jost', system-ui, sans-serif",
+                        color: C.text,
+                        fontFamily: F.sans,
                         fontWeight: 500,
                       }}
                     >
@@ -294,8 +294,8 @@ export default function InvitePage() {
                     <div
                       style={{
                         fontSize: 12,
-                        color: 'rgba(249,248,245,0.6)',
-                        fontFamily: "'Jost', system-ui, sans-serif",
+                        color: C.text2,
+                        fontFamily: F.sans,
                       }}
                     >
                       {suggestion.email}
@@ -308,12 +308,12 @@ export default function InvitePage() {
                       padding: '6px 14px',
                       fontSize: 12,
                       fontWeight: 600,
-                      fontFamily: "'Jost', system-ui, sans-serif",
+                      fontFamily: F.sans,
                       background: pending.some((inv) => inv.email === suggestion.email.toLowerCase())
-                        ? 'rgba(255,255,255,0.05)'
-                        : 'rgba(46,107,168,0.3)',
-                      color: '#F9F8F5',
-                      border: '1px solid rgba(255,255,255,0.2)',
+                        ? C.surface
+                        : C.indigoDim,
+                      color: C.text,
+                      border: `1px solid ${C.border2}`,
                       cursor: pending.some((inv) => inv.email === suggestion.email.toLowerCase())
                         ? 'not-allowed'
                         : 'pointer',
@@ -338,8 +338,8 @@ export default function InvitePage() {
             <div
               style={{
                 fontSize: 12,
-                fontFamily: "'Jost', system-ui, sans-serif",
-                color: 'rgba(249,248,245,0.5)',
+                fontFamily: F.sans,
+                color: C.text3,
                 marginBottom: 12,
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
@@ -356,16 +356,16 @@ export default function InvitePage() {
                     alignItems: 'center',
                     gap: 12,
                     padding: '12px',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.2)',
+                    background: C.surface,
+                    border: `1px solid ${C.border2}`,
                   }}
                 >
                   <div style={{ flex: 1 }}>
                     <div
                       style={{
                         fontSize: 13,
-                        color: '#F9F8F5',
-                        fontFamily: "'Jost', system-ui, sans-serif",
+                        color: C.text,
+                        fontFamily: F.sans,
                         fontWeight: 500,
                       }}
                     >
@@ -384,8 +384,8 @@ export default function InvitePage() {
                       <span
                         style={{
                           fontSize: 12,
-                          color: '#F9F8F5',
-                          fontFamily: "'Jost', system-ui, sans-serif",
+                          color: C.text,
+                          fontFamily: F.sans,
                         }}
                       >
                         Admin
@@ -402,8 +402,8 @@ export default function InvitePage() {
                       <span
                         style={{
                           fontSize: 12,
-                          color: '#F9F8F5',
-                          fontFamily: "'Jost', system-ui, sans-serif",
+                          color: C.text,
+                          fontFamily: F.sans,
                         }}
                       >
                         Member
@@ -414,10 +414,10 @@ export default function InvitePage() {
                       style={{
                         padding: '4px 10px',
                         fontSize: 12,
-                        fontFamily: "'Jost', system-ui, sans-serif",
+                        fontFamily: F.sans,
                         background: 'transparent',
-                        color: 'rgba(249,248,245,0.5)',
-                        border: '1px solid rgba(255,255,255,0.2)',
+                        color: C.text2,
+                        border: `1px solid ${C.border2}`,
                         cursor: 'pointer',
                       }}
                     >
@@ -439,10 +439,10 @@ export default function InvitePage() {
               padding: '12px 24px',
               fontSize: 14,
               fontWeight: 500,
-              fontFamily: "'Jost', system-ui, sans-serif",
-              color: '#F9F8F5',
+              fontFamily: F.sans,
+              color: C.text,
               background: 'transparent',
-              border: '1px solid rgba(255,255,255,0.2)',
+              border: `1px solid ${C.border2}`,
               cursor: sending ? 'not-allowed' : 'pointer',
               opacity: sending ? 0.5 : 1,
             }}
@@ -455,8 +455,8 @@ export default function InvitePage() {
             disabled={sending}
             style={{
               fontSize: 13,
-              fontFamily: "'Jost', system-ui, sans-serif",
-              color: 'rgba(249,248,245,0.6)',
+              fontFamily: F.sans,
+              color: C.text2,
               background: 'transparent',
               border: 'none',
               cursor: sending ? 'not-allowed' : 'pointer',
@@ -474,9 +474,9 @@ export default function InvitePage() {
               padding: '12px 32px',
               fontSize: 14,
               fontWeight: 600,
-              fontFamily: "'Jost', system-ui, sans-serif",
-              color: '#F9F8F5',
-              background: '#2E6BA8',
+              fontFamily: F.sans,
+              color: C.text,
+              background: C.indigo,
               border: 'none',
               cursor: sending ? 'not-allowed' : 'pointer',
               opacity: sending ? 0.4 : 1,
