@@ -57,8 +57,7 @@ export default function ImportPage() {
   });
 
   // Step 6: Owner assignment
-  const [ownerAssignmentEnabled, setOwnerAssignmentEnabled] = useState(false);
-  const [ownerAssignments, setOwnerAssignments] = useState<Array<{ id: string; ownerId: string; weight: number }>>([]);
+  const [ownerAssignmentConfig, setOwnerAssignmentConfig] = useState<any>(null);
 
   // Step 7: HubSpot list
   const [hubspotListEnabled, setHubspotListEnabled] = useState(false);
@@ -210,12 +209,7 @@ export default function ImportPage() {
                 buckets: hubspotListBuckets,
               }
             : undefined,
-          owner_assignment: ownerAssignmentEnabled
-            ? {
-                enabled: true,
-                assignments: ownerAssignments,
-              }
-            : undefined,
+          owner_assignment: ownerAssignmentConfig || undefined,
         }),
       });
 
@@ -506,10 +500,10 @@ export default function ImportPage() {
             matchSummary.new_contact +
             matchSummary.needs_review
           }
+          sampleRows={previewRows}
           onBack={() => setStep(5)}
-          onContinue={(enabled, assignments) => {
-            setOwnerAssignmentEnabled(enabled);
-            setOwnerAssignments(assignments);
+          onContinue={(config) => {
+            setOwnerAssignmentConfig(config);
             setStep(7);
           }}
         />
