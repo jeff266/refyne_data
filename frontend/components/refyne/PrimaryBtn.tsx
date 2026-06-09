@@ -1,17 +1,18 @@
 'use client';
 
 import { C, F } from '@/lib/design-tokens';
-import type { ReactNode, MouseEventHandler } from 'react';
+import type { ReactNode, MouseEventHandler, CSSProperties } from 'react';
 
 interface PrimaryBtnProps {
   children: ReactNode;
   onClick?: MouseEventHandler<HTMLButtonElement>;
   small?: boolean;
   disabled?: boolean;
+  style?: CSSProperties;
   type?: 'button' | 'submit' | 'reset';
 }
 
-export function PrimaryBtn({ children, onClick, small, disabled, type = 'button' }: PrimaryBtnProps) {
+export function PrimaryBtn({ children, onClick, small, disabled, style, type = 'button' }: PrimaryBtnProps) {
   return (
     <button
       type={type}
@@ -37,6 +38,7 @@ export function PrimaryBtn({ children, onClick, small, disabled, type = 'button'
         border: 'none',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.6 : 1,
+        ...style,
       }}
     >
       {children}

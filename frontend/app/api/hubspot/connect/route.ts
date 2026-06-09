@@ -126,10 +126,11 @@ export async function GET(request: NextRequest) {
 
     // Store return_to in cookie if provided and valid
     const returnTo = request.nextUrl.searchParams.get('return_to');
-    const headers = new Headers();
+    let headers: Headers | undefined;
 
     if (returnTo && returnTo.startsWith('/') && !returnTo.includes('://')) {
       // Valid relative path - store in HttpOnly cookie with 10 minute expiry
+      headers = new Headers();
       headers.append(
         'Set-Cookie',
         `oauth_return_to=${encodeURIComponent(returnTo)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`
@@ -138,7 +139,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Redirect to HubSpot
-    return NextResponse.redirect(authUrl.toString(), headers.size > 0 ? { headers } : undefined);
+    return NextResponse.redirect(authUrl.toString(), headers ? { headers } : undefined);
   } catch (error) {
     console.error('OAuth connect error:', error);
     return NextResponse.json(
