@@ -169,10 +169,17 @@ export function AssignOwnersStep({
   // Transform raw CSV rows using field mapping
   const mappedContacts = useMemo(() => {
     if (!fieldMapping || sampleRows.length === 0) {
+      console.warn('[AssignOwnersStep] Cannot map contacts:', {
+        hasFieldMapping: !!fieldMapping,
+        sampleRowsCount: sampleRows.length,
+      });
       return [];
     }
 
-    return sampleRows.map((row) => {
+    console.log('[AssignOwnersStep] Field mapping:', fieldMapping);
+    console.log('[AssignOwnersStep] First sample row keys:', Object.keys(sampleRows[0] || {}));
+
+    const mapped = sampleRows.map((row) => {
       const mapped: any = {};
 
       // Map fields from CSV columns to expected field names
@@ -196,11 +203,16 @@ export function AssignOwnersStep({
 
       return mapped;
     });
+
+    console.log('[AssignOwnersStep] Mapped contacts sample:', mapped.slice(0, 2));
+
+    return mapped;
   }, [sampleRows, fieldMapping]);
 
   // Manual preview calculation (triggered by button)
   const runPreview = () => {
     if (mappedContacts.length === 0) {
+      console.warn('[AssignOwnersStep] No mapped contacts available for preview');
       return;
     }
 
@@ -209,7 +221,20 @@ export function AssignOwnersStep({
     // Use setTimeout to allow UI to update with loading state
     setTimeout(() => {
       try {
+        console.log('[AssignOwnersStep] Running preview with:', {
+          sampleRowsCount: sampleRows.length,
+          mappedContactsCount: mappedContacts.length,
+          fieldMapping,
+          firstMappedContact: mappedContacts[0],
+          firstRawRow: sampleRows[0],
+          rulesCount: rules.length,
+          fallback,
+        });
+
         const results = previewAssignments(mappedContacts, rules, fallback);
+
+        console.log('[AssignOwnersStep] Preview results:', results);
+
         setPreviewResults(results);
         setHasRunPreview(true);
       } catch (err) {
@@ -509,6 +534,18 @@ export function AssignOwnersStep({
                         </td>
                       </tr>
                     ))}
+                    {previewResults.unassigned > 0 && (
+                      <tr className="border-b border-zinc-800">
+                        <td className="py-2 text-zinc-400 italic">Unassigned</td>
+                        <td className="py-2 text-right text-zinc-300">0 contacts</td>
+                        <td className="py-2 text-right text-zinc-300">
+                          {previewResults.unassigned} contacts
+                        </td>
+                        <td className="py-2 text-right text-white font-medium">
+                          {previewResults.unassigned}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-zinc-700">
@@ -526,12 +563,6 @@ export function AssignOwnersStep({
                   </tfoot>
                 </table>
               </div>
-
-              {previewResults.unassigned > 0 && (
-                <div className="mt-3 text-sm text-zinc-400">
-                  Note: {previewResults.unassigned} contacts have no owner (unassigned fallback)
-                </div>
-              )}
             </div>
           )}
         </>
