@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
-import { normalizeCompanyName } from '@/lib/names/normalizer';
+// import { normalizeCompanyName } from '@/lib/names/normalizer'; // REMOVED: server-only import causes client-side crash
 import { SearchableCountrySelect } from '@/components/SearchableCountrySelect';
 
 // ─────────────────────────────────────────────────────────────
@@ -370,7 +370,11 @@ export default function CalibratePage() {
   };
 
   // Live preview for company names (Screen 2)
+  // DISABLED: normalizeCompanyName imports server-only code, can't run on client
   useEffect(() => {
+    // Skip preview generation - would need API route for this
+    setCompanyNamePreviews([]);
+    /*
     async function generatePreviews() {
       if (!sampleData || steps[currentStep] !== 'company') {
         setCompanyNamePreviews([]);
@@ -400,6 +404,7 @@ export default function CalibratePage() {
     }
 
     generatePreviews();
+    */
   }, [sampleData, currentStep, steps, answers.company_name]);
 
   if (isLoading) {
