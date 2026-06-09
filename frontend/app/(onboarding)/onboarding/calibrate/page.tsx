@@ -545,7 +545,7 @@ export default function CalibratePage() {
                     }
                     title="+1 (310) 387-9598"
                     description="International with formatting"
-                    example="Recommended for US teams"
+                    example="US: +1 (310) 387-9598 • UK: +44 7700 900123"
                     badge="Recommended"
                   />
 
@@ -559,7 +559,7 @@ export default function CalibratePage() {
                     }
                     title="+1 310-387-9598"
                     description="International with dashes"
-                    example="Common in European exports"
+                    example="US: +1 310-387-9598 • UK: +44 7700-900123"
                   />
 
                   <OptionCard
@@ -572,7 +572,7 @@ export default function CalibratePage() {
                     }
                     title="+1 310 387 9598"
                     description="International with spaces"
-                    example="ITU-T recommended spacing"
+                    example="US: +1 310 387 9598 • UK: +44 7700 900123"
                   />
 
                   <OptionCard
@@ -585,7 +585,7 @@ export default function CalibratePage() {
                     }
                     title="+13103879598"
                     description="E.164 compact"
-                    example="Best for dialers and APIs"
+                    example="US: +13103879598 • UK: +447700900123"
                   />
 
                   <OptionCard
@@ -598,7 +598,7 @@ export default function CalibratePage() {
                     }
                     title="(310) 387-9598"
                     description="National, no country code"
-                    example="Legacy US format"
+                    example="US: (310) 387-9598 • UK: 07700 900123 (not recommended for international)"
                   />
 
                   <div style={{ marginTop: 24, padding: 16, background: C.surface, border: `1px solid ${C.border}` }}>
