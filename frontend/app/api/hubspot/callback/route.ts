@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/db/supabase';
+import { supabase, supabaseAdmin } from '@/lib/db/supabase';
 import { upsertSchemaFieldMappings } from '@/lib/hubspot/repository';
 import { HubSpotClient } from '@/lib/hubspot';
 import { seedFieldMappings } from '@/lib/field-mappings/auto-configure';
@@ -36,14 +36,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!supabase) {
+    if (!supabaseAdmin) {
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=database_not_configured`
       );
     }
 
     // Validate state (CSRF protection)
-    const { data: stateRecord, error: stateError } = await supabase
+    // NOTE: Must use supabaseAdmin because this is a public endpoint (no auth context)
+    // and hubspot_oauth_states has RLS that requires org_id from auth
+    const { data: stateRecord, error: stateError } = await supabaseAdmin
       .from('hubspot_oauth_states')
       .select('id, state, org_id, created_by, used_at, created_at, return_to, expires_at, used')
       .eq('state', state)
@@ -73,7 +75,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Mark state as used immediately
-    await supabase
+    await supabaseAdmin
       .from('hubspot_oauth_states')
       .update({ used: true })
       .eq('state', state);
@@ -129,7 +131,7 @@ export async function GET(request: NextRequest) {
     const portalId = hubId || portalInfo.hub_id?.toString() || '';
 
     // Check if connection exists
-    const { data: existingConnection } = await supabase
+    const { data: existingConnection } = await supabaseAdmin
       .from('hubspot_connections')
       .select('id, encrypted_token, scopes, has_export_scope')
       .eq('org_id', stateRecord.org_id)
@@ -141,7 +143,7 @@ export async function GET(request: NextRequest) {
       const encryptedAccessToken = encryptToken(access_token);
       const encryptedRefreshToken = encryptToken(refresh_token);
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin
         .from('hubspot_connections')
         .update({
           portal_id: portalId,
@@ -175,7 +177,7 @@ export async function GET(request: NextRequest) {
       const encryptedAccessToken = encryptToken(access_token);
       const encryptedRefreshToken = encryptToken(refresh_token);
 
-      const { error: insertError } = await supabase
+      const { error: insertError } = await supabaseAdmin
         .from('hubspot_connections')
         .insert({
           org_id: stateRecord.org_id,
@@ -211,14 +213,14 @@ export async function GET(request: NextRequest) {
 
     // Auto-provision org_billing record on first HubSpot connection (trial start)
     try {
-      const { data: existingBilling } = await supabase
+      const { data: existingBilling } = await supabaseAdmin
         .from('org_billing')
         .select('org_id')
         .eq('org_id', stateRecord.org_id)
         .maybeSingle();
 
       if (!existingBilling) {
-        await supabase.from('org_billing').insert({
+        await supabaseAdmin.from('org_billing').insert({
           org_id: stateRecord.org_id,
           subscription_tier: 'trial',
           subscription_status: 'active',
@@ -231,7 +233,7 @@ export async function GET(request: NextRequest) {
         // Provision feature flags for new org
         const { FEATURE_FLAGS } = await import('@/lib/features/flags');
         const flags = Object.values(FEATURE_FLAGS);
-        await supabase.from('org_feature_flags').upsert(
+        await supabaseAdmin.from('org_feature_flags').upsert(
           flags.map(flag => ({
             org_id: stateRecord.org_id,
             flag,
@@ -249,7 +251,7 @@ export async function GET(request: NextRequest) {
 
     // Auto-start trial on first HubSpot connection
     try {
-      await startTrial(supabase, stateRecord.org_id);
+      await startTrial(supabaseAdmin, stateRecord.org_id);
       console.log(`[OAuth Callback] Trial auto-started for org ${stateRecord.org_id}`);
     } catch (trialError) {
       console.error('[OAuth Callback] Trial auto-start failed (non-fatal):', trialError);
@@ -325,7 +327,7 @@ export async function GET(request: NextRequest) {
     // Update onboarding progress if returning to onboarding flow
     if (returnTo?.includes('/onboarding')) {
       try {
-        await supabase
+        await supabaseAdmin
           .from('onboarding_progress')
           .upsert({
             org_id: stateRecord.org_id,
