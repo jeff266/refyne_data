@@ -1,4 +1,5 @@
 import { C, F } from '@/lib/design-tokens';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export const metadata = {
   title: 'Onboarding - Refyne',
@@ -11,52 +12,54 @@ export default function OnboardingLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: '#162944', // Dark navy background
-        fontFamily: "'Jost', system-ui, sans-serif",
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      {/* Header with logo */}
+    <ErrorBoundary>
       <div
         style={{
-          background: '#1E293B', // Navy header
-          borderBottom: `1px solid rgba(255,255,255,0.1)`,
-          padding: '16px 32px',
+          minHeight: '100vh',
+          background: '#162944', // Dark navy background
+          fontFamily: "'Jost', system-ui, sans-serif",
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+          flexDirection: 'column',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              background: `linear-gradient(135deg, ${C.indigo}, ${C.indigoLt})`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 16,
-              fontWeight: 700,
-              color: '#fff',
-            }}
-          >
-            R
+        {/* Header with logo */}
+        <div
+          style={{
+            background: '#1E293B', // Navy header
+            borderBottom: `1px solid rgba(255,255,255,0.1)`,
+            padding: '16px 32px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                background: `linear-gradient(135deg, ${C.indigo}, ${C.indigoLt})`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 16,
+                fontWeight: 700,
+                color: '#fff',
+              }}
+            >
+              R
+            </div>
+            <span style={{ fontSize: 18, fontWeight: 700, color: '#F9F8F5', letterSpacing: '-0.02em' }}>
+              Refyne
+            </span>
           </div>
-          <span style={{ fontSize: 18, fontWeight: 700, color: '#F9F8F5', letterSpacing: '-0.02em' }}>
-            Refyne
-          </span>
+        </div>
+
+        {/* Main content area */}
+        <div style={{ flex: 1 }}>
+          {children}
         </div>
       </div>
-
-      {/* Main content area */}
-      <div style={{ flex: 1 }}>
-        {children}
-      </div>
-    </div>
+    </ErrorBoundary>
   );
 }
