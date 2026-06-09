@@ -50,7 +50,7 @@ export default function ConnectPage() {
   };
 
   const handleContinue = () => {
-    router.push('/onboarding/first-run');
+    router.push('/onboarding/calibrate');
   };
 
   return (
