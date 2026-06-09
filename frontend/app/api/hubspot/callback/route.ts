@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, supabaseAdmin } from '@/lib/db/supabase';
+import { supabase } from '@/lib/db/supabase';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 import { upsertSchemaFieldMappings } from '@/lib/hubspot/repository';
 import { HubSpotClient } from '@/lib/hubspot';
 import { seedFieldMappings } from '@/lib/field-mappings/auto-configure';
