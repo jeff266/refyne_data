@@ -501,6 +501,8 @@ export default function ImportPage() {
             matchSummary.needs_review
           }
           sampleRows={previewRows}
+          fieldMapping={fieldMapping}
+          matchSummary={matchSummary}
           onBack={() => setStep(5)}
           onContinue={(config) => {
             setOwnerAssignmentConfig(config);

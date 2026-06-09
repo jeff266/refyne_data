@@ -36,7 +36,9 @@ interface ContactData {
 interface AssignOwnersStepProps {
   sessionId: string;
   totalContacts: number;
-  sampleRows: ContactData[];
+  sampleRows: any[]; // Raw CSV rows
+  fieldMapping: any; // Field mapping from Step 3
+  matchSummary: any; // Match summary for bucket data
   onBack: () => void;
   onContinue: (config: OwnerAssignmentConfig | null) => void;
 }
@@ -45,6 +47,8 @@ export function AssignOwnersStep({
   sessionId,
   totalContacts,
   sampleRows,
+  fieldMapping,
+  matchSummary,
   onBack,
   onContinue,
 }: AssignOwnersStepProps) {
@@ -149,13 +153,45 @@ export function AssignOwnersStep({
     }
   };
 
+  // Transform raw CSV rows using field mapping
+  const mappedContacts = useMemo(() => {
+    if (!fieldMapping || sampleRows.length === 0) {
+      return [];
+    }
+
+    return sampleRows.map((row) => {
+      const mapped: any = {};
+
+      // Map fields from CSV columns to expected field names
+      if (fieldMapping.email && row[fieldMapping.email]) {
+        mapped.email = row[fieldMapping.email];
+      }
+      if (fieldMapping.job_title && row[fieldMapping.job_title]) {
+        mapped.job_title = row[fieldMapping.job_title];
+      }
+      if (fieldMapping.company && row[fieldMapping.company]) {
+        mapped.company = row[fieldMapping.company];
+      }
+      if (fieldMapping.location && row[fieldMapping.location]) {
+        mapped.location = row[fieldMapping.location];
+      }
+
+      // Add bucket from match summary if available
+      // For preview, we'll assume all contacts could be in any bucket
+      // The actual bucket assignment happens during matching
+      mapped.bucket = row.bucket || 'New Contact';
+
+      return mapped;
+    });
+  }, [sampleRows, fieldMapping]);
+
   // Live preview of assignments
   const preview = useMemo(() => {
-    if (sampleRows.length === 0) {
+    if (mappedContacts.length === 0) {
       return { byOwner: {}, unassigned: 0 };
     }
-    return previewAssignments(sampleRows, rules, fallback);
-  }, [sampleRows, rules, fallback]);
+    return previewAssignments(mappedContacts, rules, fallback);
+  }, [mappedContacts, rules, fallback]);
 
   // Owner name lookup for preview
   const getOwnerName = (ownerId: string) => {
