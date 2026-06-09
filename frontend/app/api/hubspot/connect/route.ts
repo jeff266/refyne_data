@@ -78,6 +78,16 @@ export async function GET(request: NextRequest) {
 
     console.log('[HubSpot Connect] Storing OAuth state in database...');
 
+    // Get return_to from query params
+    const returnTo = request.nextUrl.searchParams.get('return_to');
+
+    // Validate return_to is a relative path (security)
+    let validatedReturnTo: string | null = null;
+    if (returnTo && returnTo.startsWith('/') && !returnTo.includes('://')) {
+      validatedReturnTo = returnTo;
+      console.log('[HubSpot Connect] Storing return_to:', returnTo);
+    }
+
     // Store state in database for CSRF protection
     const { error } = await supabase
       .from('hubspot_oauth_states')
@@ -85,6 +95,7 @@ export async function GET(request: NextRequest) {
         state,
         org_id: ctx.orgId,
         created_by: ctx.userId,
+        return_to: validatedReturnTo,
       });
 
     if (error) {
@@ -124,22 +135,8 @@ export async function GET(request: NextRequest) {
     authUrl.searchParams.set('scope', scopes.join(' '));
     authUrl.searchParams.set('state', state);
 
-    // Store return_to in cookie if provided and valid
-    const returnTo = request.nextUrl.searchParams.get('return_to');
-    let headers: Headers | undefined;
-
-    if (returnTo && returnTo.startsWith('/') && !returnTo.includes('://')) {
-      // Valid relative path - store in HttpOnly cookie with 10 minute expiry
-      headers = new Headers();
-      headers.append(
-        'Set-Cookie',
-        `oauth_return_to=${encodeURIComponent(returnTo)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`
-      );
-      console.log('[HubSpot Connect] Stored return_to in cookie:', returnTo);
-    }
-
     // Redirect to HubSpot
-    return NextResponse.redirect(authUrl.toString(), headers ? { headers } : undefined);
+    return NextResponse.redirect(authUrl.toString());
   } catch (error) {
     console.error('OAuth connect error:', error);
     return NextResponse.json(

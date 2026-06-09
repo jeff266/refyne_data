@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     // Validate state (CSRF protection)
     const { data: stateRecord, error: stateError } = await supabase
       .from('hubspot_oauth_states')
-      .select('*')
+      .select('id, state, org_id, created_by, used_at, created_at, return_to, expires_at, used')
       .eq('state', state)
       .single();
 
@@ -310,9 +310,8 @@ export async function GET(request: NextRequest) {
       // Don't fail the connection - auto-scan is best-effort
     }
 
-    // Read return_to from cookie (if present and valid)
-    const returnToCookie = request.cookies.get('oauth_return_to')?.value;
-    let returnTo = returnToCookie ? decodeURIComponent(returnToCookie) : null;
+    // Read return_to from state record (persisted in database)
+    let returnTo = stateRecord.return_to || null;
 
     // Validate return_to is a relative path (security)
     if (returnTo && (!returnTo.startsWith('/') || returnTo.includes('://'))) {
@@ -344,11 +343,7 @@ export async function GET(request: NextRequest) {
     redirectUrl.searchParams.set('connected', 'true');
     redirectUrl.searchParams.set('__clerk_org', stateRecord.org_id);
 
-    // Clear cookie after reading
-    const headers = new Headers();
-    headers.append('Set-Cookie', 'oauth_return_to=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
-
-    return NextResponse.redirect(redirectUrl.toString(), { headers });
+    return NextResponse.redirect(redirectUrl.toString());
   } catch (error) {
     console.error('OAuth callback error:', error);
     return NextResponse.redirect(
