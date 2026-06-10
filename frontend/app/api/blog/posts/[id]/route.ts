@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { clerkClient } from '@clerk/nextjs/server';
+import { z } from 'zod';
 
 /**
  * GET /api/blog/posts/[id]
@@ -88,7 +89,31 @@ export async function PATCH(
   }
 
   try {
-    const updates = await request.json();
+    // Validate request body
+    const updateBlogPostSchema = z.object({
+      title: z.string().optional(),
+      slug: z.string().optional(),
+      excerpt: z.string().optional(),
+      body_json: z.any().optional(),
+      body_html: z.string().optional(),
+      tag: z.string().optional(),
+      seo_title: z.string().optional(),
+      seo_description: z.string().optional(),
+      featured: z.boolean().optional(),
+      cover_image_url: z.string().optional(),
+      cover_image_alt: z.string().optional(),
+      status: z.string().optional(),
+    });
+
+    const rawBody = await request.json();
+    const validation = updateBlogPostSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+    const updates = validation.data;
 
     // Always update the updated_at timestamp
     updates.updated_at = new Date().toISOString();

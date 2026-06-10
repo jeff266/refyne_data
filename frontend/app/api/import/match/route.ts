@@ -9,6 +9,22 @@ import { HubSpotClient } from '@/lib/hubspot/client';
 import { matchContact, type ParsedRow, type Bucket } from '@/lib/import/matcher';
 import { cleanLastName, splitFullName, extractEmailDomain } from '@/lib/import/name-cleaner';
 import { classifyJobTitleLevel } from '@/lib/import/client-job-classifier';
+import { z } from 'zod';
+
+const matchRequestSchema = z.object({
+  session_id: z.string().uuid(),
+  field_mapping: z.object({
+    email: z.string().min(1),
+    linkedin_url: z.string().optional(),
+    first_name: z.string().optional(),
+    last_name: z.string().optional(),
+    full_name: z.string().optional(),
+    job_title: z.string().optional(),
+    company: z.string().optional(),
+    location: z.string().optional(),
+  }),
+  filters: z.record(z.unknown()).optional(),
+});
 
 interface FilterConfig {
   [column: string]: any; // Filter configuration per column
@@ -51,19 +67,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const { session_id, field_mapping, filters } = body as {
-      session_id: string;
-      field_mapping: FieldMapping;
-      filters?: FilterConfig;
-    };
-
-    if (!session_id || !field_mapping) {
+    // Validate request body
+    const rawBody = await request.json();
+    const validation = matchRequestSchema.safeParse(rawBody);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'session_id and field_mapping required' },
+        { error: 'Invalid request', details: validation.error.issues },
         { status: 400 }
       );
     }
+    const { session_id, field_mapping, filters } = validation.data;
 
     // Load import session
     const { data: importSession, error: sessionError } = await supabaseAdmin

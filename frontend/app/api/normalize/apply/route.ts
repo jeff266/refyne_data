@@ -12,6 +12,18 @@ import { requireAdmin } from '@/lib/auth/roles';
 import { addToRegistry, type RegistryType } from '@/lib/names/registry';
 import { getJobPriority } from '@/lib/billing/job-priority';
 import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
+import { z } from 'zod';
+
+const applyRequestSchema = z.object({
+  harmonyIds: z.array(z.string()).optional(),
+  selectedChanges: z.array(z.object({
+    companyId: z.string(),
+    field: z.string(),
+    before: z.string().optional(),
+    after: z.string().optional(),
+  })).optional(),
+  objectType: z.enum(['company', 'contact']).default('company'),
+});
 
 interface SelectedChange {
   companyId: string;
@@ -76,7 +88,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body: ApplyRequest = await request.json();
+    // Validate request body
+    const rawBody = await request.json();
+    const validation = applyRequestSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+    const body = validation.data as ApplyRequest;
 
     // Get HubSpot connection
     const { data: connection, error: connError } = await supabase

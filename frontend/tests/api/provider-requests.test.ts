@@ -126,7 +126,8 @@ describe('POST /api/provider-requests', () => {
     const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(data.error).toBe('provider_name is required');
+    expect(data.error).toBe('Invalid request');
+    expect(data.details).toBeDefined();
   });
 
   it('validates provider_name is not empty string', async () => {
@@ -140,7 +141,8 @@ describe('POST /api/provider-requests', () => {
     const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(data.error).toBe('provider_name is required');
+    expect(data.error).toBe('Invalid request');
+    expect(data.details).toBeDefined();
   });
 
   it('allows reason to be optional', async () => {

@@ -244,7 +244,7 @@ describe('POST /api/import/match', () => {
     const request = new NextRequest('http://localhost:3000/api/import/match', {
       method: 'POST',
       body: JSON.stringify({
-        session_id: 'invalid-id',
+        session_id: '123e4567-e89b-12d3-a456-426614174000', // Valid UUID format
         field_mapping: { email: 'email' },
       }),
     });
@@ -312,7 +312,7 @@ describe('POST /api/import/match', () => {
     const request = new NextRequest('http://localhost:3000/api/import/match', {
       method: 'POST',
       body: JSON.stringify({
-        session_id: 'session-123',
+        session_id: '123e4567-e89b-12d3-a456-426614174123', // Valid UUID format
         field_mapping: { email: 'email', full_name: 'name' },
       }),
     });
@@ -349,7 +349,7 @@ describe('POST /api/import/execute', () => {
               eq: () => ({
                 single: vi.fn().mockResolvedValue({
                   data: {
-                    id: 'session-123',
+                    id: '123e4567-e89b-12d3-a456-426614174000',
                     org_id: 'org-123',
                     status: 'matched',
                   },
@@ -386,7 +386,7 @@ describe('POST /api/import/execute', () => {
     const request = new NextRequest('http://localhost:3000/api/import/execute', {
       method: 'POST',
       body: JSON.stringify({
-        session_id: 'session-123',
+        session_id: '123e4567-e89b-12d3-a456-426614174000',
         write_config: {
           create_new_contacts: true,
           update_customers: false,
@@ -401,7 +401,7 @@ describe('POST /api/import/execute', () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.job_id).toBe('job-456');
-    expect(body.import_id).toBe('session-123');
+    expect(body.import_id).toBe('123e4567-e89b-12d3-a456-426614174000');
     expect(mockImportQueue.add).toHaveBeenCalledWith(
       'event-list-import',
       expect.any(Object),

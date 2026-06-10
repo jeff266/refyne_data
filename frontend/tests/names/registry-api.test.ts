@@ -420,7 +420,8 @@ describe('Name Registry API Routes', () => {
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toContain('input_token');
+      expect(data.error).toBe('Invalid request');
+      expect(data.details).toBeDefined();
     });
 
     it('normalizes input_token to lowercase', async () => {

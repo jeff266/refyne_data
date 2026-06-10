@@ -19,6 +19,7 @@ import { supabaseAdmin } from '@/lib/db/admin-client';
 import { jobSegmentationQueue } from '@/lib/queue/job-segmentation-worker';
 import { decryptToken } from '@/lib/crypto/token-encryption';
 import { getJobPriority } from '@/lib/billing/job-priority';
+import { z } from 'zod';
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,7 +29,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await req.json();
+    // Validate request body
+    const jobSegmentRunSchema = z.object({
+      dryRun: z.boolean().optional(),
+      batchSize: z.number().int().positive().optional(),
+      levelField: z.string().optional(),
+      functionField: z.string().optional(),
+    });
+
+    const rawBody = await req.json();
+    const validation = jobSegmentRunSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+    const body = validation.data;
+
     const dryRun = body.dryRun ?? false;
     const batchSize = body.batchSize ?? 100;
     const levelField = body.levelField ?? 'refyne_job_level';

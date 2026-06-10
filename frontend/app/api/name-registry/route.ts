@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { z } from 'zod';
 
 type RegistryType = 'company' | 'contact_first' | 'contact_last' | 'contact_token';
 type Scope = 'org' | 'global';
@@ -155,30 +156,24 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    // Validate request body
+    const createRegistryEntrySchema = z.object({
+      registry_type: z.enum(['company', 'contact_first', 'contact_last', 'contact_token']),
+      input_token: z.string().trim().min(1, 'input_token is required'),
+      canonical_form: z.string().trim().min(1, 'canonical_form is required'),
+    });
+
+    const rawBody = await request.json();
+    const validation = createRegistryEntrySchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+    const body = validation.data;
+
     const { registry_type, input_token, canonical_form } = body;
-
-    // Validate required fields
-    if (!registry_type || !VALID_REGISTRY_TYPES.includes(registry_type)) {
-      return NextResponse.json(
-        { error: `Invalid or missing registry_type. Must be one of: ${VALID_REGISTRY_TYPES.join(', ')}` },
-        { status: 400 }
-      );
-    }
-
-    if (!input_token || typeof input_token !== 'string' || input_token.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'Invalid or missing input_token. Must be a non-empty string.' },
-        { status: 400 }
-      );
-    }
-
-    if (!canonical_form || typeof canonical_form !== 'string' || canonical_form.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'Invalid or missing canonical_form. Must be a non-empty string.' },
-        { status: 400 }
-      );
-    }
 
     // Normalize input_token (lowercase, trimmed)
     const normalizedInputToken = input_token.toLowerCase().trim();

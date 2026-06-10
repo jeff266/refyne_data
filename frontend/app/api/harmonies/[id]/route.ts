@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import type { ConditionGroups } from '@/lib/harmonies/condition-evaluator';
 import { logAuditEvent } from '@/lib/audit/logger';
 import { AUDIT_ACTIONS } from '@/lib/audit/actions';
+import { z } from 'zod';
 
 /**
  * Validate condition_groups JSONB structure.
@@ -180,7 +181,30 @@ export async function PATCH(
     }
 
     const { id } = params;
-    const body = await req.json();
+
+    // Validate request body
+    const updateHarmonySchema = z.object({
+      name: z.string().min(1).optional(),
+      description: z.string().optional(),
+      writePolicy: z.string().optional(),
+      isActive: z.boolean().optional(),
+      is_active: z.boolean().optional(), // snake_case alternative
+      isArchived: z.boolean().optional(),
+      is_archived: z.boolean().optional(), // snake_case alternative
+      conditionGroups: z.any().optional(), // Complex nested structure, validated separately
+      approach: z.string().optional(),
+      rules: z.array(z.any()).optional(), // Complex structure
+    });
+
+    const rawBody = await req.json();
+    const validation = updateHarmonySchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+    const body = validation.data;
     console.log('[Harmony PATCH] Received body:', body);
 
     // Accept both camelCase and snake_case field names for compatibility

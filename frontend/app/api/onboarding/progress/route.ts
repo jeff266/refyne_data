@@ -3,6 +3,7 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireAdmin } from '@/lib/auth/roles';
 import { supabase } from '@/lib/db/supabase';
 import { isRedisConfigured, getRedisConnection } from '@/lib/queue/redis';
+import { z } from 'zod';
 
 // Whitelist of allowed fields for PATCH
 const ALLOWED_FIELDS = [
@@ -139,7 +140,36 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    // Validate request body
+    const updateProgressSchema = z.object({
+      workspace_name: z.string().optional().nullable(),
+      user_role: z.string().optional().nullable(),
+      use_cases: z.union([z.string(), z.array(z.string())]).optional().nullable(),
+      use_case_selected_at: z.string().optional().nullable(),
+      welcome_completed_at: z.string().optional().nullable(),
+      invited_team_at: z.string().optional().nullable(),
+      onboarding_flow_completed_at: z.string().optional().nullable(),
+      onboarding_flow_skipped_at: z.string().optional().nullable(),
+      calibration_completed: z.boolean().optional(),
+      calibration_completed_at: z.string().optional().nullable(),
+      ran_normalize: z.boolean().optional(),
+      connected_hubspot: z.boolean().optional(),
+      viewed_dedup: z.boolean().optional(),
+      applied_harmony: z.boolean().optional(),
+      first_normalize_at: z.string().optional().nullable(),
+      first_merge_at: z.string().optional().nullable(),
+      viewed_dashboard: z.boolean().optional(),
+    });
+
+    const rawBody = await request.json();
+    const validation = updateProgressSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+    const body = validation.data;
 
     // Filter to only allowed fields
     const updates: Record<string, any> = {};

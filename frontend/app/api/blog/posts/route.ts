@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { clerkClient } from '@clerk/nextjs/server';
+import { z } from 'zod';
 
 /**
  * GET /api/blog/posts
@@ -92,7 +93,31 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    // Validate request body
+    const createBlogPostSchema = z.object({
+      title: z.string().optional(),
+      slug: z.string().optional(),
+      excerpt: z.string().optional(),
+      body_json: z.any().optional(),
+      body_html: z.string().optional(),
+      tag: z.string().optional(),
+      seo_title: z.string().optional(),
+      seo_description: z.string().optional(),
+      featured: z.boolean().optional(),
+      cover_image_url: z.string().optional(),
+      cover_image_alt: z.string().optional(),
+    });
+
+    const rawBody = await request.json();
+    const validation = createBlogPostSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+    const body = validation.data;
+
     const { title, slug, excerpt, body_json, body_html, tag, seo_title, seo_description, featured, cover_image_url, cover_image_alt } = body;
 
     // Generate slug from title if not provided

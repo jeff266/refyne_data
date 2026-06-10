@@ -7,6 +7,29 @@ import { supabaseAdmin } from '@/lib/db/admin-client';
 import { importQueue } from '@/lib/queue/import-queue';
 import { assignOwners, groupByCompany, type ParsedRow } from '@/lib/import/matcher';
 import { getJobPriority } from '@/lib/billing/job-priority';
+import { z } from 'zod';
+
+const executeRequestSchema = z.object({
+  session_id: z.string().uuid(),
+  write_config: z.object({
+    update_customers: z.boolean(),
+    create_new_contacts: z.boolean(),
+    update_known_contacts: z.boolean(),
+    skip_needs_review: z.boolean(),
+  }),
+  hubspot_list: z.object({
+    enabled: z.boolean(),
+    list_name: z.string().optional(),
+    buckets: z.array(z.string()).optional(),
+  }).optional(),
+  owner_assignment: z.object({
+    enabled: z.boolean(),
+    owners: z.array(z.object({
+      id: z.string(),
+      weight: z.number().min(0).max(100),
+    })).optional(),
+  }).optional(),
+});
 
 interface WriteConfig {
   update_customers: boolean;
@@ -46,20 +69,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const { session_id, write_config, hubspot_list, owner_assignment } = body as {
-      session_id: string;
-      write_config: WriteConfig;
-      hubspot_list?: { enabled: boolean; list_name: string; buckets: string[] };
-      owner_assignment?: OwnerAssignment;
-    };
-
-    if (!session_id || !write_config) {
+    // Validate request body
+    const rawBody = await request.json();
+    const validation = executeRequestSchema.safeParse(rawBody);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'session_id and write_config required' },
+        { error: 'Invalid request', details: validation.error.issues },
         { status: 400 }
       );
     }
+    const { session_id, write_config, hubspot_list, owner_assignment } = validation.data;
 
     // Load import session
     const { data: importSession, error: sessionError } = await supabaseAdmin

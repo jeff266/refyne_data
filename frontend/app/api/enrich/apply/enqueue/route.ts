@@ -6,6 +6,7 @@ import { createClient } from 'redis';
 import { logAuditEvent } from '@/lib/audit/logger';
 import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 import { consumeUsage } from '@/lib/billing/enforce';
+import { z } from 'zod';
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -35,16 +36,24 @@ export async function POST(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const objectType = searchParams.get('objectType') ?? 'company';
 
-    const body = await req.json();
-    const { jobId: previewJobId, runId: previewRunId, selectedRecordIds } = body;
+    // Validate request body
+    const enqueueApplySchema = z.object({
+      jobId: z.string().min(1, 'jobId is required'),
+      runId: z.string().optional(),
+      selectedRecordIds: z.array(z.string()).min(1, 'selectedRecordIds must not be empty'),
+    });
 
-    // Validate request
-    if (!previewJobId || !selectedRecordIds || selectedRecordIds.length === 0) {
+    const rawBody = await req.json();
+    const validation = enqueueApplySchema.safeParse(rawBody);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Missing required fields: jobId, selectedRecordIds' },
+        { error: 'Invalid request', details: validation.error.issues },
         { status: 400 }
       );
     }
+    const body = validation.data;
+
+    const { jobId: previewJobId, runId: previewRunId, selectedRecordIds } = body;
 
     // Check if preview results exist in cache
     if (REDIS_URL && REDIS_TOKEN) {

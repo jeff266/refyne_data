@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { clerkClient } from '@clerk/nextjs/server';
 import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
+
+const inviteRequestSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(['org:admin', 'org:member']),
+});
 
 interface InviteRequest {
   email: string;
@@ -29,22 +35,16 @@ export async function POST(request: NextRequest) {
   if (rateLimitResult) return rateLimitResult;
 
   try {
-    const body: InviteRequest = await request.json();
-    const { email, role } = body;
-
-    if (!email || !role) {
+    // Validate request body
+    const rawBody = await request.json();
+    const validation = inviteRequestSchema.safeParse(rawBody);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Email and role are required' },
+        { error: 'Invalid request', details: validation.error.issues },
         { status: 400 }
       );
     }
-
-    if (!['org:admin', 'org:member'].includes(role)) {
-      return NextResponse.json(
-        { error: 'Invalid role. Must be org:admin or org:member' },
-        { status: 400 }
-      );
-    }
+    const { email, role } = validation.data;
 
     // Prevent self-invitation
     if (ctx.userEmail && email.toLowerCase() === ctx.userEmail.toLowerCase()) {

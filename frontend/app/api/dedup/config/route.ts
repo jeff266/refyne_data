@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireAdmin } from '@/lib/auth/roles';
 import { supabase } from '@/lib/db/supabase';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,23 +71,30 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    // Validate request body
+    const dedupConfigSchema = z.object({
+      inactive_owner_action: z.enum(['warn', 'assign_fallback', 'leave_unassigned']).optional(),
+      inactive_owner_fallback_id: z.string().optional(),
+      parent_child_awareness: z.boolean().optional(),
+      require_closed_won_survivor: z.boolean().optional(),
+    });
+
+    const rawBody = await request.json();
+    const validation = dedupConfigSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+    const body = validation.data;
+
     const {
       inactive_owner_action,
       inactive_owner_fallback_id,
       parent_child_awareness,
       require_closed_won_survivor,
     } = body;
-
-    if (
-      inactive_owner_action &&
-      !['warn', 'assign_fallback', 'leave_unassigned'].includes(inactive_owner_action)
-    ) {
-      return NextResponse.json(
-        { error: 'Invalid inactive_owner_action' },
-        { status: 400 }
-      );
-    }
 
     if (!supabase) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });

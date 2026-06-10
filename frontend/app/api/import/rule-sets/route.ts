@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireAdmin } from '@/lib/auth/roles';
 import { supabaseAdmin } from '@/lib/db/admin-client';
+import { z } from 'zod';
 
 /**
  * GET /api/import/rule-sets
@@ -58,17 +59,24 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    // Validate request body
+    const createRuleSetSchema = z.object({
+      name: z.string().trim().min(1, 'Name is required'),
+      description: z.string().optional(),
+      rules: z.array(z.any()),
+    });
+
+    const rawBody = await request.json();
+    const validation = createRuleSetSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+    const body = validation.data;
+
     const { name, description, rules } = body;
-
-    // Validate
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    }
-
-    if (!Array.isArray(rules)) {
-      return NextResponse.json({ error: 'Rules must be an array' }, { status: 400 });
-    }
 
     // Insert rule set
     const { data: ruleSet, error } = await supabaseAdmin

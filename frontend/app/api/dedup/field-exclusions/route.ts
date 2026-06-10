@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireAdmin } from '@/lib/auth/roles';
 import { supabase } from '@/lib/db/supabase';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +48,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const fieldExclusionSchema = z.object({
+  fieldName: z.string().min(1),
+  objectType: z.enum(['company', 'contact']).default('company'),
+  exclusionType: z.enum(['never_merge', 'union_true', 'append']),
+  separator: z.enum(['\n', '; ', ', ']).optional(),
+});
+
 /**
  * POST /api/dedup/field-exclusions
  *
@@ -64,19 +72,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const { fieldName, objectType = 'company', exclusionType, separator } = body;
-
-    if (!fieldName) {
-      return NextResponse.json({ error: 'Field name is required' }, { status: 400 });
-    }
-
-    if (!['never_merge', 'union_true', 'append'].includes(exclusionType)) {
+    // Validate request body
+    const rawBody = await request.json();
+    const validation = fieldExclusionSchema.safeParse(rawBody);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'Invalid exclusion type. Must be never_merge, union_true, or append' },
+        { error: 'Invalid request', details: validation.error.issues },
         { status: 400 }
       );
     }
+    const body = validation.data;
+    const { fieldName, objectType, exclusionType, separator } = body;
 
     if (!supabase) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });

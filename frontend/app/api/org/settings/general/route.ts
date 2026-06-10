@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { z } from 'zod';
 
 interface GeneralSettings {
   workspaceName: string | null;
@@ -111,7 +112,27 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    // Validate request body
+    const generalSettingsSchema = z.object({
+      workspaceName: z.string().optional(),
+      displayName: z.string().optional(),
+      timezone: z.string().optional(),
+      digestTime: z.string().optional(),
+      scoreThreshold: z.number().optional(),
+      sendOnNoChange: z.boolean().optional(),
+      emailRecipients: z.array(z.string()).optional(),
+    });
+
+    const rawBody = await request.json();
+    const validation = generalSettingsSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
+    }
+    const body = validation.data;
+
     const {
       workspaceName,
       displayName,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireAdmin } from '@/lib/auth/roles';
 import { supabase } from '@/lib/db/supabase';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +52,18 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const signalGroupSchema = z.object({
+  name: z.string().optional(),
+  objectType: z.enum(['company', 'contact']),
+  group_order: z.number().int().min(1).optional(),
+  conditions: z.array(z.object({
+    field: z.string().min(1),
+    match_type: z.enum(['exact', 'fuzzy', 'normalized']),
+    fuzzy_threshold: z.number().min(0.5).max(1.0).optional(),
+    weight: z.number().int().min(1).max(100).optional(),
+  })).min(1, 'At least one condition required'),
+});
+
 /**
  * POST /api/dedup/signal-groups
  *
@@ -68,15 +81,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const { name, objectType = 'company', conditions } = body;
-
-    if (!conditions || !Array.isArray(conditions) || conditions.length === 0) {
+    // Validate request body
+    const rawBody = await request.json();
+    const validation = signalGroupSchema.safeParse(rawBody);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'At least one condition is required' },
+        { error: 'Invalid request', details: validation.error.issues },
         { status: 400 }
       );
     }
+    const body = validation.data;
+    const { name, objectType, conditions } = body;
 
     if (!supabase) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 });

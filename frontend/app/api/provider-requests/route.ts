@@ -3,6 +3,12 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
+import { z } from 'zod';
+
+const providerRequestSchema = z.object({
+  provider_name: z.string().trim().min(1, 'Provider name is required').max(100),
+  reason: z.string().max(1000).optional(),
+});
 
 /**
  * POST /api/provider-requests
@@ -26,11 +32,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-
-    if (!body.provider_name || body.provider_name.trim() === '') {
-      return NextResponse.json({ error: 'provider_name is required' }, { status: 400 });
+    // Validate request body
+    const rawBody = await request.json();
+    const validation = providerRequestSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.issues },
+        { status: 400 }
+      );
     }
+    const body = validation.data;
 
     const { data, error } = await supabase
       .from('provider_requests')
