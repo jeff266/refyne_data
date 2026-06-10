@@ -28,6 +28,7 @@ import { RefyneLogo } from './RefyneLogo';
 import { useEnrichRun } from '@/context/EnrichRunContext';
 import { CreditsWidget } from './CreditsWidget';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { useCookieConsent } from '@/hooks/useCookieConsent';
 import { FEATURE_FLAGS } from '@/lib/features/flags';
 
 const ICONS: Record<string, React.ElementType> = {
@@ -53,6 +54,7 @@ export function Sidebar() {
   const currentPage = pathname.split('/')[1] || 'dashboard';
   const [showHelpMenu, setShowHelpMenu] = useState(false);
   const enrichRunContext = useEnrichRun();
+  const { resetConsent } = useCookieConsent();
 
   // Fetch feature flags for beta-gated nav items
   const { isEnabled } = useFeatureFlags([FEATURE_FLAGS.EVENT_LIST_IMPORT]);
@@ -283,6 +285,38 @@ export function Sidebar() {
               >
                 Terms of Service
               </Link>
+              <Link
+                href={`/cookie-policy${queryString}`}
+                style={{
+                  display: 'block',
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  color: C.text3,
+                  textDecoration: 'none',
+                  borderRadius: 4,
+                }}
+              >
+                Cookie Policy
+              </Link>
+              <button
+                onClick={() => {
+                  resetConsent();
+                  setShowHelpMenu(false);
+                }}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  color: C.text3,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  borderRadius: 4,
+                }}
+              >
+                Cookie preferences
+              </button>
             </div>
           )}
         </div>

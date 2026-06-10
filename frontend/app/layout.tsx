@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import { CleanUrl } from '@/components/CleanUrl';
+import { CookieBanner } from '@/components/CookieBanner';
 import { Lora, Jost } from 'next/font/google';
 import './globals.css';
 
@@ -40,6 +41,7 @@ export default function RootLayout({
         >
           <CleanUrl />
           {children}
+          <CookieBanner />
         </ClerkProvider>
       </body>
     </html>
