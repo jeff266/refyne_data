@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     // Run owner assignment if enabled
     let ownerAssignmentResult: Record<string, string> | null = null;
-    if (owner_assignment?.enabled && owner_assignment.owners.length > 0) {
+    if (owner_assignment?.enabled && owner_assignment?.owners && owner_assignment.owners.length > 0) {
       console.log('[Import Execute] Running owner assignment...');
 
       // Load matched rows

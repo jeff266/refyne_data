@@ -113,14 +113,17 @@ export async function PATCH(
         { status: 400 }
       );
     }
-    const updates = validation.data;
+    const validatedData = validation.data;
 
-    // Always update the updated_at timestamp
-    updates.updated_at = new Date().toISOString();
+    // Build updates object with additional fields
+    const updates: Record<string, any> = {
+      ...validatedData,
+      updated_at: new Date().toISOString(),
+    };
 
     // Calculate read time if body_html is provided
-    if (updates.body_html) {
-      updates.read_time = calculateReadTime(updates.body_html);
+    if (validatedData.body_html) {
+      updates.read_time = calculateReadTime(validatedData.body_html);
     }
 
     const { data, error } = await supabaseAdmin

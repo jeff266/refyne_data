@@ -45,10 +45,11 @@ export async function PUT(request: NextRequest) {
     // SECURITY: Verify user is a member of this organization via Clerk
     try {
       const client = await clerkClient();
-      const membership = await client.organizations.getOrganizationMembership({
+      const { data: memberships } = await client.organizations.getOrganizationMembershipList({
         organizationId: orgId,
-        userId: userId,
       });
+
+      const membership = memberships.find((m) => m.publicUserData?.userId === userId);
 
       if (!membership) {
         return NextResponse.json(

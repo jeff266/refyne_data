@@ -16,7 +16,7 @@ import { z } from 'zod';
 
 const mergeClusterSchema = z.object({
   masterId: z.string().min(1, 'masterId is required'),
-  fieldSelections: z.record(z.string()).optional(),
+  fieldSelections: z.record(z.string(), z.string()).optional(),
   absorb: z.boolean().optional(),
 });
 

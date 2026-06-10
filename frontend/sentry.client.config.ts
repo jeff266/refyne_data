@@ -10,20 +10,9 @@ Sentry.init({
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
 
-  replaysOnErrorSampleRate: 1.0,
-
-  // This sets the sample rate to be 10%. You may want this to be 100% while
-  // in development and sample at a lower rate in production
-  replaysSessionSampleRate: 0.1,
-
-  // You can remove this option if you're not planning to use the Sentry Session Replay feature:
-  integrations: [
-    Sentry.replayIntegration({
-      // Additional Replay configuration goes in here, for example:
-      maskAllText: true,
-      blockAllMedia: true,
-    }),
-  ],
+  // NOTE: Replay integration is NOT added on init
+  // It's added dynamically after user consent via enableSentryReplay()
+  integrations: [],
 
   // Don't send PII with user context
   sendDefaultPii: false,
@@ -38,10 +27,11 @@ Sentry.init({
         'token', 'key', 'authorization'
       ];
 
-      if (typeof event.request.data === 'object') {
+      if (typeof event.request.data === 'object' && event.request.data !== null) {
+        const data = event.request.data as Record<string, any>;
         for (const key of sensitiveKeys) {
-          if (key in event.request.data) {
-            event.request.data[key] = '[REDACTED]';
+          if (key in data) {
+            data[key] = '[REDACTED]';
           }
         }
       }
@@ -70,3 +60,37 @@ Sentry.init({
     return event;
   },
 });
+
+/**
+ * Enable Sentry session replay after user consent
+ * Called when user accepts all cookies
+ */
+export function enableSentryReplay() {
+  const client = Sentry.getClient();
+  if (!client) {
+    console.warn('[Sentry] Cannot enable replay: client not initialized');
+    return;
+  }
+
+  // Add replay integration dynamically
+  const replay = Sentry.replayIntegration({
+    maskAllText: true,
+    blockAllMedia: true,
+  });
+
+  client.addIntegration(replay);
+  console.log('[Sentry] Session replay enabled');
+}
+
+/**
+ * Disable Sentry session replay
+ * Note: Replay can't be truly disabled once started without page reload
+ */
+export function disableSentryReplay() {
+  console.log('[Sentry] Session replay disabled (requires page reload to take effect)');
+}
+
+// Make enableSentryReplay available globally for the consent hook
+if (typeof window !== 'undefined') {
+  (window as any).enableSentryReplay = enableSentryReplay;
+}

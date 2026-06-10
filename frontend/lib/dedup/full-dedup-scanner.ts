@@ -352,9 +352,9 @@ export async function runFullDedupScan(
     const candidateIds = new Set<string>();
 
     const domain = record.properties?.domain ? normalizeDomain(record.properties.domain) : null;
-    const phone = record.properties?.phone?.replace(/\D/g, '').slice(0, 7) : null;
-    const name = record.properties?.name?.toLowerCase().replace(/[^\w\s]/g, '').trim().slice(0, 4) : null;
-    const linkedin = record.properties?.linkedin_company_page?.match(/linkedin\.com\/company\/([^\/\?#]+)/i)?.[1]?.toLowerCase() : null;
+    const phone = record.properties?.phone ? record.properties.phone.replace(/\D/g, '').slice(0, 7) : null;
+    const name = record.properties?.name ? record.properties.name.toLowerCase().replace(/[^\w\s]/g, '').trim().slice(0, 4) : null;
+    const linkedin = record.properties?.linkedin_company_page?.match(/linkedin\.com\/company\/([^\/\?#]+)/i)?.[1]?.toLowerCase() ?? null;
 
     if (domain && !exclusions.has(domain) && !EXCLUDED_DOMAINS.includes(domain)) {
       const matches = domainMap.get(domain) || [];
@@ -377,7 +377,7 @@ export async function runFullDedupScan(
     }
 
     // Evaluate candidate pairs
-    for (const candidateId of candidateIds) {
+    for (const candidateId of Array.from(candidateIds)) {
       const pairKey = [record.id, candidateId].sort().join(':');
       if (processedPairs.has(pairKey)) continue;
       processedPairs.add(pairKey);

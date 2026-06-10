@@ -23,7 +23,7 @@ const matchRequestSchema = z.object({
     company: z.string().optional(),
     location: z.string().optional(),
   }),
-  filters: z.record(z.unknown()).optional(),
+  filters: z.record(z.string(), z.unknown()).optional(),
 });
 
 interface FilterConfig {

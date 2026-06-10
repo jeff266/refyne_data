@@ -148,8 +148,8 @@ export async function fetchModifiedCompanies(
 
   // Use HubSpot Search API to find companies modified since timestamp
   // Filter: hs_lastmodifieddate > since
-  const companies = await hubspotClient.searchCompanies({
-    filterGroups: [
+  const companies = await hubspotClient.searchCompanies(
+    [
       {
         filters: [
           {
@@ -160,7 +160,7 @@ export async function fetchModifiedCompanies(
         ],
       },
     ],
-    properties: [
+    [
       'name',
       'domain',
       'phone',
@@ -168,8 +168,8 @@ export async function fetchModifiedCompanies(
       'linkedin_company_page',
       'hs_lastmodifieddate',
     ],
-    limit: 100,
-  });
+    100
+  );
 
   console.log(`[incremental-scanner] Found ${companies.length} companies modified since ${since.toISOString()}`);
   return companies;

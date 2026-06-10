@@ -23,10 +23,11 @@ Sentry.init({
         'token', 'key', 'authorization'
       ];
 
-      if (typeof event.request.data === 'object') {
+      if (typeof event.request.data === 'object' && event.request.data !== null) {
+        const data = event.request.data as Record<string, any>;
         for (const key of sensitiveKeys) {
-          if (key in event.request.data) {
-            event.request.data[key] = '[REDACTED]';
+          if (key in data) {
+            data[key] = '[REDACTED]';
           }
         }
       }
