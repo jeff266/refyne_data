@@ -946,7 +946,7 @@ export default function HarmoniesPage() {
         {enrichedCompany.length > 0 && (
           <Card>
             <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}` }}>
-              <span style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Company</span>
+              <h2 className="section-heading" style={{ margin: 0, border: 'none', paddingBottom: 0 }}>Company</h2>
             </div>
             {enrichedCompany.map(h => (
               <HarmonyRow
@@ -971,7 +971,7 @@ export default function HarmoniesPage() {
         {enrichedPerson.length > 0 && (
           <Card>
             <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}` }}>
-              <span style={{ fontSize: 11, color: C.text3, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Contact</span>
+              <h2 className="section-heading" style={{ margin: 0, border: 'none', paddingBottom: 0 }}>Contact</h2>
             </div>
             {enrichedPerson.map(h => (
               <HarmonyRow
