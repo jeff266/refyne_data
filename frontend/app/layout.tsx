@@ -1,7 +1,22 @@
 import type { Metadata } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import { CleanUrl } from '@/components/CleanUrl';
+import { Lora, Jost } from 'next/font/google';
 import './globals.css';
+
+const lora = Lora({
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+  variable: '--font-lora',
+  display: 'swap',
+});
+
+const jost = Jost({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600'],
+  variable: '--font-jost',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Refyne',
@@ -17,13 +32,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Jost:wght@300;400;500;600&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={`${lora.variable} ${jost.variable}`}>
       <body>
         <ClerkProvider
           signUpFallbackRedirectUrl="/onboarding"

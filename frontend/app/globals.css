@@ -4,11 +4,11 @@
 
 /* Refyne Typography */
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Lora', serif;
+  font-family: var(--font-lora), serif;
 }
 
 body, p, span, div, button, input, textarea, select, label {
-  font-family: 'Jost', sans-serif;
+  font-family: var(--font-jost), sans-serif;
 }
 
 /* Typography Scale */
@@ -24,6 +24,18 @@ h2 {
   line-height: 1.4;
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
+  text-transform: none;
+}
+
+/* Section headings (for larger sections) */
+.section-heading {
+  font-family: var(--font-lora), serif;
+  font-size: 18px;
+  font-weight: 600;
+  text-transform: none;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding-bottom: 8px;
+  margin-bottom: 16px;
 }
 
 h3 {

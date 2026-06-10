@@ -49,8 +49,8 @@ export const C = {
 
 // Font tokens
 export const F = {
-  serif: "'Lora', serif",
-  sans:  "'Jost', sans-serif",
+  serif: "var(--font-lora), serif",
+  sans:  "var(--font-jost), sans-serif",
   mono:  "'JetBrains Mono', 'Fira Code', monospace",
 } as const;
 
