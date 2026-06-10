@@ -25,14 +25,16 @@ export async function GET() {
     });
 
     // Transform to simpler format
-    const members = memberships.map((membership) => ({
-      userId: membership.publicUserData.userId,
-      email: membership.publicUserData.identifier,
-      firstName: membership.publicUserData.firstName || '',
-      lastName: membership.publicUserData.lastName || '',
-      role: membership.role,
-      joinedAt: membership.createdAt,
-    }));
+    const members = memberships
+      .filter((membership) => membership.publicUserData != null)
+      .map((membership) => ({
+        userId: membership.publicUserData!.userId,
+        email: membership.publicUserData!.identifier,
+        firstName: membership.publicUserData!.firstName || '',
+        lastName: membership.publicUserData!.lastName || '',
+        role: membership.role,
+        joinedAt: membership.createdAt,
+      }));
 
     return NextResponse.json({ members });
   } catch (error) {

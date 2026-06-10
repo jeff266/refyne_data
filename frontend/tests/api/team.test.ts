@@ -288,6 +288,7 @@ describe('Team Management API', () => {
       expect(mockRevokeOrganizationInvitation).toHaveBeenCalledWith({
         organizationId: 'org_test123',
         invitationId: 'inv_123',
+        requestingUserId: 'user_admin',
       });
     });
   });

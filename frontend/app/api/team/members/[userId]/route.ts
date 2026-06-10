@@ -112,7 +112,7 @@ export async function DELETE(
       organizationId: ctx.orgId,
     });
 
-    const targetMember = memberships.find((m) => m.publicUserData.userId === userId);
+    const targetMember = memberships.find((m) => m.publicUserData?.userId === userId);
 
     if (!targetMember) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 });

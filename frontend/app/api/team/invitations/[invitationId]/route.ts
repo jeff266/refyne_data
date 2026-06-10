@@ -28,6 +28,7 @@ export async function DELETE(
     await clerkClient.organizations.revokeOrganizationInvitation({
       organizationId: ctx.orgId,
       invitationId,
+      requestingUserId: ctx.userId,
     });
 
     console.log(`[Team] Revoked invitation ${invitationId} for org ${ctx.orgId}`);
