@@ -2739,7 +2739,10 @@ export function startArrangementWorker(): Worker | null {
   console.log(`Arrangement worker started with concurrency=${WORKER_CONCURRENCY}`);
 
   // Start stalled job monitoring
-  arrangementMonitoringInterval = startStalledJobMonitoring(arrangementWorker, 'Arrangement Worker');
+  const queue = getArrangementQueue();
+  if (queue) {
+    arrangementMonitoringInterval = startStalledJobMonitoring(queue, 'Arrangement Queue');
+  }
 
   return arrangementWorker;
 }

@@ -726,7 +726,10 @@ export function startNormalizeWorker() {
   });
 
   // Start stalled job monitoring
-  startStalledJobMonitoring(worker, 'Normalize Worker');
+  const queue = getNormalizeQueue();
+  if (queue) {
+    startStalledJobMonitoring(queue, 'Normalize Queue');
+  }
 
   return worker;
 }

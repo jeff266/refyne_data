@@ -504,7 +504,10 @@ export function startContactDedupScanWorker(): Worker<ContactDedupScanJobData, C
   console.log(`[Contact Dedup Worker] Started with concurrency=${WORKER_CONCURRENCY}`);
 
   // Start stalled job monitoring
-  contactScanMonitoringInterval = startStalledJobMonitoring(scanWorker, 'Contact Dedup Worker');
+  const queue = getContactDedupScanQueue();
+  if (queue) {
+    contactScanMonitoringInterval = startStalledJobMonitoring(queue, 'Contact Dedup Queue');
+  }
 
   return scanWorker;
 }

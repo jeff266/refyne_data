@@ -153,7 +153,10 @@ export function startImportWorker(): Worker | null {
   console.log(`[Import Worker] Started with concurrency ${WORKER_CONCURRENCY}`);
 
   // Start stalled job monitoring
-  importMonitoringInterval = startStalledJobMonitoring(importWorkerInstance, 'Import Worker');
+  const queue = getImportQueue();
+  if (queue) {
+    importMonitoringInterval = startStalledJobMonitoring(queue, 'Import Queue');
+  }
 
   return importWorkerInstance;
 }

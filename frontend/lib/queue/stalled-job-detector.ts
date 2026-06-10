@@ -7,7 +7,7 @@
  * This prevents a large trial org scan from blocking paid customers indefinitely.
  */
 
-import { Worker, Job } from 'bullmq';
+import { Queue, Job } from 'bullmq';
 import { JOB_PRIORITY } from '@/lib/billing/job-priority';
 
 /**
@@ -28,27 +28,21 @@ const CHECK_INTERVAL_MS = 2 * 60 * 1000;
 /**
  * Start monitoring for stalled priority-3 jobs
  *
- * @param worker - The BullMQ worker instance to monitor
- * @param workerName - Name of the worker for logging (e.g., "Import Worker")
+ * @param queue - The BullMQ queue instance to monitor
+ * @param queueName - Name of the queue for logging (e.g., "Import Queue")
  * @returns Interval ID (can be cleared with clearInterval)
  */
 export function startStalledJobMonitoring(
-  worker: Worker,
-  workerName: string
+  queue: Queue,
+  queueName: string
 ): NodeJS.Timeout {
-  console.log(`[${workerName}] Started stalled job monitoring (check every 2min)`);
+  console.log(`[${queueName}] Started stalled job monitoring (check every 2min)`);
 
   const intervalId = setInterval(async () => {
     try {
-      // TODO: Fix this - Worker doesn't have getActive() method
-      // Need to pass Queue instance to access getJobs(['active'])
-      // const activeJobs = await worker.getActive();
-      // for (const job of activeJobs) {
-      //   await checkAndDelayIfStalled(job, workerName);
-      // }
-      console.log(`[${workerName}] Stalled job check (temporarily disabled)`);
+      await checkStalledJobs(queue, queueName);
     } catch (error) {
-      console.error(`[${workerName}] Error checking for stalled jobs:`, error);
+      console.error(`[${queueName}] Error checking for stalled jobs:`, error);
     }
   }, CHECK_INTERVAL_MS);
 
@@ -56,39 +50,40 @@ export function startStalledJobMonitoring(
 }
 
 /**
- * Check if a job is stalled and delay it if necessary
+ * Check for stalled jobs and delay them if necessary
  *
- * @param job - The job to check
- * @param workerName - Name of the worker for logging
+ * @param queue - The BullMQ queue to check
+ * @param queueName - Name of the queue for logging
  */
-async function checkAndDelayIfStalled(
-  job: Job,
-  workerName: string
-): Promise<void> {
-  // Only check priority-3 (trial tier) jobs
-  if (job.opts?.priority !== JOB_PRIORITY.TRIAL) {
-    return;
-  }
+async function checkStalledJobs(queue: Queue, queueName: string): Promise<void> {
+  const activeJobs = await queue.getActive();
+  const now = Date.now();
 
-  // Check if job has been processing too long
-  const processingTime = job.processedOn ? Date.now() - job.processedOn : 0;
+  for (const job of activeJobs) {
+    // Only check priority-3 (trial tier) jobs
+    if (!job.opts?.priority || job.opts.priority !== JOB_PRIORITY.TRIAL) {
+      continue;
+    }
 
-  if (processingTime > MAX_PRIORITY_3_RUNTIME_MS) {
-    try {
-      // Delay the job to allow higher priority jobs through
-      await job.moveToDelayed(Date.now() + DELAY_DURATION_MS, job.token);
+    const processedOn = job.processedOn ?? now;
+    const runningMs = now - processedOn;
 
-      const runtimeMinutes = Math.round(processingTime / 60000);
-      console.warn(
-        `[${workerName}] Delayed stalled priority-3 job ${job.id} ` +
-          `(runtime: ${runtimeMinutes}min) to allow higher priority jobs through`
-      );
-    } catch (error) {
-      // Job may have already completed or been moved - log but don't throw
-      console.warn(
-        `[${workerName}] Could not delay job ${job.id}:`,
-        error instanceof Error ? error.message : error
-      );
+    if (runningMs > MAX_PRIORITY_3_RUNTIME_MS) {
+      try {
+        // Delay the job to allow higher priority jobs through
+        await job.moveToDelayed(now + DELAY_DURATION_MS, job.token);
+
+        console.warn(
+          `[${queueName}] Delayed priority-3 job ${job.id} ` +
+            `after ${Math.round(runningMs / 1000)}s to allow higher priority jobs through`
+        );
+      } catch (error) {
+        // Job may have already completed or been moved - log but don't throw
+        console.warn(
+          `[${queueName}] Could not delay job ${job.id}:`,
+          error instanceof Error ? error.message : error
+        );
+      }
     }
   }
 }
@@ -97,12 +92,12 @@ async function checkAndDelayIfStalled(
  * Stop monitoring for stalled jobs
  *
  * @param intervalId - The interval ID returned by startStalledJobMonitoring
- * @param workerName - Name of the worker for logging
+ * @param queueName - Name of the queue for logging
  */
 export function stopStalledJobMonitoring(
   intervalId: NodeJS.Timeout,
-  workerName: string
+  queueName: string
 ): void {
   clearInterval(intervalId);
-  console.log(`[${workerName}] Stopped stalled job monitoring`);
+  console.log(`[${queueName}] Stopped stalled job monitoring`);
 }

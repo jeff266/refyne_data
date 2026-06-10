@@ -190,7 +190,10 @@ export function startDigestWorker(): Worker<DigestJobData, DigestJobResult> | nu
   console.log(`Digest worker started with concurrency=${WORKER_CONCURRENCY}`);
 
   // Start stalled job monitoring
-  digestMonitoringInterval = startStalledJobMonitoring(digestWorker, 'Digest Worker');
+  const queue = getDigestQueue();
+  if (queue) {
+    digestMonitoringInterval = startStalledJobMonitoring(queue, 'Digest Queue');
+  }
 
   return digestWorker;
 }

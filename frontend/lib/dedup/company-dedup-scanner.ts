@@ -827,7 +827,10 @@ export function startCompanyDedupScanWorker(): Worker<CompanyDedupScanJobData, C
   console.log(`[Company Dedup Worker] Started with concurrency=${WORKER_CONCURRENCY}`);
 
   // Start stalled job monitoring
-  scanMonitoringInterval = startStalledJobMonitoring(scanWorker, 'Company Dedup Worker');
+  const queue = getCompanyDedupScanQueue();
+  if (queue) {
+    scanMonitoringInterval = startStalledJobMonitoring(queue, 'Company Dedup Queue');
+  }
 
   return scanWorker;
 }

@@ -186,7 +186,10 @@ export function startEnrichmentWorker(): Worker | null {
   console.log(`[Enrichment Worker] Started with concurrency ${WORKER_CONCURRENCY}`);
 
   // Start stalled job monitoring
-  enrichmentMonitoringInterval = startStalledJobMonitoring(enrichmentWorker, 'Enrichment Worker');
+  const queue = getEnrichmentQueue();
+  if (queue) {
+    enrichmentMonitoringInterval = startStalledJobMonitoring(queue, 'Enrichment Queue');
+  }
 
   return enrichmentWorker;
 }

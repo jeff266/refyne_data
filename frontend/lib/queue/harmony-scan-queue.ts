@@ -143,7 +143,10 @@ export function createHarmonyScanWorker(
     console.log('[HarmonyScanWorker] Worker started');
 
     // Start stalled job monitoring
-    harmonyScanMonitoringInterval = startStalledJobMonitoring(worker, 'Harmony Scan Worker');
+    const queue = getHarmonyScanQueue();
+    if (queue) {
+      harmonyScanMonitoringInterval = startStalledJobMonitoring(queue, 'Harmony Scan Queue');
+    }
 
     return worker;
   } catch (error) {

@@ -378,7 +378,10 @@ export function startWebhookWorker(): Worker<WebhookJobData, WebhookJobResult> |
   console.log(`Webhook worker started with concurrency=${WORKER_CONCURRENCY}, default rate limit=${defaultRateLimit.max}/${defaultRateLimit.duration}ms`);
 
   // Start stalled job monitoring
-  webhookMonitoringInterval = startStalledJobMonitoring(webhookWorker, 'Webhook Worker');
+  const queue = getWebhookQueue();
+  if (queue) {
+    webhookMonitoringInterval = startStalledJobMonitoring(queue, 'Webhook Queue');
+  }
 
   return webhookWorker;
 }

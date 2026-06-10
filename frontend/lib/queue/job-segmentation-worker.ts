@@ -297,4 +297,4 @@ jobSegmentationWorker.on('failed', (job, err) => {
 });
 
 // Start stalled job monitoring
-startStalledJobMonitoring(jobSegmentationWorker, 'Job Segmentation Worker');
+startStalledJobMonitoring(jobSegmentationQueue, 'Job Segmentation Queue');
