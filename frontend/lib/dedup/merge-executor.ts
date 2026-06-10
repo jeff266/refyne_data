@@ -52,6 +52,15 @@ export interface MergeResult {
   error?: string;
 }
 
+export interface FieldExclusion {
+  id: string;
+  org_id: string;
+  object_type: string;
+  field_name: string;
+  exclusion_type: 'never_merge' | 'union_true' | 'append';
+  separator: string;
+}
+
 /**
  * Load active dedup policy for an org.
  * Falls back to default policy if no org-specific policy exists.
@@ -89,6 +98,231 @@ export async function loadDedupPolicy(orgId: string, policyId?: string): Promise
   }
 
   return data;
+}
+
+/**
+ * Load field exclusions for an org.
+ */
+export async function loadFieldExclusions(
+  orgId: string,
+  objectType: string = 'company'
+): Promise<FieldExclusion[]> {
+  if (!supabase) {
+    console.warn('[Merge Executor] Supabase not configured');
+    return [];
+  }
+
+  const { data } = await supabase
+    .from('dedup_field_exclusions')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('object_type', objectType);
+
+  return data ?? [];
+}
+
+/**
+ * Apply field exclusions to the merge payload.
+ * Returns modified properties object with exclusions applied.
+ */
+export async function applyFieldExclusions(
+  survivorProperties: Record<string, any>,
+  allRecords: Array<Record<string, any>>,
+  exclusions: FieldExclusion[]
+): Promise<{
+  properties: Record<string, any>;
+  applied: Record<string, string>;
+}> {
+  const result = { ...survivorProperties };
+  const applied: Record<string, string> = {};
+
+  for (const exclusion of exclusions) {
+    const field = exclusion.field_name;
+
+    switch (exclusion.exclusion_type) {
+      case 'never_merge':
+        // Remove from update payload entirely
+        // Surviving record's value is unchanged
+        delete result[field];
+        applied[field] = 'never_merge';
+        break;
+
+      case 'union_true':
+        // True if ANY record has true
+        const anyTrue = allRecords.some((r) => {
+          const val = r[field];
+          return val === 'true' || val === true || val === 1;
+        });
+        result[field] = anyTrue ? 'true' : 'false';
+        applied[field] = 'union_true';
+        break;
+
+      case 'append':
+        // Concatenate all non-empty values
+        const values = allRecords
+          .map((r) => r[field])
+          .filter((v) => v !== null && v !== undefined && v !== '');
+
+        const unique = Array.from(new Set(values));
+        result[field] = unique.join(exclusion.separator || '\n');
+        applied[field] = 'append';
+        break;
+    }
+  }
+
+  return { properties: result, applied };
+}
+
+/**
+ * Check if a HubSpot owner is active (not archived).
+ */
+export async function checkOwnerActive(
+  ownerId: string,
+  portalId: string,
+  accessToken: string
+): Promise<{ active: boolean; owner: any | null }> {
+  try {
+    const response = await fetch(
+      `https://api.hubapi.com/crm/v3/owners/${ownerId}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+
+    if (!response.ok) {
+      console.warn(`[Merge Executor] Owner ${ownerId} not found`);
+      return { active: false, owner: null };
+    }
+
+    const owner = await response.json();
+    return { active: !owner.archived, owner };
+  } catch (error) {
+    console.error('[Merge Executor] Error checking owner:', error);
+    return { active: false, owner: null };
+  }
+}
+
+/**
+ * Resolve the owner for the merged record based on config.
+ * Handles inactive owner scenarios per dedup_config settings.
+ */
+export async function resolveOwnerForMerge(
+  survivorRecord: Record<string, any>,
+  allRecords: Array<Record<string, any>>,
+  inactiveOwnerAction: string,
+  fallbackOwnerId: string | null,
+  accessToken: string,
+  portalId: string
+): Promise<{
+  ownerId: string | null;
+  action: string;
+  wasInactive: boolean;
+}> {
+  const survivorOwnerId = survivorRecord.hubspot_owner_id || null;
+
+  if (!survivorOwnerId) {
+    return { ownerId: null, action: 'no_owner', wasInactive: false };
+  }
+
+  // Check if owner is active
+  const { active } = await checkOwnerActive(survivorOwnerId, portalId, accessToken);
+
+  if (active) {
+    return { ownerId: survivorOwnerId, action: 'kept_active', wasInactive: false };
+  }
+
+  // Owner is inactive - apply configured action
+  switch (inactiveOwnerAction) {
+    case 'assign_fallback':
+      if (fallbackOwnerId) {
+        return {
+          ownerId: fallbackOwnerId,
+          action: 'fallback_assigned',
+          wasInactive: true,
+        };
+      }
+      // No fallback configured, treat as warn
+      return {
+        ownerId: survivorOwnerId,
+        action: 'kept_inactive_no_fallback',
+        wasInactive: true,
+      };
+
+    case 'leave_unassigned':
+      return { ownerId: null, action: 'unassigned', wasInactive: true };
+
+    case 'warn':
+    default:
+      // Keep inactive owner but flag in merge history
+      return { ownerId: survivorOwnerId, action: 'kept_inactive', wasInactive: true };
+  }
+}
+
+/**
+ * Check parent/child relationship for a record.
+ */
+export async function checkParentChild(
+  record: Record<string, any>,
+  accessToken: string,
+  portalId: string
+): Promise<{
+  hasParent: boolean;
+  parentId: string | null;
+  childIds: string[];
+}> {
+  const parentId = record.hs_parent_company_id || null;
+
+  // Get child companies
+  let childIds: string[] = [];
+  try {
+    const response = await fetch(
+      `https://api.hubapi.com/crm/v3/objects/companies/${record.hs_object_id}/associations/companies`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      // Filter for child relationships (parent-to-child associations)
+      // Note: This is a simplified version - HubSpot's association types would be more specific
+      childIds = data.results?.map((r: any) => r.id) || [];
+    }
+  } catch (error) {
+    console.error('[Merge Executor] Error fetching child companies:', error);
+  }
+
+  return {
+    hasParent: !!parentId,
+    parentId,
+    childIds,
+  };
+}
+
+/**
+ * Select survivor with parent/child awareness.
+ * Prefers record with no parent (it IS the parent).
+ */
+export function selectSurvivorWithParentAwareness(
+  records: Array<Record<string, any>>,
+  parentChecks: Map<string, { hasParent: boolean; parentId: string | null; childIds: string[] }>
+): { survivorId: string; reason: string } {
+  // Prefer record with no parent (it IS the parent)
+  for (const record of records) {
+    const check = parentChecks.get(record.hs_object_id);
+    if (check && !check.hasParent) {
+      return {
+        survivorId: record.hs_object_id,
+        reason: 'parent_preferred',
+      };
+    }
+  }
+
+  // All have parents - return first record, will be flagged for review
+  return {
+    survivorId: records[0].hs_object_id,
+    reason: 'all_have_parents',
+  };
 }
 
 /**

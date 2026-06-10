@@ -261,12 +261,82 @@ export function applyRules(
           winner = { value: result, source, rule: 'rollup' };
         }
       }
+
+      // NEW: boolean_union - true if ANY record has true
+      if (rule.rule_type === 'boolean_union') {
+        const masterBool = masterVal === 'true' || masterVal === true;
+        const dupBool = dupVal === 'true' || dupVal === true;
+
+        if (masterBool || dupBool) {
+          winner = {
+            value: 'true',
+            source: masterBool ? 'master' : 'duplicate',
+            rule: 'boolean_union',
+          };
+        } else {
+          winner = {
+            value: 'false',
+            source: 'master',
+            rule: 'boolean_union',
+          };
+        }
+      }
+
+      // NEW: append - concatenate values from both records
+      if (rule.rule_type === 'append') {
+        const separator = rule.rule_config.separator ?? '\n';
+        const deduplicate = rule.rule_config.deduplicate ?? true;
+        const maxLength = rule.rule_config.max_length;
+
+        const values = [masterVal, dupVal].filter(
+          (v) => v !== null && v !== undefined && v !== ''
+        );
+
+        const unique = deduplicate ? Array.from(new Set(values)) : values;
+        let joined = unique.join(separator);
+
+        if (maxLength && joined.length > maxLength) {
+          joined = joined.slice(0, maxLength);
+        }
+
+        winner = {
+          value: joined,
+          source: 'master', // Combined from both
+          rule: 'append',
+        };
+      }
     }
 
     result[field] = winner;
   }
 
   return result;
+}
+
+/**
+ * Apply survivorship rules with support for closed won priority.
+ * This requires checking HubSpot deals, so it's separated from field-level rules.
+ */
+export function applyRulesWithClosedWonPriority(
+  masterRecord: Record<string, any>,
+  duplicateRecord: Record<string, any>,
+  rules: SurvivorshipRule[],
+  masterHasClosedWon: boolean,
+  duplicateHasClosedWon: boolean
+): Record<string, FieldWinner> {
+  // Check if closed_won_priority rule exists and applies
+  const closedWonRule = rules.find((r) => r.rule_type === 'closed_won_priority');
+
+  if (closedWonRule && masterHasClosedWon !== duplicateHasClosedWon) {
+    // One has closed won, the other doesn't
+    // Swap master/duplicate if duplicate has closed won
+    if (duplicateHasClosedWon) {
+      return applyRules(duplicateRecord, masterRecord, rules);
+    }
+  }
+
+  // Otherwise, apply normal rules
+  return applyRules(masterRecord, duplicateRecord, rules);
 }
 
 /**

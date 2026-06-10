@@ -17,6 +17,10 @@ import { UnionFind } from './union-find';
 import { runDedupScan } from './incremental-scanner';
 import { sendDedupScanNotification } from './send-scan-notification';
 import { track } from '../telemetry/track';
+import {
+  evaluateCompanyPairWithSignalGroups,
+  type SignalGroup,
+} from './compound-signal-matcher';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -315,6 +319,30 @@ export async function runCompanyDedupScan(
   const excludedDomains = new Set(exclusions?.map(e => e.domain) || []);
   console.log(`[Company Dedup Scan] Loaded ${excludedDomains.size} excluded domains`);
 
+  // Load signal groups for this org (if configured)
+  const { data: groupsData } = await supabase
+    .from('dedup_signal_groups')
+    .select(`
+      *,
+      conditions:dedup_signal_conditions(*)
+    `)
+    .eq('org_id', orgId)
+    .eq('object_type', 'company')
+    .order('group_order', { ascending: true });
+
+  const signalGroups: SignalGroup[] = (groupsData || []).map((g: any) => ({
+    id: g.id,
+    name: g.name,
+    group_order: g.group_order,
+    conditions: g.conditions || [],
+  }));
+
+  if (signalGroups.length > 0) {
+    console.log(`[Company Dedup Scan] Using ${signalGroups.length} custom signal groups`);
+  } else {
+    console.log('[Company Dedup Scan] No signal groups configured, using cascade matching');
+  }
+
   // Fetch all companies
   const companies = await fetchAllCompanies(accessToken, portalId, job);
   console.log(`[Company Dedup Scan] Loaded ${companies.size} companies`);
@@ -442,7 +470,11 @@ export async function runCompanyDedupScan(
 
     if (!companyA || !companyB) continue;
 
-    const evaluation = evaluateCompanyPair(companyA, companyB);
+    const evaluation = evaluateCompanyPairWithSignalGroups(
+      companyA,
+      companyB,
+      signalGroups
+    );
 
     // Only store pairs with confidence >= 65 (Grade C or better)
     if (evaluation.confidence >= 65) {
