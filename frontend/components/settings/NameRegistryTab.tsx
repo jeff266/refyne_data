@@ -54,6 +54,15 @@ export function NameRegistryTab() {
   // Error states
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch data on mount
+  useEffect(() => {
+    if (isAdmin) {
+      fetchQueueItems();
+      fetchOrgEntries();
+      fetchGlobalEntries();
+    }
+  }, [isAdmin]);
+
   // Only render if admin
   if (!isAdmin) {
     return (
@@ -70,13 +79,6 @@ export function NameRegistryTab() {
       </div>
     );
   }
-
-  // Fetch data on mount
-  useEffect(() => {
-    fetchQueueItems();
-    fetchOrgEntries();
-    fetchGlobalEntries();
-  }, []);
 
   async function fetchQueueItems() {
     try {
