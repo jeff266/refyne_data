@@ -1226,6 +1226,46 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         </p>
       </div>
 
+      {/* V2 Warning: Inactive Owner */}
+      {visibleRecords.some((r: any) => r.properties?.hubspot_owner_id) && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            background: '#FEF3C7',
+            border: '1px solid #FCD34D',
+            fontSize: 13,
+            color: '#92400E',
+          }}
+        >
+          <strong>⚠️ Inactive Owner Warning:</strong> One or more records may have inactive owners.
+          The merge operation will handle this based on your{' '}
+          <a href="/settings/policies/dedup" style={{ color: '#92400E', textDecoration: 'underline' }}>
+            dedup config
+          </a>.
+        </div>
+      )}
+
+      {/* V2 Warning: Parent/Child Relationship */}
+      {visibleRecords.some((r: any) => r.properties?.hs_parent_company_id) && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            background: '#DBEAFE',
+            border: '1px solid #93C5FD',
+            fontSize: 13,
+            color: '#1E40AF',
+          }}
+        >
+          <strong>ℹ️ Parent/Child Detected:</strong> One or more records have parent company relationships.
+          {` `}If parent/child awareness is enabled in your{' '}
+          <a href="/settings/policies/dedup" style={{ color: '#1E40AF', textDecoration: 'underline' }}>
+            dedup config
+          </a>, records without parents will be preferred as survivors.
+        </div>
+      )}
+
       {cluster.status === 'merged' && (
         <div style={{ marginBottom: 32 }}>
           <MergeHistory clusterId={params.id} />

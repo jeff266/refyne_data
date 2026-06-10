@@ -81,12 +81,23 @@ export async function GET(request: NextRequest) {
     // Get return_to from query params
     const returnTo = request.nextUrl.searchParams.get('return_to');
 
+    console.log('[HubSpot Connect] ========== RETURN_TO STORAGE START ==========');
+    console.log('[HubSpot Connect] Full request URL:', request.url);
+    console.log('[HubSpot Connect] return_to param from query:', returnTo);
+    console.log('[HubSpot Connect] return_to type:', typeof returnTo);
+
     // Validate return_to is a relative path (security)
     let validatedReturnTo: string | null = null;
     if (returnTo && returnTo.startsWith('/') && !returnTo.includes('://')) {
       validatedReturnTo = returnTo;
-      console.log('[HubSpot Connect] Storing return_to:', returnTo);
+      console.log('[HubSpot Connect] ✓ return_to validated:', returnTo);
+    } else if (returnTo) {
+      console.warn('[HubSpot Connect] ✗ return_to REJECTED (security):', returnTo);
+    } else {
+      console.log('[HubSpot Connect] No return_to parameter provided');
     }
+
+    console.log('[HubSpot Connect] Storing in database with return_to:', validatedReturnTo);
 
     // Store state in database for CSRF protection
     const { error } = await supabase

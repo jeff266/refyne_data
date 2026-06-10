@@ -9,19 +9,19 @@ export const C = {
   // Backgrounds
   bg:        '#0F1E30',  // Page background (slightly darker)
   sidebar:   '#0A1829',  // Sidebar background
-  surface:   '#162944',  // Card/surface background
-  hover:     '#1D3455',  // Hover state
-  input:     '#1A3050',  // Input background (lighter than card)
+  surface:   '#1C3654',  // Card/surface background (WCAG AA compliant)
+  hover:     '#243D63',  // Hover state (WCAG AA compliant)
+  input:     '#203C60',  // Input background (WCAG AA compliant)
 
   // Borders
-  border:    'rgba(255,255,255,0.06)',  // Base border
-  border2:   'rgba(249,248,245,0.15)',  // Input border
+  border:    'rgba(255,255,255,0.10)',  // Base border (WCAG AA compliant)
+  border2:   'rgba(249,248,245,0.20)',  // Input border (WCAG AA compliant)
   borderFocus: '#2E6BA8',  // Input focus border
 
   // Text hierarchy
   text:      '#F9F8F5',  // Primary text (headings, labels)
-  text2:     'rgba(249,248,245,0.7)',   // Secondary text (body, descriptions)
-  text3:     'rgba(249,248,245,0.4)',   // Tertiary text (captions, placeholders)
+  text2:     'rgba(249,248,245,0.85)',  // Secondary text (WCAG AA compliant)
+  text3:     'rgba(249,248,245,0.6)',   // Tertiary text (WCAG AA compliant)
 
   // Accent colors
   indigo:    '#6366F1',

@@ -246,6 +246,15 @@ export default function CalibratePage() {
     Array<{ before: string; after: string }>
   >([]);
 
+  // Log page mount
+  useEffect(() => {
+    console.log('[Calibrate Page] ========== PAGE MOUNTED ==========');
+    console.log('[Calibrate Page] URL:', window.location.href);
+    console.log('[Calibrate Page] Search params:', window.location.search);
+    console.log('[Calibrate Page] Hash:', window.location.hash);
+    console.log('[Calibrate Page] =================================');
+  }, []);
+
   // Fetch sample data and compute steps on mount
   useEffect(() => {
     async function loadData() {

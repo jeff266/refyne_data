@@ -1,0 +1,9 @@
+The compound signal matching tests (16-20) need the properties wrapper.
+All company objects should have this structure:
+{
+  properties: {
+    name: '...',
+    domain: '...',
+    // etc
+  }
+}

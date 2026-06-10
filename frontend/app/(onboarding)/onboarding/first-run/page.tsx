@@ -24,6 +24,15 @@ export default function FirstRunPage() {
   const [isApplying, setIsApplying] = useState(false);
   const [useCases, setUseCases] = useState<string[]>([]);
 
+  // Log page mount
+  useEffect(() => {
+    console.log('[First-Run Page] ========== PAGE MOUNTED ==========');
+    console.log('[First-Run Page] URL:', window.location.href);
+    console.log('[First-Run Page] This page should NOT load directly after OAuth');
+    console.log('[First-Run Page] Expected flow: OAuth → calibrate → first-run');
+    console.log('[First-Run Page] ==================================');
+  }, []);
+
   useEffect(() => {
     loadPreview();
     fetchUseCases();

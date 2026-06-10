@@ -310,6 +310,48 @@ export async function GET(request: NextRequest) {
       // Don't fail the connection - auto-config is best-effort
     }
 
+    // Auto-seed compliance field exclusions (V2 dedup policies)
+    try {
+      // Check which compliance fields exist in this org's HubSpot schema
+      const { data: complianceFields } = await supabaseAdmin
+        .from('hubspot_properties_cache')
+        .select('property_name')
+        .eq('org_id', stateRecord.org_id)
+        .eq('object_type', 'company')
+        .in('property_name', [
+          'hs_email_optout',
+          'HasOptedOutOfEmail',
+          'DoNotCall',
+          'hs_email_bounce',
+        ]);
+
+      if (complianceFields && complianceFields.length > 0) {
+        const exclusionsToCreate = complianceFields.map((field) => ({
+          org_id: stateRecord.org_id,
+          object_type: 'company',
+          field_name: field.property_name,
+          exclusion_type: 'union_true',
+          separator: '\n',
+        }));
+
+        const { error: seedError } = await supabaseAdmin
+          .from('dedup_field_exclusions')
+          .upsert(exclusionsToCreate, {
+            onConflict: 'org_id,object_type,field_name',
+            ignoreDuplicates: true,
+          });
+
+        if (!seedError) {
+          console.log(
+            `[OAuth Callback] Auto-seeded ${complianceFields.length} compliance field exclusions`
+          );
+        }
+      }
+    } catch (seedError) {
+      console.error('[OAuth Callback] Compliance field seeding error (non-fatal):', seedError);
+      // Don't fail the connection - seeding is best-effort
+    }
+
     // Auto-trigger full dedup scan after first connection
     try {
       const scanResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/dedup/scan`, {
@@ -338,7 +380,10 @@ export async function GET(request: NextRequest) {
     // Read return_to from state record (persisted in database)
     let returnTo = stateRecord.return_to || null;
 
-    console.log('[OAuth Callback] return_to from state:', returnTo);
+    console.log('[OAuth Callback] ========== RETURN_TO FLOW START ==========');
+    console.log('[OAuth Callback] return_to from state record:', returnTo);
+    console.log('[OAuth Callback] return_to type:', typeof returnTo);
+    console.log('[OAuth Callback] return_to is null/undefined:', returnTo == null);
 
     // Validate return_to is a relative path (security)
     if (returnTo && (!returnTo.startsWith('/') || returnTo.includes('://'))) {
@@ -348,6 +393,8 @@ export async function GET(request: NextRequest) {
 
     const redirectPath = returnTo || '/connections';
     console.log('[OAuth Callback] Final redirect path:', redirectPath);
+    console.log('[OAuth Callback] Using return_to?:', !!returnTo);
+    console.log('[OAuth Callback] ========== RETURN_TO FLOW END ==========')
 
     // Update onboarding progress if returning to onboarding flow
     if (returnTo?.includes('/onboarding')) {

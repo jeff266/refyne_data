@@ -1,254 +1,124 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
-import {
-  rowToConfig,
-  configUpdateToRow,
-  type DedupConfigRow,
-  type DedupConfigUpdate,
-} from '@/lib/dedup/types';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-feature';
-import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { requireAdmin } from '@/lib/auth/roles';
+import { supabase } from '@/lib/db/supabase';
 
-// Valid canonical fields for core_display_fields
-const VALID_CORE_FIELDS = new Set([
-  'name', 'domain', 'industry', 'phone', 'employees',
-  'city', 'state', 'country', 'website', 'linkedin_url',
-  'annual_revenue', 'description', 'founded_year',
-]);
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/dedup/config
  *
- * Returns dedup config for the current org.
- * Creates default row if none exists (upsert behavior).
+ * Get dedup config for the org.
+ * Auth: getOrgContext()
  */
 export async function GET(request: NextRequest) {
-  // Add auth check
   let ctx;
-  try { ctx = await getOrgContext(); }
-  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
-
-  // Feature gate: dedup
   try {
-    await requireFeature(ctx.orgId, 'dedup');
-  } catch (error) {
-    const gateError = parseFeatureGateError(error);
-    if (gateError) {
-      return NextResponse.json(
-        { error: 'feature_gated', feature: gateError.feature, currentPlan: gateError.currentPlan },
-        { status: 403 }
-      );
-    }
-    throw error;
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
   try {
-    if (!isSupabaseConfigured() || !supabase) {
-      return NextResponse.json(
-        { error: 'Database not configured' },
-        { status: 503 }
-      );
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
 
-    const orgId = ctx.orgId;
-
-    // Try to get existing config
-    const { data: existing, error: selectError } = await supabase
+    const { data: config, error } = await supabase
       .from('dedup_config')
       .select('*')
-      .eq('org_id', orgId)
+      .eq('org_id', ctx.orgId)
       .single();
 
-    if (selectError && selectError.code !== 'PGRST116') {
-      // PGRST116 = no rows returned (expected for new orgs)
-      captureWithOrgContext(selectError, ctx.orgId, { route: '/api/dedup/config' });
-      console.error('Failed to get dedup config:', selectError);
-      return NextResponse.json(
-        { error: 'Failed to get config' },
-        { status: 500 }
-      );
+    if (error && error.code !== 'PGRST116') {
+      console.error('[Dedup Config] Error fetching:', error);
+      return NextResponse.json({ error: 'Failed to fetch dedup config' }, { status: 500 });
     }
 
-    if (existing) {
-      return NextResponse.json({ config: rowToConfig(existing as DedupConfigRow) });
+    // Return empty config if not found
+    if (!config) {
+      return NextResponse.json({
+        config: {
+          org_id: ctx.orgId,
+          inactive_owner_action: 'warn',
+          parent_child_awareness: false,
+          require_closed_won_survivor: false,
+        },
+      });
     }
 
-    // Create default config
-    const { data: created, error: insertError } = await supabase
-      .from('dedup_config')
-      .insert({ org_id: orgId })
-      .select()
-      .single();
-
-    if (insertError) {
-      captureWithOrgContext(insertError, ctx.orgId, { route: '/api/dedup/config' });
-      console.error('Failed to create default dedup config:', insertError);
-      return NextResponse.json(
-        { error: 'Failed to create config' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ config: rowToConfig(created as DedupConfigRow) });
+    return NextResponse.json({ config });
   } catch (error) {
-    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/config' });
-    console.error('Failed to get dedup config:', error);
-    return NextResponse.json(
-      { error: 'Failed to get config' },
-      { status: 500 }
-    );
+    console.error('[Dedup Config] Error:', error);
+    return NextResponse.json({ error: 'Failed to fetch dedup config' }, { status: 500 });
   }
 }
 
 /**
- * PUT /api/dedup/config
+ * PATCH /api/dedup/config
  *
- * Update dedup config for the current org.
- * Admin role only.
+ * Update dedup config for the org.
+ * Auth: requireAdmin()
  */
-export async function PUT(request: NextRequest) {
-  // Add auth check
+export async function PATCH(request: NextRequest) {
   let ctx;
-  try { ctx = await getOrgContext(); }
-  catch (e) { return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 }); }
-
-  requireAdmin(ctx.orgRole);
-
-  // Feature gate: dedup
   try {
-    await requireFeature(ctx.orgId, 'dedup');
-  } catch (error) {
-    const gateError = parseFeatureGateError(error);
-    if (gateError) {
-      return NextResponse.json(
-        { error: 'feature_gated', feature: gateError.feature, currentPlan: gateError.currentPlan },
-        { status: 403 }
-      );
-    }
-    throw error;
+    ctx = await getOrgContext();
+    requireAdmin(ctx.orgRole);
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
   try {
-    if (!isSupabaseConfigured() || !supabase) {
+    const body = await request.json();
+    const {
+      inactive_owner_action,
+      inactive_owner_fallback_id,
+      parent_child_awareness,
+      require_closed_won_survivor,
+    } = body;
+
+    if (
+      inactive_owner_action &&
+      !['warn', 'assign_fallback', 'leave_unassigned'].includes(inactive_owner_action)
+    ) {
       return NextResponse.json(
-        { error: 'Database not configured' },
-        { status: 503 }
+        { error: 'Invalid inactive_owner_action' },
+        { status: 400 }
       );
     }
 
-    const orgId = ctx.orgId;
-
-    const body = await request.json() as DedupConfigUpdate;
-
-    // Validate weight ranges (0.0-1.0)
-    const weightFields = [
-      'signalPhoneWeight', 'signalAddressWeight', 'signalNameWeight',
-      'nameLevenshteinFloor', 'nameDivergenceFloor',
-      'parentOneMultiplier', 'parentDifferentScore',
-    ] as const;
-
-    for (const field of weightFields) {
-      if (body[field] !== undefined) {
-        const value = body[field];
-        if (typeof value !== 'number' || value < 0 || value > 1) {
-          return NextResponse.json(
-            { error: `${field} must be between 0.0 and 1.0`, field },
-            { status: 400 }
-          );
-        }
-      }
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 });
     }
 
-    // Validate auto_merge_threshold (50-100)
-    if (body.autoMergeThreshold !== undefined) {
-      if (body.autoMergeThreshold < 50 || body.autoMergeThreshold > 100) {
-        return NextResponse.json(
-          { error: 'autoMergeThreshold must be between 50 and 100', field: 'autoMergeThreshold' },
-          { status: 400 }
-        );
-      }
+    const updates: any = {};
+    if (inactive_owner_action !== undefined) updates.inactive_owner_action = inactive_owner_action;
+    if (inactive_owner_fallback_id !== undefined) updates.inactive_owner_fallback_id = inactive_owner_fallback_id;
+    if (parent_child_awareness !== undefined) updates.parent_child_awareness = parent_child_awareness;
+    if (require_closed_won_survivor !== undefined) updates.require_closed_won_survivor = require_closed_won_survivor;
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
-    // Validate review_floor_threshold must be < auto_merge_threshold
-    if (body.reviewFloorThreshold !== undefined) {
-      // Get current auto_merge_threshold if not being updated
-      let autoThreshold: number = body.autoMergeThreshold ?? 90;
-      if (body.autoMergeThreshold === undefined) {
-        const { data: current } = await supabase
-          .from('dedup_config')
-          .select('auto_merge_threshold')
-          .eq('org_id', orgId)
-          .single();
-        autoThreshold = current?.auto_merge_threshold ?? 90;
-      }
-
-      if (body.reviewFloorThreshold >= autoThreshold) {
-        return NextResponse.json(
-          { error: 'reviewFloorThreshold must be less than autoMergeThreshold', field: 'reviewFloorThreshold' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Validate core_display_fields (min 1 item, all must be valid)
-    if (body.coreDisplayFields !== undefined) {
-      if (!Array.isArray(body.coreDisplayFields) || body.coreDisplayFields.length < 1) {
-        return NextResponse.json(
-          { error: 'coreDisplayFields must have at least 1 field', field: 'coreDisplayFields' },
-          { status: 400 }
-        );
-      }
-      for (const field of body.coreDisplayFields) {
-        if (!VALID_CORE_FIELDS.has(field)) {
-          return NextResponse.json(
-            { error: `Invalid field in coreDisplayFields: ${field}`, field: 'coreDisplayFields' },
-            { status: 400 }
-          );
-        }
-      }
-    }
-
-    // Validate rollback_window_hours (1-168)
-    if (body.rollbackWindowHours !== undefined) {
-      if (body.rollbackWindowHours < 1 || body.rollbackWindowHours > 168) {
-        return NextResponse.json(
-          { error: 'rollbackWindowHours must be between 1 and 168', field: 'rollbackWindowHours' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Convert to database format
-    const rowUpdate = configUpdateToRow(body);
-
-    // Upsert the config
-    const { data: updated, error: updateError } = await supabase
+    const { data, error } = await supabase
       .from('dedup_config')
-      .upsert({
-        org_id: orgId,
-        ...rowUpdate,
-      })
+      .upsert(
+        { org_id: ctx.orgId, ...updates },
+        { onConflict: 'org_id' }
+      )
       .select()
       .single();
 
-    if (updateError) {
-      captureWithOrgContext(updateError, ctx.orgId, { route: '/api/dedup/config' });
-      console.error('Failed to update dedup config:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to update config' },
-        { status: 500 }
-      );
+    if (error) {
+      console.error('[Dedup Config] Error updating:', error);
+      return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
     }
 
-    return NextResponse.json({ config: rowToConfig(updated as DedupConfigRow) });
+    return NextResponse.json({ success: true, config: data });
   } catch (error) {
-    captureWithOrgContext(error, ctx.orgId, { route: '/api/dedup/config' });
-    console.error('Failed to update dedup config:', error);
-    return NextResponse.json(
-      { error: 'Failed to update config' },
-      { status: 500 }
-    );
+    console.error('[Dedup Config] Error:', error);
+    return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
   }
 }

@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       .from('hubspot_connections')
       .select('portal_id, connection_status')
       .eq('org_id', ctx.orgId)
-      .eq('connection_status', 'connected');
+      .eq('connection_status', 'active');
 
     if (connError) {
       console.error('[Onboarding Status] Connection error:', connError);

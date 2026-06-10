@@ -64,8 +64,18 @@ export default clerkMiddleware(async (auth, request) => {
     }
 
     // Redirect to dashboard if already complete and trying to access onboarding
+    // EXCEPT when reconnecting HubSpot (?connected=true) or recalibrating (?recalibrate=true)
     if (isOnboardingComplete && isOnboardingRoute) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      const url = new URL(request.url);
+      const isReconnecting = url.searchParams.get('connected') === 'true';
+      const isRecalibrating = url.searchParams.get('recalibrate') === 'true';
+
+      if (!isReconnecting && !isRecalibrating) {
+        console.log('[Middleware] Onboarding complete - redirecting to dashboard');
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      } else {
+        console.log('[Middleware] Allowing onboarding access - reconnecting or recalibrating');
+      }
     }
   }
 

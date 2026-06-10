@@ -44,7 +44,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all preset harmonies (org_id IS NULL) + org-specific harmonies for selected object type
-    const { data: harmonies, error } = await supabase
+    // SECURITY: Double-filter by org_id to prevent cross-org data leaks
+    // (Service role key bypasses RLS, so explicit filter is critical)
+    const { data: allHarmonies, error } = await supabase
       .from('harmonies')
       .select('*')
       .eq('object_type', objectType)
@@ -57,6 +59,12 @@ export async function GET(request: NextRequest) {
       console.error('Failed to fetch harmonies:', error);
       return NextResponse.json({ error: 'Failed to load harmonies' }, { status: 500 });
     }
+
+    // SECURITY FIX: Explicit filter to prevent cross-org leaks
+    // Filter out any harmonies that don't belong to this org (unless they're presets)
+    const harmonies = (allHarmonies || []).filter((h: any) =>
+      h.org_id === null || h.org_id === orgId
+    );
 
     // Fetch org-specific settings for preset harmonies
     const presetHarmonyIds = (harmonies || []).filter((h: any) => h.is_preset).map((h: any) => h.id);

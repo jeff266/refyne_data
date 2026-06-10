@@ -61,11 +61,9 @@ interface Provider {
 const PROVIDERS: Provider[] = [
   { id: 'hubspot', name: 'HubSpot', description: 'CRM platform integration', category: 'crm' },
   { id: 'apollo', name: 'Apollo.io', description: 'People and company data', category: 'enrichment' },
-  { id: 'zoominfo', name: 'ZoomInfo', description: 'B2B contact database', category: 'enrichment' },
   { id: 'serper', name: 'Serper', description: 'Web search API', category: 'research', managed: true, managedCredits: 'Credits included in your plan' },
   { id: 'graphiq', name: 'GraphIQ', description: 'AI-powered company search', category: 'research', managed: true, managedCredits: 'Credits included in your plan' },
   { id: 'tinyfish', name: 'TinyFish', description: 'Web agent automation', category: 'research' },
-  { id: 'clearbit', name: 'Clearbit', description: 'Real-time enrichment', category: 'enrichment' },
 ];
 
 function getStatusBadge(status: string, authType: 'oauth' | 'pat' | 'unknown') {
