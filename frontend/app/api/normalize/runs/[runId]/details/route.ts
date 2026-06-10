@@ -2,30 +2,35 @@
  * GET /api/normalize/runs/:runId/details
  *
  * Get detailed information about a normalization run.
+ *
+ * SECURITY: Requires authentication and run ownership verification.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/db/supabase';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { runId: string } }
 ) {
-  const runId = params.runId;
-
-  if (!supabase) {
-    return NextResponse.json(
-      { error: 'Database not configured' },
-      { status: 500 }
-    );
+  // SECURITY: Require authentication
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const runId = params.runId;
+
   try {
-    // Get run details
-    const { data: run, error: runError } = await supabase
+    // Get run details with org verification
+    const { data: run, error: runError } = await supabaseAdmin
       .from('normalization_runs')
       .select(`
         id,
+        org_id,
         started_at,
         completed_at,
         initiated_by,
@@ -39,8 +44,8 @@ export async function GET(
       .eq('id', runId)
       .single();
 
-    if (runError || !run) {
-      console.error('[normalize] /details query error:', runError);
+    if (runError || !run || run.org_id !== ctx.orgId) {
+      // Return 404 (not 403) to avoid confirming run existence
       return NextResponse.json(
         { error: 'Run not found' },
         { status: 404 }
@@ -48,7 +53,7 @@ export async function GET(
     }
 
     // Get list of field keys changed in this run
-    const { data: changesData, error: changesError } = await supabase
+    const { data: changesData, error: changesError } = await supabaseAdmin
       .from('normalization_run_progress')
       .select('field_key')
       .eq('run_id', runId);

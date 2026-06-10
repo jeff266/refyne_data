@@ -3,16 +3,27 @@
  *
  * Get paginated list of changes for a normalization run.
  * Supports filtering by field name and searching by company name/ID.
+ *
+ * SECURITY: Requires authentication and run ownership verification.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/db/supabase';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 import { transformArray } from '@/lib/utils/transform';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { runId: string } }
 ) {
+  // SECURITY: Require authentication
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const runId = params.runId;
   const searchParams = request.nextUrl.searchParams;
 
@@ -21,16 +32,23 @@ export async function GET(
   const field = searchParams.get('field');
   const search = searchParams.get('search');
 
-  if (!supabase) {
-    return NextResponse.json(
-      { error: 'Database not configured' },
-      { status: 500 }
-    );
-  }
-
   try {
+    // SECURITY: Verify run belongs to this organization
+    const { data: run, error: runError } = await supabaseAdmin
+      .from('normalization_runs')
+      .select('org_id')
+      .eq('id', runId)
+      .single();
+
+    if (runError || !run || run.org_id !== ctx.orgId) {
+      // Return 404 (not 403) to avoid confirming run existence
+      return NextResponse.json(
+        { error: 'Run not found' },
+        { status: 404 }
+      );
+    }
     // Build query
-    let query = supabase
+    let query = supabaseAdmin
       .from('normalization_run_progress')
       .select('*', { count: 'exact' })
       .eq('run_id', runId);

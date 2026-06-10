@@ -3,11 +3,16 @@
  *
  * POST /api/hubspot/write
  * Writes normalized records back to HubSpot with dedup gate.
+ *
+ * SECURITY: Requires authentication and portal ownership verification.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 import { executeBatchWrite } from '@/lib/hubspot/batch-writer';
 import { HubSpotClient } from '@/lib/hubspot/client';
+import { decryptToken } from '@/lib/crypto/token-encryption';
 import type { RawRecord } from '@/lib/mcp/types';
 import type { BatchWriteInput } from '@/lib/hubspot/write-types';
 
@@ -18,6 +23,14 @@ interface WriteRequestBody {
 }
 
 export async function POST(request: NextRequest) {
+  // SECURITY: Require authentication
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = (await request.json()) as WriteRequestBody;
 
@@ -54,14 +67,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get HubSpot access token from environment
-    const accessToken = process.env.HUBSPOT_ACCESS_TOKEN;
-    if (!accessToken) {
+    // SECURITY: Verify portal_id belongs to this organization
+    const { data: connection, error: connError } = await supabaseAdmin
+      .from('hubspot_connections')
+      .select('portal_id, access_token, connection_status')
+      .eq('org_id', ctx.orgId)
+      .eq('portal_id', body.portalId)
+      .eq('connection_status', 'active')
+      .single();
+
+    if (connError || !connection) {
       return NextResponse.json(
-        { success: false, error: 'HubSpot access token not configured' },
-        { status: 500 }
+        { success: false, error: 'Portal not found or not authorized' },
+        { status: 403 }
       );
     }
+
+    // Get decrypted access token from connection
+    const accessToken = decryptToken(connection.access_token);
 
     // Initialize client
     const client = new HubSpotClient(accessToken, body.portalId);

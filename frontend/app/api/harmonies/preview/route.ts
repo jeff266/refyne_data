@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { executeHarmoniesPreview } from '@/lib/mcp';
 import type { HarmoniesPreviewInput } from '@/lib/mcp/types';
 
@@ -6,8 +7,18 @@ import type { HarmoniesPreviewInput } from '@/lib/mcp/types';
  * POST /api/harmonies/preview
  *
  * Runs harmonies_preview tool via API route.
+ *
+ * SECURITY: Requires authentication.
  */
 export async function POST(request: NextRequest) {
+  // SECURITY: Require authentication
+  let ctx;
+  try {
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await request.json() as HarmoniesPreviewInput;
 
