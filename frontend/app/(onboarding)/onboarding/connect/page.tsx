@@ -61,6 +61,7 @@ export default function ConnectPage() {
         justifyContent: 'center',
         minHeight: 'calc(100vh - 64px)',
         padding: 32,
+        background: C.bg,
       }}
     >
       <div style={{ width: '100%', maxWidth: 540 }}>

@@ -66,6 +66,7 @@ export default function WelcomePage() {
         justifyContent: 'center',
         minHeight: 'calc(100vh - 64px)',
         padding: 32,
+        background: C.bg,
       }}
     >
       <div style={{ width: '100%', maxWidth: 480 }}>

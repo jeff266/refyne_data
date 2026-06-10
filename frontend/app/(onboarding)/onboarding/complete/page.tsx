@@ -60,6 +60,7 @@ export default function CompletePage() {
           minHeight: 'calc(100vh - 64px)',
           fontFamily: F.sans,
           color: C.text2,
+          background: C.bg,
         }}
       >
         Finalizing setup...
@@ -75,6 +76,7 @@ export default function CompletePage() {
         justifyContent: 'center',
         minHeight: 'calc(100vh - 64px)',
         padding: 32,
+        background: C.bg,
       }}
     >
       <div style={{ width: '100%', maxWidth: 640, textAlign: 'center' }}>
