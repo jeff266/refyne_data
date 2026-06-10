@@ -7,6 +7,7 @@
 
 import { Queue, Worker, Job } from 'bullmq';
 import { createRedisConnection, isRedisConfigured } from './redis';
+import { startStalledJobMonitoring, stopStalledJobMonitoring } from './stalled-job-detector';
 import { supabase } from '../db/supabase';
 import { DEMO_COMPANIES, getDemoEnrichmentResult, simulateEnrichmentDelay } from '../arrangements/demo-fixtures';
 import { estimateRunCost } from '../arrangements/estimate-cost';
@@ -264,6 +265,7 @@ export interface LiveRunJobResult {
 
 let arrangementQueue: Queue | null = null;
 let arrangementWorker: Worker | null = null;
+let arrangementMonitoringInterval: NodeJS.Timeout | null = null;
 
 /**
  * Get or create the arrangement queue.
@@ -301,7 +303,7 @@ export function getArrangementQueue(): Queue | null {
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Enqueue a preflight check job.
+ * Enqueue a preflight check job with priority based on subscription tier.
  */
 export async function enqueuePreflightJob(
   data: PreflightJobData
@@ -311,12 +313,15 @@ export async function enqueuePreflightJob(
     return { queued: false, reason: 'Queue not configured' };
   }
 
-  const job = await queue.add('preflight', data);
+  const { getJobPriority } = await import('@/lib/billing/job-priority');
+  const priority = await getJobPriority(data.orgId);
+
+  const job = await queue.add('preflight', data, { priority });
   return { queued: true, jobId: job.id };
 }
 
 /**
- * Enqueue a rehearsal job.
+ * Enqueue a rehearsal job with priority based on subscription tier.
  */
 export async function enqueueRehearsalJob(
   data: RehearsalJobData
@@ -326,12 +331,15 @@ export async function enqueueRehearsalJob(
     return { queued: false, reason: 'Queue not configured' };
   }
 
-  const job = await queue.add('rehearsal', data);
+  const { getJobPriority } = await import('@/lib/billing/job-priority');
+  const priority = await getJobPriority(data.orgId);
+
+  const job = await queue.add('rehearsal', data, { priority });
   return { queued: true, jobId: job.id };
 }
 
 /**
- * Enqueue a live run job.
+ * Enqueue a live run job with priority based on subscription tier.
  */
 export async function enqueueLiveRunJob(
   data: LiveRunJobData
@@ -341,7 +349,10 @@ export async function enqueueLiveRunJob(
     return { queued: false, reason: 'Queue not configured' };
   }
 
-  const job = await queue.add('live-run', data);
+  const { getJobPriority } = await import('@/lib/billing/job-priority');
+  const priority = await getJobPriority(data.orgId);
+
+  const job = await queue.add('live-run', data, { priority });
   return { queued: true, jobId: job.id };
 }
 
@@ -2727,6 +2738,9 @@ export function startArrangementWorker(): Worker | null {
 
   console.log(`Arrangement worker started with concurrency=${WORKER_CONCURRENCY}`);
 
+  // Start stalled job monitoring
+  arrangementMonitoringInterval = startStalledJobMonitoring(arrangementWorker, 'Arrangement Worker');
+
   return arrangementWorker;
 }
 
@@ -2734,6 +2748,11 @@ export function startArrangementWorker(): Worker | null {
  * Stop the arrangement worker.
  */
 export async function stopArrangementWorker(): Promise<void> {
+  if (arrangementMonitoringInterval) {
+    stopStalledJobMonitoring(arrangementMonitoringInterval, 'Arrangement Worker');
+    arrangementMonitoringInterval = null;
+  }
+
   if (arrangementWorker) {
     await arrangementWorker.close();
     arrangementWorker = null;

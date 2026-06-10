@@ -14,6 +14,8 @@
 
 import { Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
+import { startStalledJobMonitoring } from './stalled-job-detector';
+import { withHubSpotRateLimit } from '../hubspot/shared-portal-rate-limiter';
 import { HubSpotClient } from '../hubspot/client';
 import { classifyJobTitleBatch } from '../harmonies/job-title-classifier';
 import { ensureJobSegmentationProperties } from '../hubspot/job-segmentation-properties';
@@ -117,27 +119,30 @@ export async function processJobSegmentation(data: JobSegmentationJobData) {
     const FETCH_LIMIT = dryRun ? 100 : 100000; // Limit fetches in dry run mode
 
     while (hasMore && allContacts.length < FETCH_LIMIT) {
-      const response = await hubspot.request<{
-        results: ContactBatch[];
-        paging?: { next?: { after: string } };
-      }>('/crm/v3/objects/contacts/search', {
-        method: 'POST',
-        body: JSON.stringify({
-          filterGroups: [
-            {
-              filters: [
-                {
-                  propertyName: 'jobtitle',
-                  operator: 'HAS_PROPERTY',
-                },
-              ],
-            },
-          ],
-          properties: ['jobtitle'],
-          limit: 100,
-          after,
-        }),
-      });
+      const response = await withHubSpotRateLimit(
+        portalId,
+        () => hubspot.request<{
+          results: ContactBatch[];
+          paging?: { next?: { after: string } };
+        }>('/crm/v3/objects/contacts/search', {
+          method: 'POST',
+          body: JSON.stringify({
+            filterGroups: [
+              {
+                filters: [
+                  {
+                    propertyName: 'jobtitle',
+                    operator: 'HAS_PROPERTY',
+                  },
+                ],
+              },
+            ],
+            properties: ['jobtitle'],
+            limit: 100,
+            after,
+          }),
+        })
+      );
 
       allContacts.push(...response.results);
       after = response.paging?.next?.after;
@@ -193,10 +198,13 @@ export async function processJobSegmentation(data: JobSegmentationJobData) {
           await Promise.all(
             chunk.map(async (update) => {
               try {
-                await hubspot.request(`/crm/v3/objects/contacts/${update.id}`, {
-                  method: 'PATCH',
-                  body: JSON.stringify({ properties: update.properties }),
-                });
+                await withHubSpotRateLimit(
+                  portalId,
+                  () => hubspot.request(`/crm/v3/objects/contacts/${update.id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ properties: update.properties }),
+                  })
+                );
                 updatedCount++;
               } catch (error) {
                 console.error(`[JobSegmentation] Failed to update contact ${update.id}:`, error);
@@ -287,3 +295,6 @@ jobSegmentationWorker.on('completed', (job) => {
 jobSegmentationWorker.on('failed', (job, err) => {
   console.error(`[JobSegmentation] Job ${job?.id} failed:`, err);
 });
+
+// Start stalled job monitoring
+startStalledJobMonitoring(jobSegmentationWorker, 'Job Segmentation Worker');

@@ -126,9 +126,15 @@ export async function enqueueRollbackJob(
   // Use run ID as job ID to prevent duplicate rollback jobs
   const jobId = `rollback:${runId}`;
 
+  // Rollback is always priority 1 (highest) - users waiting for rollback
+  // should not be deprioritized. Rollback is a correctness operation, not a bulk job.
+  const { JOB_PRIORITY } = await import('@/lib/billing/job-priority');
+  const priority = JOB_PRIORITY.SCALE;
+
   try {
     const job = await queue.add('process-rollback', jobData, {
       jobId,
+      priority,
     });
 
     return { queued: true, jobId: job.id };

@@ -118,11 +118,16 @@ export async function enqueueScan(
 
   const jobId = `scan:${orgId}:${Date.now()}`;
 
+  // System-initiated (nightly cron), but still apply priority
+  // so paid org compliance scans run before trial org scans
+  const { getJobPriority } = await import('@/lib/billing/job-priority');
+  const priority = await getJobPriority(orgId);
+
   try {
     const job = await queue.add(
       'compliance-scan',
       { orgId, accessToken, hasExportScope },
-      { jobId }
+      { jobId, priority }
     );
 
     return { queued: true, jobId: job.id };

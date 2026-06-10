@@ -18,6 +18,7 @@ import { auth } from '@clerk/nextjs/server';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { jobSegmentationQueue } from '@/lib/queue/job-segmentation-worker';
 import { decryptToken } from '@/lib/crypto/token-encryption';
+import { getJobPriority } from '@/lib/billing/job-priority';
 
 export async function POST(req: NextRequest) {
   try {
@@ -74,7 +75,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Enqueue job
+    // Enqueue job with priority based on subscription tier
+    const priority = await getJobPriority(orgId);
     await jobSegmentationQueue.add('segment-jobs', {
       runId: run.id,
       orgId,
@@ -82,6 +84,8 @@ export async function POST(req: NextRequest) {
       accessToken,
       dryRun,
       batchSize,
+    }, {
+      priority,
     });
 
     console.log(`[JobSegmentation] Run ${run.id} enqueued (dryRun: ${dryRun})`);

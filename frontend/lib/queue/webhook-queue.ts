@@ -12,6 +12,7 @@
 
 import { Queue, Worker, Job, QueueEvents } from 'bullmq';
 import { createRedisConnection, isRedisConfigured } from './redis';
+import { startStalledJobMonitoring, stopStalledJobMonitoring } from './stalled-job-detector';
 import type { HubSpotWebhookEvent, NormalizationMode } from '../hubspot/write-types';
 import {
   recordEvent,
@@ -107,6 +108,7 @@ export interface WebhookJobResult {
 
 let webhookQueue: Queue<WebhookJobData, WebhookJobResult> | null = null;
 let webhookWorker: Worker<WebhookJobData, WebhookJobResult> | null = null;
+let webhookMonitoringInterval: NodeJS.Timeout | null = null;
 let queueEvents: QueueEvents | null = null;
 
 /**
@@ -186,9 +188,14 @@ export async function enqueueWebhookEvent(
   // Use eventId as job ID for deduplication at queue level
   const jobId = `${orgId}:${event.eventId}`;
 
+  // Get job priority based on org's subscription tier
+  const { getJobPriority } = await import('@/lib/billing/job-priority');
+  const priority = await getJobPriority(orgId);
+
   try {
     const job = await queue.add('process-webhook', jobData, {
       jobId,
+      priority,
     });
 
     return { queued: true, jobId: job.id };
@@ -370,6 +377,9 @@ export function startWebhookWorker(): Worker<WebhookJobData, WebhookJobResult> |
 
   console.log(`Webhook worker started with concurrency=${WORKER_CONCURRENCY}, default rate limit=${defaultRateLimit.max}/${defaultRateLimit.duration}ms`);
 
+  // Start stalled job monitoring
+  webhookMonitoringInterval = startStalledJobMonitoring(webhookWorker, 'Webhook Worker');
+
   return webhookWorker;
 }
 
@@ -377,6 +387,11 @@ export function startWebhookWorker(): Worker<WebhookJobData, WebhookJobResult> |
  * Stop the webhook worker gracefully.
  */
 export async function stopWebhookWorker(): Promise<void> {
+  if (webhookMonitoringInterval) {
+    stopStalledJobMonitoring(webhookMonitoringInterval, 'Webhook Worker');
+    webhookMonitoringInterval = null;
+  }
+
   if (webhookWorker) {
     await webhookWorker.close();
     webhookWorker = null;

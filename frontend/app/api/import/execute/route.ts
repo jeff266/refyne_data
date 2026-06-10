@@ -6,6 +6,7 @@ import { FEATURE_FLAGS } from '@/lib/features/flags';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { importQueue } from '@/lib/queue/import-queue';
 import { assignOwners, groupByCompany, type ParsedRow } from '@/lib/import/matcher';
+import { getJobPriority } from '@/lib/billing/job-priority';
 
 interface WriteConfig {
   update_customers: boolean;
@@ -144,14 +145,17 @@ export async function POST(request: NextRequest) {
       console.log(`[Import Execute] Assigned owners to ${assignments.size} company groups`);
     }
 
-    // Enqueue BullMQ job
+    // Enqueue BullMQ job with priority based on subscription tier
     console.log('[Import Execute] Enqueueing import job...');
+    const priority = await getJobPriority(ctx.orgId);
     const job = await importQueue.add('event-list-import', {
       importId: session_id,
       orgId: ctx.orgId,
       writeConfig: write_config,
       hubspotList: hubspot_list,
       ownerAssignment: ownerAssignmentResult,
+    }, {
+      priority,
     });
 
     // Update import session

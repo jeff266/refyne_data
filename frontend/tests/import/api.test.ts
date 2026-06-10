@@ -40,6 +40,7 @@ vi.mock('@/lib/features/flags', () => ({
 
 vi.mock('@/lib/db/admin-client', () => ({
   supabaseAdmin: mockSupabaseAdmin,
+  createServiceClient: () => mockSupabaseAdmin,
 }));
 
 vi.mock('@/lib/queue/import-queue', () => ({
@@ -349,6 +350,21 @@ describe('POST /api/import/execute', () => {
           update: () => ({ eq: vi.fn().mockResolvedValue({ error: null }) }),
         };
       }
+      if (table === 'org_billing') {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  subscription_tier: 'scale',
+                  subscription_status: 'active',
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
       return {};
     });
 
@@ -375,7 +391,11 @@ describe('POST /api/import/execute', () => {
     const body = await response.json();
     expect(body.job_id).toBe('job-456');
     expect(body.import_id).toBe('session-123');
-    expect(mockImportQueue.add).toHaveBeenCalledWith('event-list-import', expect.any(Object));
+    expect(mockImportQueue.add).toHaveBeenCalledWith(
+      'event-list-import',
+      expect.any(Object),
+      expect.objectContaining({ priority: expect.any(Number) })
+    );
   });
 
   it('should enforce beta gate', async () => {

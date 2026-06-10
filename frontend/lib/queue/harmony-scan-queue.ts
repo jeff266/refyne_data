@@ -8,6 +8,7 @@
 
 import { Queue, Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
+import { startStalledJobMonitoring, stopStalledJobMonitoring } from './stalled-job-detector';
 
 export interface HarmonyScanJobData {
   jobId: string;
@@ -22,6 +23,7 @@ export interface HarmonyScanJobData {
 
 let harmonyScanQueue: Queue<HarmonyScanJobData> | null = null;
 let redisConnection: IORedis | null = null;
+let harmonyScanMonitoringInterval: NodeJS.Timeout | null = null;
 
 /**
  * Get or create the harmony scan queue
@@ -70,7 +72,12 @@ export async function enqueueHarmonyScan(
   }
 
   try {
+    // Get job priority based on org's subscription tier
+    const { getJobPriority } = await import('@/lib/billing/job-priority');
+    const priority = await getJobPriority(data.orgId);
+
     const job = await queue.add('scan', data, {
+      priority,
       attempts: 3,
       backoff: {
         type: 'exponential',
@@ -134,6 +141,10 @@ export function createHarmonyScanWorker(
     });
 
     console.log('[HarmonyScanWorker] Worker started');
+
+    // Start stalled job monitoring
+    harmonyScanMonitoringInterval = startStalledJobMonitoring(worker, 'Harmony Scan Worker');
+
     return worker;
   } catch (error) {
     console.error('[HarmonyScanWorker] Failed to create worker:', error);
@@ -142,9 +153,21 @@ export function createHarmonyScanWorker(
 }
 
 /**
+ * Stop the harmony scan worker monitoring
+ */
+export function stopHarmonyScanMonitoring() {
+  if (harmonyScanMonitoringInterval) {
+    stopStalledJobMonitoring(harmonyScanMonitoringInterval, 'Harmony Scan Worker');
+    harmonyScanMonitoringInterval = null;
+  }
+}
+
+/**
  * Close the queue connection gracefully
  */
 export async function closeHarmonyScanQueue() {
+  stopHarmonyScanMonitoring();
+
   if (harmonyScanQueue) {
     await harmonyScanQueue.close();
     harmonyScanQueue = null;

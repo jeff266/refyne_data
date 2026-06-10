@@ -7,6 +7,8 @@
 
 import { Queue, Worker, Job } from 'bullmq';
 import { createRedisConnection, isRedisConfigured } from './redis';
+import { startStalledJobMonitoring, stopStalledJobMonitoring } from './stalled-job-detector';
+import { withHubSpotRateLimit } from '../hubspot/shared-portal-rate-limiter';
 import { supabase } from '../db/supabase';
 import { getAccessToken } from '../hubspot/get-access-token';
 import { HubSpotClient } from '../hubspot/client';
@@ -93,6 +95,7 @@ export interface EnrichmentJobResult {
 
 let enrichmentQueue: Queue | null = null;
 let enrichmentWorker: Worker | null = null;
+let enrichmentMonitoringInterval: NodeJS.Timeout | null = null;
 
 /**
  * Get or create the enrichment queue.
@@ -126,7 +129,7 @@ export function getEnrichmentQueue(): Queue | null {
 }
 
 /**
- * Enqueue an enrichment job.
+ * Enqueue an enrichment job with priority based on subscription tier.
  */
 export async function enqueueEnrichmentJob(
   data: EnrichmentJobData
@@ -136,7 +139,11 @@ export async function enqueueEnrichmentJob(
     return { queued: false, reason: 'Queue not configured' };
   }
 
-  const job = await queue.add('enrich', data);
+  // Get job priority based on org's subscription tier
+  const { getJobPriority } = await import('@/lib/billing/job-priority');
+  const priority = await getJobPriority(data.orgId);
+
+  const job = await queue.add('enrich', data, { priority });
   return { queued: true, jobId: job.id };
 }
 
@@ -178,6 +185,9 @@ export function startEnrichmentWorker(): Worker | null {
 
   console.log(`[Enrichment Worker] Started with concurrency ${WORKER_CONCURRENCY}`);
 
+  // Start stalled job monitoring
+  enrichmentMonitoringInterval = startStalledJobMonitoring(enrichmentWorker, 'Enrichment Worker');
+
   return enrichmentWorker;
 }
 
@@ -185,6 +195,11 @@ export function startEnrichmentWorker(): Worker | null {
  * Stop the enrichment worker.
  */
 export async function stopEnrichmentWorker(): Promise<void> {
+  if (enrichmentMonitoringInterval) {
+    stopStalledJobMonitoring(enrichmentMonitoringInterval, 'Enrichment Worker');
+    enrichmentMonitoringInterval = null;
+  }
+
   if (enrichmentWorker) {
     await enrichmentWorker.close();
     enrichmentWorker = null;
@@ -230,7 +245,7 @@ async function processEnrichmentJob(
     const hubspot = new HubSpotClient(accessToken, connection.portal_id);
 
     // Fetch companies based on source config
-    const companies = await fetchCompanies(hubspot, source, fields, record_limit);
+    const companies = await fetchCompanies(hubspot, connection.portal_id, source, fields, record_limit);
 
     console.log(`[Enrichment Job] Fetched ${companies.length} companies to enrich`);
 
@@ -445,6 +460,7 @@ async function processEnrichmentJob(
  */
 async function fetchCompanies(
   hubspot: HubSpotClient,
+  portalId: string,
   source: EnrichmentJobData['source'],
   fields: string[],
   limit: number
@@ -479,18 +495,21 @@ async function fetchCompanies(
       sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }],
     };
 
-    const response = await hubspot.request<{
-      results: Array<{
-        id: string;
-        properties: Record<string, string | null>;
-      }>;
-    }>(
-      '/crm/v3/objects/companies/search',
-      {
-        method: 'POST',
-        body: JSON.stringify(searchRequest),
-      },
-      true
+    const response = await withHubSpotRateLimit(
+      portalId,
+      () => hubspot.request<{
+        results: Array<{
+          id: string;
+          properties: Record<string, string | null>;
+        }>;
+      }>(
+        '/crm/v3/objects/companies/search',
+        {
+          method: 'POST',
+          body: JSON.stringify(searchRequest),
+        },
+        true
+      )
     );
 
     let results = response.results.map((r) => ({
@@ -526,18 +545,21 @@ async function fetchCompanies(
       sorts: [{ propertyName: 'hs_lastmodifieddate', direction: 'DESCENDING' }],
     };
 
-    const response = await hubspot.request<{
-      results: Array<{
-        id: string;
-        properties: Record<string, string | null>;
-      }>;
-    }>(
-      '/crm/v3/objects/companies/search',
-      {
-        method: 'POST',
-        body: JSON.stringify(searchRequest),
-      },
-      true
+    const response = await withHubSpotRateLimit(
+      portalId,
+      () => hubspot.request<{
+        results: Array<{
+          id: string;
+          properties: Record<string, string | null>;
+        }>;
+      }>(
+        '/crm/v3/objects/companies/search',
+        {
+          method: 'POST',
+          body: JSON.stringify(searchRequest),
+        },
+        true
+      )
     );
 
     companies.push(
@@ -774,7 +796,7 @@ export function getApplyQueue(): Queue | null {
 }
 
 /**
- * Enqueue an apply job.
+ * Enqueue an apply job with priority based on subscription tier.
  */
 export async function enqueueApplyJob(
   data: ApplyJobData
@@ -784,7 +806,11 @@ export async function enqueueApplyJob(
     return { queued: false, reason: 'Queue not configured' };
   }
 
-  const job = await queue.add('apply', data);
+  // Get job priority based on org's subscription tier
+  const { getJobPriority } = await import('@/lib/billing/job-priority');
+  const priority = await getJobPriority(data.orgId);
+
+  const job = await queue.add('apply', data, { priority });
   return { queued: true, jobId: job.id };
 }
 

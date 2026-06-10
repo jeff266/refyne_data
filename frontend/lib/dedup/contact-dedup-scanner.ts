@@ -7,6 +7,8 @@
 
 import { Queue, Worker, Job } from 'bullmq';
 import { createRedisConnection, isRedisConfigured } from '../queue/redis';
+import { startStalledJobMonitoring, stopStalledJobMonitoring } from '../queue/stalled-job-detector';
+import { withHubSpotRateLimit } from '../hubspot/shared-portal-rate-limiter';
 import { supabase, isSupabaseConfigured } from '../db/supabase';
 import { createHubSpotClient } from '../hubspot/client';
 import { evaluateContactPair, type ContactProperties } from './contact-signals';
@@ -65,6 +67,7 @@ export interface ContactDedupScanResult {
 
 let scanQueue: Queue<ContactDedupScanJobData, ContactDedupScanResult> | null = null;
 let scanWorker: Worker<ContactDedupScanJobData, ContactDedupScanResult> | null = null;
+let contactScanMonitoringInterval: NodeJS.Timeout | null = null;
 
 /**
  * Get or create the contact dedup scan queue.
@@ -138,11 +141,15 @@ export async function enqueueContactDedupScan(
 
   const jobId = `contact-dedup:${orgId}:${run.id}`;
 
+  // Get job priority based on org's subscription tier
+  const { getJobPriority } = await import('@/lib/billing/job-priority');
+  const priority = await getJobPriority(orgId);
+
   try {
     const job = await queue.add(
       'contact-dedup-scan',
       { orgId, accessToken, connectionId, initiatedBy },
-      { jobId }
+      { jobId, priority }
     );
 
     return { queued: true, jobId: job.id, runId: run.id };
@@ -173,15 +180,18 @@ async function fetchAllContacts(
   let after: string | undefined;
 
   do {
-    const response = await client.request<{
-      results: Array<{
-        id: string;
-        properties: Record<string, string | null>;
-      }>;
-      paging?: { next?: { after: string } };
-    }>(
-      `/crm/v3/objects/contacts?properties=${CONTACT_PROPERTIES.join(',')}&limit=100${after ? `&after=${after}` : ''}`,
-      { method: 'GET' }
+    const response = await withHubSpotRateLimit(
+      portalId,
+      () => client.request<{
+        results: Array<{
+          id: string;
+          properties: Record<string, string | null>;
+        }>;
+        paging?: { next?: { after: string } };
+      }>(
+        `/crm/v3/objects/contacts?properties=${CONTACT_PROPERTIES.join(',')}&limit=100${after ? `&after=${after}` : ''}`,
+        { method: 'GET' }
+      )
     );
 
     for (const contact of response.results) {
@@ -493,6 +503,9 @@ export function startContactDedupScanWorker(): Worker<ContactDedupScanJobData, C
 
   console.log(`[Contact Dedup Worker] Started with concurrency=${WORKER_CONCURRENCY}`);
 
+  // Start stalled job monitoring
+  contactScanMonitoringInterval = startStalledJobMonitoring(scanWorker, 'Contact Dedup Worker');
+
   return scanWorker;
 }
 
@@ -500,6 +513,11 @@ export function startContactDedupScanWorker(): Worker<ContactDedupScanJobData, C
  * Stop the contact dedup scan worker.
  */
 export async function stopContactDedupScanWorker(): Promise<void> {
+  if (contactScanMonitoringInterval) {
+    stopStalledJobMonitoring(contactScanMonitoringInterval, 'Contact Dedup Worker');
+    contactScanMonitoringInterval = null;
+  }
+
   if (scanWorker) {
     await scanWorker.close();
     scanWorker = null;

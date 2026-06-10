@@ -7,6 +7,8 @@
 
 import { Queue, Worker, Job } from 'bullmq';
 import { createRedisConnection, isRedisConfigured } from '../queue/redis';
+import { startStalledJobMonitoring, stopStalledJobMonitoring } from '../queue/stalled-job-detector';
+import { withHubSpotRateLimit } from '../hubspot/shared-portal-rate-limiter';
 import { supabase, isSupabaseConfigured } from '../db/supabase';
 import { HubSpotClient, createHubSpotClient } from '../hubspot/client';
 import { evaluateCompanyPair, type CompanyProperties, normalizeDomain } from './company-signals';
@@ -71,6 +73,7 @@ export interface CompanyDedupScanResult {
 
 let scanQueue: Queue<CompanyDedupScanJobData, CompanyDedupScanResult> | null = null;
 let scanWorker: Worker<CompanyDedupScanJobData, CompanyDedupScanResult> | null = null;
+let scanMonitoringInterval: NodeJS.Timeout | null = null;
 
 /**
  * Get or create the company dedup scan queue.
@@ -130,11 +133,15 @@ export async function enqueueCompanyDedupScan(
 
   const jobId = `dedup-${objectType}:${orgId}:${Date.now()}`;
 
+  // Get job priority based on org's subscription tier
+  const { getJobPriority } = await import('@/lib/billing/job-priority');
+  const priority = await getJobPriority(orgId);
+
   try {
     const job = await queue.add(
       'company-dedup-scan',
       { orgId, connectionId, initiatedBy, forceFullScan, objectType },
-      { jobId }
+      { jobId, priority }
     );
 
     return { queued: true, jobId: job.id };
@@ -206,16 +213,19 @@ async function fetchAllCompanies(
   let estimatedTotal = 0;
 
   do {
-    const response = await client.request<{
-      results: Array<{
-        id: string;
-        properties: Record<string, string | null>;
-      }>;
-      paging?: { next?: { after: string } };
-      total?: number;
-    }>(
-      `/crm/v3/objects/companies?properties=${COMPANY_PROPERTIES.join(',')}&limit=100${after ? `&after=${after}` : ''}`,
-      { method: 'GET' }
+    const response = await withHubSpotRateLimit(
+      portalId,
+      () => client.request<{
+        results: Array<{
+          id: string;
+          properties: Record<string, string | null>;
+        }>;
+        paging?: { next?: { after: string } };
+        total?: number;
+      }>(
+        `/crm/v3/objects/companies?properties=${COMPANY_PROPERTIES.join(',')}&limit=100${after ? `&after=${after}` : ''}`,
+        { method: 'GET' }
+      )
     );
 
     for (const company of response.results) {
@@ -816,6 +826,9 @@ export function startCompanyDedupScanWorker(): Worker<CompanyDedupScanJobData, C
 
   console.log(`[Company Dedup Worker] Started with concurrency=${WORKER_CONCURRENCY}`);
 
+  // Start stalled job monitoring
+  scanMonitoringInterval = startStalledJobMonitoring(scanWorker, 'Company Dedup Worker');
+
   return scanWorker;
 }
 
@@ -823,6 +836,11 @@ export function startCompanyDedupScanWorker(): Worker<CompanyDedupScanJobData, C
  * Stop the company dedup scan worker.
  */
 export async function stopCompanyDedupScanWorker(): Promise<void> {
+  if (scanMonitoringInterval) {
+    stopStalledJobMonitoring(scanMonitoringInterval, 'Company Dedup Worker');
+    scanMonitoringInterval = null;
+  }
+
   if (scanWorker) {
     await scanWorker.close();
     scanWorker = null;

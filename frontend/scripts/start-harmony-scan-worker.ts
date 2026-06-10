@@ -9,7 +9,7 @@
  *   UPSTASH_REDIS_URL=rediss://... npx tsx scripts/start-harmony-scan-worker.ts
  */
 
-import { createHarmonyScanWorker } from '../lib/queue/harmony-scan-queue';
+import { createHarmonyScanWorker, stopHarmonyScanMonitoring } from '../lib/queue/harmony-scan-queue';
 import { processHarmonyScan } from '../lib/queue/harmony-scan-processor';
 
 async function main() {
@@ -45,6 +45,7 @@ async function main() {
   // Graceful shutdown
   const gracefulShutdown = async (signal: string) => {
     console.log(`\n${signal} received, shutting down gracefully...`);
+    stopHarmonyScanMonitoring();
     await worker.close();
     console.log('Worker closed');
     process.exit(0);

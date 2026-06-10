@@ -10,6 +10,8 @@ import { createRedisConnection, isRedisConfigured } from './redis';
 import { supabaseAdmin } from '../db/admin-client';
 import { getAccessToken } from '../hubspot/get-access-token';
 import { HubSpotClient } from '../hubspot/client';
+import { startStalledJobMonitoring, stopStalledJobMonitoring } from './stalled-job-detector';
+import { withHubSpotRateLimit } from '../hubspot/shared-portal-rate-limiter';
 
 // ─────────────────────────────────────────────────────────────
 // Queue Configuration
@@ -74,6 +76,7 @@ export interface ImportJobResult {
 
 let importQueueInstance: Queue | null = null;
 let importWorkerInstance: Worker | null = null;
+let importMonitoringInterval: NodeJS.Timeout | null = null;
 
 /**
  * Get or create the import queue.
@@ -149,6 +152,9 @@ export function startImportWorker(): Worker | null {
 
   console.log(`[Import Worker] Started with concurrency ${WORKER_CONCURRENCY}`);
 
+  // Start stalled job monitoring
+  importMonitoringInterval = startStalledJobMonitoring(importWorkerInstance, 'Import Worker');
+
   return importWorkerInstance;
 }
 
@@ -156,6 +162,11 @@ export function startImportWorker(): Worker | null {
  * Stop the import worker.
  */
 export async function stopImportWorker(): Promise<void> {
+  if (importMonitoringInterval) {
+    stopStalledJobMonitoring(importMonitoringInterval, 'Import Worker');
+    importMonitoringInterval = null;
+  }
+
   if (importWorkerInstance) {
     await importWorkerInstance.close();
     importWorkerInstance = null;
@@ -219,16 +230,19 @@ async function processImportJob(job: Job<ImportJobData>): Promise<ImportJobResul
     if (hubspotList?.enabled) {
       console.log(`[Import Job] Creating HubSpot list: ${hubspotList.list_name}`);
 
-      const listResponse = await hubspot.request<{ id: string }>(
-        '/crm/v3/lists',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            name: hubspotList.list_name,
-            objectTypeId: '0-1', // Contacts
-            processingType: 'MANUAL',
-          }),
-        }
+      const listResponse = await withHubSpotRateLimit(
+        connection.portal_id,
+        () => hubspot.request<{ id: string }>(
+          '/crm/v3/lists',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              name: hubspotList.list_name,
+              objectTypeId: '0-1', // Contacts
+              processingType: 'MANUAL',
+            }),
+          }
+        )
       );
 
       listId = listResponse.id;
@@ -319,12 +333,15 @@ async function processImportJob(job: Job<ImportJobData>): Promise<ImportJobResul
         const batch = contactsToCreate.slice(i, i + HUBSPOT_BATCH_SIZE);
         const batchBuckets = newContactBuckets.slice(i, i + HUBSPOT_BATCH_SIZE);
 
-        const createResponse = await hubspot.request<{ results: Array<{ id: string }> }>(
-          '/crm/v3/objects/contacts/batch/create',
-          {
-            method: 'POST',
-            body: JSON.stringify({ inputs: batch }),
-          }
+        const createResponse = await withHubSpotRateLimit(
+          connection.portal_id,
+          () => hubspot.request<{ results: Array<{ id: string }> }>(
+            '/crm/v3/objects/contacts/batch/create',
+            {
+              method: 'POST',
+              body: JSON.stringify({ inputs: batch }),
+            }
+          )
         );
 
         createdCount += createResponse.results.length;
@@ -350,12 +367,15 @@ async function processImportJob(job: Job<ImportJobData>): Promise<ImportJobResul
       for (let i = 0; i < contactsToUpdate.length; i += HUBSPOT_BATCH_SIZE) {
         const batch = contactsToUpdate.slice(i, i + HUBSPOT_BATCH_SIZE);
 
-        await hubspot.request(
-          '/crm/v3/objects/contacts/batch/update',
-          {
-            method: 'POST',
-            body: JSON.stringify({ inputs: batch }),
-          }
+        await withHubSpotRateLimit(
+          connection.portal_id,
+          () => hubspot.request(
+            '/crm/v3/objects/contacts/batch/update',
+            {
+              method: 'POST',
+              body: JSON.stringify({ inputs: batch }),
+            }
+          )
         );
 
         updatedCount += batch.length;
@@ -372,14 +392,17 @@ async function processImportJob(job: Job<ImportJobData>): Promise<ImportJobResul
         for (let i = 0; i < contactsForList.length; i += HUBSPOT_BATCH_SIZE) {
           const batch = contactsForList.slice(i, i + HUBSPOT_BATCH_SIZE);
 
-          await hubspot.request(
-            `/crm/v3/lists/${listId}/memberships/add`,
-            {
-              method: 'POST',
-              body: JSON.stringify({
-                recordIdsToAdd: batch,
-              }),
-            }
+          await withHubSpotRateLimit(
+            connection.portal_id,
+            () => hubspot.request(
+              `/crm/v3/lists/${listId}/memberships/add`,
+              {
+                method: 'POST',
+                body: JSON.stringify({
+                  recordIdsToAdd: batch,
+                }),
+              }
+            )
           );
 
           console.log(`[Import] List membership batch ${i / HUBSPOT_BATCH_SIZE + 1}: ${batch.length} contacts added`);

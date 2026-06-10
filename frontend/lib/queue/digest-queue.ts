@@ -7,6 +7,7 @@
 
 import { Queue, Worker, Job } from 'bullmq';
 import { createRedisConnection, isRedisConfigured } from './redis';
+import { startStalledJobMonitoring, stopStalledJobMonitoring } from './stalled-job-detector';
 import { processDigestJob } from '../jobs/always-on-digest';
 
 // ─────────────────────────────────────────────────────────────
@@ -59,6 +60,7 @@ export interface DigestJobResult {
 
 let digestQueue: Queue<DigestJobData, DigestJobResult> | null = null;
 let digestWorker: Worker<DigestJobData, DigestJobResult> | null = null;
+let digestMonitoringInterval: NodeJS.Timeout | null = null;
 
 /**
  * Get or create the digest queue.
@@ -120,9 +122,15 @@ export async function enqueueDigestJob(
     ? `${orgId}:${connectionId}:${timestamp}`
     : `${orgId}:all:${timestamp}`;
 
+  // System-initiated (nightly cron), but still apply priority
+  // so paid org digests run before trial org digests
+  const { getJobPriority } = await import('@/lib/billing/job-priority');
+  const priority = await getJobPriority(orgId);
+
   try {
     const job = await queue.add('process-digest', jobData, {
       jobId,
+      priority,
     });
 
     return { queued: true, jobId: job.id };
@@ -181,6 +189,9 @@ export function startDigestWorker(): Worker<DigestJobData, DigestJobResult> | nu
 
   console.log(`Digest worker started with concurrency=${WORKER_CONCURRENCY}`);
 
+  // Start stalled job monitoring
+  digestMonitoringInterval = startStalledJobMonitoring(digestWorker, 'Digest Worker');
+
   return digestWorker;
 }
 
@@ -188,6 +199,11 @@ export function startDigestWorker(): Worker<DigestJobData, DigestJobResult> | nu
  * Stop the digest worker gracefully.
  */
 export async function stopDigestWorker(): Promise<void> {
+  if (digestMonitoringInterval) {
+    stopStalledJobMonitoring(digestMonitoringInterval, 'Digest Worker');
+    digestMonitoringInterval = null;
+  }
+
   if (digestWorker) {
     await digestWorker.close();
     digestWorker = null;

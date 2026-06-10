@@ -10,6 +10,8 @@
 
 import { Worker, Job, Queue } from 'bullmq';
 import { createRedisConnection, isRedisConfigured } from './redis';
+import { startStalledJobMonitoring, stopStalledJobMonitoring } from './stalled-job-detector';
+import { withHubSpotRateLimit } from '../hubspot/shared-portal-rate-limiter';
 import { supabase } from '../db/supabase';
 import { getAccessToken } from '../hubspot/get-access-token';
 import { HubSpotClient } from '../hubspot/client';
@@ -555,9 +557,12 @@ export function startNormalizeWorker() {
         const batch = companyEntries.slice(i, i + batchSize);
 
         try {
-          const { results, errors } = await hubspot.batchUpdateRecords(
-            objectType,
-            batch.map(([id, properties]) => ({ id, properties }))
+          const { results, errors } = await withHubSpotRateLimit(
+            portalId,
+            () => hubspot.batchUpdateRecords(
+              objectType,
+              batch.map(([id, properties]) => ({ id, properties }))
+            )
           );
 
           // Track which records failed by index
@@ -719,6 +724,9 @@ export function startNormalizeWorker() {
       );
     }
   });
+
+  // Start stalled job monitoring
+  startStalledJobMonitoring(worker, 'Normalize Worker');
 
   return worker;
 }

@@ -10,6 +10,7 @@ import CascadeEditorModal from '@/components/admin/CascadeEditorModal';
 import AdminSettings from '@/components/admin/AdminSettings';
 import ProviderShowdown from '@/components/admin/ProviderShowdown';
 import ProviderSetupWizard from '@/components/admin/ProviderSetupWizard';
+import QueueStats from '@/components/admin/QueueStats';
 import type { CascadeTrigger } from '@/types';
 
 interface Segment {
@@ -421,6 +422,10 @@ export default function AdminPage() {
               onReload={fetchConfig}
               onSave={saveConfig}
             />
+
+            <div className="mt-8">
+              <QueueStats />
+            </div>
           </div>
         )}
 

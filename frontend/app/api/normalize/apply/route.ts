@@ -10,6 +10,7 @@ import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 import { consumeUsage } from '@/lib/billing/enforce';
 import { requireAdmin } from '@/lib/auth/roles';
 import { addToRegistry, type RegistryType } from '@/lib/names/registry';
+import { getJobPriority } from '@/lib/billing/job-priority';
 
 interface SelectedChange {
   companyId: string;
@@ -209,7 +210,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Enqueue the normalize job
+    // Enqueue the normalize job with priority based on subscription tier
+    const priority = await getJobPriority(ctx.orgId);
     const job = await getNormalizeQueue().add('normalize-apply', {
       runId: run.id,
       orgId: ctx.orgId,
@@ -218,6 +220,8 @@ export async function POST(request: NextRequest) {
       harmonyIds: body.harmonyIds || [],
       selectedChanges: body.selectedChanges ?? [],
       objectType: body.objectType ?? 'company',
+    }, {
+      priority,
     });
 
     console.log(`[Normalize Apply] Enqueued job ${job.id} for run ${run.id}`);
