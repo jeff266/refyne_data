@@ -58,6 +58,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Invite] Sent ${sent}/${invites.length} invitations for org ${ctx.orgId}`);
 
+    if (failed.length > 0) {
+      console.error('[Invite] Failed invitations:', failed);
+    }
+
     return NextResponse.json({ sent, failed });
   } catch (error) {
     console.error('[Invite] Error:', error);

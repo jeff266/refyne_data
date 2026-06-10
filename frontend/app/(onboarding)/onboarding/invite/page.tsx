@@ -102,7 +102,9 @@ export default function InvitePage() {
 
       // Show success and advance
       if (data.failed && data.failed.length > 0) {
-        setError(`Sent ${data.sent} invitations. ${data.failed.length} failed.`);
+        // Show specific error for first failed invitation
+        const firstError = data.failed[0];
+        setError(`Sent ${data.sent} invitations. Failed to invite ${firstError.email}: ${firstError.error}`);
         // Remove successful ones from pending
         const failedEmails = data.failed.map((f: any) => f.email);
         setPending(pending.filter((inv) => failedEmails.includes(inv.email)));
