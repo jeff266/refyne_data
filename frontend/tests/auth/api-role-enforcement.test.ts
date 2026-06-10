@@ -15,6 +15,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
+// Mock rate-limit module to avoid Redis initialization
+vi.mock('@/lib/api/rate-limit', () => ({
+  rateLimiters: {
+    invite: {},
+    expensive: {},
+    upload: {},
+    requests: {},
+  },
+  checkRateLimit: vi.fn().mockResolvedValue(null), // Always allow requests in tests
+}));
+
 // Mock getOrgContext to return different roles
 const mockGetOrgContext = vi.fn();
 

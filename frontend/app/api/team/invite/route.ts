@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { clerkClient } from '@clerk/nextjs/server';
+import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,10 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  // Rate limiting: prevent invitation spam
+  const rateLimitResult = await checkRateLimit(rateLimiters.invite, ctx.orgId);
+  if (rateLimitResult) return rateLimitResult;
 
   try {
     const body: InviteRequest = await request.json();

@@ -6,6 +6,7 @@ import { seedHarmonyLibrary } from '@/lib/harmonies/seed-library';
 import { track } from '@/lib/telemetry/track';
 import { logAuditEvent } from '@/lib/audit/logger';
 import { AUDIT_ACTIONS } from '@/lib/audit/actions';
+import { z } from 'zod';
 
 /**
  * GET /api/harmonies
@@ -118,6 +119,18 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const createHarmonySchema = z.object({
+  name: z.string().min(1, 'name is required'),
+  description: z.string().optional(),
+  category: z.enum(['company', 'contact', 'deal']).optional(),
+  field: z.string().min(1, 'field is required'),
+  approach: z.string().optional(),
+  object_type: z.enum(['company', 'contact', 'deal']).optional(),
+  transform_type: z.string().optional(),
+  transform_function: z.string().optional(),
+  write_policy: z.string().optional(),
+});
+
 /**
  * POST /api/harmonies
  *
@@ -141,7 +154,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    // Validate request body
+    const rawBody = await request.json();
+    const validation = createHarmonySchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const body = validation.data;
     const {
       name,
       description,
@@ -156,7 +178,7 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     const objectTypeValue = object_type || category;
-    if (!name || !field || !objectTypeValue) {
+    if (!objectTypeValue) {
       return NextResponse.json(
         { error: 'Missing required fields: name, field, object_type' },
         { status: 400 }

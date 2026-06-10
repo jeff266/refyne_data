@@ -12,6 +12,13 @@ import { logAuditEvent } from '@/lib/audit/logger';
 import { AUDIT_ACTIONS } from '@/lib/audit/actions';
 import { consumeUsage } from '@/lib/billing/enforce';
 import { requireAdmin } from '@/lib/auth/roles';
+import { z } from 'zod';
+
+const mergeClusterSchema = z.object({
+  masterId: z.string().min(1, 'masterId is required'),
+  fieldSelections: z.record(z.string()).optional(),
+  absorb: z.boolean().optional(),
+});
 
 interface MergeClusterRequest {
   masterId: string;
@@ -61,7 +68,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const { id } = params;
     const orgId = ctx.orgId;
-    const body = (await request.json()) as MergeClusterRequest;
+
+    // Validate request body
+    const rawBody = await request.json();
+    const validation = mergeClusterSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid request', details: validation.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    const body = validation.data as MergeClusterRequest;
 
     // Get cluster
     const { data: cluster, error: clusterError } = await supabase

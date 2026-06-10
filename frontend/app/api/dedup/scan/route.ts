@@ -4,6 +4,7 @@ import { requireFeature, parseFeatureGateError } from '@/lib/billing/check-featu
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 import { enqueueCompanyDedupScan } from '@/lib/dedup/company-dedup-scanner';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
+import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
 
 /**
  * POST /api/dedup/scan
@@ -32,6 +33,10 @@ export async function POST(request: NextRequest) {
     }
     throw error;
   }
+
+  // Rate limiting: prevent dedup scan spam
+  const rateLimitResult = await checkRateLimit(rateLimiters.expensive, ctx.orgId);
+  if (rateLimitResult) return rateLimitResult;
 
   try {
     // Parse request body for optional forceFullScan and objectType parameters

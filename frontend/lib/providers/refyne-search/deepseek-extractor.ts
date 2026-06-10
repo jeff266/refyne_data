@@ -12,7 +12,7 @@ if (!FIREWORKS_API_KEY) {
   console.error('[Refyne Search] CRITICAL: FIREWORKS_API_KEY or REFYNE_FIREWORKS_KEY not set - extraction disabled');
   console.error('[Refyne Search] Set FIREWORKS_API_KEY in production or REFYNE_FIREWORKS_KEY for local dev');
 } else {
-  console.log(`[Refyne Search] Fireworks API key configured (${FIREWORKS_API_KEY.substring(0, 8)}...)`);
+  console.log('[Refyne Search] Fireworks API key:', FIREWORKS_API_KEY ? 'configured' : 'missing');
 }
 // DeepSeek V4 Flash - fastest and cheapest DeepSeek model on Fireworks
 const DEEPSEEK_MODEL = 'accounts/fireworks/models/deepseek-v4-flash';

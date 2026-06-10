@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, requireAdmin, authError } from '@/lib/auth/clerk-helpers';
 import { supabase } from '@/lib/db/supabase';
 import { getStripeClient } from '@/lib/billing/stripe-client';
+import { z } from 'zod';
+
+const checkoutSchema = z.object({
+  priceId: z.string().min(1, 'priceId is required'),
+  interval: z.enum(['month', 'year']),
+  addAlwaysOn: z.boolean().optional().default(false),
+  successUrl: z.string().url().optional(),
+  cancelUrl: z.string().url().optional(),
+});
 
 /**
  * POST /api/billing/checkout
@@ -26,21 +35,23 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const {
-      priceId,
-      interval,
-      addAlwaysOn = false,
-      successUrl,
-      cancelUrl,
-    } = body;
-
-    if (!priceId || !interval) {
+    // Validate request body
+    const rawBody = await request.json();
+    const validation = checkoutSchema.safeParse(rawBody);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'priceId and interval are required' },
+        { error: 'Invalid request', details: validation.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
+    const body = validation.data;
+    const {
+      priceId,
+      interval,
+      addAlwaysOn,
+      successUrl,
+      cancelUrl,
+    } = body;
 
     // Get or create Stripe customer
     const { data: entitlements } = await supabase

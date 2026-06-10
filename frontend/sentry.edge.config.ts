@@ -9,4 +9,49 @@ Sentry.init({
 
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
+
+  // Don't send PII with user context
+  sendDefaultPii: false,
+
+  // Scrub sensitive data before sending to Sentry
+  beforeSend(event) {
+    // Remove sensitive data from request bodies
+    if (event.request?.data) {
+      const sensitiveKeys = [
+        'access_token', 'refresh_token', 'api_key',
+        'api_key_enc', 'password', 'secret',
+        'token', 'key', 'authorization'
+      ];
+
+      if (typeof event.request.data === 'object') {
+        for (const key of sensitiveKeys) {
+          if (key in event.request.data) {
+            event.request.data[key] = '[REDACTED]';
+          }
+        }
+      }
+    }
+
+    // Remove authorization headers
+    if (event.request?.headers) {
+      if (event.request.headers['authorization']) {
+        event.request.headers['authorization'] = '[REDACTED]';
+      }
+      if (event.request.headers['cookie']) {
+        event.request.headers['cookie'] = '[REDACTED]';
+      }
+    }
+
+    // Scrub extra context for sensitive keys
+    if (event.extra) {
+      const sensitiveKeys = ['token', 'key', 'secret', 'password'];
+      for (const key of Object.keys(event.extra)) {
+        if (sensitiveKeys.some(s => key.toLowerCase().includes(s))) {
+          event.extra[key] = '[REDACTED]';
+        }
+      }
+    }
+
+    return event;
+  },
 });

@@ -11,6 +11,7 @@ import { consumeUsage } from '@/lib/billing/enforce';
 import { requireAdmin } from '@/lib/auth/roles';
 import { addToRegistry, type RegistryType } from '@/lib/names/registry';
 import { getJobPriority } from '@/lib/billing/job-priority';
+import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
 
 interface SelectedChange {
   companyId: string;
@@ -48,6 +49,10 @@ export async function POST(request: NextRequest) {
     if (e instanceof Response) return e;
     throw e;
   }
+
+  // Rate limiting: prevent normalization run spam
+  const rateLimitResult = await checkRateLimit(rateLimiters.expensive, ctx.orgId);
+  if (rateLimitResult) return rateLimitResult;
 
   // Feature gate: normalize
   try {

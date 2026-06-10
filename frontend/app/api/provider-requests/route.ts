@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabase, isSupabaseConfigured } from '@/lib/db/supabase';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
+import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
 
 /**
  * POST /api/provider-requests
@@ -15,6 +16,10 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
+
+  // Rate limiting: prevent provider request spam
+  const rateLimitResult = await checkRateLimit(rateLimiters.requests, ctx.orgId);
+  if (rateLimitResult) return rateLimitResult;
 
   if (!isSupabaseConfigured() || !supabase) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });

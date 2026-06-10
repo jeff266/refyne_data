@@ -5,6 +5,7 @@ import { isBetaFeatureEnabled } from '@/lib/features/flags';
 import { FEATURE_FLAGS } from '@/lib/features/flags';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import Papa from 'papaparse';
+import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_ROWS = 10000;
@@ -39,6 +40,10 @@ export async function POST(request: NextRequest) {
   if (!betaEnabled) {
     return NextResponse.json({ error: 'feature_not_enabled' }, { status: 403 });
   }
+
+  // Rate limiting: prevent CSV upload spam
+  const rateLimitResult = await checkRateLimit(rateLimiters.upload, ctx.orgId);
+  if (rateLimitResult) return rateLimitResult;
 
   if (!supabaseAdmin) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
