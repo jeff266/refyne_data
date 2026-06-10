@@ -6,7 +6,7 @@ import { captureWithOrgContext } from "@/lib/monitoring/sentry";
 import { Redis } from "@upstash/redis";
 
 // Initialize Redis from URL (extracts token from URL automatically)
-const redis = process.env.UPSTASH_REDIS_URL ? Redis.fromEnv() : null;
+const redis = process.env.UPSTASH_REDIS_REST_URL ? Redis.fromEnv() : null;
 
 interface SampleDataResponse {
   names: string[];

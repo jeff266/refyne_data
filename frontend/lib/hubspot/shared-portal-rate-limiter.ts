@@ -17,14 +17,14 @@ let hubspotLimiter: Ratelimit | null = null;
 
 function getHubSpotLimiter(): Ratelimit | null {
   // Skip rate limiting if Redis not configured (e.g., in tests)
-  if (!process.env.UPSTASH_REDIS_URL || !process.env.UPSTASH_REDIS_TOKEN) {
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
     return null;
   }
 
   if (!hubspotLimiter) {
     redis = new Redis({
-      url: process.env.UPSTASH_REDIS_URL,
-      token: process.env.UPSTASH_REDIS_TOKEN,
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
     });
 
     // Shared across ALL workers via same Redis instance

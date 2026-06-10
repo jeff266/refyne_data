@@ -23,7 +23,7 @@ import { Redis } from '@upstash/redis';
 import { randomUUID } from 'crypto';
 
 // Initialize Redis from URL (extracts token from URL automatically)
-const redis = process.env.UPSTASH_REDIS_URL
+const redis = process.env.UPSTASH_REDIS_REST_URL
   ? Redis.fromEnv()
   : null;
 
