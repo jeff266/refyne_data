@@ -35,8 +35,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No invites provided' }, { status: 400 });
     }
 
+    // Filter out self-invitations
+    const currentUserEmail = ctx.userEmail?.toLowerCase();
+    const filteredInvites = invites.filter(invite => {
+      if (currentUserEmail && invite.email.toLowerCase() === currentUserEmail) {
+        console.log(`[Invite] Blocked self-invitation attempt: ${invite.email}`);
+        return false;
+      }
+      return true;
+    });
+
+    if (filteredInvites.length === 0) {
+      return NextResponse.json({
+        error: 'cannot_invite_self',
+        message: 'You cannot invite yourself to the organization'
+      }, { status: 400 });
+    }
+
     const results = await Promise.allSettled(
-      invites.map(async (invite) => {
+      filteredInvites.map(async (invite) => {
         await clerkClient.organizations.createOrganizationInvitation({
           organizationId: ctx.orgId,
           inviterUserId: ctx.userId,
@@ -51,20 +68,31 @@ export async function POST(request: NextRequest) {
     const sent = results.filter((r) => r.status === 'fulfilled').length;
     const failed = results
       .filter((r) => r.status === 'rejected')
-      .map((r, i) => ({
-        email: invites[i].email,
-        error: r.status === 'rejected' ? r.reason.message : 'Unknown error',
-      }));
+      .map((r, i) => {
+        const reason = r.status === 'rejected' ? r.reason : null;
+        return {
+          email: filteredInvites[i].email,
+          error: reason?.errors?.[0]?.message || reason?.message || 'Unknown error',
+          code: reason?.errors?.[0]?.code || reason?.code,
+          details: reason?.errors?.[0]?.longMessage,
+        };
+      });
 
-    console.log(`[Invite] Sent ${sent}/${invites.length} invitations for org ${ctx.orgId}`);
+    console.log(`[Invite] Sent ${sent}/${filteredInvites.length} invitations for org ${ctx.orgId}`);
 
     if (failed.length > 0) {
-      console.error('[Invite] Failed invitations:', failed);
+      console.error('[Invite] Failed invitations with details:', failed);
     }
 
     return NextResponse.json({ sent, failed });
-  } catch (error) {
-    console.error('[Invite] Error:', error);
+  } catch (error: any) {
+    console.error('[Invite] Error details:', {
+      message: error?.message,
+      errors: error?.errors,
+      status: error?.status,
+      clerkTraceId: error?.clerkTraceId,
+      fullError: JSON.stringify(error, null, 2)
+    });
     return NextResponse.json(
       { error: 'Failed to send invitations' },
       { status: 500 }
