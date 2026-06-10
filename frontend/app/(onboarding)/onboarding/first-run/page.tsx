@@ -117,12 +117,13 @@ export default function FirstRunPage() {
         justifyContent: 'center',
         minHeight: 'calc(100vh - 64px)',
         padding: 32,
+        background: C.bg,
       }}
     >
       <div style={{ width: '100%', maxWidth: 640 }}>
         {/* Progress indicator */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <span style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.5)', fontWeight: 500 }}>
+          <span style={{ fontSize: 12, fontFamily: F.sans, color: C.text3, fontWeight: 500 }}>
             Step 5 of 6
           </span>
         </div>
@@ -133,7 +134,7 @@ export default function FirstRunPage() {
             fontSize: 32,
             fontFamily: 'Lora, serif',
             fontWeight: 600,
-            color: '#F9F8F5',
+            color: C.text,
             marginBottom: 12,
             textAlign: 'center',
           }}
@@ -143,8 +144,8 @@ export default function FirstRunPage() {
         <p
           style={{
             fontSize: 15,
-            fontFamily: "'Jost', system-ui, sans-serif",
-            color: 'rgba(249,248,245,0.7)',
+            fontFamily: F.sans,
+            color: C.text2,
             textAlign: 'center',
             marginBottom: 48,
             lineHeight: 1.6,
@@ -157,13 +158,13 @@ export default function FirstRunPage() {
           <div
             style={{
               padding: 64,
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: C.surface,
+              border: `1px solid ${C.border2}`,
               textAlign: 'center',
               marginBottom: 48,
             }}
           >
-            <div style={{ fontSize: 14, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontFamily: F.sans, color: C.text2, marginBottom: 16 }}>
               Scanning your records...
             </div>
             <div
@@ -171,7 +172,7 @@ export default function FirstRunPage() {
                 width: '100%',
                 maxWidth: 300,
                 height: 6,
-                background: 'rgba(255,255,255,0.1)',
+                background: C.border2,
                 overflow: 'hidden',
                 margin: '0 auto',
               }}
@@ -180,7 +181,7 @@ export default function FirstRunPage() {
                 style={{
                   height: '100%',
                   width: '60%',
-                  background: '#2E6BA8',
+                  background: C.indigo,
                   animation: 'progress 1.5s ease-in-out infinite',
                 }}
               />
@@ -192,16 +193,16 @@ export default function FirstRunPage() {
             <div
               style={{
                 padding: 48,
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: C.surface,
+                border: `1px solid ${C.border2}`,
                 textAlign: 'center',
                 marginBottom: 48,
               }}
             >
-              <div style={{ fontSize: 16, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#F9F8F5', marginBottom: 8 }}>
+              <div style={{ fontSize: 16, fontFamily: F.sans, fontWeight: 600, color: C.text, marginBottom: 8 }}>
                 We'll scan your records after setup
               </div>
-              <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>
+              <div style={{ fontSize: 13, fontFamily: F.sans, color: C.text2 }}>
                 Unable to preview changes right now. You can run normalization from the dashboard after completing setup.
               </div>
             </div>
@@ -214,9 +215,9 @@ export default function FirstRunPage() {
                   padding: '12px 32px',
                   fontSize: 14,
                   fontWeight: 600,
-                  fontFamily: "'Jost', system-ui, sans-serif",
-                  color: '#F9F8F5',
-                  background: '#2E6BA8',
+                  fontFamily: F.sans,
+                  color: C.text,
+                  background: C.indigo,
                   border: 'none',
                   cursor: 'pointer',
                 }}
@@ -231,32 +232,32 @@ export default function FirstRunPage() {
             <div
               style={{
                 padding: 24,
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: C.surface,
+                border: `1px solid ${C.border2}`,
                 marginBottom: 24,
               }}
             >
-              <div style={{ fontSize: 14, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#F9F8F5', marginBottom: 16 }}>
+              <div style={{ fontSize: 14, fontFamily: F.sans, fontWeight: 600, color: C.text, marginBottom: 16 }}>
                 Summary
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>
+                  <span style={{ fontSize: 13, fontFamily: F.sans, color: C.text2 }}>
                     {preview.summary.total_records.toLocaleString()} records scanned
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>Records with changes</span>
-                  <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8' }}>
+                  <span style={{ fontSize: 13, fontFamily: F.sans, color: C.text2 }}>Records with changes</span>
+                  <span style={{ fontSize: 13, fontFamily: F.sans, fontWeight: 600, color: C.indigo }}>
                     {preview.summary.records_with_changes.toLocaleString()}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>Total field changes</span>
-                  <span style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8' }}>
+                  <span style={{ fontSize: 13, fontFamily: F.sans, color: C.text2 }}>Total field changes</span>
+                  <span style={{ fontSize: 13, fontFamily: F.sans, fontWeight: 600, color: C.indigo }}>
                     {preview.summary.total_changes.toLocaleString()}
                   </span>
                 </div>
@@ -268,15 +269,15 @@ export default function FirstRunPage() {
               <div
                 style={{
                   padding: 16,
-                  background: 'rgba(46,107,168,0.15)',
-                  border: '1px solid rgba(46,107,168,0.3)',
+                  background: C.indigoDim,
+                  border: `1px solid ${C.indigoBrd}`,
                   marginBottom: 32,
                 }}
               >
-                <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#2E6BA8', marginBottom: 4 }}>
+                <div style={{ fontSize: 13, fontFamily: F.sans, fontWeight: 600, color: C.indigo, marginBottom: 4 }}>
                   Ready to enrich your records?
                 </div>
-                <div style={{ fontSize: 12, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)', lineHeight: 1.6 }}>
+                <div style={{ fontSize: 12, fontFamily: F.sans, color: C.text2, lineHeight: 1.6 }}>
                   After setup, head to Enrich to fill in missing company data.
                 </div>
               </div>
@@ -291,10 +292,10 @@ export default function FirstRunPage() {
                   padding: '12px 24px',
                   fontSize: 14,
                   fontWeight: 500,
-                  fontFamily: "'Jost', system-ui, sans-serif",
-                  color: '#F9F8F5',
+                  fontFamily: F.sans,
+                  color: C.text,
                   background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.2)',
+                  border: `1px solid ${C.border2}`,
                   cursor: isApplying ? 'not-allowed' : 'pointer',
                   opacity: isApplying ? 0.5 : 1,
                 }}
@@ -309,9 +310,9 @@ export default function FirstRunPage() {
                   padding: '12px 32px',
                   fontSize: 14,
                   fontWeight: 600,
-                  fontFamily: "'Jost', system-ui, sans-serif",
-                  color: '#F9F8F5',
-                  background: '#2E6BA8',
+                  fontFamily: F.sans,
+                  color: C.text,
+                  background: C.indigo,
                   border: 'none',
                   cursor: isApplying ? 'not-allowed' : 'pointer',
                   opacity: isApplying ? 0.4 : 1,
@@ -327,17 +328,17 @@ export default function FirstRunPage() {
             <div
               style={{
                 padding: 48,
-                background: 'rgba(34,197,94,0.15)',
-                border: '1px solid rgba(34,197,94,0.3)',
+                background: C.greenDim,
+                border: `1px solid ${C.greenBrd}`,
                 textAlign: 'center',
                 marginBottom: 48,
               }}
             >
-              <div style={{ fontSize: 48, marginBottom: 16, color: '#22C55E' }}>✓</div>
-              <div style={{ fontSize: 16, fontFamily: "'Jost', system-ui, sans-serif", fontWeight: 600, color: '#F9F8F5', marginBottom: 8 }}>
+              <div style={{ fontSize: 48, marginBottom: 16, color: C.green }}>✓</div>
+              <div style={{ fontSize: 16, fontFamily: F.sans, fontWeight: 600, color: C.text, marginBottom: 8 }}>
                 Your data looks clean!
               </div>
-              <div style={{ fontSize: 13, fontFamily: "'Jost', system-ui, sans-serif", color: 'rgba(249,248,245,0.7)' }}>
+              <div style={{ fontSize: 13, fontFamily: F.sans, color: C.text2 }}>
                 No changes needed at this time.
               </div>
             </div>
@@ -350,9 +351,9 @@ export default function FirstRunPage() {
                   padding: '12px 32px',
                   fontSize: 14,
                   fontWeight: 600,
-                  fontFamily: "'Jost', system-ui, sans-serif",
-                  color: '#F9F8F5',
-                  background: '#2E6BA8',
+                  fontFamily: F.sans,
+                  color: C.text,
+                  background: C.indigo,
                   border: 'none',
                   cursor: 'pointer',
                 }}
