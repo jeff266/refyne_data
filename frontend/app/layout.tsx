@@ -18,6 +18,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Jost:wght@300;400;500;600&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>
         <ClerkProvider
           signUpFallbackRedirectUrl="/onboarding"

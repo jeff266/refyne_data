@@ -1,20 +1,29 @@
 /**
  * Refyne Design System Tokens
  *
- * Color palette and typography tokens for the Refyne UI.
+ * Dark theme with improved contrast and typography.
  */
 
-// Color tokens
+// Color tokens - Dark blue theme
 export const C = {
-  bg:        '#09090B',
-  sidebar:   '#0E0E12',
-  surface:   '#18181B',
-  hover:     '#1F1F23',
-  border:    'rgba(255,255,255,0.06)',
-  border2:   'rgba(255,255,255,0.1)',
-  text:      '#FAFAFA',
-  text2:     '#A1A1AA',
-  text3:     '#52525B',
+  // Backgrounds
+  bg:        '#0F1E30',  // Page background (slightly darker)
+  sidebar:   '#0A1829',  // Sidebar background
+  surface:   '#162944',  // Card/surface background
+  hover:     '#1D3455',  // Hover state
+  input:     '#1A3050',  // Input background (lighter than card)
+
+  // Borders
+  border:    'rgba(255,255,255,0.06)',  // Base border
+  border2:   'rgba(249,248,245,0.15)',  // Input border
+  borderFocus: '#2E6BA8',  // Input focus border
+
+  // Text hierarchy
+  text:      '#F9F8F5',  // Primary text (headings, labels)
+  text2:     'rgba(249,248,245,0.7)',   // Secondary text (body, descriptions)
+  text3:     'rgba(249,248,245,0.4)',   // Tertiary text (captions, placeholders)
+
+  // Accent colors
   indigo:    '#6366F1',
   indigoLt:  '#818CF8',
   indigoDk:  '#4338CA',
@@ -40,8 +49,51 @@ export const C = {
 
 // Font tokens
 export const F = {
-  sans: "'Plus Jakarta Sans', system-ui, sans-serif",
-  mono: "'JetBrains Mono', 'Fira Code', monospace",
+  serif: "'Lora', serif",
+  sans:  "'Jost', sans-serif",
+  mono:  "'JetBrains Mono', 'Fira Code', monospace",
+} as const;
+
+// Typography scale
+export const T = {
+  pageHeading: {
+    fontFamily: F.serif,
+    fontSize: '28px',
+    fontWeight: 600,
+    lineHeight: 1.3,
+  },
+  sectionHeading: {
+    fontFamily: F.serif,
+    fontSize: '20px',
+    fontWeight: 600,
+    lineHeight: 1.4,
+  },
+  tabLabel: {
+    fontFamily: F.sans,
+    fontSize: '14px',
+    fontWeight: 500,
+    lineHeight: 1.5,
+  },
+  body: {
+    fontFamily: F.sans,
+    fontSize: '14px',
+    fontWeight: 400,
+    lineHeight: 1.5,
+  },
+  caption: {
+    fontFamily: F.sans,
+    fontSize: '12px',
+    fontWeight: 400,
+    lineHeight: 1.4,
+    opacity: 0.6,
+  },
+  emptyState: {
+    fontFamily: F.sans,
+    fontSize: '14px',
+    fontWeight: 400,
+    lineHeight: 1.5,
+    opacity: 0.5,
+  },
 } as const;
 
 // Navigation configuration

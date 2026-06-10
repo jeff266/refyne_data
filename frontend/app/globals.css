@@ -1,8 +1,74 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Refyne Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Lora', serif;
+}
+
+body, p, span, div, button, input, textarea, select, label {
+  font-family: 'Jost', sans-serif;
+}
+
+/* Typography Scale */
+h1 {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+h3 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+body {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Refyne Input Defaults */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  background: #1A3050;
+  color: #F9F8F5;
+  border-color: rgba(249,248,245,0.15);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #2E6BA8;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(249,248,245,0.4);
+}
+
+/* Refyne Empty States */
+.empty-state {
+  font-family: 'Jost', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: rgba(249,248,245,0.5);
+  text-align: center;
+  padding: 40px 20px;
+}
 
 /* Refyne Global Styles */
 ::-webkit-scrollbar { width: 3px; }
@@ -26,6 +92,15 @@
 /* MPLC Custom Styles */
 @layer base {
   :root {
+    /* Refyne Dark Theme */
+    --refyne-bg: #0F1E30;
+    --refyne-surface: #162944;
+    --refyne-text: #F9F8F5;
+    --refyne-text-secondary: rgba(249,248,245,0.7);
+    --refyne-text-tertiary: rgba(249,248,245,0.4);
+    --refyne-border: rgba(255,255,255,0.06);
+
+    /* Legacy MPLC tokens (for compatibility) */
     --mplc-black: #000000;
     --mplc-white: #FFFFFF;
     --mplc-gray-50: #FAFAFA;
@@ -41,11 +116,13 @@
   }
 
   body {
-    @apply bg-mplc-gray-50 text-mplc-black antialiased;
+    background: var(--refyne-bg);
+    color: var(--refyne-text);
+    @apply antialiased;
   }
 
   * {
-    @apply border-mplc-gray-200;
+    border-color: var(--refyne-border);
   }
 }
 
