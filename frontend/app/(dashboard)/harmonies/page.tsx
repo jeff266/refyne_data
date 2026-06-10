@@ -125,6 +125,7 @@ function HarmonyRow({
   isAdmin,
   onDelete,
   conflicts,
+  isCalibrated,
 }: {
   h: HarmonyItem;
   isRec?: boolean;
@@ -139,6 +140,7 @@ function HarmonyRow({
   isAdmin: boolean;
   onDelete: (harmonyId: string) => void;
   conflicts?: Array<{ harmonyId: string; harmonyName: string; canonicalField: string }>;
+  isCalibrated?: boolean;
 }) {
   const router = useRouter();
   const [testInput, setTestInput] = useState('');
@@ -233,6 +235,18 @@ function HarmonyRow({
                       letterSpacing: '0.05em'
                     }}>Archived</span>
                   )}
+                  {isCalibrated && (
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: C.indigo,
+                      background: 'rgba(99,102,241,0.1)',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>Configured in setup</span>
+                  )}
                   {isRec && <Chip color="indigo">★ recommended</Chip>}
                   {h.unmatchedCount && h.unmatchedCount > 0 && (
                     <Chip color="red">{h.unmatchedCount} unmatched</Chip>
@@ -264,6 +278,20 @@ function HarmonyRow({
                 <div style={{ fontSize: 11, color: C.text3, marginBottom: 4 }}>
                   {h.description || h.name}
                 </div>
+                {h.examples && h.examples.length > 0 && (
+                  <div style={{ fontSize: 11, color: C.text3, marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: '8px 16px' }}>
+                    {h.examples.slice(0, 3).map((ex, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: F.mono, fontSize: 10 }}>
+                        <span style={{ color: C.text3 }}>{JSON.stringify(ex.input)}</span>
+                        <span style={{ color: C.text3 }}>→</span>
+                        <span style={{ color: C.green, fontWeight: 500 }}>{JSON.stringify(ex.output)}</span>
+                      </div>
+                    ))}
+                    {h.examples.length > 3 && (
+                      <span style={{ fontSize: 10, color: C.text3 }}>+{h.examples.length - 3} more</span>
+                    )}
+                  </div>
+                )}
               </Link>
               <div style={{ fontSize: 10, fontFamily: F.mono, color: C.text3, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span>{h.fields[0]}</span>
@@ -594,13 +622,15 @@ export default function HarmoniesPage() {
   const [conflictResolution, setConflictResolution] = useState<'cancel' | 'disable-others' | 'both'>('cancel');
   const [resolvingConflict, setResolvingConflict] = useState(false);
   const [fieldConflicts, setFieldConflicts] = useState<Map<string, Array<{ harmonyId: string; harmonyName: string; canonicalField: string }>>>(new Map());
+  const [calibrationHarmonies, setCalibrationHarmonies] = useState<Set<string>>(new Set());
 
   // Fetch harmonies and enabled state
   const fetchHarmonies = useCallback(async () => {
     try {
-      const [harmoniesRes, insightsRes] = await Promise.all([
+      const [harmoniesRes, insightsRes, onboardingRes] = await Promise.all([
         fetch(`/api/harmonies?objectType=${objectType}`),
-        fetch('/api/compliance/insights')
+        fetch('/api/compliance/insights'),
+        fetch('/api/onboarding/progress')
       ]);
 
       if (harmoniesRes.ok) {
@@ -624,6 +654,12 @@ export default function HarmoniesPage() {
           }
         });
         setInsights(insightsMap);
+      }
+
+      if (onboardingRes.ok) {
+        const onboardingData = await onboardingRes.json();
+        const calibratedIds = onboardingData.calibration_harmonies || [];
+        setCalibrationHarmonies(new Set(calibratedIds));
       }
 
       // Fetch field conflicts for visual indicators
@@ -936,9 +972,6 @@ export default function HarmoniesPage() {
             <PrimaryBtn onClick={() => setTaxonomyWizardOpen(true)}>
               <Plus size={12} /> Add Taxonomy
             </PrimaryBtn>
-            <GhostBtn onClick={() => alert('YAML import coming soon. You can currently manage reference data inline by clicking the "Data" button on lookup harmonies.')}>
-              Import YAML
-            </GhostBtn>
           </>
         )}
       </div>
@@ -964,6 +997,7 @@ export default function HarmoniesPage() {
                 isAdmin={isAdmin}
                 onDelete={handleDeleteClick}
                 conflicts={fieldConflicts.get(h.id)}
+                isCalibrated={calibrationHarmonies.has(h.id)}
               />
             ))}
           </Card>
@@ -988,6 +1022,7 @@ export default function HarmoniesPage() {
                 isAdmin={isAdmin}
                 onDelete={handleDeleteClick}
                 conflicts={fieldConflicts.get(h.id)}
+                isCalibrated={calibrationHarmonies.has(h.id)}
               />
             ))}
           </Card>

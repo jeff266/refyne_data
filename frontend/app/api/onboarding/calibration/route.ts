@@ -292,7 +292,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Mark calibration complete in onboarding_progress
+    // 4. Mark calibration complete in onboarding_progress and store configured harmonies
     const { error: onboardingError } = await supabaseAdmin
       .from('onboarding_progress')
       .upsert(
@@ -300,6 +300,7 @@ export async function POST(request: NextRequest) {
           org_id: ctx.orgId,
           calibration_completed: true,
           calibration_completed_at: new Date().toISOString(),
+          calibration_harmonies: harmoniesConfigured, // Track which harmonies were configured
         },
         {
           onConflict: 'org_id',
