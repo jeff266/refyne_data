@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
 
     // Call Anthropic API
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-3-5-20241022',
+      model: 'claude-3-5-haiku-20241022',
       max_tokens: 1000,
       system: REFYNE_SYSTEM_PROMPT,
       messages,
