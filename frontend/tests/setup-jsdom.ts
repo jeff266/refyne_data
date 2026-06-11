@@ -1,5 +1,5 @@
 /**
- * Vitest setup file for React component tests
+ * Vitest setup file for React component tests (jsdom environment only)
  */
 
 import '@testing-library/jest-dom';

@@ -275,12 +275,12 @@ describe('Security: Profile Workspace Activate Endpoint', () => {
   it('should return 403 when user is not a member of the organization', async () => {
     mockAuth.mockResolvedValue({ userId: 'user_123' });
 
-    // Mock Clerk to throw 404 error (user not a member)
+    // Mock Clerk to return empty membership list (user not a member)
     mockClerkClient.mockResolvedValue({
       organizations: {
-        getOrganizationMembership: vi.fn().mockRejectedValue({
-          status: 404,
-          errors: [{ code: 'resource_not_found' }],
+        getOrganizationMembershipList: vi.fn().mockResolvedValue({
+          data: [], // No memberships found for this user in this org
+          totalCount: 0,
         }),
       },
     });

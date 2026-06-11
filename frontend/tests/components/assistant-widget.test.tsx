@@ -7,8 +7,11 @@
  * - Pill-shaped inputs and suggestions
  * - Animations (open/close, typing indicator)
  * - Error states
+ *
+ * @vitest-environment jsdom
  */
 
+import '../setup-jsdom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AssistantWidget } from '@/components/AssistantWidget';

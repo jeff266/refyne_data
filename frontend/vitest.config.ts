@@ -15,8 +15,7 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./tests/setup.ts'],
+    environment: 'node',
     include: ['lib/**/*.test.ts', 'lib/**/*.spec.ts', 'tests/**/*.test.ts', 'tests/**/*.spec.ts', 'tests/**/*.test.tsx'],
     exclude: [
       // Exclude integration tests that require real DB connection (now fixed and passing with DB)

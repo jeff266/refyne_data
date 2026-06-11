@@ -320,20 +320,22 @@ describe('fetchModifiedCompanies', () => {
     expect(result).toHaveLength(2);
     expect(result[0].id).toBe('company-1');
     expect(result[1].id).toBe('company-2');
+
+    // searchCompanies takes positional args: (filterGroups, properties, limit)
     expect(mockClient.searchCompanies).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filterGroups: [
-          {
-            filters: [
-              {
-                propertyName: 'hs_lastmodifieddate',
-                operator: 'GT',
-                value: since.getTime().toString(),
-              },
-            ],
-          },
-        ],
-      })
+      [
+        {
+          filters: [
+            {
+              propertyName: 'hs_lastmodifieddate',
+              operator: 'GT',
+              value: since.getTime().toString(),
+            },
+          ],
+        },
+      ],
+      expect.arrayContaining(['name', 'domain', 'phone', 'industry', 'linkedin_company_page', 'hs_lastmodifieddate']),
+      100
     );
   });
 
