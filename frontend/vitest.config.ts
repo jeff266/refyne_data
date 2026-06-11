@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
 import path from 'path';
 import dotenv from 'dotenv';
 
@@ -6,6 +7,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 
 export default defineConfig({
+  plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),
@@ -13,8 +15,9 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'node',
-    include: ['lib/**/*.test.ts', 'lib/**/*.spec.ts', 'tests/**/*.test.ts', 'tests/**/*.spec.ts'],
+    environment: 'jsdom',
+    setupFiles: ['./tests/setup.ts'],
+    include: ['lib/**/*.test.ts', 'lib/**/*.spec.ts', 'tests/**/*.test.ts', 'tests/**/*.spec.ts', 'tests/**/*.test.tsx'],
     exclude: [
       // Exclude integration tests that require real DB connection (now fixed and passing with DB)
       // Run explicitly with: npm test -- trial-counter when DB is available

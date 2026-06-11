@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { MessageCircle, X, Send } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
 
 type Message = {
@@ -8,11 +9,61 @@ type Message = {
   content: string;
 };
 
+type Suggestion = {
+  text: string;
+  icon?: string;
+};
+
+// Hardcoded fallback suggestions
+const DEFAULT_SUGGESTIONS: Suggestion[] = [
+  { text: 'How do I normalize phone numbers?', icon: 'Phone' },
+  { text: "What's a Grade A duplicate?", icon: 'GitMerge' },
+  { text: 'How does the merge survivor work?', icon: 'Shield' },
+  { text: 'How do I import a contact list?', icon: 'Upload' },
+];
+
+// Animation keyframes
+const bounceKeyframes = `
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-8px); }
+}
+`;
+
+const fadeScaleInKeyframes = `
+@keyframes fadeScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+`;
+
+const fadeScaleOutKeyframes = `
+@keyframes fadeScaleOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+}
+`;
+
 export function AssistantWidget() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>(DEFAULT_SUGGESTIONS);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -23,13 +74,37 @@ export function AssistantWidget() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = async () => {
+  // Fetch dynamic suggestions on mount
+  useEffect(() => {
+    fetch('/api/assistant/suggestions')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.suggestions && Array.isArray(data.suggestions)) {
+          setSuggestions(data.suggestions);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch suggestions:', err);
+        // Keep default suggestions on error
+      });
+  }, []);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsOpen(false);
+      setIsClosing(false);
+    }, 180);
+  };
+
+  const handleSend = async (suggestionClicked = false) => {
     if (!input.trim() || isLoading) return;
 
     const userMessage = input.trim();
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
+    setHasError(false);
 
     try {
       const res = await fetch('/api/assistant/chat', {
@@ -38,6 +113,7 @@ export function AssistantWidget() {
         body: JSON.stringify({
           message: userMessage,
           history: messages,
+          suggestionClicked,
         }),
       });
 
@@ -50,6 +126,7 @@ export function AssistantWidget() {
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
     } catch (error) {
       console.error('Assistant error:', error);
+      setHasError(true);
       setMessages(prev => [
         ...prev,
         {
@@ -69,20 +146,17 @@ export function AssistantWidget() {
     }
   };
 
-  const suggestedPrompts = [
-    'How do I normalize phone numbers?',
-    "What's a Grade A duplicate?",
-    'How does the merge survivor work?',
-    'How do I import a contact list?',
-  ];
-
   const handleSuggestedPrompt = (prompt: string) => {
     setInput(prompt);
+    // Immediately send when suggestion is clicked
+    setTimeout(() => handleSend(true), 0);
   };
 
   return (
     <>
-      {/* Trigger Button */}
+      <style dangerouslySetInnerHTML={{ __html: bounceKeyframes + fadeScaleInKeyframes + fadeScaleOutKeyframes }} />
+
+      {/* Trigger Button - Circular */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
@@ -90,32 +164,34 @@ export function AssistantWidget() {
             position: 'fixed',
             bottom: 24,
             right: 24,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '12px 18px',
+            width: 52,
+            height: 52,
+            borderRadius: '50%',
             background: C.indigo,
             color: C.text,
             border: 'none',
             cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 600,
-            fontFamily: F.sans,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
             zIndex: 999,
+            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.3)';
           }}
         >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path
-              d="M10 2C5.58 2 2 5.58 2 10c0 1.85.63 3.55 1.69 4.9L2 18l3.34-1.55C6.67 17.41 8.26 18 10 18c4.42 0 8-3.58 8-8s-3.58-8-8-8z"
-              fill="currentColor"
-            />
-          </svg>
-          Ask Refyne
+          <MessageCircle size={24} />
         </button>
       )}
 
-      {/* Chat Panel */}
+      {/* Chat Panel - Modern with Animations */}
       {isOpen && (
         <div
           style={{
@@ -123,41 +199,106 @@ export function AssistantWidget() {
             bottom: 24,
             right: 24,
             width: 380,
-            height: 520,
-            background: '#1C3654',
-            border: '1px solid rgba(255,255,255,0.1)',
+            maxHeight: 'calc(100vh - 100px)',
+            background: hasError ? 'rgba(28, 54, 84, 0.95)' : '#1C3654',
+            border: hasError ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 16,
             display: 'flex',
             flexDirection: 'column',
             zIndex: 999,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
+            animation: isClosing ? 'fadeScaleOut 180ms ease-out forwards' : 'fadeScaleIn 180ms ease-out',
+            transformOrigin: 'bottom right',
           }}
         >
-          {/* Header */}
+          {/* Header with Avatar */}
           <div
             style={{
               padding: '16px 20px',
               borderBottom: '1px solid rgba(255,255,255,0.1)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              gap: 12,
             }}
           >
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: F.sans }}>
-              <span style={{ color: C.indigoLt }}>Refyne</span> Assistant
-            </div>
-            <button
-              onClick={() => setIsOpen(false)}
+            {/* Avatar */}
+            <div
               style={{
-                background: 'none',
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: C.indigo,
+                color: C.text,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 14,
+                fontWeight: 700,
+                flexShrink: 0,
+              }}
+            >
+              R
+            </div>
+
+            {/* Title and Status */}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: F.sans }}>
+                Refyne Assistant
+              </div>
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {isLoading ? (
+                  <>
+                    <div
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: C.amber,
+                        animation: 'bounce 1.4s infinite',
+                      }}
+                    />
+                    Typing...
+                  </>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: C.green,
+                      }}
+                    />
+                    Online
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Close Button */}
+            <button
+              onClick={handleClose}
+              style={{
+                background: 'rgba(255,255,255,0.05)',
                 border: 'none',
                 color: C.text3,
                 cursor: 'pointer',
-                fontSize: 20,
-                padding: 0,
-                lineHeight: 1,
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
               }}
             >
-              ×
+              <X size={16} />
             </button>
           </div>
 
@@ -173,33 +314,36 @@ export function AssistantWidget() {
             }}
           >
             {messages.length === 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <p style={{ fontSize: 13, color: C.text2, marginBottom: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <p style={{ fontSize: 13, color: C.text2, marginBottom: 4 }}>
                   Ask me anything about using Refyne:
                 </p>
-                {suggestedPrompts.map((prompt, i) => (
+                {suggestions.map((suggestion, i) => (
                   <button
                     key={i}
-                    onClick={() => handleSuggestedPrompt(prompt)}
+                    onClick={() => handleSuggestedPrompt(suggestion.text)}
                     style={{
                       textAlign: 'left',
-                      padding: '10px 12px',
+                      padding: '10px 16px',
                       background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.1)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: 20,
                       color: C.text2,
                       fontSize: 13,
                       fontFamily: F.sans,
                       cursor: 'pointer',
-                      transition: 'background 0.2s',
+                      transition: 'all 0.15s ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                      e.currentTarget.style.transform = 'translateY(0)';
                     }}
                   >
-                    {prompt}
+                    {suggestion.text}
                   </button>
                 ))}
               </div>
@@ -218,8 +362,9 @@ export function AssistantWidget() {
                 {msg.role === 'assistant' && (
                   <div
                     style={{
-                      width: 24,
-                      height: 24,
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
                       background: C.indigo,
                       color: C.text,
                       display: 'flex',
@@ -235,15 +380,20 @@ export function AssistantWidget() {
                 )}
                 <div
                   style={{
-                    padding: '10px 14px',
-                    background: msg.role === 'user' ? 'rgba(46,107,168,0.3)' : 'rgba(255,255,255,0.05)',
+                    padding: '11px 15px',
+                    background: msg.role === 'user' ? 'rgba(46,107,168,0.4)' : 'rgba(255,255,255,0.08)',
                     color: C.text,
                     fontSize: 13,
                     lineHeight: 1.5,
                     fontFamily: F.sans,
-                    maxWidth: '80%',
+                    maxWidth: '75%',
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
+                    // Asymmetric border-radius (iMessage style)
+                    borderRadius:
+                      msg.role === 'user'
+                        ? '18px 18px 4px 18px' // User: sharp bottom-right
+                        : '18px 18px 18px 4px', // Assistant: sharp bottom-left
                   }}
                 >
                   {msg.content}
@@ -255,8 +405,9 @@ export function AssistantWidget() {
               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <div
                   style={{
-                    width: 24,
-                    height: 24,
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
                     background: C.indigo,
                     color: C.text,
                     display: 'flex',
@@ -270,14 +421,27 @@ export function AssistantWidget() {
                 </div>
                 <div
                   style={{
-                    padding: '10px 14px',
-                    background: 'rgba(255,255,255,0.05)',
-                    color: C.text3,
-                    fontSize: 13,
-                    fontFamily: F.sans,
+                    padding: '11px 15px',
+                    background: 'rgba(255,255,255,0.08)',
+                    borderRadius: '18px 18px 18px 4px',
+                    display: 'flex',
+                    gap: 4,
+                    alignItems: 'center',
                   }}
                 >
-                  Thinking...
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: C.text3,
+                        animation: `bounce 1.4s infinite`,
+                        animationDelay: `${i * 0.2}s`,
+                      }}
+                    />
+                  ))}
                 </div>
               </div>
             )}
@@ -285,13 +449,14 @@ export function AssistantWidget() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
+          {/* Input - Pill-shaped */}
           <div
             style={{
               padding: '16px',
               borderTop: '1px solid rgba(255,255,255,0.1)',
               display: 'flex',
-              gap: 8,
+              gap: 10,
+              alignItems: 'center',
             }}
           >
             <input
@@ -303,30 +468,50 @@ export function AssistantWidget() {
               disabled={isLoading}
               style={{
                 flex: 1,
-                padding: '10px 12px',
+                padding: '12px 18px',
                 background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.2)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 24,
                 color: C.text,
                 fontSize: 13,
                 fontFamily: F.sans,
                 outline: 'none',
+                transition: 'border-color 0.15s ease',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
               }}
             />
             <button
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={isLoading || !input.trim()}
               style={{
-                padding: '10px 16px',
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
                 background: input.trim() && !isLoading ? C.indigo : 'rgba(255,255,255,0.1)',
                 color: input.trim() && !isLoading ? C.text : C.text3,
                 border: 'none',
                 cursor: input.trim() && !isLoading ? 'pointer' : 'not-allowed',
-                fontSize: 13,
-                fontWeight: 600,
-                fontFamily: F.sans,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (input.trim() && !isLoading) {
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
               }}
             >
-              Send
+              <Send size={18} />
             </button>
           </div>
         </div>
