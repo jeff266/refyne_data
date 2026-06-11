@@ -106,6 +106,9 @@ export function AssistantWidget() {
     setIsLoading(true);
     setHasError(false);
 
+    // Add empty assistant message immediately
+    setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+
     try {
       const res = await fetch('/api/assistant/chat', {
         method: 'POST',
@@ -118,24 +121,60 @@ export function AssistantWidget() {
       });
 
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to get response');
+        throw new Error('Failed to get response');
       }
 
-      const data = await res.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+      // Read streaming response
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      const decoder = new TextDecoder();
+      let assistantMessage = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        // Decode chunk and extract text from SSE events
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'content_block_delta' && data.delta?.text) {
+                assistantMessage += data.delta.text;
+
+                // Update last message in real-time
+                setMessages(prev => [
+                  ...prev.slice(0, -1),
+                  { role: 'assistant', content: assistantMessage },
+                ]);
+              }
+            } catch (e) {
+              // Skip invalid JSON lines
+            }
+          }
+        }
+      }
+
+      setIsLoading(false);
     } catch (error) {
       console.error('Assistant error:', error);
       setHasError(true);
+      setIsLoading(false);
+
+      // Replace empty assistant message with error
       setMessages(prev => [
-        ...prev,
+        ...prev.slice(0, -1),
         {
           role: 'assistant',
           content: error instanceof Error ? error.message : 'Sorry, I encountered an error. Please try again.',
         },
       ]);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -246,32 +285,15 @@ export function AssistantWidget() {
                 Refyne Assistant
               </div>
               <div style={{ fontSize: 11, color: C.text3, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {isLoading ? (
-                  <>
-                    <div
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        background: C.amber,
-                        animation: 'bounce 1.4s infinite',
-                      }}
-                    />
-                    Typing...
-                  </>
-                ) : (
-                  <>
-                    <div
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        background: C.green,
-                      }}
-                    />
-                    Online
-                  </>
-                )}
+                <div
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: C.green,
+                  }}
+                />
+                Online
               </div>
             </div>
 
@@ -400,51 +422,6 @@ export function AssistantWidget() {
                 </div>
               </div>
             ))}
-
-            {isLoading && (
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <div
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    background: C.indigo,
-                    color: C.text,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
-                >
-                  R
-                </div>
-                <div
-                  style={{
-                    padding: '11px 15px',
-                    background: 'rgba(255,255,255,0.08)',
-                    borderRadius: '18px 18px 18px 4px',
-                    display: 'flex',
-                    gap: 4,
-                    alignItems: 'center',
-                  }}
-                >
-                  {[0, 1, 2].map((i) => (
-                    <div
-                      key={i}
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        background: C.text3,
-                        animation: `bounce 1.4s infinite`,
-                        animationDelay: `${i * 0.2}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div ref={messagesEndRef} />
           </div>

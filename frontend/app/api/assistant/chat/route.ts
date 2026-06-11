@@ -198,8 +198,20 @@ export async function POST(req: NextRequest) {
       { role: 'user' as const, content: message },
     ];
 
-    // 6. Call Claude with cached system prompt
-    const response = await anthropic.messages.create({
+    // 6. Log question (non-blocking - fire and forget, before streaming)
+    const normalized = normalizeQuestion(message);
+    supabaseAdmin
+      .from('assistant_questions')
+      .insert({
+        org_id: ctx.orgId,
+        user_id: ctx.userId,
+        question: message,
+        question_normalized: normalized,
+        suggestion_clicked: suggestionClicked === true,
+      });
+
+    // 7. Stream Claude response with cached system prompt
+    const stream = await anthropic.messages.stream({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1000,
       system: [
@@ -212,25 +224,14 @@ export async function POST(req: NextRequest) {
       messages,
     });
 
-    const assistantMessage = response.content[0];
-    if (assistantMessage.type !== 'text') {
-      throw new Error('Unexpected response type from Anthropic');
-    }
-
-    // 7. Log question (non-blocking - fire and forget)
-    const normalized = normalizeQuestion(message);
-    supabaseAdmin
-      .from('assistant_questions')
-      .insert({
-        org_id: ctx.orgId,
-        user_id: ctx.userId,
-        question: message,
-        question_normalized: normalized,
-        suggestion_clicked: suggestionClicked === true,
-      });
-
-    // 8. Return response
-    return NextResponse.json({ response: assistantMessage.text });
+    // 8. Return streaming response
+    return new Response(stream.toReadableStream(), {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
+    });
   } catch (error: unknown) {
     console.error('Assistant chat error:', error);
     return NextResponse.json(

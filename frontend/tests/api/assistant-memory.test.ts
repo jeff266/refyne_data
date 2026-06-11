@@ -10,12 +10,14 @@ import { NextRequest } from 'next/server';
 
 // Use vi.hoisted to share mock function across module boundary
 const mockCreate = vi.hoisted(() => vi.fn());
+const mockStream = vi.hoisted(() => vi.fn());
 
 // Mock Anthropic SDK
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class {
     messages = {
       create: mockCreate,
+      stream: mockStream,
     };
   },
 }));
@@ -62,8 +64,8 @@ describe('Assistant Memory - Conversation Compaction', () => {
       { role: 'assistant', content: 'Dedup finds duplicate records...' },
     ];
 
-    mockCreate.mockResolvedValue({
-      content: [{ type: 'text', text: 'Test response' }],
+    mockStream.mockResolvedValue({
+      toReadableStream: () => new ReadableStream(),
     });
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
@@ -76,11 +78,12 @@ describe('Assistant Memory - Conversation Compaction', () => {
 
     await POST(request);
 
-    // Should call Claude once (no summarization needed)
-    expect(mockCreate).toHaveBeenCalledTimes(1);
+    // Should call stream once (no summarization needed)
+    expect(mockStream).toHaveBeenCalledTimes(1);
+    expect(mockCreate).toHaveBeenCalledTimes(0);
 
     // Should pass all history messages plus new message
-    const callArgs = mockCreate.mock.calls[0][0];
+    const callArgs = mockStream.mock.calls[0][0];
     expect(callArgs.messages).toHaveLength(shortHistory.length + 1);
     expect(callArgs.messages[0].content).toBe('What is Refyne?');
   });
@@ -92,14 +95,14 @@ describe('Assistant Memory - Conversation Compaction', () => {
       content: `Message ${i + 1}`,
     }));
 
-    // Mock summarization response
-    mockCreate
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'Summary of earlier conversation' }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'Final response' }],
-      });
+    // Mock summarization response (create) and main response (stream)
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'Summary of earlier conversation' }],
+    });
+
+    mockStream.mockResolvedValue({
+      toReadableStream: () => new ReadableStream(),
+    });
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
       method: 'POST',
@@ -111,16 +114,17 @@ describe('Assistant Memory - Conversation Compaction', () => {
 
     await POST(request);
 
-    // Should call Claude twice (once for summary, once for response)
-    expect(mockCreate).toHaveBeenCalledTimes(2);
+    // Should call create once for summary, stream once for main response
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockStream).toHaveBeenCalledTimes(1);
 
     // First call should be for summarization
     const summaryCall = mockCreate.mock.calls[0][0];
     expect(summaryCall.max_tokens).toBe(200);
     expect(summaryCall.messages[0].content).toContain('Summarize this conversation');
 
-    // Second call should use compacted history
-    const mainCall = mockCreate.mock.calls[1][0];
+    // Stream call should use compacted history
+    const mainCall = mockStream.mock.calls[0][0];
     // 2 (summary block) + 4 (recent turns) + 1 (new message) = 7
     expect(mainCall.messages).toHaveLength(7);
   });
@@ -131,13 +135,13 @@ describe('Assistant Memory - Conversation Compaction', () => {
       content: `Message ${i + 1}`,
     }));
 
-    mockCreate
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'Earlier topics: dedup and normalize' }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'Response' }],
-      });
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'Earlier topics: dedup and normalize' }],
+    });
+
+    mockStream.mockResolvedValue({
+      toReadableStream: () => new ReadableStream(),
+    });
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
       method: 'POST',
@@ -149,7 +153,7 @@ describe('Assistant Memory - Conversation Compaction', () => {
 
     await POST(request);
 
-    const mainCall = mockCreate.mock.calls[1][0];
+    const mainCall = mockStream.mock.calls[0][0];
 
     // First message should be summary from user
     expect(mainCall.messages[0].role).toBe('user');
@@ -167,13 +171,13 @@ describe('Assistant Memory - Conversation Compaction', () => {
       content: `Message ${i + 1}`,
     }));
 
-    mockCreate
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'Summary' }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'Response' }],
-      });
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'Summary' }],
+    });
+
+    mockStream.mockResolvedValue({
+      toReadableStream: () => new ReadableStream(),
+    });
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
       method: 'POST',
@@ -185,7 +189,7 @@ describe('Assistant Memory - Conversation Compaction', () => {
 
     await POST(request);
 
-    const mainCall = mockCreate.mock.calls[1][0];
+    const mainCall = mockStream.mock.calls[0][0];
 
     // Last 4 history messages should be messages 9-12
     // (summary block is messages 0-1, recent is messages 2-5, new message is 6)
@@ -201,13 +205,13 @@ describe('Assistant Memory - Conversation Compaction', () => {
       content: `Message ${i + 1}`,
     }));
 
-    mockCreate
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'Summary' }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'Response' }],
-      });
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'Summary' }],
+    });
+
+    mockStream.mockResolvedValue({
+      toReadableStream: () => new ReadableStream(),
+    });
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
       method: 'POST',
@@ -219,19 +223,20 @@ describe('Assistant Memory - Conversation Compaction', () => {
 
     await POST(request);
 
-    // Should call exactly twice: once for summary, once for main response
-    expect(mockCreate).toHaveBeenCalledTimes(2);
+    // Should call create once for summary, stream once for main response
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockStream).toHaveBeenCalledTimes(1);
 
     // First call should be summarization
     expect(mockCreate.mock.calls[0][0].max_tokens).toBe(200);
 
-    // Second call should be main response
-    expect(mockCreate.mock.calls[1][0].max_tokens).toBe(1000);
+    // Stream call should be main response
+    expect(mockStream.mock.calls[0][0].max_tokens).toBe(1000);
   });
 
   it('6. Rate limit uses userId not orgId as identifier', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{ type: 'text', text: 'Response' }],
+    mockStream.mockResolvedValue({
+      toReadableStream: () => new ReadableStream(),
     });
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
@@ -258,8 +263,8 @@ describe('Assistant Memory - Conversation Compaction', () => {
       content: `Message ${i + 1}`,
     }));
 
-    mockCreate.mockResolvedValue({
-      content: [{ type: 'text', text: 'Response' }],
+    mockStream.mockResolvedValue({
+      toReadableStream: () => new ReadableStream(),
     });
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
@@ -272,11 +277,12 @@ describe('Assistant Memory - Conversation Compaction', () => {
 
     await POST(request);
 
-    // Should call Claude once (no summarization at threshold)
-    expect(mockCreate).toHaveBeenCalledTimes(1);
+    // Should call stream once (no summarization at threshold)
+    expect(mockStream).toHaveBeenCalledTimes(1);
+    expect(mockCreate).toHaveBeenCalledTimes(0);
 
     // Should have all 10 history messages + new message
-    const callArgs = mockCreate.mock.calls[0][0];
+    const callArgs = mockStream.mock.calls[0][0];
     expect(callArgs.messages).toHaveLength(11);
   });
 
@@ -287,13 +293,13 @@ describe('Assistant Memory - Conversation Compaction', () => {
       content: `Message ${i + 1}`,
     }));
 
-    mockCreate
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'Summary' }],
-      })
-      .mockResolvedValueOnce({
-        content: [{ type: 'text', text: 'Response' }],
-      });
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'Summary' }],
+    });
+
+    mockStream.mockResolvedValue({
+      toReadableStream: () => new ReadableStream(),
+    });
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
       method: 'POST',
@@ -305,13 +311,14 @@ describe('Assistant Memory - Conversation Compaction', () => {
 
     await POST(request);
 
-    // Should call Claude twice (compaction triggered)
-    expect(mockCreate).toHaveBeenCalledTimes(2);
+    // Should call create once for summary, stream once for main (compaction triggered)
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockStream).toHaveBeenCalledTimes(1);
   });
 
   it('10. Empty history: no compaction, passes through', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{ type: 'text', text: 'Response' }],
+    mockStream.mockResolvedValue({
+      toReadableStream: () => new ReadableStream(),
     });
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
@@ -324,11 +331,12 @@ describe('Assistant Memory - Conversation Compaction', () => {
 
     await POST(request);
 
-    // Should call Claude once (no history to compact)
-    expect(mockCreate).toHaveBeenCalledTimes(1);
+    // Should call stream once (no history to compact)
+    expect(mockStream).toHaveBeenCalledTimes(1);
+    expect(mockCreate).toHaveBeenCalledTimes(0);
 
     // Should have only the new message
-    const callArgs = mockCreate.mock.calls[0][0];
+    const callArgs = mockStream.mock.calls[0][0];
     expect(callArgs.messages).toHaveLength(1);
     expect(callArgs.messages[0].content).toBe('Question');
   });
@@ -348,8 +356,8 @@ describe('Assistant Memory - Prompt Caching', () => {
   });
 
   it('7. Prompt caching: system passed as array with cache_control block', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{ type: 'text', text: 'Response' }],
+    mockStream.mockResolvedValue({
+      toReadableStream: () => new ReadableStream(),
     });
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
@@ -362,7 +370,7 @@ describe('Assistant Memory - Prompt Caching', () => {
 
     await POST(request);
 
-    const callArgs = mockCreate.mock.calls[0][0];
+    const callArgs = mockStream.mock.calls[0][0];
 
     // System should be an array
     expect(Array.isArray(callArgs.system)).toBe(true);
