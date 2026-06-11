@@ -540,7 +540,7 @@ export default function HomePage() {
                   letterSpacing: '0.05em',
                   borderBottom: `1px solid ${C.border}`,
                 }}>
-                  <div style={{ marginBottom: 4 }}>Insycle</div>
+                  <div style={{ marginBottom: 4 }}>Point Solutions</div>
                   <div style={{ fontSize: 10, fontWeight: 500 }}>More setup</div>
                 </th>
                 <th style={{
@@ -553,7 +553,7 @@ export default function HomePage() {
                   letterSpacing: '0.05em',
                   borderBottom: `1px solid ${C.border}`,
                 }}>
-                  <div style={{ marginBottom: 4 }}>Openprise</div>
+                  <div style={{ marginBottom: 4 }}>Enterprise Platforms</div>
                   <div style={{ fontSize: 10, fontWeight: 500 }}>More cost</div>
                 </th>
                 <th style={{
@@ -566,7 +566,7 @@ export default function HomePage() {
                   letterSpacing: '0.05em',
                   borderBottom: `1px solid ${C.border}`,
                 }}>
-                  <div style={{ marginBottom: 4 }}>Manual cleanup</div>
+                  <div style={{ marginBottom: 4 }}>Spreadsheets & Scripts</div>
                   <div style={{ fontSize: 10, fontWeight: 500 }}>More time</div>
                 </th>
               </tr>
