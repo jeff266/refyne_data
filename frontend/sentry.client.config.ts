@@ -61,11 +61,20 @@ Sentry.init({
   },
 });
 
+// Track if replay has been enabled to prevent duplicates
+let replayEnabled = false;
+
 /**
  * Enable Sentry session replay after user consent
  * Called when user accepts all cookies
  */
 export function enableSentryReplay() {
+  // Prevent duplicate replay instances
+  if (replayEnabled) {
+    console.log('[Sentry] Session replay already enabled, skipping');
+    return;
+  }
+
   const client = Sentry.getClient();
   if (!client) {
     console.warn('[Sentry] Cannot enable replay: client not initialized');
@@ -79,6 +88,7 @@ export function enableSentryReplay() {
   });
 
   client.addIntegration(replay);
+  replayEnabled = true;
   console.log('[Sentry] Session replay enabled');
 }
 
