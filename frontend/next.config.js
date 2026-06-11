@@ -40,7 +40,7 @@ const nextConfig = {
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' https://fonts.gstatic.com",
           "img-src 'self' data: blob: https://*.supabase.co https://iidsiejbhdpzzmbotybw.supabase.co https://media.giphy.com https://i.giphy.com https://img.clerk.com",
-          "connect-src 'self' https://*.supabase.co https://*.clerk.com https://clerk.refynedata.com https://*.upstash.io wss://*.supabase.co",
+          "connect-src 'self' https://*.supabase.co https://*.clerk.com https://*.clerk.accounts.dev https://clerk.refynedata.com https://*.upstash.io https://*.ingest.us.sentry.io https://api.anthropic.com wss://*.supabase.co",
           "frame-src 'self' https://www.youtube.com https://player.vimeo.com",
           "worker-src 'self' blob:",
         ].join('; ')
