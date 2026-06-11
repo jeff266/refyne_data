@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/db/admin-client';
 import { normalizeQuestion } from '@/lib/assistant/normalize-question';
 import Anthropic from '@anthropic-ai/sdk';
 
-// Using claude-3-5-sonnet-latest (Haiku deprecated Feb 2026, Sonnet is current mid-tier model)
+// Using claude-haiku-4-5-20251001 (Haiku 4.5 - fast, efficient model for assistant)
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 });
@@ -128,7 +128,7 @@ async function compactHistory(history: Message[]): Promise<Message[]> {
 
   // Generate summary of older conversation
   const summaryResponse = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet-latest',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 200,
     messages: [
       {
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
 
     // 6. Call Claude with cached system prompt
     const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-latest',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1000,
       system: [
         {
