@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
-import { Workflow, Plus, Play, Edit, Clock, Trash2 } from 'lucide-react';
+import { Plus, Play, Edit, MoreVertical, Trash2, X } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
-import { PrimaryBtn, GhostBtn } from '@/components/refyne';
+import { PrimaryBtn } from '@/components/refyne';
 import { addToast } from '@/components/ui/toast';
 
 interface Arrangement {
@@ -44,6 +44,14 @@ interface Run {
   function_field?: string;
 }
 
+interface RunEstimate {
+  estimated_records: number;
+  provider: string;
+  is_byok: boolean;
+  credits_required: number;
+  credits_available: number;
+}
+
 type Tab = 'arrangements' | 'history';
 
 function formatDuration(seconds: number): string {
@@ -67,6 +75,19 @@ function formatTimeAgo(dateString: string): string {
   return date.toLocaleDateString();
 }
 
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+  const monthDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  if (diffDays === 0) return `${monthDay} · today`;
+  if (diffDays === 1) return `${monthDay} · yesterday`;
+  if (diffDays < 7) return `${monthDay} · ${diffDays} days ago`;
+  return monthDay;
+}
+
 export default function ArrangementsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -76,11 +97,24 @@ export default function ArrangementsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
   const [runsLoading, setRunsLoading] = useState(false);
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Modals
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [runConfirmModalOpen, setRunConfirmModalOpen] = useState(false);
+  const [arrangementToRun, setArrangementToRun] = useState<Arrangement | null>(null);
+  const [runEstimate, setRunEstimate] = useState<RunEstimate | null>(null);
+  const [estimateLoading, setEstimateLoading] = useState(false);
+
   const [arrangementToDelete, setArrangementToDelete] = useState<Arrangement | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const highlightRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const [running, setRunning] = useState(false);
+
+  // Dropdown state
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   const isViewer = orgRole === 'org:viewer';
   const canCreate = !isViewer;
@@ -94,29 +128,6 @@ export default function ArrangementsPage() {
       fetchRuns();
     }
   }, [activeTab]);
-
-  // Handle highlight from query param
-  useEffect(() => {
-    const highlight = searchParams.get('highlight');
-    if (highlight && arrangements.length > 0) {
-      setHighlightedId(highlight);
-
-      // Scroll to highlighted arrangement
-      setTimeout(() => {
-        const ref = highlightRefs.current[highlight];
-        if (ref) {
-          ref.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 100);
-
-      // Remove highlight after 3 seconds
-      setTimeout(() => {
-        setHighlightedId(null);
-        // Clean up query param
-        router.replace('/arrangements', { scroll: false });
-      }, 3000);
-    }
-  }, [searchParams, arrangements, router]);
 
   const fetchArrangements = async () => {
     setLoading(true);
@@ -148,6 +159,27 @@ export default function ArrangementsPage() {
     }
   };
 
+  const fetchRunEstimate = async (arrangementId: string) => {
+    setEstimateLoading(true);
+    try {
+      const response = await fetch(`/api/arrangements/${arrangementId}/estimate`);
+      if (!response.ok) throw new Error('Failed to fetch estimate');
+      const data = await response.json();
+      setRunEstimate(data);
+    } catch (error) {
+      console.error('Failed to fetch estimate:', error);
+      setRunEstimate({
+        estimated_records: 0,
+        provider: 'Unknown',
+        is_byok: false,
+        credits_required: 0,
+        credits_available: 0,
+      });
+    } finally {
+      setEstimateLoading(false);
+    }
+  };
+
   const handleCreateNew = async () => {
     try {
       // Check onboarding status
@@ -171,24 +203,38 @@ export default function ArrangementsPage() {
     }
   };
 
-  const handleRun = async (id: string) => {
+  const handleRunClick = async (arrangement: Arrangement) => {
+    setArrangementToRun(arrangement);
+    setRunConfirmModalOpen(true);
+    await fetchRunEstimate(arrangement.id);
+  };
+
+  const handleRunConfirm = async () => {
+    if (!arrangementToRun) return;
+
+    setRunning(true);
     try {
-      const response = await fetch(`/api/arrangements/${id}/run`, {
+      const response = await fetch(`/api/arrangements/${arrangementToRun.id}/run`, {
         method: 'POST',
       });
       if (!response.ok) throw new Error('Failed to start run');
       const data = await response.json();
       addToast('success', 'Run started successfully');
+      setRunConfirmModalOpen(false);
+      setArrangementToRun(null);
       router.push(`/arrangements/runs/${data.runId}`);
     } catch (error) {
       console.error('Failed to start run:', error);
       addToast('error', 'Failed to start run');
+    } finally {
+      setRunning(false);
     }
   };
 
   const handleDeleteClick = (arrangement: Arrangement) => {
     setArrangementToDelete(arrangement);
     setDeleteModalOpen(true);
+    setOpenDropdownId(null);
   };
 
   const handleDeleteConfirm = async () => {
@@ -215,6 +261,80 @@ export default function ArrangementsPage() {
     }
   };
 
+  const handleBulkDeleteConfirm = async () => {
+    setDeleting(true);
+    try {
+      const deletePromises = Array.from(selectedIds).map(id =>
+        fetch(`/api/arrangements/${id}`, { method: 'DELETE' })
+      );
+
+      await Promise.all(deletePromises);
+
+      addToast('success', `${selectedIds.size} arrangement${selectedIds.size > 1 ? 's' : ''} deleted successfully`);
+      setBulkDeleteModalOpen(false);
+      setSelectedIds(new Set());
+
+      // Refresh the list
+      await fetchArrangements();
+    } catch (error) {
+      console.error('Failed to delete arrangements:', error);
+      addToast('error', 'Failed to delete arrangements');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === arrangements.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(arrangements.map(a => a.id)));
+    }
+  };
+
+  const getStatusBadge = (arrangement: Arrangement) => {
+    // Determine status based on last run
+    if (!arrangement.last_run_at) {
+      return (
+        <span style={{
+          padding: '4px 10px',
+          borderRadius: 12,
+          fontSize: 12,
+          fontWeight: 500,
+          background: 'rgba(255,255,255,0.05)',
+          color: 'rgba(249,248,245,0.4)',
+        }}>
+          Never run
+        </span>
+      );
+    }
+
+    // For now, assume completed if last_run_at exists
+    // TODO: Check actual status from last run
+    return (
+      <span style={{
+        padding: '4px 10px',
+        borderRadius: 12,
+        fontSize: 12,
+        fontWeight: 500,
+        background: 'rgba(34,197,94,0.15)',
+        color: '#22c55e',
+      }}>
+        Completed
+      </span>
+    );
+  };
+
   if (loading) {
     return (
       <div style={{ padding: 32, color: C.text2 }}>
@@ -236,14 +356,6 @@ export default function ArrangementsPage() {
           padding: 32,
         }}
       >
-        <div
-          style={{
-            fontSize: 64,
-            marginBottom: 24,
-          }}
-        >
-          🌊
-        </div>
         <h2
           style={{
             fontSize: 24,
@@ -252,22 +364,8 @@ export default function ArrangementsPage() {
             marginBottom: 8,
           }}
         >
-          {isViewer ? 'No Arrangements Yet' : 'Your first Arrangement takes 3 minutes to build.'}
+          No arrangements yet
         </h2>
-        <p
-          style={{
-            fontSize: 14,
-            color: C.text2,
-            marginBottom: 4,
-            textAlign: 'center',
-            maxWidth: 520,
-            lineHeight: '1.6',
-          }}
-        >
-          {isViewer
-            ? 'Your workspace admin hasn\'t created any arrangements yet.'
-            : 'Enrich 10x more records with multi-provider waterfalls.'}
-        </p>
         <p
           style={{
             fontSize: 14,
@@ -278,18 +376,12 @@ export default function ArrangementsPage() {
             lineHeight: '1.6',
           }}
         >
-          {isViewer ? (
-            'Arrangements are multi-provider enrichment pipelines that keep your CRM data fresh.'
-          ) : (
-            <>
-              Apollo fills what it can. Clearbit fills the gaps. Serper catches what both miss. Set it
-              up once, run it whenever your data needs refreshing.
-            </>
-          )}
+          Create a multi-provider enrichment pipeline to fill gaps in your HubSpot data.
         </p>
         {canCreate && (
           <PrimaryBtn onClick={handleCreateNew}>
-            Build your first Arrangement →
+            <Plus size={16} />
+            New arrangement
           </PrimaryBtn>
         )}
       </div>
@@ -368,173 +460,314 @@ export default function ArrangementsPage() {
 
       {/* Arrangements tab content */}
       {activeTab === 'arrangements' && (
-        <div
-          style={{
-            display: 'grid',
-            gap: 16,
-          }}
-        >
-          {arrangements.map((arr) => {
-          const steps = arr.enrichment_steps || [];
-          const providerNames = steps
-            .sort((a, b) => a.order - b.order)
-            .map((step) => step.provider.charAt(0).toUpperCase() + step.provider.slice(1))
-            .join(' → ');
-
-          const totalFields = new Set(steps.flatMap((step) => step.fields)).size;
-          const isHighlighted = highlightedId === arr.id;
-
-          return (
+        <>
+          {/* Bulk actions bar */}
+          {selectedIds.size > 0 && canCreate && (
             <div
-              key={arr.id}
-              ref={(el) => {
-                highlightRefs.current[arr.id] = el;
-              }}
               style={{
-                background: C.surface,
-                border: `1px solid ${isHighlighted ? C.green : C.border}`,
-                borderRadius: 8,
-                padding: 20,
-                boxShadow: isHighlighted ? `0 0 0 3px ${C.greenDim}` : undefined,
-                transition: 'all 0.3s ease',
+                padding: '12px 16px',
+                background: '#162944',
+                border: `1px solid ${C.border}`,
+                borderBottom: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 16,
               }}
             >
-              {/* Header */}
-              <div
+              <span style={{ fontSize: 14, color: C.text2, fontFamily: F.sans }}>
+                {selectedIds.size} arrangement{selectedIds.size > 1 ? 's' : ''} selected
+              </span>
+              <button
+                onClick={() => setBulkDeleteModalOpen(true)}
                 style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'start',
-                  marginBottom: 8,
+                  padding: '6px 12px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: C.red,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  fontFamily: F.sans,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textDecoration = 'underline';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textDecoration = 'none';
                 }}
               >
-                <div style={{ flex: 1 }}>
-                  <h3
+                Delete selected
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                style={{
+                  padding: '6px 12px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: C.text3,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  fontFamily: F.sans,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textDecoration = 'underline';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textDecoration = 'none';
+                }}
+              >
+                Deselect all
+              </button>
+            </div>
+          )}
+
+          {/* Table */}
+          <div>
+            {/* Header row */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: canCreate ? '40px 2fr 1.5fr 140px 120px 180px' : '2fr 1.5fr 140px 120px 180px',
+                padding: '12px 16px',
+                background: '#1C3654',
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+                fontSize: 12,
+                fontWeight: 600,
+                color: C.text3,
+                fontFamily: F.sans,
+              }}
+            >
+              {canCreate && (
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === arrangements.length}
+                    onChange={toggleSelectAll}
                     style={{
-                      fontSize: 16,
-                      fontWeight: 600,
+                      width: 16,
+                      height: 16,
+                      cursor: 'pointer',
+                      accentColor: '#2E6BA8',
+                    }}
+                  />
+                </div>
+              )}
+              <div>Name</div>
+              <div>Fields</div>
+              <div>Last run</div>
+              <div>Status</div>
+              <div>Actions</div>
+            </div>
+
+            {/* Data rows */}
+            {arrangements.map((arr) => {
+              const steps = arr.enrichment_steps || [];
+              const totalFields = new Set(steps.flatMap((step) => step.fields)).size;
+              const fieldsText = steps
+                .flatMap((step) => step.fields)
+                .slice(0, 3)
+                .join(', ');
+              const remainingFields = totalFields - 3;
+
+              return (
+                <div
+                  key={arr.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: canCreate ? '40px 2fr 1.5fr 140px 120px 180px' : '2fr 1.5fr 140px 120px 180px',
+                    padding: '12px 16px',
+                    background: '#162944',
+                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    fontSize: 14,
+                    alignItems: 'center',
+                    fontFamily: F.sans,
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#162944';
+                  }}
+                >
+                  {canCreate && (
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(arr.id)}
+                        onChange={() => toggleSelect(arr.id)}
+                        style={{
+                          width: 16,
+                          height: 16,
+                          cursor: 'pointer',
+                          accentColor: '#2E6BA8',
+                        }}
+                      />
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      fontWeight: 500,
                       color: C.text,
-                      marginBottom: 4,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => router.push(`/arrangements/${arr.id}`)}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.textDecoration = 'underline';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.textDecoration = 'none';
                     }}
                   >
                     {arr.name}
-                  </h3>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: C.text3,
-                      marginBottom: 12,
-                    }}
-                  >
-                    {providerNames} · {arr.total_runs} runs · {totalFields} fields
+                  </div>
+                  <div style={{ color: 'rgba(249,248,245,0.7)' }}>
+                    {fieldsText}
+                    {remainingFields > 0 && `, +${remainingFields} more`}
+                  </div>
+                  <div style={{ color: 'rgba(249,248,245,0.7)' }}>
+                    {arr.last_run_at ? formatDate(arr.last_run_at) : '—'}
+                  </div>
+                  <div>{getStatusBadge(arr)}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {canCreate && (
+                      <>
+                        <button
+                          onClick={() => handleRunClick(arr)}
+                          style={{
+                            padding: '6px 12px',
+                            background: C.indigo,
+                            border: 'none',
+                            borderRadius: 6,
+                            color: C.text,
+                            fontSize: 13,
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            fontFamily: F.sans,
+                          }}
+                        >
+                          Run
+                        </button>
+                        <button
+                          onClick={() => router.push(`/arrangements/new?edit=${arr.id}`)}
+                          style={{
+                            padding: '6px 12px',
+                            background: 'transparent',
+                            border: `1px solid ${C.border2}`,
+                            borderRadius: 6,
+                            color: C.text2,
+                            fontSize: 13,
+                            cursor: 'pointer',
+                            fontFamily: F.sans,
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={() => setOpenDropdownId(openDropdownId === arr.id ? null : arr.id)}
+                            style={{
+                              padding: '6px 8px',
+                              background: 'transparent',
+                              border: `1px solid ${C.border2}`,
+                              borderRadius: 6,
+                              color: C.text2,
+                              fontSize: 13,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+
+                          {/* Dropdown menu */}
+                          {openDropdownId === arr.id && (
+                            <>
+                              {/* Backdrop */}
+                              <div
+                                style={{
+                                  position: 'fixed',
+                                  inset: 0,
+                                  zIndex: 998,
+                                }}
+                                onClick={() => setOpenDropdownId(null)}
+                              />
+                              {/* Menu */}
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  right: 0,
+                                  top: '100%',
+                                  marginTop: 4,
+                                  background: C.surface,
+                                  border: `1px solid ${C.border}`,
+                                  borderRadius: 6,
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                                  zIndex: 999,
+                                  minWidth: 140,
+                                }}
+                              >
+                                <button
+                                  onClick={() => {
+                                    router.push(`/arrangements/${arr.id}`);
+                                    setOpenDropdownId(null);
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    textAlign: 'left',
+                                    color: C.text2,
+                                    fontSize: 13,
+                                    cursor: 'pointer',
+                                    fontFamily: F.sans,
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = C.hover;
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'transparent';
+                                  }}
+                                >
+                                  View details
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteClick(arr)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    textAlign: 'left',
+                                    color: C.red,
+                                    fontSize: 13,
+                                    cursor: 'pointer',
+                                    fontFamily: F.sans,
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = C.hover;
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'transparent';
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
-                {arr.last_run_at && (
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: C.text3,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
-                  >
-                    <Clock size={12} />
-                    Last run: {formatTimeAgo(arr.last_run_at)}
-                  </div>
-                )}
-              </div>
-
-              {/* Last run stats */}
-              {arr.last_run_stats && (
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: C.text2,
-                    marginBottom: 16,
-                    paddingBottom: 16,
-                    borderBottom: `1px solid ${C.border}`,
-                  }}
-                >
-                  Last run:{' '}
-                  <strong style={{ color: C.text }}>
-                    {arr.last_run_stats.records_enriched.toLocaleString()} records enriched
-                  </strong>{' '}
-                  ·{' '}
-                  <strong style={{ color: C.green }}>
-                    {Math.round(arr.last_run_stats.fill_rate * 100)}% fill rate
-                  </strong>{' '}
-                  · {formatDuration(arr.last_run_stats.duration_seconds)}
-                </div>
-              )}
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: 8 }}>
-                {canCreate && (
-                  <>
-                    <button
-                      onClick={() => handleRun(arr.id)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '8px 16px',
-                        background: C.indigo,
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: 6,
-                        fontSize: 13,
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.opacity = '0.9';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.opacity = '1';
-                      }}
-                    >
-                      Run again
-                    </button>
-                    <GhostBtn onClick={() => router.push(`/arrangements/${arr.id}`)}>
-                      <Edit size={14} />
-                      Edit
-                    </GhostBtn>
-                  </>
-                )}
-                <GhostBtn onClick={() => router.push(`/arrangements/${arr.id}`)}>
-                  View details
-                </GhostBtn>
-                {canCreate && (
-                  <button
-                    onClick={() => handleDeleteClick(arr)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '8px 12px',
-                      background: 'transparent',
-                      border: `1px solid ${C.border2}`,
-                      borderRadius: 6,
-                      fontSize: 13,
-                      color: C.red,
-                      cursor: 'pointer',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = C.redDim;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* History tab content */}
@@ -698,26 +931,37 @@ export default function ArrangementsPage() {
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              width: 480,
-              background: C.surface,
-              border: `1px solid ${C.border}`,
-              borderRadius: 12,
+              width: 440,
+              background: '#1C3654',
+              border: '1px solid rgba(255,255,255,0.1)',
               boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
               zIndex: 9999,
               padding: 24,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <Trash2 size={24} color={C.red} />
-              <div style={{ fontSize: 16, fontWeight: 600, color: C.text }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: C.text, fontFamily: F.sans }}>
                 Delete arrangement?
               </div>
+              <button
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deleting}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: C.text3,
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  padding: 4,
+                }}
+              >
+                <X size={20} />
+              </button>
             </div>
-            <div style={{ fontSize: 13, color: C.text3, marginBottom: 8 }}>
+            <div style={{ fontSize: 13, color: C.text3, marginBottom: 8, fontFamily: F.sans }}>
               Are you sure you want to delete <strong style={{ color: C.text }}>{arrangementToDelete.name}</strong>?
             </div>
-            <div style={{ fontSize: 13, color: C.text3, marginBottom: 20 }}>
-              This will archive the arrangement and preserve its run history. This action cannot be undone.
+            <div style={{ fontSize: 13, color: C.text3, marginBottom: 20, fontFamily: F.sans }}>
+              This cannot be undone. Run history will be preserved.
             </div>
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -726,7 +970,7 @@ export default function ArrangementsPage() {
                 disabled={deleting}
                 style={{
                   padding: '8px 16px',
-                  background: C.surface,
+                  background: 'transparent',
                   border: `1px solid ${C.border2}`,
                   borderRadius: 6,
                   color: C.text,
@@ -754,7 +998,257 @@ export default function ArrangementsPage() {
                   opacity: deleting ? 0.6 : 1,
                 }}
               >
-                {deleting ? 'Deleting...' : 'Delete arrangement'}
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Bulk delete confirmation modal */}
+      {bulkDeleteModalOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.6)',
+              zIndex: 9998,
+            }}
+            onClick={() => !deleting && setBulkDeleteModalOpen(false)}
+          />
+          {/* Modal */}
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 440,
+              background: '#1C3654',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              zIndex: 9999,
+              padding: 24,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: C.text, fontFamily: F.sans }}>
+                Delete {selectedIds.size} arrangement{selectedIds.size > 1 ? 's' : ''}?
+              </div>
+              <button
+                onClick={() => setBulkDeleteModalOpen(false)}
+                disabled={deleting}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: C.text3,
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  padding: 4,
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ fontSize: 13, color: C.text3, marginBottom: 20, fontFamily: F.sans }}>
+              This cannot be undone. Run history will be preserved.
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setBulkDeleteModalOpen(false)}
+                disabled={deleting}
+                style={{
+                  padding: '8px 16px',
+                  background: 'transparent',
+                  border: `1px solid ${C.border2}`,
+                  borderRadius: 6,
+                  color: C.text,
+                  fontSize: 13,
+                  fontFamily: F.sans,
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  opacity: deleting ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDeleteConfirm}
+                disabled={deleting}
+                style={{
+                  padding: '8px 16px',
+                  background: C.red,
+                  border: 'none',
+                  borderRadius: 6,
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: F.sans,
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  opacity: deleting ? 0.6 : 1,
+                }}
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Run confirmation modal */}
+      {runConfirmModalOpen && arrangementToRun && (
+        <>
+          {/* Backdrop */}
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.6)',
+              zIndex: 9998,
+            }}
+            onClick={() => !running && setRunConfirmModalOpen(false)}
+          />
+          {/* Modal */}
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 440,
+              maxWidth: '90vw',
+              background: '#1C3654',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              zIndex: 9999,
+              padding: 24,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: C.text, fontFamily: F.sans }}>
+                Run arrangement
+              </div>
+              <button
+                onClick={() => setRunConfirmModalOpen(false)}
+                disabled={running}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: C.text3,
+                  cursor: running ? 'not-allowed' : 'pointer',
+                  padding: 4,
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 4, fontFamily: F.sans }}>
+                {arrangementToRun.name}
+              </div>
+              <div style={{ fontSize: 13, color: C.text3, fontFamily: F.sans }}>
+                {arrangementToRun.enrichment_steps
+                  ?.flatMap(step => step.fields)
+                  .slice(0, 3)
+                  .join(', ')}
+              </div>
+            </div>
+
+            {estimateLoading ? (
+              <div style={{ padding: '40px 0', textAlign: 'center', color: C.text3 }}>
+                Loading estimate...
+              </div>
+            ) : runEstimate && (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.text3, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: F.sans }}>
+                    Scope
+                  </div>
+                  <div style={{ fontSize: 13, color: C.text2, fontFamily: F.sans }}>
+                    All companies with missing fields
+                  </div>
+                  <div style={{ fontSize: 13, color: C.text, fontWeight: 500, fontFamily: F.sans }}>
+                    Estimated records: ~{runEstimate.estimated_records.toLocaleString()}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.text3, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: F.sans }}>
+                    Provider
+                  </div>
+                  <div style={{ fontSize: 13, color: C.text, fontWeight: 500, fontFamily: F.sans }}>
+                    {runEstimate.provider.charAt(0).toUpperCase() + runEstimate.provider.slice(1)}
+                    {runEstimate.is_byok && ' (uses your API key)'}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.text3, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: F.sans }}>
+                    Credits
+                  </div>
+                  {runEstimate.is_byok ? (
+                    <div style={{ fontSize: 13, color: C.text2, fontFamily: F.sans }}>
+                      No Refyne credits used
+                      <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>
+                        (BYOK arrangement - {runEstimate.provider} is free from Refyne's perspective)
+                      </div>
+                    </div>
+                  ) : runEstimate.credits_required > runEstimate.credits_available ? (
+                    <div style={{ fontSize: 13, color: C.amber, fontFamily: F.sans }}>
+                      ~{runEstimate.credits_required} Refyne credits required
+                      <div style={{ fontSize: 12, color: C.amber, marginTop: 4 }}>
+                        You have {runEstimate.credits_available} remaining. Not enough credits. Upgrade your plan.
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: C.text2, fontFamily: F.sans }}>
+                      ~{runEstimate.credits_required} Refyne credits
+                      <div style={{ fontSize: 12, color: C.text3, marginTop: 4 }}>
+                        You have {runEstimate.credits_available} remaining ({Math.round((runEstimate.credits_available - runEstimate.credits_required) / runEstimate.credits_available * 100)}% after this run)
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setRunConfirmModalOpen(false)}
+                disabled={running}
+                style={{
+                  padding: '8px 16px',
+                  background: 'transparent',
+                  border: `1px solid ${C.border2}`,
+                  borderRadius: 6,
+                  color: C.text,
+                  fontSize: 13,
+                  fontFamily: F.sans,
+                  cursor: running ? 'not-allowed' : 'pointer',
+                  opacity: running ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRunConfirm}
+                disabled={running || (runEstimate && !runEstimate.is_byok && runEstimate.credits_required > runEstimate.credits_available)}
+                style={{
+                  padding: '8px 16px',
+                  background: C.indigo,
+                  border: 'none',
+                  borderRadius: 6,
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: F.sans,
+                  cursor: running || (runEstimate && !runEstimate.is_byok && runEstimate.credits_required > runEstimate.credits_available) ? 'not-allowed' : 'pointer',
+                  opacity: running || (runEstimate && !runEstimate.is_byok && runEstimate.credits_required > runEstimate.credits_available) ? 0.6 : 1,
+                }}
+              >
+                {running ? 'Starting...' : 'Run arrangement →'}
               </button>
             </div>
           </div>
