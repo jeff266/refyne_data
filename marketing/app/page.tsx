@@ -41,34 +41,9 @@ export default function Home() {
           </div>
 
           {/* Trust Signal */}
-          <p className="text-[13px] text-text-2 font-jost mb-16">
+          <p className="text-[13px] text-text-2 font-jost">
             No credit card required. 14-day free trial. Cancel anytime.
           </p>
-
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-3xl mx-auto pt-8 border-t border-border">
-            <div>
-              <div className="text-4xl font-lora font-bold bg-gradient-to-br from-[#2E6BA8] to-[#7C3AED] bg-clip-text text-transparent mb-2"
-                   style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                2,835+
-              </div>
-              <div className="text-sm text-text-2">Records normalized</div>
-            </div>
-            <div>
-              <div className="text-4xl font-lora font-bold bg-gradient-to-br from-[#2E6BA8] to-[#7C3AED] bg-clip-text text-transparent mb-2"
-                   style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                Under 2 min
-              </div>
-              <div className="text-sm text-text-2">Full cleanup run</div>
-            </div>
-            <div>
-              <div className="text-4xl font-lora font-bold bg-gradient-to-br from-[#2E6BA8] to-[#7C3AED] bg-clip-text text-transparent mb-2"
-                   style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                14-day
-              </div>
-              <div className="text-sm text-text-2">Free trial</div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -222,8 +197,8 @@ export default function Home() {
               "Refyne saved us 15 hours a week on data cleanup. Our sales team finally trusts the data in HubSpot."
             </p>
             <div>
-              <div className="font-bold">Sarah Chen</div>
-              <div className="text-sm text-text-2">Head of Revenue Operations, TechCorp</div>
+              <div className="font-bold">Jeff Ignacio</div>
+              <div className="text-sm text-text-2">Founder, RevOps Impact</div>
             </div>
           </div>
         </div>
