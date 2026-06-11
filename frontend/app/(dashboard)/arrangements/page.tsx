@@ -1234,7 +1234,7 @@ export default function ArrangementsPage() {
               </button>
               <button
                 onClick={handleRunConfirm}
-                disabled={running || (runEstimate && !runEstimate.is_byok && runEstimate.credits_required > runEstimate.credits_available)}
+                disabled={running || Boolean(runEstimate && runEstimate.is_byok !== true && runEstimate.credits_required > runEstimate.credits_available)}
                 style={{
                   padding: '8px 16px',
                   background: C.indigo,
