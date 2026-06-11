@@ -88,7 +88,7 @@ export function ScanningState({ jobId, orgId, onComplete }: ScanningStateProps) 
           setProgress(data);
 
           // If scan is complete, show completion state for 2 seconds then transition
-          if (data.completed && data.phase === 'completed') {
+          if (data.phase === 'completed') {
             console.log(`[ScanningState] Scan completed, showing completion state for 2s`);
             setShowComplete(true);
             stopPolling();
