@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import AdminWorkspaceControls from '@/components/admin/AdminWorkspaceControls';
 
 interface WorkspaceDetail {
   org_id: string;
@@ -184,6 +185,9 @@ export default function WorkspaceDetailPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Admin Controls */}
+        <AdminWorkspaceControls orgId={orgId} />
+
         {/* Workspace Info */}
         <div className="grid grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-lg border border-gray-200 p-6">
