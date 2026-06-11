@@ -11,8 +11,21 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 px-6 overflow-hidden">
         <div className="max-w-[1100px] mx-auto text-center">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[rgba(255,255,255,0.12)] mb-8">
+            <div className="w-2 h-2 rounded-full bg-[#FF7A59]"></div>
+            <span className="text-sm text-text-2">Built for HubSpot</span>
+          </div>
+
           <h1 className="font-lora text-5xl md:text-6xl font-bold mb-6 leading-tight">
-            Your HubSpot data.<br />Finally clean.
+            Your HubSpot data.
+            <br />
+            <span
+              className="bg-gradient-to-br from-[#2E6BA8] to-[#7C3AED] bg-clip-text text-transparent"
+              style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+            >
+              Finally clean.
+            </span>
           </h1>
           <p className="text-xl text-text-2 mb-10 max-w-2xl mx-auto">
             Refyne normalizes formats, removes duplicates, and fixes data quality issues automatically, so your team always works from a single source of truth.
@@ -28,9 +41,34 @@ export default function Home() {
           </div>
 
           {/* Trust Signal */}
-          <p className="text-[13px] text-text-2 font-jost">
+          <p className="text-[13px] text-text-2 font-jost mb-16">
             No credit card required. 14-day free trial. Cancel anytime.
           </p>
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-3xl mx-auto pt-8 border-t border-border">
+            <div>
+              <div className="text-4xl font-lora font-bold bg-gradient-to-br from-[#2E6BA8] to-[#7C3AED] bg-clip-text text-transparent mb-2"
+                   style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                2,835+
+              </div>
+              <div className="text-sm text-text-2">Records normalized</div>
+            </div>
+            <div>
+              <div className="text-4xl font-lora font-bold bg-gradient-to-br from-[#2E6BA8] to-[#7C3AED] bg-clip-text text-transparent mb-2"
+                   style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                Under 2 min
+              </div>
+              <div className="text-sm text-text-2">Full cleanup run</div>
+            </div>
+            <div>
+              <div className="text-4xl font-lora font-bold bg-gradient-to-br from-[#2E6BA8] to-[#7C3AED] bg-clip-text text-transparent mb-2"
+                   style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                14-day
+              </div>
+              <div className="text-sm text-text-2">Free trial</div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -48,8 +86,8 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-[32px]">
-              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] mb-4">
+            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-8 rounded-xl">
+              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] rounded-lg mb-4">
                 <ArrowUpDown className="w-5 h-5 text-[#2E6BA8]" />
               </div>
               <h3 className="font-lora text-xl font-bold mb-3">Normalize</h3>
@@ -61,8 +99,8 @@ export default function Home() {
               </code>
             </div>
 
-            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-[32px]">
-              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] mb-4">
+            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-8 rounded-xl">
+              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] rounded-lg mb-4">
                 <GitMerge className="w-5 h-5 text-[#2E6BA8]" />
               </div>
               <h3 className="font-lora text-xl font-bold mb-3">Dedup</h3>
@@ -74,8 +112,8 @@ export default function Home() {
               </code>
             </div>
 
-            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-[32px]">
-              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] mb-4">
+            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-8 rounded-xl">
+              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] rounded-lg mb-4">
                 <Sparkles className="w-5 h-5 text-[#2E6BA8]" />
               </div>
               <h3 className="font-lora text-xl font-bold mb-3">Enrich</h3>
@@ -87,8 +125,8 @@ export default function Home() {
               </code>
             </div>
 
-            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-[32px]">
-              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] mb-4">
+            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-8 rounded-xl">
+              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] rounded-lg mb-4">
                 <Bell className="w-5 h-5 text-[#2E6BA8]" />
               </div>
               <h3 className="font-lora text-xl font-bold mb-3">Always On</h3>
@@ -152,21 +190,21 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-bg border border-border p-8">
+            <div className="bg-bg border border-border p-8 rounded-xl">
               <h3 className="font-lora text-xl font-bold mb-3">RevOps Teams</h3>
               <p className="text-text-2 text-sm">
                 Stop spending hours on manual data cleanup. Automate normalization, deduplication, and enrichment so you can focus on strategy.
               </p>
             </div>
 
-            <div className="bg-bg border border-border p-8">
+            <div className="bg-bg border border-border p-8 rounded-xl">
               <h3 className="font-lora text-xl font-bold mb-3">Sales Leaders</h3>
               <p className="text-text-2 text-sm">
                 Give your reps clean, complete contact data. No more duplicate records, missing phone numbers, or formatting inconsistencies.
               </p>
             </div>
 
-            <div className="bg-bg border border-border p-8">
+            <div className="bg-bg border border-border p-8 rounded-xl">
               <h3 className="font-lora text-xl font-bold mb-3">Marketing Teams</h3>
               <p className="text-text-2 text-sm">
                 Run campaigns with confidence. Clean data means better segmentation, higher deliverability, and more accurate attribution.
@@ -204,7 +242,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="max-w-md mx-auto bg-bg border border-border p-8">
+          <div className="max-w-md mx-auto bg-bg border border-border p-8 rounded-xl">
             <div className="mb-6">
               <div className="text-3xl font-lora font-bold mb-2">Starter</div>
               <div className="text-text-2 text-sm mb-4">Everything you need to get started</div>

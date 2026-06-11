@@ -25,7 +25,7 @@ export default function Pricing() {
         <div className="max-w-[1100px] mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Starter */}
-            <div className="bg-surface border border-border p-8">
+            <div className="bg-surface border border-border p-8 rounded-xl">
               <div className="mb-6">
                 <h3 className="text-2xl font-lora font-bold mb-2">Starter</h3>
                 <p className="text-text-2 text-sm mb-4">For small teams getting started</p>
@@ -63,8 +63,8 @@ export default function Pricing() {
             </div>
 
             {/* Growth (Recommended) */}
-            <div className="bg-accent border-2 border-accent p-8 relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-accent px-4 py-1 text-xs font-bold text-white">
+            <div className="bg-accent border-2 border-accent p-8 relative rounded-xl">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-accent px-4 py-1 text-xs font-bold text-white rounded-full">
                 RECOMMENDED
               </div>
               <div className="mb-6">
@@ -108,7 +108,7 @@ export default function Pricing() {
             </div>
 
             {/* Enterprise */}
-            <div className="bg-surface border border-border p-8">
+            <div className="bg-surface border border-border p-8 rounded-xl">
               <div className="mb-6">
                 <h3 className="text-2xl font-lora font-bold mb-2">Enterprise</h3>
                 <p className="text-text-2 text-sm mb-4">For large organizations</p>
