@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Lora, Jost } from "next/font/google";
+import { Lora, Jost, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 const lora = Lora({
@@ -14,6 +14,12 @@ const jost = Jost({
   display: "swap",
 });
 
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Refyne - Your HubSpot data. Finally clean.",
   description: "Refyne normalizes formats, removes duplicates, and fixes data quality issues automatically - so your team always works from a single source of truth.",
@@ -25,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${lora.variable} ${jost.variable}`}>
+    <html lang="en" className={`${lora.variable} ${jost.variable} ${jetbrainsMono.variable}`}>
       <body className="font-jost bg-bg text-text antialiased">
         {children}
       </body>

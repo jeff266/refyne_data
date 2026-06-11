@@ -1,6 +1,7 @@
 import { Navigation } from '@/components/Navigation';
 import { Button } from '@/components/Button';
 import { Footer } from '@/components/Footer';
+import { ArrowUpDown, GitMerge, Sparkles, Bell } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -14,10 +15,10 @@ export default function Home() {
             Your HubSpot data.<br />Finally clean.
           </h1>
           <p className="text-xl text-text-2 mb-10 max-w-2xl mx-auto">
-            Refyne normalizes formats, removes duplicates, and fixes data quality issues automatically — so your team always works from a single source of truth.
+            Refyne normalizes formats, removes duplicates, and fixes data quality issues automatically, so your team always works from a single source of truth.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
             <Button href="https://app.refynedata.com/sign-up" variant="primary">
               Get started →
             </Button>
@@ -26,21 +27,10 @@ export default function Home() {
             </Button>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-3xl mx-auto pt-8 border-t border-border">
-            <div>
-              <div className="text-3xl font-lora font-bold text-accent mb-2">10M+</div>
-              <div className="text-sm text-text-2">Records cleaned</div>
-            </div>
-            <div>
-              <div className="text-3xl font-lora font-bold text-accent mb-2">99.8%</div>
-              <div className="text-sm text-text-2">Accuracy rate</div>
-            </div>
-            <div>
-              <div className="text-3xl font-lora font-bold text-accent mb-2">5 min</div>
-              <div className="text-sm text-text-2">Average setup time</div>
-            </div>
-          </div>
+          {/* Trust Signal */}
+          <p className="text-[13px] text-text-2 font-jost">
+            No credit card required. 14-day free trial. Cancel anytime.
+          </p>
         </div>
       </section>
 
@@ -58,48 +48,56 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-bg border border-border p-8">
-              <div className="text-accent text-2xl mb-4">📐</div>
+            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-[32px]">
+              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] mb-4">
+                <ArrowUpDown className="w-5 h-5 text-[#2E6BA8]" />
+              </div>
               <h3 className="font-lora text-xl font-bold mb-3">Normalize</h3>
               <p className="text-text-2 text-sm mb-4">
                 Standardize phone numbers, company names, titles, locations, and custom fields across your entire database.
               </p>
-              <div className="text-xs text-text-2 font-mono">
+              <code className="block text-[13px] text-[rgba(249,248,245,0.6)] mt-3 font-[family-name:var(--font-jetbrains-mono)]">
                 (555) 123-4567 → +1 555-123-4567
-              </div>
+              </code>
             </div>
 
-            <div className="bg-bg border border-border p-8">
-              <div className="text-accent text-2xl mb-4">🔗</div>
+            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-[32px]">
+              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] mb-4">
+                <GitMerge className="w-5 h-5 text-[#2E6BA8]" />
+              </div>
               <h3 className="font-lora text-xl font-bold mb-3">Dedup</h3>
               <p className="text-text-2 text-sm mb-4">
                 Identify and merge duplicate contacts and companies using intelligent matching algorithms.
               </p>
-              <div className="text-xs text-text-2 font-mono">
+              <code className="block text-[13px] text-[rgba(249,248,245,0.6)] mt-3 font-[family-name:var(--font-jetbrains-mono)]">
                 john.smith@co.com + johnsmith@co.com → 1 record
-              </div>
+              </code>
             </div>
 
-            <div className="bg-bg border border-border p-8">
-              <div className="text-accent text-2xl mb-4">✨</div>
+            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-[32px]">
+              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] mb-4">
+                <Sparkles className="w-5 h-5 text-[#2E6BA8]" />
+              </div>
               <h3 className="font-lora text-xl font-bold mb-3">Enrich</h3>
               <p className="text-text-2 text-sm mb-4">
                 Fill in missing data like company info, job titles, and contact details from trusted sources.
               </p>
-              <div className="text-xs text-text-2 font-mono">
+              <code className="block text-[13px] text-[rgba(249,248,245,0.6)] mt-3 font-[family-name:var(--font-jetbrains-mono)]">
                 Missing phone → +1 555-987-6543
-              </div>
+              </code>
             </div>
 
-            <div className="bg-bg border border-border p-8">
-              <div className="text-accent text-2xl mb-4">🔄</div>
+            <div className="bg-[#1C3654] border border-[rgba(255,255,255,0.08)] p-[32px]">
+              <div className="w-10 h-10 flex items-center justify-center bg-[rgba(46,107,168,0.2)] mb-4">
+                <Bell className="w-5 h-5 text-[#2E6BA8]" />
+              </div>
               <h3 className="font-lora text-xl font-bold mb-3">Always On</h3>
               <p className="text-text-2 text-sm mb-4">
-                Automatically clean new records as they enter your CRM — no manual work required.
+                Automatically clean new records as they enter your CRM, no manual work required.
               </p>
-              <div className="text-xs text-text-2 font-mono">
+              <code className="block text-[13px] text-[rgba(249,248,245,0.6)] mt-3 font-[family-name:var(--font-jetbrains-mono)]">
                 New contact → Cleaned in real-time
-              </div>
+              </code>
             </div>
           </div>
         </div>
@@ -120,7 +118,7 @@ export default function Home() {
               <div className="text-6xl font-lora font-bold text-accent mb-6 opacity-20">01</div>
               <h3 className="font-lora text-xl font-bold mb-3">Connect HubSpot</h3>
               <p className="text-text-2 text-sm">
-                One-click OAuth connection. We only request the permissions we need — nothing more.
+                One-click OAuth connection. We only request the permissions we need, nothing more.
               </p>
             </div>
 
