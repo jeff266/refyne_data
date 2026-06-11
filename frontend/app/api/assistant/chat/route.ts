@@ -1,31 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
 import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 });
 
-// Rate limiting: 20 messages per hour per user
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+// Conversation compaction settings
+const COMPACT_THRESHOLD = 10;  // total messages
+const RECENT_TURNS_TO_KEEP = 4;  // messages kept verbatim (2 exchanges)
 
-function checkRateLimit(userId: string): { allowed: boolean; resetAt?: number } {
-  const now = Date.now();
-  const limit = rateLimitMap.get(userId);
-
-  if (!limit || now > limit.resetAt) {
-    // New window
-    rateLimitMap.set(userId, { count: 1, resetAt: now + 60 * 60 * 1000 }); // 1 hour
-    return { allowed: true };
-  }
-
-  if (limit.count >= 20) {
-    return { allowed: false, resetAt: limit.resetAt };
-  }
-
-  limit.count++;
-  return { allowed: true };
-}
+type Message = {
+  role: 'user' | 'assistant';
+  content: string;
+};
 
 const REFYNE_SYSTEM_PROMPT = `You are Refyne Assistant, a helpful guide built into Refyne, a HubSpot CRM data quality tool.
 
@@ -122,7 +111,54 @@ TONE:
 - Never make up features that don't exist
 - Use "you" not "the user"`;
 
+/**
+ * Compact conversation history when it exceeds threshold.
+ * Summarizes older turns and keeps recent turns verbatim.
+ */
+async function compactHistory(history: Message[]): Promise<Message[]> {
+  if (history.length <= COMPACT_THRESHOLD) {
+    return history;
+  }
+
+  const older = history.slice(0, -RECENT_TURNS_TO_KEEP);
+  const recent = history.slice(-RECENT_TURNS_TO_KEEP);
+
+  // Generate summary of older conversation
+  const summaryResponse = await anthropic.messages.create({
+    model: 'claude-3-5-haiku-20241022',
+    max_tokens: 200,
+    messages: [
+      {
+        role: 'user',
+        content: `Summarize this conversation history concisely in 3-5 sentences. Focus on what features were discussed and what was resolved.
+
+History: ${JSON.stringify(older)}`,
+      },
+    ],
+  });
+
+  const summaryContent = summaryResponse.content[0];
+  if (summaryContent.type !== 'text') {
+    throw new Error('Unexpected summary response type');
+  }
+
+  const summary = summaryContent.text;
+
+  return [
+    {
+      role: 'user',
+      content: `[Earlier conversation summary: ${summary}]`,
+    },
+    {
+      role: 'assistant',
+      content: 'Understood. I have context from our earlier discussion.',
+    },
+    ...recent,
+  ];
+}
+
 export async function POST(req: NextRequest) {
+  // 1. Auth
   let ctx;
   try {
     ctx = await getOrgContext();
@@ -135,16 +171,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Rate limiting
-    const rateLimitCheck = checkRateLimit(ctx.userId);
-    if (!rateLimitCheck.allowed) {
-      const resetIn = Math.ceil((rateLimitCheck.resetAt! - Date.now()) / 1000 / 60);
-      return NextResponse.json(
-        { error: `Rate limit exceeded. Try again in ${resetIn} minutes.` },
-        { status: 429 }
-      );
-    }
+    // 2. Rate limit (per user, not org)
+    const limited = await checkRateLimit(rateLimiters.assistant, ctx.userId);
+    if (limited) return limited;
 
+    // 3. Parse and validate body
     const body = await req.json();
     const { message, history } = body;
 
@@ -152,23 +183,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    // Truncate history to last 10 messages to prevent context overflow
-    const truncatedHistory = (history || []).slice(-10);
+    // 4. Compact history if needed
+    const processedHistory = await compactHistory(history || []);
 
-    // Build messages array
+    // 5. Build messages array
     const messages: Anthropic.MessageParam[] = [
-      ...truncatedHistory.map((msg: { role: string; content: string }) => ({
+      ...processedHistory.map((msg) => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
       })),
       { role: 'user' as const, content: message },
     ];
 
-    // Call Anthropic API
+    // 6. Call Claude with cached system prompt
     const response = await anthropic.messages.create({
       model: 'claude-3-5-haiku-20241022',
       max_tokens: 1000,
-      system: REFYNE_SYSTEM_PROMPT,
+      system: [
+        {
+          type: 'text',
+          text: REFYNE_SYSTEM_PROMPT,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages,
     });
 
@@ -177,6 +214,7 @@ export async function POST(req: NextRequest) {
       throw new Error('Unexpected response type from Anthropic');
     }
 
+    // 7. Return response
     return NextResponse.json({ response: assistantMessage.text });
   } catch (error: unknown) {
     console.error('Assistant chat error:', error);

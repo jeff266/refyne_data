@@ -40,6 +40,14 @@ export const rateLimiters = {
     prefix: 'rl:requests',
     // 10 provider requests per day per org
   }),
+
+  // Assistant chat - per user (not org)
+  assistant: new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(20, '1 h'),
+    prefix: 'rl:assistant',
+    // 20 messages per hour per user
+  }),
 };
 
 export async function checkRateLimit(
