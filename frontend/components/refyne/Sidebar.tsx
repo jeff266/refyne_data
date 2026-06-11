@@ -27,6 +27,7 @@ import { C, F, NAV } from '@/lib/design-tokens';
 import { RefyneLogo } from './RefyneLogo';
 import { useEnrichRun } from '@/context/EnrichRunContext';
 import { CreditsWidget } from './CreditsWidget';
+import { AlwaysOnStatus } from './AlwaysOnStatus';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useCookieConsent } from '@/hooks/useCookieConsent';
 import { FEATURE_FLAGS } from '@/lib/features/flags';
@@ -188,6 +189,9 @@ export function Sidebar() {
       </nav>
 
       <div style={{ borderTop: `1px solid ${C.border}`, padding: '8px 8px' }}>
+        {/* Always On Status Indicator */}
+        <AlwaysOnStatus />
+
         <CreditsWidget />
         <div
           style={{

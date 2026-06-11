@@ -12,9 +12,6 @@ import { TrendChart } from './TrendChart';
 import { OnboardingWrapper } from './OnboardingWrapper';
 import { DashboardClient } from './DashboardClient';
 import { ComplianceAIOverview } from './ComplianceAIOverview';
-import { DashboardTopSection } from '@/components/dashboard/DashboardTopSection';
-import { FieldCoverageSection } from '@/components/dashboard/FieldCoverageSection';
-import { NeedsAttentionSection } from '@/components/dashboard/NeedsAttentionSection';
 import { auth } from '@clerk/nextjs/server';
 
 // ─────────────────────────────────────────────────────────────
@@ -572,10 +569,7 @@ async function ClientData() {
   );
 }
 
-export default async function DashboardPage() {
-  const { orgId } = await auth();
-  if (!orgId) return null;
-
+export default function DashboardPage() {
   return (
     <div style={{ padding: '28px 32px', fontFamily: F.sans, position: 'relative' }}>
       <Suspense fallback={<StatCardsSkeleton />}>
@@ -585,20 +579,13 @@ export default async function DashboardPage() {
       {/* Onboarding Checklist */}
       <OnboardingWrapper />
 
-      {/* Always On Upsell OR Since Yesterday Section */}
-      <DashboardTopSection orgId={orgId} />
-
-      {/* Field Coverage Section */}
-      <FieldCoverageSection orgId={orgId} />
-
-      {/* Needs Your Attention Section */}
-      <NeedsAttentionSection />
-
       <Suspense fallback={null}>
         <ClientData />
       </Suspense>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, marginTop: 24 }}>
+      <ComplianceAIOverview />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Suspense fallback={<HarmonyBarsSkeleton />}>
             <HarmonyBarsSection />
@@ -618,22 +605,6 @@ export default async function DashboardPage() {
             <PortalsSection />
           </Suspense>
         </div>
-      </div>
-
-      {/* AI Overview moved to bottom and renamed to "Analysis" */}
-      <div style={{ marginTop: 24 }}>
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: C.text,
-            marginBottom: 16,
-            letterSpacing: '-0.01em',
-          }}
-        >
-          Analysis
-        </div>
-        <ComplianceAIOverview />
       </div>
     </div>
   );

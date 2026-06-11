@@ -12,6 +12,7 @@ export { InsightRow } from './InsightRow';
 export { Tooltip } from './Tooltip';
 export { GlobalStyles } from './GlobalStyles';
 export { Sidebar } from './Sidebar';
+export { AlwaysOnStatus } from './AlwaysOnStatus';
 export { TopBar } from './TopBar';
 export { Skeleton } from './Skeleton';
 export { HowItWorksStrip } from './HowItWorksStrip';

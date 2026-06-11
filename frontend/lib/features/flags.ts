@@ -6,6 +6,7 @@ export const FEATURE_FLAGS = {
   BETA_FEATURES: 'beta_features',       // master opt-in toggle
   EVENT_LIST_IMPORT: 'event_list_import', // Event List Import feature
   CONTACT_DEDUP: 'contact_dedup',        // Contact dedup UI
+  ALWAYS_ON: 'always_on',                // Always On overnight processing
 } as const;
 
 export type FeatureFlag = typeof FEATURE_FLAGS[keyof typeof FEATURE_FLAGS];
