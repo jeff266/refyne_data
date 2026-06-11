@@ -1,7 +1,8 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { OrganizationSwitcher } from '@clerk/nextjs';
+import { OrganizationSwitcher, useOrganization } from '@clerk/nextjs';
 import { ChevronRight, Command, RefreshCw, Plus } from 'lucide-react';
 import { C, F, PAGE_META } from '@/lib/design-tokens';
 import { PrimaryBtn } from './PrimaryBtn';
@@ -11,6 +12,24 @@ export function TopBar() {
   const pathname = usePathname();
   const currentPage = pathname.split('/')[1] || 'dashboard';
   const meta = PAGE_META[currentPage] || { label: 'Dashboard', action: null };
+
+  // Force full page reload when organization changes to clear all cached state
+  const { organization } = useOrganization();
+  const orgIdRef = useRef<string | undefined>();
+
+  useEffect(() => {
+    // Skip on initial mount
+    if (orgIdRef.current === undefined) {
+      orgIdRef.current = organization?.id;
+      return;
+    }
+
+    // If org changed, force full page reload to clear cached data
+    if (organization?.id !== orgIdRef.current) {
+      console.log('[TopBar] Organization changed, forcing page reload to clear cache');
+      window.location.href = pathname;
+    }
+  }, [organization?.id, pathname]);
 
   return (
     <div
