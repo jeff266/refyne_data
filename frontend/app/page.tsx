@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import { C, F } from '@/lib/design-tokens';
 
@@ -120,6 +123,15 @@ const RefyneMark = ({ size = 28 }: { size?: number }) => (
 // ── Page ────────────────────────────────────────────────────────────
 
 export default function HomePage() {
+  const [email, setEmail] = useState('');
+
+  const handleStartTrial = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (email) {
+      e.preventDefault();
+      window.location.href = `https://app.refynedata.com/sign-up?email=${encodeURIComponent(email)}`;
+    }
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -130,6 +142,7 @@ export default function HomePage() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         a { text-decoration: none; }
       `}</style>
@@ -210,23 +223,62 @@ export default function HomePage() {
           </span>
         </h1>
 
+        {/* Two-tone subtitle */}
+        <h2 style={{
+          fontSize: 'clamp(18px, 2.5vw, 24px)',
+          fontWeight: 700,
+          color: 'rgba(249,248,245,0.4)',
+          lineHeight: 1.3,
+          letterSpacing: '-0.02em',
+          maxWidth: 600,
+          marginTop: -16,
+        }}>
+          No manual cleanup. No spreadsheets. No data team required.
+        </h2>
+
         <p style={{
           fontSize: 18, color: C.text2, lineHeight: 1.65,
           maxWidth: 600, fontWeight: 400,
         }}>
-          Refyne normalizes formats, removes duplicates, and fixes data quality issues automatically, so your team always works from a single source of truth. No manual cleanup. No spreadsheets. No data team required.
+          Refyne normalizes formats, removes duplicates, and fixes data quality issues automatically, so your team always works from a single source of truth.
         </p>
 
+        {/* Email capture */}
+        <div style={{ width: '100%', maxWidth: 380, marginTop: 8 }}>
+          <input
+            type="email"
+            placeholder="Work email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{
+              width: '100%',
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: 6,
+              padding: '12px 16px',
+              color: C.text,
+              fontFamily: F.sans,
+              fontSize: 16,
+              marginBottom: 12,
+              outline: 'none',
+            }}
+          />
+        </div>
+
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <Link href="/sign-up" style={{
-            display: 'inline-flex', alignItems: 'center',
-            padding: '13px 32px',
-            background: `linear-gradient(to bottom, ${C.indigo}, ${C.indigoDk})`,
-            color: '#fff', borderRadius: 10,
-            fontSize: 15, fontWeight: 600,
-            letterSpacing: '-0.01em',
-            boxShadow: '0 0 0 1px rgba(99,102,241,0.3), 0 2px 10px rgba(0,0,0,0.4)',
-          }}>
+          <Link
+            href={email ? `https://app.refynedata.com/sign-up?email=${encodeURIComponent(email)}` : '/sign-up'}
+            onClick={handleStartTrial}
+            style={{
+              display: 'inline-flex', alignItems: 'center',
+              padding: '13px 32px',
+              background: `linear-gradient(to bottom, ${C.indigo}, ${C.indigoDk})`,
+              color: '#fff', borderRadius: 10,
+              fontSize: 15, fontWeight: 600,
+              letterSpacing: '-0.01em',
+              boxShadow: '0 0 0 1px rgba(99,102,241,0.3), 0 2px 10px rgba(0,0,0,0.4)',
+            }}
+          >
             Start free trial
           </Link>
           <Link href="/pricing" style={{
@@ -248,6 +300,112 @@ export default function HomePage() {
         }}>
           No credit card required. 14-day free trial. Cancel anytime.
         </p>
+
+        {/* Product UI Preview Placeholder */}
+        <div style={{
+          maxWidth: 700,
+          marginTop: 48,
+          width: '100%',
+        }}>
+          <div style={{
+            background: '#1C3654',
+            border: '1px solid rgba(255,255,255,0.1)',
+            overflow: 'hidden',
+          }}>
+            {/* Table header */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '80px 1fr 120px',
+              padding: '12px 16px',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(0,0,0,0.2)',
+              fontSize: 11,
+              fontWeight: 600,
+              color: C.text3,
+              fontFamily: F.sans,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}>
+              <div>Grade</div>
+              <div>Cluster</div>
+              <div>Size</div>
+            </div>
+
+            {/* Table rows */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '80px 1fr 120px',
+              padding: '14px 16px',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              alignItems: 'center',
+            }}>
+              <div style={{
+                display: 'inline-block',
+                width: 24, height: 24,
+                background: 'rgba(34,197,94,0.15)',
+                border: '1px solid rgba(34,197,94,0.4)',
+                color: 'rgba(34,197,94,1)',
+                fontWeight: 700,
+                fontSize: 12,
+                fontFamily: F.mono,
+                textAlign: 'center',
+                lineHeight: '24px',
+              }}>
+                A
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>
+                  Acme Corp
+                </div>
+                <div style={{ fontSize: 11, color: C.text3, fontFamily: F.mono }}>
+                  Domain exact
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: C.text2 }}>2 records</div>
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '80px 1fr 120px',
+              padding: '14px 16px',
+              alignItems: 'center',
+            }}>
+              <div style={{
+                display: 'inline-block',
+                width: 24, height: 24,
+                background: 'rgba(34,197,94,0.15)',
+                border: '1px solid rgba(34,197,94,0.4)',
+                color: 'rgba(34,197,94,1)',
+                fontWeight: 700,
+                fontSize: 12,
+                fontFamily: F.mono,
+                textAlign: 'center',
+                lineHeight: '24px',
+              }}>
+                A
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>
+                  Kickstarter
+                </div>
+                <div style={{ fontSize: 11, color: C.text3, fontFamily: F.mono }}>
+                  Domain exact · Name 25%
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: C.text2 }}>2 records</div>
+            </div>
+          </div>
+
+          <p style={{
+            marginTop: 12,
+            fontSize: 11,
+            color: C.text3,
+            textAlign: 'center',
+            fontFamily: F.sans,
+          }}>
+            Live dedup queue - actual product
+          </p>
+        </div>
       </section>
 
       {/* ── Features ─────────────────────────────────────────────── */}
@@ -267,7 +425,15 @@ export default function HomePage() {
             fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700, color: C.text,
             letterSpacing: '-0.03em', lineHeight: 1.15,
           }}>
-            Everything your CRM data needs
+            Everything your CRM data needs.
+          </h2>
+          <h2 style={{
+            fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700,
+            color: 'rgba(249,248,245,0.4)',
+            letterSpacing: '-0.03em', lineHeight: 1.15,
+            marginTop: 4,
+          }}>
+            One tool. No integrations required.
           </h2>
         </div>
 
@@ -299,6 +465,215 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── Comparison Table ─────────────────────────────────────── */}
+      <section style={{
+        maxWidth: 1100, margin: '0 auto',
+        padding: '72px 24px',
+        borderTop: `1px solid ${C.border}`,
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 52 }}>
+          <h2 style={{
+            fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700, color: C.text,
+            letterSpacing: '-0.03em', lineHeight: 1.15,
+          }}>
+            For RevOps teams, not IT projects.
+          </h2>
+          <h2 style={{
+            fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700,
+            color: 'rgba(249,248,245,0.4)',
+            letterSpacing: '-0.03em', lineHeight: 1.15,
+            marginTop: 4,
+          }}>
+            That's the point.
+          </h2>
+          <p style={{
+            fontSize: 16, color: C.text2, lineHeight: 1.6,
+            maxWidth: 600, margin: '16px auto 0',
+          }}>
+            Blank workflows. Implementation fees. Months to value. Those are bugs, not features.
+          </p>
+        </div>
+
+        <div style={{
+          overflow: 'auto',
+          border: `1px solid ${C.border}`,
+        }}>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            fontFamily: F.sans,
+          }}>
+            <thead>
+              <tr style={{ background: 'rgba(0,0,0,0.2)' }}>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'left',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: C.text3,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  borderBottom: `1px solid ${C.border}`,
+                }}></th>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'center',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: C.text,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  background: 'rgba(46,107,168,0.15)',
+                  border: '1px solid rgba(46,107,168,0.4)',
+                  borderBottom: '1px solid rgba(46,107,168,0.4)',
+                }}>
+                  <div style={{ marginBottom: 4, fontSize: 13 }}>Refyne</div>
+                  <div style={{ fontSize: 10, color: C.indigoLt, fontWeight: 500 }}>Complete system</div>
+                </th>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'center',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: C.text3,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  borderBottom: `1px solid ${C.border}`,
+                }}>
+                  <div style={{ marginBottom: 4 }}>Insycle</div>
+                  <div style={{ fontSize: 10, fontWeight: 500 }}>More setup</div>
+                </th>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'center',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: C.text3,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  borderBottom: `1px solid ${C.border}`,
+                }}>
+                  <div style={{ marginBottom: 4 }}>Openprise</div>
+                  <div style={{ fontSize: 10, fontWeight: 500 }}>More cost</div>
+                </th>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'center',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: C.text3,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  borderBottom: `1px solid ${C.border}`,
+                }}>
+                  <div style={{ marginBottom: 4 }}>Manual cleanup</div>
+                  <div style={{ fontSize: 10, fontWeight: 500 }}>More time</div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { label: 'Time to value', refyne: 'Same day', insycle: 'Weeks', openprise: 'Months', manual: 'Never done' },
+                { label: 'Setup', refyne: '60 seconds', insycle: 'Hours', openprise: 'Months', manual: 'Ongoing' },
+                { label: 'HubSpot-native', refyne: '✓', insycle: 'Partial', openprise: 'No', manual: 'No' },
+                { label: 'Per-seat fees', refyne: 'Never', insycle: 'Yes', openprise: 'Yes', manual: 'N/A' },
+                { label: 'Record limits', refyne: 'Never', insycle: 'Yes', openprise: 'Yes', manual: 'N/A' },
+              ].map((row, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <td style={{
+                    padding: '14px 16px',
+                    fontSize: 13,
+                    color: C.text2,
+                    fontWeight: 500,
+                  }}>
+                    {row.label}
+                  </td>
+                  <td style={{
+                    padding: '14px 16px',
+                    textAlign: 'center',
+                    fontSize: 13,
+                    color: row.refyne === '✓' ? '#2E6BA8' : C.text,
+                    background: 'rgba(46,107,168,0.08)',
+                  }}>
+                    {row.refyne}
+                  </td>
+                  <td style={{
+                    padding: '14px 16px',
+                    textAlign: 'center',
+                    fontSize: 13,
+                    color: C.text3,
+                  }}>
+                    {row.insycle}
+                  </td>
+                  <td style={{
+                    padding: '14px 16px',
+                    textAlign: 'center',
+                    fontSize: 13,
+                    color: C.text3,
+                  }}>
+                    {row.openprise}
+                  </td>
+                  <td style={{
+                    padding: '14px 16px',
+                    textAlign: 'center',
+                    fontSize: 13,
+                    color: C.text3,
+                  }}>
+                    {row.manual}
+                  </td>
+                </tr>
+              ))}
+              <tr>
+                <td style={{
+                  padding: '14px 16px',
+                  fontSize: 13,
+                  color: C.text2,
+                  fontWeight: 500,
+                }}>
+                  Bottom line
+                </td>
+                <td style={{
+                  padding: '14px 16px',
+                  textAlign: 'center',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: C.text,
+                  background: 'rgba(46,107,168,0.15)',
+                  border: '1px solid rgba(46,107,168,0.4)',
+                  borderTop: '1px solid rgba(46,107,168,0.4)',
+                }}>
+                  Clean data.<br />Automatically.
+                </td>
+                <td style={{
+                  padding: '14px 16px',
+                  textAlign: 'center',
+                  fontSize: 13,
+                  color: C.text3,
+                }}>
+                  More config.
+                </td>
+                <td style={{
+                  padding: '14px 16px',
+                  textAlign: 'center',
+                  fontSize: 13,
+                  color: C.text3,
+                }}>
+                  Enterprise<br />pricing.
+                </td>
+                <td style={{
+                  padding: '14px 16px',
+                  textAlign: 'center',
+                  fontSize: 13,
+                  color: C.text3,
+                }}>
+                  Manual<br />forever.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* ── How it works ─────────────────────────────────────────── */}
       <section style={{
         maxWidth: 1100, margin: '0 auto',
@@ -316,7 +691,15 @@ export default function HomePage() {
             fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700, color: C.text,
             letterSpacing: '-0.03em', lineHeight: 1.15,
           }}>
-            Up and running in minutes
+            Up and running in minutes.
+          </h2>
+          <h2 style={{
+            fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700,
+            color: 'rgba(249,248,245,0.4)',
+            letterSpacing: '-0.03em', lineHeight: 1.15,
+            marginTop: 4,
+          }}>
+            Improving forever.
           </h2>
         </div>
 
@@ -324,6 +707,7 @@ export default function HomePage() {
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))',
           gap: 16,
+          marginBottom: 64,
         }}>
           <StepCard
             number="01"
@@ -340,6 +724,23 @@ export default function HomePage() {
             title="Watch it run"
             description="Refyne scans nightly, surfaces issues, and writes clean values back to HubSpot. Your compliance score improves automatically."
           />
+        </div>
+
+        {/* Staccato copy */}
+        <div style={{
+          textAlign: 'center',
+          maxWidth: 600,
+          margin: '0 auto',
+          fontFamily: 'Lora, serif',
+          fontStyle: 'italic',
+          fontSize: 24,
+          lineHeight: 1.5,
+          color: 'rgba(249,248,245,0.85)',
+        }}>
+          Your rules. Your formats.<br />
+          Applied to every record.<br />
+          Every night.<br />
+          Without you lifting a finger.
         </div>
       </section>
 
@@ -360,9 +761,16 @@ export default function HomePage() {
           <div>
             <h2 style={{
               fontSize: 'clamp(22px, 3vw, 30px)', fontWeight: 700, color: C.text,
-              letterSpacing: '-0.03em', marginBottom: 10,
+              letterSpacing: '-0.03em', marginBottom: 4,
             }}>
               One price. Unlimited seats. Unlimited records.
+            </h2>
+            <h2 style={{
+              fontSize: 'clamp(22px, 3vw, 30px)', fontWeight: 700,
+              color: 'rgba(249,248,245,0.4)',
+              letterSpacing: '-0.03em', marginBottom: 10,
+            }}>
+              That's not a bug. That's the point.
             </h2>
             <p style={{ fontSize: 15, color: C.text2, lineHeight: 1.5 }}>
               Most data tools charge per user or per record. Refyne charges per HubSpot portal. Starting at $149/mo.
