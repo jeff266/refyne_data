@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       .from('dedup_clusters')
       .select('id, record_ids, grade, auto_merge_scheduled_at')
       .eq('org_id', ctx.orgId)
-      .eq('status', 'pending')
+      .eq('status', 'open')  // Only fetch clusters awaiting review
       .not('auto_merge_scheduled_at', 'is', null)
       .is('auto_merge_cancelled_at', null)
       .order('auto_merge_scheduled_at', { ascending: true })

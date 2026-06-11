@@ -58,12 +58,15 @@ export async function GET(request: NextRequest) {
       try {
         const cached = await redis.get(cacheKey);
         if (cached) {
+          console.log('[dashboard/summary] Cache hit');
           return NextResponse.json(JSON.parse(cached));
         }
       } catch (err) {
         console.warn('[dashboard/summary] Redis get failed:', err);
       }
     }
+
+    console.log('[dashboard/summary] Calculating fresh summary for org:', orgId);
 
     // Calculate 24 hour window
     const now = new Date();

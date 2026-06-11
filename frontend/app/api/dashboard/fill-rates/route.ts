@@ -81,6 +81,10 @@ export async function GET(request: NextRequest) {
 
     // Get HubSpot access token
     const accessToken = await getAccessToken(orgId);
+    if (!accessToken) {
+      console.warn('[dashboard/fill-rates] No HubSpot access token found');
+      return NextResponse.json({ fillRates: [] });
+    }
 
     // Select field list based on objectType
     const fields = objectType === 'company' ? COMPANY_FIELDS : CONTACT_FIELDS;
@@ -89,6 +93,8 @@ export async function GET(request: NextRequest) {
     // Fetch records from HubSpot with requested properties
     const hubspotObjectType = objectType === 'company' ? 'companies' : 'contacts';
     const url = `https://api.hubapi.com/crm/v3/objects/${hubspotObjectType}?properties=${fieldNames.join(',')}&limit=100`;
+
+    console.log(`[dashboard/fill-rates] Fetching ${objectType} records with fields:`, fieldNames.join(','));
 
     const response = await fetch(url, {
       headers: {
@@ -99,8 +105,16 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[dashboard/fill-rates] HubSpot API error:', errorText);
-      throw new Error(`HubSpot API error: ${response.status}`);
+      console.error('[dashboard/fill-rates] HubSpot API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText,
+        objectType,
+        fields: fieldNames,
+      });
+
+      // Return empty rates instead of throwing to prevent dashboard from breaking
+      return NextResponse.json({ fillRates: [] });
     }
 
     const data = await response.json();

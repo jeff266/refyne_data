@@ -41,56 +41,87 @@ vi.mock('@/lib/auth/clerk-helpers', () => ({
 }));
 
 describe('Dashboard API Routes', () => {
+  // Shared mock functions for Supabase chain
+  const mockFrom = vi.fn();
+  const mockSelect = vi.fn();
+  const mockEq = vi.fn();
+  const mockGte = vi.fn();
+  const mockNot = vi.fn();
+  const mockOr = vi.fn();
+
+  const setupSupabaseMocks = () => {
+    mockFrom.mockImplementation((table: string) => {
+      const mockData = {
+        normalization_runs: [{ records_processed: 100 }],
+        dedup_clusters: [],
+        dedup_pairs: [],
+        arrangement_run_progress: [{ fields_updated: 50 }],
+        csv_imports: [{ id: '1' }],
+      };
+
+      const mockCounts = {
+        dedup_clusters: 5,
+      };
+
+      const finalResult = {
+        data: mockData[table as keyof typeof mockData] || [],
+        count: mockCounts[table as keyof typeof mockCounts] || 0,
+        error: null,
+      };
+
+      // Create fully chainable mock - any method can call any other method
+      const createChain = (): any => {
+        const chain: any = {};
+
+        chain.eq = (...args: any[]) => {
+          mockEq(...args); // Track on module-level mock
+          return chain;
+        };
+
+        chain.gte = (...args: any[]) => {
+          mockGte(...args); // Track on module-level mock
+          return chain;
+        };
+
+        chain.not = (...args: any[]) => {
+          mockNot(...args); // Track on module-level mock
+          return Promise.resolve(finalResult);
+        };
+
+        chain.or = (...args: any[]) => {
+          mockOr(...args); // Track on module-level mock
+          return Promise.resolve(finalResult);
+        };
+
+        chain.then = (resolve: any) => Promise.resolve(finalResult).then(resolve);
+
+        return chain;
+      };
+
+      const chain = createChain();
+
+      // Track calls on module-level mocks
+      const selectMock = (...args: any[]) => {
+        mockSelect(...args);
+        return chain;
+      };
+
+      return { select: selectMock };
+    });
+
+    mockSupabaseAdmin.from = mockFrom;
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRedis.get.mockResolvedValue(null); // Clear cache by default
+    setupSupabaseMocks();
+    // Reset module cache to ensure fresh imports
+    vi.resetModules();
   });
 
   describe('GET /api/dashboard/summary', () => {
     it('should return summary with lastNight stats and pendingAttention items', async () => {
-      // Mock Supabase responses
-      const mockFrom = vi.fn().mockReturnThis();
-      const mockSelect = vi.fn().mockReturnThis();
-      const mockEq = vi.fn().mockReturnThis();
-      const mockGte = vi.fn().mockReturnThis();
-      const mockNot = vi.fn().mockReturnThis();
-      const mockOr = vi.fn().mockReturnThis();
-
-      mockSupabaseAdmin.from = mockFrom;
-      mockFrom.mockImplementation((table: string) => {
-        const chain = {
-          select: mockSelect,
-        };
-
-        mockSelect.mockImplementation(() => ({
-          eq: mockEq,
-          gte: mockGte,
-          not: mockNot,
-          or: mockOr,
-        }));
-
-        mockEq.mockReturnValue({
-          gte: mockGte,
-          eq: mockEq,
-          not: mockNot,
-        });
-
-        mockGte.mockReturnValue({
-          not: mockNot,
-          then: vi.fn().mockResolvedValue({
-            data: table === 'normalization_runs' ? [{ records_processed: 100 }] : [],
-            count: table === 'dedup_clusters' ? 5 : 0,
-          }),
-        });
-
-        mockNot.mockReturnValue({
-          then: vi.fn().mockResolvedValue({
-            data: [{ records_processed: 100 }],
-          }),
-        });
-
-        return chain;
-      });
-
       const { GET } = await import('@/app/api/dashboard/summary/route');
       const request = new Request('http://localhost:3000/api/dashboard/summary');
       const response = await GET(request as any);
@@ -105,8 +136,6 @@ describe('Dashboard API Routes', () => {
     });
 
     it('should cache results in Redis with 15 minute TTL', async () => {
-      mockRedis.get.mockResolvedValue(null);
-
       const { GET } = await import('@/app/api/dashboard/summary/route');
       const request = new Request('http://localhost:3000/api/dashboard/summary');
       await GET(request as any);
@@ -159,8 +188,10 @@ describe('Dashboard API Routes', () => {
 
       // Verify gte() was called with a timestamp from ~24 hours ago
       expect(mockGte).toHaveBeenCalled();
-      const callArg = mockGte.mock.calls[0][0];
-      const timestamp = new Date(callArg);
+      const gteCall = mockGte.mock.calls.find((call) => call[0] === 'completed_at' || call[0] === 'created_at');
+      expect(gteCall).toBeDefined();
+
+      const timestamp = new Date(gteCall[1]); // Second argument is the timestamp value
       const now = new Date();
       const diff = now.getTime() - timestamp.getTime();
 
@@ -173,6 +204,7 @@ describe('Dashboard API Routes', () => {
   describe('GET /api/dashboard/fill-rates', () => {
     beforeEach(() => {
       global.fetch = vi.fn();
+      mockRedis.get.mockResolvedValue(null); // Clear Redis cache for fill-rates tests
     });
 
     it('should return fill rates for company objectType', async () => {

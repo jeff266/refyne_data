@@ -32,7 +32,7 @@ export async function POST(
       .select('id, auto_merge_scheduled_at')
       .eq('id', clusterId)
       .eq('org_id', ctx.orgId)
-      .eq('status', 'pending')
+      .eq('status', 'open')  // Only cancel clusters awaiting review
       .is('auto_merge_cancelled_at', null)
       .single();
 

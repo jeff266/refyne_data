@@ -15,7 +15,7 @@ export interface DedupCluster {
   grade: PairGrade;
   recordIds: string[];
   pairIds: string[];
-  status: 'pending' | 'merged' | 'rejected' | 'skipped';
+  status: 'open' | 'merged' | 'rejected' | 'invalid' | 'stale';  // Fixed to match DB constraint
   mergedInto: string | null;
   resolvedBy: string | null;
   resolvedAt: string | null;
@@ -33,7 +33,7 @@ export interface DedupClusterRow {
   grade: PairGrade;
   record_ids: string[];
   pair_ids: string[];
-  status: 'pending' | 'merged' | 'rejected' | 'skipped';
+  status: 'open' | 'merged' | 'rejected' | 'invalid' | 'stale';  // Fixed to match DB constraint
   merged_into: string | null;
   resolved_by: string | null;
   resolved_at: string | null;
@@ -53,10 +53,11 @@ export interface ClusterWithRecords {
 export interface ClustersCounts {
   byGrade: Record<PairGrade, number>;
   byStatus: {
-    pending: number;
-    merged: number;
-    rejected: number;
-    skipped: number;
+    open: number;        // Awaiting review
+    merged: number;      // Completed merge
+    rejected: number;    // Not duplicates
+    invalid: number;     // Company deleted
+    stale: number;       // Data changed, needs re-evaluation
   };
 }
 

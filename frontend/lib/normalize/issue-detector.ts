@@ -98,21 +98,28 @@ async function countLookupIssues(
     }
 
     // Fetch all records with this field set
-    const records = await hubspot.searchRecords(
-      harmony.objectType,
-      [
-        {
-          filters: [
-            {
-              propertyName,
-              operator: 'HAS_PROPERTY',
-            },
-          ],
-        },
-      ],
-      [propertyName],
-      100
-    );
+    let records;
+    try {
+      records = await hubspot.searchRecords(
+        harmony.objectType,
+        [
+          {
+            filters: [
+              {
+                propertyName,
+                operator: 'HAS_PROPERTY',
+              },
+            ],
+          },
+        ],
+        [propertyName],
+        100
+      );
+    } catch (searchError) {
+      // If HubSpot search fails (invalid property, rate limit, etc), return 0
+      console.warn(`[Issue Detector] HubSpot search failed for ${propertyName}:`, searchError);
+      return 0;
+    }
 
     // Count records with non-canonical values
     let issueCount = 0;
@@ -148,21 +155,28 @@ async function countFormatIssues(
     }
 
     // Fetch records with this field set
-    const records = await hubspot.searchRecords(
-      harmony.objectType,
-      [
-        {
-          filters: [
-            {
-              propertyName,
-              operator: 'HAS_PROPERTY',
-            },
-          ],
-        },
-      ],
-      [propertyName],
-      100
-    );
+    let records;
+    try {
+      records = await hubspot.searchRecords(
+        harmony.objectType,
+        [
+          {
+            filters: [
+              {
+                propertyName,
+                operator: 'HAS_PROPERTY',
+              },
+            ],
+          },
+        ],
+        [propertyName],
+        100
+      );
+    } catch (searchError) {
+      // If HubSpot search fails (invalid property, rate limit, etc), return 0
+      console.warn(`[Issue Detector] HubSpot search failed for ${propertyName}:`, searchError);
+      return 0;
+    }
 
     // Count records with non-canonical format
     let issueCount = 0;

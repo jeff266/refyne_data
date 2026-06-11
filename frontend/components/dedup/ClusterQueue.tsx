@@ -23,10 +23,11 @@ const GRADE_COLORS: Record<PairGrade, { bg: string; text: string; border: string
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All statuses' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'merged', label: 'Merged' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'skipped', label: 'Skipped' },
+  { value: 'open', label: 'Pending' },        // Awaiting review
+  { value: 'merged', label: 'Merged' },       // Completed merge
+  { value: 'rejected', label: 'Rejected' },   // Not duplicates
+  { value: 'invalid', label: 'Invalid' },     // Company deleted
+  { value: 'stale', label: 'Stale' },         // Data changed, needs re-evaluation
 ] as const;
 
 const PER_PAGE_OPTIONS = [
@@ -393,7 +394,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
   const [clusters, setClusters] = useState<DedupCluster[]>([]);
   const [counts, setCounts] = useState<ClustersCounts>({
     byGrade: { A: 0, B: 0, C: 0, D: 0 },
-    byStatus: { pending: 0, merged: 0, rejected: 0, skipped: 0 },
+    byStatus: { open: 0, merged: 0, rejected: 0, invalid: 0, stale: 0 },
   });
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -401,7 +402,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
 
   // Filter state
   const [gradeFilter, setGradeFilter] = useState<PairGrade | 'all'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'merged' | 'rejected' | 'skipped'>('pending');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'merged' | 'rejected' | 'invalid' | 'stale'>('open');  // Default to 'open' (pending review)
   const [sizeFilter, setSizeFilter] = useState<'all' | '2' | '3' | '4' | '5+'>('all');
   const [view, setView] = useState<'compact' | 'expanded'>('compact');
   const [page, setPage] = useState(1);
@@ -685,7 +686,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
 
   const totalGradeCount =
     counts.byGrade.A + counts.byGrade.B + counts.byGrade.C + counts.byGrade.D;
-  const gradeAClusters = clusters.filter((c) => c.grade === 'A' && c.status === 'pending');
+  const gradeAClusters = clusters.filter((c) => c.grade === 'A' && c.status === 'open');
 
   // Object type labels
   const recordTypeLabel = objectType === 'contact' ? 'contact' : 'company';
@@ -927,7 +928,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                   {/* Checkbox (Grade A only) */}
                   <div
                     onClick={(e) => {
-                      if (cluster.grade === 'A' && cluster.status === 'pending') {
+                      if (cluster.grade === 'A' && cluster.status === 'open') {
                         e.stopPropagation();
                         setSelectedIds((prev) => {
                           const next = new Set(prev);
@@ -941,7 +942,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                       }
                     }}
                   >
-                    {cluster.grade === 'A' && cluster.status === 'pending' && (
+                    {cluster.grade === 'A' && cluster.status === 'open' && (
                       <input
                         type="checkbox"
                         checked={selectedIds.has(cluster.id)}

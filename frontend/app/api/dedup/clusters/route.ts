@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     // Parse query params
     const grade = searchParams.get('grade') || 'all';
-    const status = searchParams.get('status') || 'pending';
+    const status = searchParams.get('status') || 'open';  // Default to open (awaiting review)
     const size = searchParams.get('size') || 'all';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const perPage = Math.min(200, Math.max(1, parseInt(searchParams.get('per_page') || '50', 10)));
@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
 
     // Aggregate counts
     const byGrade: Record<PairGrade, number> = { A: 0, B: 0, C: 0, D: 0 };
-    const byStatus = { pending: 0, merged: 0, rejected: 0, skipped: 0 };
+    const byStatus = { open: 0, merged: 0, rejected: 0, invalid: 0, stale: 0 };
 
     if (gradeCountsResult.data) {
       for (const row of gradeCountsResult.data) {

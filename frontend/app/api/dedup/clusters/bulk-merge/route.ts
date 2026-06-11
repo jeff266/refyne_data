@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       .from('dedup_clusters')
       .select('*')
       .eq('org_id', orgId)
-      .eq('status', 'pending');
+      .eq('status', 'open');  // Only merge clusters awaiting review
 
     if (body.allGradeA) {
       // Fetch all Grade A pending clusters

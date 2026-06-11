@@ -14,7 +14,7 @@ import { supabaseAdmin } from '@/lib/db/admin-client';
 
 export interface OrgEntitlements {
   org_id: string;
-  subscription_tier: 'trial' | 'starter' | 'growth' | 'scale' | 'internal';
+  subscription_tier: 'trial' | 'starter' | 'growth' | 'scale' | 'internal' | 'exempt';
   subscription_status: 'active' | 'past_due' | 'cancelled' | 'paused';
 
   // Trial limits
@@ -97,8 +97,8 @@ export async function canPerformAction(
     return false;
   }
 
-  // Internal orgs bypass all limits
-  if (entitlements.subscription_tier === 'internal') {
+  // Internal and exempt orgs bypass all limits
+  if (entitlements.subscription_tier === 'internal' || entitlements.subscription_tier === 'exempt') {
     return true;
   }
 
@@ -166,8 +166,8 @@ export async function getLimitStatus(
     return 'Unable to check limits';
   }
 
-  // Internal orgs have no limits
-  if (entitlements.subscription_tier === 'internal') {
+  // Internal and exempt orgs have no limits
+  if (entitlements.subscription_tier === 'internal' || entitlements.subscription_tier === 'exempt') {
     return null;
   }
 

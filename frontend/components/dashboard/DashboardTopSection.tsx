@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { SinceYesterdaySection } from './SinceYesterdaySection';
 import { AlwaysOnUpsell } from './AlwaysOnUpsell';
-import { supabaseAdmin } from '@/lib/db/admin-client';
 
 interface DashboardTopSectionProps {
   orgId: string;

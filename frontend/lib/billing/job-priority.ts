@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/db/admin-client';
  *
  * Priority determines job execution order in BullMQ (lower number = higher priority)
  *
- * Tier 1 (Priority 1): Scale + Internal orgs - highest priority
+ * Tier 1 (Priority 1): Scale + Internal + Exempt orgs - highest priority
  * Tier 2 (Priority 2): Starter + Growth orgs - medium priority
  * Tier 3 (Priority 3): Trial orgs + cancelled/past_due - lowest priority
  */
@@ -47,6 +47,8 @@ export async function getJobPriority(orgId: string): Promise<JobPriority> {
       return JOB_PRIORITY.SCALE;
     case 'internal':
       return JOB_PRIORITY.SCALE; // Internal orgs get high priority
+    case 'exempt':
+      return JOB_PRIORITY.SCALE; // Exempt orgs get high priority
     case 'growth':
       return JOB_PRIORITY.GROWTH;
     case 'starter':

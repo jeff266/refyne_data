@@ -94,7 +94,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const clusterData = rowToCluster(cluster as DedupClusterRow);
 
-    if (clusterData.status !== 'pending') {
+    if (clusterData.status !== 'open') {
       return NextResponse.json({ error: 'Cluster already processed' }, { status: 400 });
     }
 
@@ -317,7 +317,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         objectId: id,
         objectLabel: `Cluster ${clusterData.grade} (${clusterData.recordIds.length} records)`,
         beforeState: {
-          status: 'pending',
+          status: 'open',
           recordCount: clusterData.recordIds.length,
           grade: clusterData.grade,
         },

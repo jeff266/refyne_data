@@ -117,7 +117,7 @@ export async function POST(
     await supabase
       .from('dedup_clusters')
       .update({
-        status: 'pending',
+        status: 'open',  // Reopen for review
         resolved_at: null,
         resolved_by: null,
       })

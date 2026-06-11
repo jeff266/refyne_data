@@ -29,6 +29,7 @@ export function FieldCoverageSection({ orgId }: FieldCoverageSectionProps) {
   const [companyRates, setCompanyRates] = useState<FieldFillRate[]>([]);
   const [contactRates, setContactRates] = useState<FieldFillRate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
 
@@ -60,6 +61,7 @@ export function FieldCoverageSection({ orgId }: FieldCoverageSectionProps) {
   useEffect(() => {
     const fetchFillRates = async () => {
       setLoading(true);
+      setError(null);
       try {
         const [companyRes, contactRes] = await Promise.all([
           fetch('/api/dashboard/fill-rates?objectType=company'),
@@ -69,14 +71,24 @@ export function FieldCoverageSection({ orgId }: FieldCoverageSectionProps) {
         if (companyRes.ok) {
           const companyData = await companyRes.json();
           setCompanyRates(companyData.fillRates || []);
+        } else {
+          console.warn('Company fill rates API returned error:', await companyRes.text());
         }
 
         if (contactRes.ok) {
           const contactData = await contactRes.json();
           setContactRates(contactData.fillRates || []);
+        } else {
+          console.warn('Contact fill rates API returned error:', await contactRes.text());
         }
-      } catch (error) {
-        console.error('Failed to fetch fill rates:', error);
+
+        // If both failed, show error
+        if (!companyRes.ok && !contactRes.ok) {
+          setError('Unable to load field coverage data');
+        }
+      } catch (err) {
+        console.error('Failed to fetch fill rates:', err);
+        setError('Unable to load field coverage data');
       } finally {
         setLoading(false);
       }
@@ -253,6 +265,17 @@ export function FieldCoverageSection({ orgId }: FieldCoverageSectionProps) {
               />
             </div>
           ))}
+        </div>
+      ) : error ? (
+        <div
+          style={{
+            fontSize: 13,
+            color: C.text3,
+            textAlign: 'center',
+            padding: '32px 0',
+          }}
+        >
+          {error}
         </div>
       ) : displayedRates.length === 0 ? (
         <div

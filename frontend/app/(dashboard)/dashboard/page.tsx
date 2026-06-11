@@ -15,6 +15,7 @@ import { ComplianceAIOverview } from './ComplianceAIOverview';
 import { DashboardTopSection } from '@/components/dashboard/DashboardTopSection';
 import { FieldCoverageSection } from '@/components/dashboard/FieldCoverageSection';
 import { NeedsAttentionSection } from '@/components/dashboard/NeedsAttentionSection';
+import { DashboardErrorBoundary } from '@/components/dashboard/DashboardErrorBoundary';
 import { auth } from '@clerk/nextjs/server';
 
 // ─────────────────────────────────────────────────────────────
@@ -586,13 +587,19 @@ export default async function DashboardPage() {
       <OnboardingWrapper />
 
       {/* Always On Upsell OR Since Yesterday Section */}
-      <DashboardTopSection orgId={orgId} />
+      <DashboardErrorBoundary>
+        <DashboardTopSection orgId={orgId} />
+      </DashboardErrorBoundary>
 
       {/* Field Coverage Section */}
-      <FieldCoverageSection orgId={orgId} />
+      <DashboardErrorBoundary>
+        <FieldCoverageSection orgId={orgId} />
+      </DashboardErrorBoundary>
 
       {/* Needs Your Attention Section */}
-      <NeedsAttentionSection />
+      <DashboardErrorBoundary>
+        <NeedsAttentionSection />
+      </DashboardErrorBoundary>
 
       <Suspense fallback={null}>
         <ClientData />
