@@ -125,7 +125,7 @@ async function compactHistory(history: Message[]): Promise<Message[]> {
 
   // Generate summary of older conversation
   const summaryResponse = await anthropic.messages.create({
-    model: 'claude-3-5-haiku-20241022',
+    model: 'claude-3-5-haiku-latest',
     max_tokens: 200,
     messages: [
       {
@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
 
     // 6. Call Claude with cached system prompt
     const response = await anthropic.messages.create({
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-3-5-haiku-latest',
       max_tokens: 1000,
       system: [
         {
