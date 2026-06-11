@@ -1,5 +1,6 @@
 import { C, F } from '@/lib/design-tokens';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { AssistantWidget } from '@/components/AssistantWidget';
 
 export const metadata = {
   title: 'Onboarding - Refyne',
@@ -59,6 +60,7 @@ export default function OnboardingLayout({
         <div style={{ flex: 1 }}>
           {children}
         </div>
+        <AssistantWidget />
       </div>
     </ErrorBoundary>
   );
