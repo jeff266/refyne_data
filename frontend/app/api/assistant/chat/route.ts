@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/db/admin-client';
 import { normalizeQuestion } from '@/lib/assistant/normalize-question';
 import Anthropic from '@anthropic-ai/sdk';
 
+// Using claude-3-5-haiku-latest (latest Haiku model, replaces deprecated 20241022 version)
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 });
