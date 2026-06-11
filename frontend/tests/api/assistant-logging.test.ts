@@ -11,7 +11,7 @@ import { GET as suggestionsGet } from '@/app/api/assistant/suggestions/route';
 import { PATCH as patternsPatch } from '@/app/api/admin/assistant-patterns/[id]/route';
 import * as clerkHelpers from '@/lib/auth/clerk-helpers';
 import * as rateLimit from '@/lib/api/rate-limit';
-import { supabaseAdmin } from '@/lib/db/supabase';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 
 // Mock modules
 const mockCreate = vi.hoisted(() => vi.fn());
@@ -24,7 +24,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 
 vi.mock('@/lib/auth/clerk-helpers');
 vi.mock('@/lib/api/rate-limit');
-vi.mock('@/lib/db/supabase', () => ({
+vi.mock('@/lib/db/admin-client', () => ({
   supabaseAdmin: {
     from: vi.fn(),
   },
@@ -83,8 +83,7 @@ describe('Assistant Question Logging', () => {
   });
 
   it('2. normalizeQuestion strips punctuation and filler', async () => {
-    // Import normalizeQuestion from route
-    const { normalizeQuestion } = await import('@/app/api/assistant/chat/route') as any;
+    const { normalizeQuestion } = await import('@/lib/assistant/normalize-question');
 
     const tests = [
       { input: 'How do I normalize phone numbers?', expected: 'normalize phone numbers' },

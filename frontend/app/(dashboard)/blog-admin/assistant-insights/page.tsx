@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/refyne';
 import { C, F } from '@/lib/design-tokens';
 import { Check, X } from 'lucide-react';
-import { supabaseAdmin } from '@/lib/db/supabase';
 
 interface Pattern {
   id: string;
@@ -29,13 +28,10 @@ export default function AssistantInsightsPage() {
   const fetchPatterns = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabaseAdmin
-        .from('assistant_question_patterns')
-        .select('*')
-        .order('count', { ascending: false });
-
-      if (error) throw error;
-      setPatterns(data || []);
+      const res = await fetch('/api/admin/assistant-patterns');
+      if (!res.ok) throw new Error('Failed to fetch patterns');
+      const data = await res.json();
+      setPatterns(data.patterns || []);
     } catch (error) {
       console.error('Failed to fetch patterns:', error);
     } finally {

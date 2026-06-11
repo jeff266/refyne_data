@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { supabaseAdmin } from '@/lib/db/supabase';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 
 // Hardcoded fallback suggestions
 const DEFAULT_SUGGESTIONS = [

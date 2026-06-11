@@ -1,25 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
-import { supabaseAdmin } from '@/lib/db/supabase';
+import { supabaseAdmin } from '@/lib/db/admin-client';
+import { normalizeQuestion } from '@/lib/assistant/normalize-question';
 import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 });
-
-/**
- * Normalize a question for pattern matching.
- * Strips punctuation, filler words, and converts to lowercase.
- */
-export function normalizeQuestion(question: string): string {
-  return question
-    .toLowerCase()
-    .replace(/[?!.,;:'"]/g, '') // Remove punctuation (handles contractions like "what's" → "whats")
-    .replace(/\b(do|does|can|how|what|whats|when|where|why|is|are|the|a|an|i|me|my|you)\b/g, '') // Remove filler words
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim();
-}
 
 // Conversation compaction settings
 const COMPACT_THRESHOLD = 10;  // total messages
@@ -228,7 +216,7 @@ export async function POST(req: NextRequest) {
       throw new Error('Unexpected response type from Anthropic');
     }
 
-    // 7. Log question (non-blocking - don't await)
+    // 7. Log question (non-blocking - fire and forget)
     const normalized = normalizeQuestion(message);
     supabaseAdmin
       .from('assistant_questions')
@@ -238,14 +226,6 @@ export async function POST(req: NextRequest) {
         question: message,
         question_normalized: normalized,
         suggestion_clicked: suggestionClicked === true,
-      })
-      .then(({ error }) => {
-        if (error) {
-          console.error('[Assistant] Failed to log question:', error);
-        }
-      })
-      .catch((err) => {
-        console.error('[Assistant] Error logging question:', err);
       });
 
     // 8. Return response
