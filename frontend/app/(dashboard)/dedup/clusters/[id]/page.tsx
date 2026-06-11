@@ -213,6 +213,7 @@ function SortableFieldRow({
   mergeState,
   rescuedFieldKeys,
   survivorshipReasons,
+  ownerNames,
   onFieldSelectionChange,
   onRemoveField,
 }: {
@@ -225,6 +226,7 @@ function SortableFieldRow({
   mergeState: MergeAnimationState;
   rescuedFieldKeys: string[];
   survivorshipReasons?: Record<string, { rule: string; source?: string }>;
+  ownerNames: Record<string, { name: string; email: string }>;
   onFieldSelectionChange: (field: string, recordId: string) => void;
   onRemoveField: (field: string) => void;
 }) {
@@ -311,8 +313,17 @@ function SortableFieldRow({
           mergeState === 'highlighting' ||
           mergeState === 'complete';
 
-        // Get human-readable label for enum values
-        const displayValue = value ? propertyLabels[`${field}:${value}`] || value : '(empty)';
+        // Get human-readable label for enum values or owner names
+        let displayValue: string;
+        if (field === 'hubspot_owner_id' && value && ownerNames[value]) {
+          displayValue = `${ownerNames[value].name}${ownerNames[value].email ? ` (${ownerNames[value].email})` : ''}`;
+        } else if (field === 'ownername' && record.properties.hubspot_owner_id && ownerNames[record.properties.hubspot_owner_id]) {
+          displayValue = ownerNames[record.properties.hubspot_owner_id].name;
+        } else if (field === 'owneremail' && record.properties.hubspot_owner_id && ownerNames[record.properties.hubspot_owner_id]) {
+          displayValue = ownerNames[record.properties.hubspot_owner_id].email;
+        } else {
+          displayValue = value ? propertyLabels[`${field}:${value}`] || value : '(empty)';
+        }
 
         return (
           <td
@@ -611,6 +622,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
   const [fieldsToDisplay, setFieldsToDisplay] = useState<string[]>([]);
   const [availableProperties, setAvailableProperties] = useState<HubSpotProperty[]>([]);
   const [loadingFields, setLoadingFields] = useState(true);
+  const [ownerNames, setOwnerNames] = useState<Record<string, { name: string; email: string }>>({});
 
   // Action state
   const [rejecting, setRejecting] = useState(false);
@@ -681,15 +693,39 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
     loadClusterList();
   }, [params.id, searchParams]);
 
-  // Load dedup display fields from API
+  // Load dedup display fields from localStorage first, then API
   useEffect(() => {
     async function loadDedupFields() {
       try {
+        // Try localStorage first (persists field selections across navigation)
+        const storageKey = `dedupFieldsToDisplay_${navObjectType}`;
+        const stored = localStorage.getItem(storageKey);
+
+        if (stored) {
+          try {
+            const fields = JSON.parse(stored);
+            if (Array.isArray(fields) && fields.length > 0) {
+              setFieldsToDisplay(fields);
+              setLoadingFields(false);
+              return; // Use cached fields
+            }
+          } catch (e) {
+            console.warn('Failed to parse stored fields:', e);
+          }
+        }
+
+        // Fall back to API if no localStorage data
         const res = await fetch('/api/org/dedup-fields');
 
         if (res.ok) {
           const data = await res.json();
-          setFieldsToDisplay(data.fields || []);
+          const fields = data.fields || [];
+          setFieldsToDisplay(fields);
+
+          // Save to localStorage for future use
+          if (fields.length > 0) {
+            localStorage.setItem(storageKey, JSON.stringify(fields));
+          }
         }
       } catch (err) {
         console.error('Failed to load dedup fields:', err);
@@ -700,11 +736,16 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
     }
 
     loadDedupFields();
-  }, []);
+  }, [navObjectType]);
 
-  // Save fields to API when changed
+  // Save fields to API and localStorage when changed
   const saveFieldsToAPI = async (fields: string[]) => {
     try {
+      // Save to localStorage immediately (persists across navigation)
+      const storageKey = `dedupFieldsToDisplay_${navObjectType}`;
+      localStorage.setItem(storageKey, JSON.stringify(fields));
+
+      // Also save to API (syncs across devices/sessions)
       await fetch('/api/org/dedup-fields', {
         method: 'PUT',
         headers: {
@@ -858,6 +899,33 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
           }
         } catch (err) {
           console.error('Failed to fetch property definitions:', err);
+        }
+
+        // Fetch owner names/emails if hubspot_owner_id is in the data
+        try {
+          const ownerIds = new Set<string>();
+
+          // Extract all owner IDs from records
+          clusterData.records.forEach((record: any) => {
+            if (record.hubspot_owner_id) {
+              ownerIds.add(String(record.hubspot_owner_id));
+            }
+          });
+
+          if (ownerIds.size > 0) {
+            const ownersRes = await fetch('/api/hubspot/owners/batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ownerIds: Array.from(ownerIds) }),
+            });
+
+            if (ownersRes.ok) {
+              const ownersData = await ownersRes.json();
+              setOwnerNames(ownersData.owners || {});
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch owner names:', err);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch cluster');
@@ -1520,6 +1588,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
                     mergeState={mergeState}
                     rescuedFieldKeys={rescuedFieldKeys}
                     survivorshipReasons={data?.survivorshipReasons}
+                    ownerNames={ownerNames}
                     onFieldSelectionChange={(field, recordId) =>
                       setFieldSelections((prev) => ({ ...prev, [field]: recordId }))
                     }
