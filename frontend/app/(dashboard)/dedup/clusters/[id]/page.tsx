@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -390,6 +390,8 @@ function FieldPicker({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const filtered = availableProperties.filter(
     (f) =>
@@ -400,10 +402,42 @@ function FieldPicker({
   const standardFields = filtered.filter((f) => f.hubspotDefined);
   const customFields = filtered.filter((f) => !f.hubspotDefined);
 
+  // Calculate dropdown position when opening
+  const handleToggle = () => {
+    if (disabled) return;
+
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const dropdownHeight = 400;
+
+      // If not enough space below, render above
+      const renderAbove = spaceBelow < dropdownHeight && rect.top > dropdownHeight;
+
+      setDropdownStyle({
+        position: 'fixed',
+        left: rect.left,
+        top: renderAbove ? rect.top - dropdownHeight - 4 : rect.bottom + 4,
+        width: 320,
+        maxHeight: 400,
+        background: C.surface,
+        border: `0.5px solid ${C.border}`,
+        borderRadius: 0,
+        overflow: 'auto',
+        zIndex: 100,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      });
+    }
+
+    setIsOpen(!isOpen);
+  };
+
   return (
     <div style={{ position: 'relative' }}>
       <button
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        ref={buttonRef}
+        onClick={handleToggle}
         disabled={disabled}
         style={{
           padding: '6px 12px',
@@ -438,22 +472,7 @@ function FieldPicker({
             }}
           />
 
-          <div
-            style={{
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              marginTop: 4,
-              background: C.surface,
-              border: `0.5px solid ${C.border}`,
-              borderRadius: 0,
-              width: 320,
-              maxHeight: 400,
-              overflow: 'auto',
-              zIndex: 100,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            }}
-          >
+          <div style={dropdownStyle}>
             {/* Search input */}
             <input
               type="text"
