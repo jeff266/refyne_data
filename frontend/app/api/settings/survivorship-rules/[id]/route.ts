@@ -31,7 +31,7 @@ export async function PATCH(
   try {
     const ruleId = params.id;
     const body = await request.json();
-    const { is_active, rule_config } = body;
+    const { is_active, rule_config, priority } = body;
 
     // Verify rule belongs to this org or is a default rule
     const { data: existingRule, error: fetchError } = await supabase
@@ -60,6 +60,7 @@ export async function PATCH(
     const updates: any = {};
     if (is_active !== undefined) updates.is_active = is_active;
     if (rule_config !== undefined) updates.rule_config = rule_config;
+    if (priority !== undefined) updates.priority = priority;
 
     const { data, error } = await supabase
       .from('dedup_survivorship_rules')

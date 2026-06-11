@@ -8,7 +8,7 @@ import { SurvivorshipRulesPanel } from '@/app/(dashboard)/settings/policies/comp
 interface OrgPolicies {
   write_policy_default: 'fill_empty' | 'overwrite' | 'per_field';
   dedup_auto_merge_threshold: number | null;
-  dedup_merge_survivor_rule: 'most_recent' | 'most_complete' | 'oldest';
+  // dedup_merge_survivor_rule deprecated - survivorship rules engine handles this
   nightly_scan_enabled: boolean;
   incremental_scan_enabled: boolean;
 }
@@ -17,7 +17,6 @@ export function PoliciesTab() {
   const [policies, setPolicies] = useState<OrgPolicies>({
     write_policy_default: 'fill_empty',
     dedup_auto_merge_threshold: null,
-    dedup_merge_survivor_rule: 'most_recent',
     nightly_scan_enabled: true,
     incremental_scan_enabled: true,
   });
@@ -146,30 +145,6 @@ export function PoliciesTab() {
                 <div>
                   <span style={{ fontSize: 13, color: C.text }}>{opt.label}</span>
                   <span style={{ fontSize: 11, color: C.text3, marginLeft: 8 }}>{opt.sub}</span>
-                </div>
-              </label>
-            ))}
-          </div>
-
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 12 }}>
-              Merge survivor rule
-            </div>
-            {[
-              { value: 'most_recent', label: 'Most recently updated' },
-              { value: 'most_complete', label: 'Most complete', sub: '(fewest empty fields)' },
-              { value: 'oldest', label: 'Oldest record', sub: '(original source of truth)' },
-            ].map((opt) => (
-              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', marginBottom: 8 }}>
-                <input
-                  type="radio"
-                  checked={policies.dedup_merge_survivor_rule === opt.value}
-                  onChange={() => setPolicies({ ...policies, dedup_merge_survivor_rule: opt.value as any })}
-                  style={{ cursor: 'pointer' }}
-                />
-                <div>
-                  <span style={{ fontSize: 13, color: C.text }}>{opt.label}</span>
-                  {opt.sub && <span style={{ fontSize: 11, color: C.text3, marginLeft: 8 }}>{opt.sub}</span>}
                 </div>
               </label>
             ))}

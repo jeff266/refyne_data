@@ -173,6 +173,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get the highest priority for this org to assign next priority
+    const { data: existingRules } = await supabase
+      .from('dedup_survivorship_rules')
+      .select('priority')
+      .eq('org_id', orgId)
+      .order('priority', { ascending: false })
+      .limit(1);
+
+    const nextPriority = existingRules && existingRules.length > 0 && existingRules[0].priority
+      ? existingRules[0].priority + 1
+      : 1;
+
     const { data, error } = await supabase
       .from('dedup_survivorship_rules')
       .insert({
@@ -181,6 +193,7 @@ export async function POST(request: NextRequest) {
         rule_type,
         rule_config,
         is_active: true,
+        priority: nextPriority,
       })
       .select()
       .single();

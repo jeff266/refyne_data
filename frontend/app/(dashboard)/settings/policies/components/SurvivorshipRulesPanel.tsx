@@ -10,7 +10,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
-import { Plus, Settings as SettingsIcon, X } from 'lucide-react';
+import { Plus, Settings as SettingsIcon, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { AddRuleModal } from './AddRuleModal';
 import { addToast } from '@/components/ui/toast';
 
@@ -22,6 +22,7 @@ interface SurvivorshipRule {
   rule_config: Record<string, any>;
   is_active: boolean;
   is_default: boolean;
+  priority?: number;
 }
 
 interface FieldOption {
@@ -124,6 +125,43 @@ export function SurvivorshipRulesPanel() {
     }
   };
 
+  const handleReorderRule = async (ruleId: string, direction: 'up' | 'down') => {
+    const sortedOrgRules = [...orgRules].sort((a, b) => (a.priority || 999) - (b.priority || 999));
+    const currentIndex = sortedOrgRules.findIndex(r => r.id === ruleId);
+
+    if (currentIndex === -1) return;
+    if (direction === 'up' && currentIndex === 0) return;
+    if (direction === 'down' && currentIndex === sortedOrgRules.length - 1) return;
+
+    const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+    // Get new priority values (swap them)
+    const currentPriority = sortedOrgRules[currentIndex].priority || currentIndex + 1;
+    const swapPriority = sortedOrgRules[swapIndex].priority || swapIndex + 1;
+
+    try {
+      // Update both rules' priorities
+      await Promise.all([
+        fetch(`/api/settings/survivorship-rules/${sortedOrgRules[currentIndex].id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ priority: swapPriority }),
+        }),
+        fetch(`/api/settings/survivorship-rules/${sortedOrgRules[swapIndex].id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ priority: currentPriority }),
+        }),
+      ]);
+
+      await loadRules();
+      addToast('success', 'Rule order updated');
+    } catch (error) {
+      console.error('Failed to reorder rule:', error);
+      addToast('error', 'Failed to reorder rule');
+    }
+  };
+
   const getRuleBehaviorText = (rule: SurvivorshipRule): string => {
     switch (rule.rule_type) {
       case 'prefer_nonempty':
@@ -138,6 +176,9 @@ export function SurvivorshipRulesPanel() {
         return `${order.slice(0, 2).join(' > ')} > ...`;
       case 'most_recent':
         return 'Keep most recently updated value';
+      case 'specific_value':
+        const preferredValue = rule.rule_config.preferred_value;
+        return preferredValue ? `Always prefer: ${preferredValue}` : 'Always prefer specific value';
       default:
         return '';
     }
@@ -150,6 +191,8 @@ export function SurvivorshipRulesPanel() {
       tld_disqualifier: 'TLD disqualifier',
       never_downgrade: 'Never downgrade',
       most_recent: 'Most recent',
+      specific_value: 'Specific value',
+      rollup: 'Rollup',
     };
     return labels[ruleType] || ruleType;
   };
@@ -180,7 +223,9 @@ export function SurvivorshipRulesPanel() {
   };
 
   const defaultRules = rules.filter((r) => r.is_default && isRuleApplicable(r));
-  const orgRules = rules.filter((r) => !r.is_default && isRuleApplicable(r));
+  const orgRules = rules
+    .filter((r) => !r.is_default && isRuleApplicable(r))
+    .sort((a, b) => (a.priority || 999) - (b.priority || 999));
 
   if (isLoading) {
     return (
@@ -204,8 +249,8 @@ export function SurvivorshipRulesPanel() {
           SURVIVORSHIP RULES
         </h2>
         <p style={{ fontSize: 13, color: C.text3, lineHeight: 1.6, maxWidth: 800 }}>
-          Define which field values survive when duplicate records are merged. Rules apply in priority order. Default
-          rules apply to all fields unless overridden.
+          Define which field values survive when duplicate records are merged. Default rules apply first, then your rules
+          in the order shown below.
         </p>
       </div>
 
@@ -359,7 +404,7 @@ export function SurvivorshipRulesPanel() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '150px 180px 1fr 120px 60px',
+                gridTemplateColumns: '40px 150px 180px 1fr 120px 80px',
                 padding: '12px 16px',
                 borderBottom: `1px solid ${C.border}`,
                 fontSize: 11,
@@ -368,6 +413,7 @@ export function SurvivorshipRulesPanel() {
                 textTransform: 'uppercase',
               }}
             >
+              <div>#</div>
               <div>Field</div>
               <div>Rule</div>
               <div>Behavior</div>
@@ -376,12 +422,12 @@ export function SurvivorshipRulesPanel() {
             </div>
 
             {/* Table rows */}
-            {orgRules.map((rule) => (
+            {orgRules.map((rule, index) => (
               <div
                 key={rule.id}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '150px 180px 1fr 120px 60px',
+                  gridTemplateColumns: '40px 150px 180px 1fr 120px 80px',
                   padding: '12px 16px',
                   borderBottom: `1px solid ${C.border}`,
                   fontSize: 13,
@@ -394,6 +440,9 @@ export function SurvivorshipRulesPanel() {
                   e.currentTarget.style.background = 'transparent';
                 }}
               >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ color: C.text2, fontFamily: F.mono }}>{index + 1}</span>
+                </div>
                 <div>{getFieldLabel(rule.field_key, rule.rule_type)}</div>
                 <div>{getRuleTypeLabel(rule.rule_type)}</div>
                 <div style={{ color: C.text3 }}>{getRuleBehaviorText(rule)}</div>
@@ -410,7 +459,53 @@ export function SurvivorshipRulesPanel() {
                     ● {rule.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <button
+                      onClick={() => handleReorderRule(rule.id, 'up')}
+                      disabled={index === 0}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: index === 0 ? 'not-allowed' : 'pointer',
+                        color: index === 0 ? C.border : C.text3,
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        opacity: index === 0 ? 0.3 : 1,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (index !== 0) e.currentTarget.style.color = C.text;
+                      }}
+                      onMouseLeave={(e) => {
+                        if (index !== 0) e.currentTarget.style.color = C.text3;
+                      }}
+                    >
+                      <ChevronUp size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleReorderRule(rule.id, 'down')}
+                      disabled={index === orgRules.length - 1}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: index === orgRules.length - 1 ? 'not-allowed' : 'pointer',
+                        color: index === orgRules.length - 1 ? C.border : C.text3,
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        opacity: index === orgRules.length - 1 ? 0.3 : 1,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (index !== orgRules.length - 1) e.currentTarget.style.color = C.text;
+                      }}
+                      onMouseLeave={(e) => {
+                        if (index !== orgRules.length - 1) e.currentTarget.style.color = C.text3;
+                      }}
+                    >
+                      <ChevronDown size={14} />
+                    </button>
+                  </div>
                   <button
                     onClick={() => handleDeleteRule(rule.id)}
                     style={{
