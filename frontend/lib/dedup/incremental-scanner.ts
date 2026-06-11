@@ -322,8 +322,7 @@ export async function recordScanCompletion(
   const { error: updateError } = await supabase
     .from('dedup_config')
     .update(updateData)
-    .eq('org_id', orgId)
-    .eq('portal_id', portalId);
+    .eq('org_id', orgId);
 
   if (updateError) {
     console.error('[incremental-scanner] Error updating dedup_config:', updateError);

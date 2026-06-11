@@ -59,8 +59,21 @@ export function ScanningState({ jobId, orgId, onComplete }: ScanningStateProps) 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
     let autoTransitionTimeout: NodeJS.Timeout | null = null;
+    let safetyTimeout: NodeJS.Timeout | null = null;
+    let isPolling = true;
+
+    const stopPolling = () => {
+      console.log(`[ScanningState] Stopping polling for jobId: ${jobId}`);
+      isPolling = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
 
     const pollProgress = async () => {
+      if (!isPolling) return;
+
       try {
         console.log(`[ScanningState] Polling progress for jobId: ${jobId}`);
         const res = await fetch(`/api/dedup/scan-progress?jobId=${jobId}`, {
@@ -78,7 +91,7 @@ export function ScanningState({ jobId, orgId, onComplete }: ScanningStateProps) 
           if (data.completed && data.phase === 'completed') {
             console.log(`[ScanningState] Scan completed, showing completion state for 2s`);
             setShowComplete(true);
-            if (intervalId) clearInterval(intervalId);
+            stopPolling();
 
             autoTransitionTimeout = setTimeout(() => {
               console.log(`[ScanningState] Calling onComplete after 2s delay`);
@@ -89,7 +102,7 @@ export function ScanningState({ jobId, orgId, onComplete }: ScanningStateProps) 
           // If scan failed, show error and stop polling
           if (data.phase === 'failed') {
             console.log(`[ScanningState] Scan failed: ${data.error}`);
-            if (intervalId) clearInterval(intervalId);
+            stopPolling();
           }
         } else {
           const errorData = await res.json().catch(() => ({}));
@@ -106,9 +119,23 @@ export function ScanningState({ jobId, orgId, onComplete }: ScanningStateProps) 
     // Poll every 2 seconds
     intervalId = setInterval(pollProgress, 2000);
 
+    // Safety timeout: stop polling after 10 minutes
+    safetyTimeout = setTimeout(() => {
+      console.warn(`[ScanningState] Safety timeout reached (10 minutes), stopping polling for jobId: ${jobId}`);
+      stopPolling();
+      setProgress(prev => ({
+        ...prev,
+        phase: 'failed',
+        error: 'Scan timed out after 10 minutes',
+        completed: true,
+      }));
+    }, 600000); // 10 minutes
+
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      console.log(`[ScanningState] Cleanup: stopping polling for jobId: ${jobId}`);
+      stopPolling();
       if (autoTransitionTimeout) clearTimeout(autoTransitionTimeout);
+      if (safetyTimeout) clearTimeout(safetyTimeout);
     };
   }, [jobId, orgId, onComplete]);
 
