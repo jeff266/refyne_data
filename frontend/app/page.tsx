@@ -199,23 +199,22 @@ export default function HomePage() {
           letterSpacing: '-0.04em',
           maxWidth: 700,
         }}>
-          Clean CRM data,{' '}
+          Your HubSpot data.{' '}
           <span style={{
             background: `linear-gradient(135deg, ${C.indigoLt} 0%, ${C.indigo} 100%)`,
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
           }}>
-            automatically.
+            Finally clean.
           </span>
         </h1>
 
         <p style={{
           fontSize: 18, color: C.text2, lineHeight: 1.65,
-          maxWidth: 520, fontWeight: 400,
+          maxWidth: 600, fontWeight: 400,
         }}>
-          Refyne normalizes, deduplicates, and monitors your HubSpot data —
-          so your team always works from a single source of truth.
+          Refyne normalizes formats, removes duplicates, and fixes data quality issues automatically, so your team always works from a single source of truth. No manual cleanup. No spreadsheets. No data team required.
         </p>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -242,32 +241,13 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {/* Stats */}
-        <div style={{
-          display: 'flex', gap: 56, marginTop: 20,
-          flexWrap: 'wrap', justifyContent: 'center',
-          paddingTop: 32,
-          borderTop: `1px solid ${C.border}`,
-          width: '100%', maxWidth: 560,
+        {/* Trust Signal */}
+        <p style={{
+          fontSize: 13, color: C.text2, fontWeight: 400,
+          fontFamily: F.sans, marginTop: 8,
         }}>
-          {[
-            { value: '23K+', label: 'Records cleaned' },
-            { value: '184', label: 'Duplicates caught' },
-            { value: '82%', label: 'Avg compliance score' },
-          ].map(stat => (
-            <div key={stat.label} style={{ textAlign: 'center' }}>
-              <div style={{
-                fontSize: 30, fontWeight: 700, color: C.text,
-                fontFamily: F.mono, letterSpacing: '-0.03em',
-              }}>
-                {stat.value}
-              </div>
-              <div style={{ fontSize: 12, color: C.text3, marginTop: 5 }}>
-                {stat.label}
-              </div>
-            </div>
-          ))}
-        </div>
+          No credit card required. 14-day free trial. Cancel anytime.
+        </p>
       </section>
 
       {/* ── Features ─────────────────────────────────────────────── */}
@@ -299,22 +279,22 @@ export default function HomePage() {
           <FeatureCard
             icon="↕"
             title="Normalize"
-            description="Canonical rules that clean company names, industries, and phone numbers automatically. Declare once, apply everywhere."
+            description='"Acme Corp", "acme corp", and "ACME CORP." are three different companies in your CRM. Refyne makes them one. Phone numbers, LinkedIn URLs, and industry values standardized across every record. Define your rules once. Refyne applies them everywhere, automatically.'
           />
           <FeatureCard
             icon="⚡"
             title="Dedup"
-            description="Detect and merge duplicate companies with a 7-signal confidence cascade. Grade A matches bulk-approve in seconds."
+            description="Duplicate records corrupt your pipeline, inflate your contact counts, and send the same email twice. Refyne scans your HubSpot nightly, groups duplicates by confidence grade, and applies your merge rules automatically."
           />
           <FeatureCard
             icon="📊"
-            title="Compliance dashboard"
-            description="Real-time CRM health score with harmony-level breakdown and trend tracking. Know exactly where your data breaks down."
+            title="Enrich"
+            description="Empty fields mean missing context. Refyne fills them using your existing provider accounts - Apollo, ZoomInfo, Cognism - or Refyne Search, our built-in enrichment engine. Bring your own keys. Pay your providers directly. No markup."
           />
           <FeatureCard
             icon="🔔"
             title="Always On"
-            description="Nightly monitoring with digest emails and Slack alerts — no login required. Refyne watches your CRM while you sleep."
+            description="Your CRM data degrades 30% every year. Refyne watches it while you sleep. Nightly scans surface new issues before they affect your pipeline. Weekly digest emails show exactly what changed and what was fixed. No login required."
           />
         </div>
       </section>
@@ -352,8 +332,8 @@ export default function HomePage() {
           />
           <StepCard
             number="02"
-            title="Configure Harmonies"
-            description="Activate community-built normalization rules or write your own in YAML. Preview every change before it touches your CRM."
+            title="Set your data standards"
+            description="Choose from pre-built rules for phone formats, company names, and industry values - or define your own. Preview every change before anything touches your CRM."
           />
           <StepCard
             number="03"
@@ -382,11 +362,10 @@ export default function HomePage() {
               fontSize: 'clamp(22px, 3vw, 30px)', fontWeight: 700, color: C.text,
               letterSpacing: '-0.03em', marginBottom: 10,
             }}>
-              Simple per-workspace pricing.
+              One price. Unlimited seats. Unlimited records.
             </h2>
             <p style={{ fontSize: 15, color: C.text2, lineHeight: 1.5 }}>
-              No per-seat fees. No usage surprises.<br />
-              One flat price per HubSpot portal, starting at $149/mo.
+              Most data tools charge per user or per record. Refyne charges per HubSpot portal. Starting at $149/mo.
             </p>
           </div>
           <Link href="/pricing" style={{
