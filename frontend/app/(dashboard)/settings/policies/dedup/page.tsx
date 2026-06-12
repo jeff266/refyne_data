@@ -1,6 +1,6 @@
 'use client';
 
-// Cache bust v6: June 12 2026 21:15 - force rebuild after settings layout fix
+// Cache bust v7: June 12 2026 21:30 - optional chaining for nested property access (group?.conditions)
 /**
  * Unified Dedup Configuration
  *
@@ -602,9 +602,9 @@ export default function UnifiedDedupConfigPage() {
       body: JSON.stringify({
         objectType: activeTab,
         groups: (editingGroups ?? []).map((group) => ({
-          name: group.name || `Group ${group.group_order}`,
-          group_order: group.group_order,
-          conditions: group.conditions,
+          name: group?.name || `Group ${group?.group_order}`,
+          group_order: group?.group_order,
+          conditions: group?.conditions ?? [],
         })),
       }),
     });
@@ -994,7 +994,7 @@ export default function UnifiedDedupConfigPage() {
                     </div>
 
                     {/* Condition Rows */}
-                    {(group.conditions ?? []).map((condition: any, condIdx: number) => (
+                    {(group?.conditions ?? []).map((condition: any, condIdx: number) => (
                       <div
                         key={condIdx}
                         style={{
@@ -1329,7 +1329,7 @@ export default function UnifiedDedupConfigPage() {
                         Survive when ALL of these are true:
                       </div>
                       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                        {(group.conditions ?? []).map((condition) => (
+                        {(group?.conditions ?? []).map((condition) => (
                           <li key={condition.id} style={{ fontSize: 12, color: C.text2, marginBottom: 4, fontFamily: F.mono }}>
                             {condition.field_key} {getOperatorLabel(condition.operator)}
                             {condition.comparison_value && ` ${condition.comparison_value}`}
