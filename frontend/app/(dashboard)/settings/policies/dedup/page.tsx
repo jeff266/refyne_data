@@ -1,6 +1,6 @@
 'use client';
 
-// Cache bust: force rebuild June 12 2026 - fixes stale Vercel build cache serving old JS bundle
+// Cache bust v2: June 12 2026 17:45 - add HubSpot field dropdown for compliance fields
 /**
  * Unified Dedup Configuration
  *
@@ -158,6 +158,7 @@ export default function UnifiedDedupConfigPage() {
     'hs_legal_basis',
   ]);
   const [newComplianceField, setNewComplianceField] = useState('');
+  const [hubspotFieldOptions, setHubspotFieldOptions] = useState<Array<{ key: string; label: string; type: string }>>([]);
 
   // ──────────────────────────────────────────────────────────────────────
   // STATE - Step 5: Hierarchy & Owners
@@ -270,6 +271,11 @@ export default function UnifiedDedupConfigPage() {
         const orgSpecific = data.rules.filter((r: SurvivorshipRule) => r.org_id);
         setDefaultRules(defaults);
         setOrgRules(orgSpecific);
+
+        // Store field options for compliance field dropdown
+        if (data.field_options && Array.isArray(data.field_options)) {
+          setHubspotFieldOptions(data.field_options);
+        }
       }
     } catch (error) {
       console.error('Failed to load survivorship rules:', error);
@@ -1532,28 +1538,39 @@ export default function UnifiedDedupConfigPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                type="text"
+              <select
                 value={newComplianceField}
                 onChange={(e) => setNewComplianceField(e.target.value)}
-                placeholder="hs_email_optout"
                 style={{
                   flex: 1,
                   padding: '8px 12px',
                   fontSize: 14,
                   fontFamily: 'monospace',
                   border: `1px solid ${C.border}`,
+                  background: 'white',
+                  color: C.text,
                 }}
-              />
+              >
+                <option value="">Select a field...</option>
+                {hubspotFieldOptions
+                  .filter(opt => !complianceFields.includes(opt.key) && !opt.key.startsWith('hs_object_'))
+                  .map(opt => (
+                    <option key={opt.key} value={opt.key}>
+                      {opt.label} ({opt.key})
+                    </option>
+                  ))}
+              </select>
               <button
                 onClick={addComplianceField}
+                disabled={!newComplianceField}
                 style={{
                   padding: '8px 16px',
                   fontSize: 14,
-                  color: '#2E6BA8',
+                  color: newComplianceField ? '#2E6BA8' : C.text3,
                   background: 'white',
-                  border: `1px solid #2E6BA8`,
-                  cursor: 'pointer',
+                  border: `1px solid ${newComplianceField ? '#2E6BA8' : C.border}`,
+                  cursor: newComplianceField ? 'pointer' : 'not-allowed',
+                  opacity: newComplianceField ? 1 : 0.6,
                 }}
               >
                 Add Field
