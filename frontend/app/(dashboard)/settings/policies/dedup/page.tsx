@@ -1,5 +1,6 @@
 'use client';
 
+// Cache bust: force rebuild June 12 2026 - fixes stale Vercel build cache serving old JS bundle
 /**
  * Unified Dedup Configuration
  *
