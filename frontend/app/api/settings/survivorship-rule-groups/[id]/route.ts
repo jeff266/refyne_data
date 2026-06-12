@@ -30,12 +30,12 @@ export async function PATCH(
   try {
     const groupId = params.id;
     const body = await request.json();
-    const { name, group_priority, is_active } = body;
+    const { name, group_priority, is_active, conditions } = body;
 
     console.log('[Survivorship Groups PATCH] Request:', {
       groupId,
       orgId: ctx.orgId,
-      updates: { name, group_priority, is_active }
+      updates: { name, group_priority, is_active, conditions: conditions?.length }
     });
 
     // Verify group belongs to this org
@@ -77,15 +77,50 @@ export async function PATCH(
 
     if (error) throw error;
 
+    // Update conditions if provided
+    if (conditions && Array.isArray(conditions)) {
+      console.log('[Survivorship Groups PATCH] Updating conditions');
+
+      // Delete existing conditions
+      const { error: deleteError } = await supabaseAdmin
+        .from('dedup_survivorship_rule_conditions')
+        .delete()
+        .eq('group_id', groupId);
+
+      if (deleteError) {
+        console.error('[Survivorship Groups PATCH] Failed to delete old conditions:', deleteError);
+        throw deleteError;
+      }
+
+      // Insert new conditions
+      if (conditions.length > 0) {
+        const conditionInserts = conditions.map((c: any) => ({
+          group_id: groupId,
+          field_key: c.field_key,
+          operator: c.operator,
+          value: c.value ?? null,
+        }));
+
+        const { error: insertError } = await supabaseAdmin
+          .from('dedup_survivorship_rule_conditions')
+          .insert(conditionInserts);
+
+        if (insertError) {
+          console.error('[Survivorship Groups PATCH] Failed to insert new conditions:', insertError);
+          throw insertError;
+        }
+      }
+    }
+
     // Fetch conditions
-    const { data: conditions } = await supabaseAdmin
+    const { data: updatedConditions } = await supabaseAdmin
       .from('dedup_survivorship_rule_conditions')
       .select('*')
       .eq('group_id', groupId);
 
     return NextResponse.json({
       ...data,
-      conditions: conditions ?? [],
+      conditions: updatedConditions ?? [],
     });
   } catch (error) {
     console.error('[Survivorship Groups PATCH] Error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));

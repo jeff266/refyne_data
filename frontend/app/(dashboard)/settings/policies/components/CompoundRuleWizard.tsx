@@ -18,7 +18,7 @@ import { FieldSearchCombobox } from '@/components/ui/FieldSearchCombobox';
 interface Condition {
   field_key: string;
   operator: string;
-  value: string;
+  value?: string | null;
 }
 
 interface HubSpotProperty {
@@ -31,10 +31,11 @@ interface HubSpotProperty {
 interface CompoundRuleWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (group: { name: string; conditions: Condition[] }) => Promise<void>;
+  onSave: (group: { id?: string; name: string; conditions: Condition[] }) => Promise<void>;
+  initialGroup?: { id: string; name: string; conditions: Condition[] } | null;
 }
 
-export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWizardProps) {
+export function CompoundRuleWizard({ isOpen, onClose, onSave, initialGroup }: CompoundRuleWizardProps) {
   const [step, setStep] = useState(1);
   const [groupName, setGroupName] = useState('');
   const [conditions, setConditions] = useState<Condition[]>([
@@ -50,6 +51,20 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
       loadProperties();
     }
   }, [isOpen]);
+
+  // Populate initial values when editing
+  useEffect(() => {
+    if (isOpen && initialGroup) {
+      setStep(1);
+      setGroupName(initialGroup.name);
+      setConditions(initialGroup.conditions.length > 0 ? initialGroup.conditions : [{ field_key: '', operator: '', value: '' }]);
+    } else if (isOpen && !initialGroup) {
+      // Reset for new group
+      setStep(1);
+      setGroupName('');
+      setConditions([{ field_key: '', operator: '', value: '' }]);
+    }
+  }, [isOpen, initialGroup]);
 
   const loadProperties = async () => {
     setLoading(true);
@@ -154,7 +169,11 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave({ name: groupName, conditions });
+      await onSave({
+        ...(initialGroup?.id && { id: initialGroup.id }),
+        name: groupName,
+        conditions
+      });
       resetAndClose();
     } catch (error) {
       console.error('Failed to save group:', error);
@@ -326,7 +345,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
                       // Enum field - show dropdown
                       return (
                         <select
-                          value={condition.value}
+                          value={condition.value ?? ''}
                           onChange={(e) => updateCondition(index, 'value', e.target.value)}
                           style={{
                             padding: '8px 10px',
@@ -350,7 +369,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
                       return (
                         <input
                           type="text"
-                          value={condition.value}
+                          value={condition.value ?? ''}
                           onChange={(e) => updateCondition(index, 'value', e.target.value)}
                           placeholder="Value"
                           style={{

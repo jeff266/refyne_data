@@ -16,7 +16,7 @@
 import { useState, useEffect } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { addToast } from '@/components/ui/toast';
-import { Plus, ArrowUp, ArrowDown, X, Lock } from 'lucide-react';
+import { Plus, ArrowUp, ArrowDown, X, Lock, Pencil } from 'lucide-react';
 import { useRole } from '@/hooks/useRole';
 import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
 import { CompoundRuleWizard } from '../components/CompoundRuleWizard';
@@ -141,6 +141,7 @@ export default function UnifiedDedupConfigPage() {
   // ──────────────────────────────────────────────────────────────────────
   const [compoundGroups, setCompoundGroups] = useState<CompoundRuleGroup[]>([]);
   const [showCompoundWizard, setShowCompoundWizard] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<CompoundRuleGroup | null>(null);
 
   // ──────────────────────────────────────────────────────────────────────
   // STATE - Step 3b: Field Rules (Survivorship)
@@ -400,12 +401,18 @@ export default function UnifiedDedupConfigPage() {
   // STEP 3a: COMPOUND RULES Handlers
   // ============================================================================
 
-  async function handleSaveCompoundGroup(group: { name: string; conditions: any[] }) {
+  async function handleSaveCompoundGroup(group: { id?: string; name: string; conditions: any[] }) {
     try {
       console.log('[handleSaveCompoundGroup] Saving group:', JSON.stringify(group, null, 2));
 
-      const res = await fetch('/api/settings/survivorship-rule-groups', {
-        method: 'POST',
+      const isUpdate = !!group.id;
+      const endpoint = isUpdate
+        ? `/api/settings/survivorship-rule-groups/${group.id}`
+        : '/api/settings/survivorship-rule-groups';
+      const method = isUpdate ? 'PATCH' : 'POST';
+
+      const res = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(group),
       });
@@ -415,16 +422,22 @@ export default function UnifiedDedupConfigPage() {
       if (!res.ok) {
         const errorData = await res.json();
         console.error('[handleSaveCompoundGroup] Error response:', errorData);
-        throw new Error(errorData.details || 'Failed to create group');
+        throw new Error(errorData.details || `Failed to ${isUpdate ? 'update' : 'create'} group`);
       }
 
-      addToast('success', 'Compound rule created');
+      addToast('success', `Compound rule ${isUpdate ? 'updated' : 'created'}`);
       await loadCompoundGroups();
+      setEditingGroup(null); // Clear editing state after save
     } catch (error) {
-      console.error('Failed to create group:', error);
-      addToast('error', 'Failed to create compound rule');
+      console.error(`Failed to ${group.id ? 'update' : 'create'} group:`, error);
+      addToast('error', `Failed to ${group.id ? 'update' : 'create'} compound rule`);
       throw error;
     }
+  }
+
+  function handleEditCompoundGroup(group: CompoundRuleGroup) {
+    setEditingGroup(group);
+    setShowCompoundWizard(true);
   }
 
   async function handleReorderCompoundGroup(groupId: string, direction: 'up' | 'down') {
@@ -1310,6 +1323,18 @@ export default function UnifiedDedupConfigPage() {
                             </button>
                           </div>
                           <button
+                            onClick={() => handleEditCompoundGroup(group)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: C.text3,
+                              padding: 4,
+                            }}
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
                             onClick={() => handleDeleteCompoundGroup(group.id)}
                             style={{
                               background: 'none',
@@ -1751,8 +1776,20 @@ export default function UnifiedDedupConfigPage() {
       {/* Compound Rule Wizard Modal */}
       <CompoundRuleWizard
         isOpen={showCompoundWizard}
-        onClose={() => setShowCompoundWizard(false)}
+        onClose={() => {
+          setShowCompoundWizard(false);
+          setEditingGroup(null);
+        }}
         onSave={handleSaveCompoundGroup}
+        initialGroup={editingGroup ? {
+          id: editingGroup.id,
+          name: editingGroup.name,
+          conditions: editingGroup.conditions.map(c => ({
+            field_key: c.field_key,
+            operator: c.operator,
+            value: c.value ?? '',
+          })),
+        } : null}
       />
     </div>
   );
