@@ -3,6 +3,7 @@ import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { checkRateLimit, rateLimiters } from '@/lib/api/rate-limit';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { normalizeQuestion } from '@/lib/assistant/normalize-question';
+import { buildWorkspaceContext } from '@/lib/assistant/context-builder';
 import Anthropic from '@anthropic-ai/sdk';
 
 // Using claude-haiku-4-5-20251001 (Haiku 4.5 - fast, efficient model for assistant)
@@ -186,10 +187,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    // 4. Compact history if needed
+    // 4. Load workspace context
+    const { data: wsContext } = await supabaseAdmin
+      .from('workspace_context')
+      .select('interpreted_context, built_at')
+      .eq('org_id', ctx.orgId)
+      .single();
+
+    let contextText = wsContext?.interpreted_context || '';
+
+    // First-time: build context synchronously (adds ~1-2s to first message, cached after)
+    if (!contextText) {
+      try {
+        contextText = await buildWorkspaceContext(ctx.orgId, 'first_chat');
+      } catch (err) {
+        console.error('[Assistant] Context build failed:', err);
+        contextText = ''; // graceful degradation
+      }
+    }
+
+    // 5. Compact history if needed
     const processedHistory = await compactHistory(history || []);
 
-    // 5. Build messages array
+    // 6. Build messages array
     const messages: Anthropic.MessageParam[] = [
       ...processedHistory.map((msg) => ({
         role: msg.role as 'user' | 'assistant',
@@ -198,7 +218,7 @@ export async function POST(req: NextRequest) {
       { role: 'user' as const, content: message },
     ];
 
-    // 6. Log question (non-blocking - fire and forget, before streaming)
+    // 7. Log question (non-blocking - fire and forget, before streaming)
     const normalized = normalizeQuestion(message);
     supabaseAdmin
       .from('assistant_questions')
@@ -210,17 +230,33 @@ export async function POST(req: NextRequest) {
         suggestion_clicked: suggestionClicked === true,
       });
 
-    // 7. Stream Claude response with cached system prompt
+    // 8. Build system blocks with workspace context
+    const systemBlocks: Anthropic.Messages.TextBlockParam[] = [
+      {
+        type: 'text',
+        text: REFYNE_SYSTEM_PROMPT,
+        cache_control: { type: 'ephemeral' },
+      },
+    ];
+
+    // Add workspace context as second cached block if available
+    if (contextText) {
+      const updatedDate = wsContext?.built_at
+        ? new Date(wsContext.built_at).toLocaleDateString()
+        : 'recently';
+
+      systemBlocks.push({
+        type: 'text',
+        text: `WORKSPACE CONTEXT (updated ${updatedDate}):\n\n${contextText}`,
+        cache_control: { type: 'ephemeral' },
+      });
+    }
+
+    // 9. Stream Claude response with cached system prompts
     const stream = await anthropic.messages.stream({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1000,
-      system: [
-        {
-          type: 'text',
-          text: REFYNE_SYSTEM_PROMPT,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
+      system: systemBlocks,
       messages,
     });
 

@@ -57,8 +57,17 @@ describe('Assistant Question Logging', () => {
 
   it('1. Question logged after each chat message', async () => {
     const mockInsert = vi.fn().mockResolvedValue({ error: null });
-    const mockFrom = vi.fn().mockReturnValue({
-      insert: mockInsert,
+    const mockFrom = vi.fn().mockImplementation((table: string) => {
+      if (table === 'workspace_context') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+        };
+      }
+      return { insert: mockInsert };
     });
 
     vi.mocked(supabaseAdmin.from).mockImplementation(mockFrom as any);
@@ -73,7 +82,8 @@ describe('Assistant Question Logging', () => {
 
     await chatPost(request);
 
-    // Should call insert on assistant_questions
+    // Should call both workspace_context and assistant_questions
+    expect(mockFrom).toHaveBeenCalledWith('workspace_context');
     expect(mockFrom).toHaveBeenCalledWith('assistant_questions');
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -157,9 +167,20 @@ describe('Assistant Question Logging', () => {
 
   it('6. suggestionClicked logged correctly', async () => {
     const mockInsert = vi.fn().mockResolvedValue({ error: null });
-    vi.mocked(supabaseAdmin.from).mockReturnValue({
-      insert: mockInsert,
-    } as any);
+    const mockFrom = vi.fn().mockImplementation((table: string) => {
+      if (table === 'workspace_context') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+        };
+      }
+      return { insert: mockInsert };
+    });
+
+    vi.mocked(supabaseAdmin.from).mockImplementation(mockFrom as any);
 
     const request = new NextRequest('http://localhost/api/assistant/chat', {
       method: 'POST',
@@ -232,11 +253,22 @@ describe('Assistant Question Logging', () => {
   });
 
   it('9. API route returns streaming response headers', async () => {
-    // Mock supabaseAdmin for logging
+    // Mock supabaseAdmin for logging and workspace context
     const mockInsert = vi.fn().mockResolvedValue({ error: null });
-    vi.mocked(supabaseAdmin.from).mockReturnValue({
-      insert: mockInsert,
-    } as any);
+    const mockFrom = vi.fn().mockImplementation((table: string) => {
+      if (table === 'workspace_context') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+        };
+      }
+      return { insert: mockInsert };
+    });
+
+    vi.mocked(supabaseAdmin.from).mockImplementation(mockFrom as any);
 
     // Mock Anthropic streaming response
     mockStream.mockResolvedValue({

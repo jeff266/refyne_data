@@ -41,6 +41,27 @@ vi.mock('@/lib/api/rate-limit', () => ({
   },
 }));
 
+// Mock supabaseAdmin for workspace context and logging
+vi.mock('@/lib/db/admin-client', () => ({
+  supabaseAdmin: {
+    from: vi.fn().mockImplementation((table: string) => {
+      if (table === 'workspace_context') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+        };
+      }
+      // For assistant_questions logging
+      return {
+        insert: vi.fn().mockResolvedValue({ error: null }),
+      };
+    }),
+  },
+}));
+
 describe('Assistant Memory - Conversation Compaction', () => {
   beforeEach(() => {
     vi.clearAllMocks();

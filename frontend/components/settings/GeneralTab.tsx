@@ -50,10 +50,13 @@ export function GeneralTab() {
   const [syncFrequency, setSyncFrequency] = useState<'manual' | 'nightly' | 'every_6h' | 'hourly'>('nightly');
   const [connections, setConnections] = useState<any[]>([]);
   const [savingSyncFreq, setSavingSyncFreq] = useState(false);
+  const [contextInfo, setContextInfo] = useState<{ built_at: string; version: number } | null>(null);
+  const [refreshingContext, setRefreshingContext] = useState(false);
 
   useEffect(() => {
     fetchSettings();
     fetchConnections();
+    fetchContextInfo();
   }, []);
 
   async function fetchSettings() {
@@ -93,6 +96,37 @@ export function GeneralTab() {
       }
     } catch (err) {
       console.error('Failed to fetch connections:', err);
+    }
+  }
+
+  async function fetchContextInfo() {
+    try {
+      const res = await fetch('/api/assistant/context-info');
+      if (res.ok) {
+        const data = await res.json();
+        setContextInfo(data.context);
+      }
+    } catch (err) {
+      console.error('Failed to fetch context info:', err);
+    }
+  }
+
+  async function handleRefreshContext() {
+    if (!isAdmin) return;
+
+    setRefreshingContext(true);
+    try {
+      const res = await fetch('/api/assistant/refresh-context', { method: 'POST' });
+      if (res.ok) {
+        showToast('Assistant context refreshed', 'success');
+        await fetchContextInfo();
+      } else {
+        showToast('Failed to refresh context', 'error');
+      }
+    } catch (err) {
+      showToast('Failed to refresh context', 'error');
+    } finally {
+      setRefreshingContext(false);
     }
   }
 
@@ -501,6 +535,46 @@ export function GeneralTab() {
                   {savingSyncFreq ? 'Saving...' : 'Save sync frequency'}
                 </PrimaryBtn>
               </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Assistant Context */}
+      {contextInfo && (
+        <div style={{ marginBottom: 32 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: C.text2, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
+            Assistant Context
+          </h2>
+
+          <Card>
+            <div style={{ padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 6 }}>
+                    Workspace context
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
+                    Last updated: {contextInfo ? new Date(contextInfo.built_at).toLocaleString() : 'Never'}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.text3 }}>
+                    The assistant uses workspace context to provide personalized answers about your Refyne configuration.
+                  </div>
+                </div>
+
+                <GhostBtn
+                  onClick={handleRefreshContext}
+                  disabled={refreshingContext || !isAdmin}
+                >
+                  {refreshingContext ? 'Refreshing...' : 'Refresh now'}
+                </GhostBtn>
+              </div>
+
+              {!isAdmin && (
+                <div style={{ marginTop: 12, padding: 10, background: C.amberDim, border: `1px solid ${C.amberBrd}`, fontSize: 11, color: C.amber }}>
+                  Only admins can manually refresh assistant context.
+                </div>
+              )}
             </div>
           </Card>
         </div>
