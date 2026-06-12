@@ -1,6 +1,6 @@
 'use client';
 
-// Cache bust v5: June 12 2026 18:20 - add ?? [] to imported constants (COMPANY_FIELDS, MATCH_TYPES, ACCURACY_LEVELS)
+// Cache bust v6: June 12 2026 21:15 - force rebuild after settings layout fix
 /**
  * Unified Dedup Configuration
  *
