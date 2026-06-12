@@ -237,21 +237,6 @@ export function FieldSearchCombobox({
                   >
                     {prop.name}
                   </div>
-                  {prop.options && prop.options.length > 0 && (
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: C.text3,
-                        marginTop: 4,
-                        fontStyle: 'italic',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
-                      Options: {prop.options.map(opt => opt.label).join(', ')}
-                    </div>
-                  )}
                 </div>
               ))
             )}

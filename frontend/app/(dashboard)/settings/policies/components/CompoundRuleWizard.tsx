@@ -109,6 +109,11 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
     return operator !== 'is_populated' && operator !== 'is_empty';
   };
 
+  const getFieldOptions = (fieldKey: string) => {
+    const property = properties.find(p => p.name === fieldKey);
+    return property?.options || [];
+  };
+
   const addCondition = () => {
     setConditions([...conditions, { field_key: '', operator: '', comparison_value: '' }]);
   };
@@ -313,22 +318,53 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
                   </select>
 
                   {/* Value (if needed) */}
-                  {needsValue(condition.operator) && (
-                    <input
-                      type="text"
-                      value={condition.comparison_value}
-                      onChange={(e) => updateCondition(index, 'comparison_value', e.target.value)}
-                      placeholder="Value"
-                      style={{
-                        padding: '8px 10px',
-                        fontSize: 13,
-                        background: C.bg,
-                        border: `1px solid ${C.border}`,
-                        color: C.text,
-                        fontFamily: F.sans,
-                      }}
-                    />
-                  )}
+                  {needsValue(condition.operator) && (() => {
+                    const fieldOptions = getFieldOptions(condition.field_key);
+                    const hasOptions = fieldOptions.length > 0;
+
+                    if (hasOptions) {
+                      // Enum field - show dropdown
+                      return (
+                        <select
+                          value={condition.comparison_value}
+                          onChange={(e) => updateCondition(index, 'comparison_value', e.target.value)}
+                          style={{
+                            padding: '8px 10px',
+                            fontSize: 13,
+                            background: C.bg,
+                            border: `1px solid ${C.border}`,
+                            color: C.text,
+                            fontFamily: F.sans,
+                          }}
+                        >
+                          <option value="">Select value...</option>
+                          {fieldOptions.map(opt => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      );
+                    } else {
+                      // Non-enum field - show text input
+                      return (
+                        <input
+                          type="text"
+                          value={condition.comparison_value}
+                          onChange={(e) => updateCondition(index, 'comparison_value', e.target.value)}
+                          placeholder="Value"
+                          style={{
+                            padding: '8px 10px',
+                            fontSize: 13,
+                            background: C.bg,
+                            border: `1px solid ${C.border}`,
+                            color: C.text,
+                            fontFamily: F.sans,
+                          }}
+                        />
+                      );
+                    }
+                  })()}
 
                   {/* Remove button */}
                   <button
