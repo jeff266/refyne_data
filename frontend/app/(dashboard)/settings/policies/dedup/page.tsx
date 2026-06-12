@@ -16,7 +16,11 @@
 import { useState, useEffect } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { addToast } from '@/components/ui/toast';
-import { Plus, ArrowUp, ArrowDown, X, Lock, Pencil } from 'lucide-react';
+import { Plus, ArrowUp, ArrowDown, X } from 'lucide-react';
+import { DragHandle } from '@/components/ui/icons/DragHandle';
+import { LockIcon } from '@/components/ui/icons/LockIcon';
+import { PencilIcon } from '@/components/ui/icons/PencilIcon';
+import { CloseIcon } from '@/components/ui/icons/CloseIcon';
 import { useRole } from '@/hooks/useRole';
 import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
 import { CompoundRuleWizard } from '../components/CompoundRuleWizard';
@@ -142,12 +146,16 @@ export default function UnifiedDedupConfigPage() {
   const [compoundGroups, setCompoundGroups] = useState<CompoundRuleGroup[]>([]);
   const [showCompoundWizard, setShowCompoundWizard] = useState(false);
   const [editingGroup, setEditingGroup] = useState<CompoundRuleGroup | null>(null);
+  const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
 
   // ──────────────────────────────────────────────────────────────────────
   // STATE - Step 3b: Field Rules (Survivorship)
   // ──────────────────────────────────────────────────────────────────────
   const [defaultRules, setDefaultRules] = useState<SurvivorshipRule[]>([]);
   const [orgRules, setOrgRules] = useState<SurvivorshipRule[]>([]);
+  const [draggedRuleId, setDraggedRuleId] = useState<string | null>(null);
+  const [dragOverRuleId, setDragOverRuleId] = useState<string | null>(null);
 
   // ──────────────────────────────────────────────────────────────────────
   // STATE - Step 4: Protected Fields
@@ -490,6 +498,65 @@ export default function UnifiedDedupConfigPage() {
     }
   }
 
+  // Drag-and-drop handlers for compound groups
+  function handleGroupDragStart(groupId: string) {
+    setDraggedGroupId(groupId);
+  }
+
+  function handleGroupDragOver(e: React.DragEvent, groupId: string) {
+    e.preventDefault();
+    if (draggedGroupId && draggedGroupId !== groupId) {
+      setDragOverGroupId(groupId);
+    }
+  }
+
+  async function handleGroupDrop(e: React.DragEvent, targetGroupId: string) {
+    e.preventDefault();
+    if (!draggedGroupId || draggedGroupId === targetGroupId) {
+      setDraggedGroupId(null);
+      setDragOverGroupId(null);
+      return;
+    }
+
+    const draggedIndex = compoundGroups.findIndex(g => g.id === draggedGroupId);
+    const targetIndex = compoundGroups.findIndex(g => g.id === targetGroupId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    // Reorder locally
+    const newGroups = [...compoundGroups];
+    const [removed] = newGroups.splice(draggedIndex, 1);
+    newGroups.splice(targetIndex, 0, removed);
+
+    setCompoundGroups(newGroups);
+
+    // Call bulk-order API
+    try {
+      const orderedIds = newGroups.map(g => g.id);
+      const res = await fetch('/api/settings/survivorship-rule-groups/bulk-order', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds }),
+      });
+
+      if (!res.ok) throw new Error('Failed to update order');
+
+      addToast('success', 'Group order updated');
+    } catch (error) {
+      console.error('Failed to update group order:', error);
+      addToast('error', 'Failed to update group order');
+      await loadCompoundGroups(); // Reload to get correct order
+    } finally {
+      setDraggedGroupId(null);
+      setDragOverGroupId(null);
+    }
+  }
+
+  function handleGroupDragEnd() {
+    setDraggedGroupId(null);
+    setDragOverGroupId(null);
+  }
+
   // ============================================================================
   // STEP 3b: FIELD RULES (Survivorship) Handlers
   // ============================================================================
@@ -542,6 +609,65 @@ export default function UnifiedDedupConfigPage() {
       console.error('Failed to delete rule:', error);
       addToast('error', 'Failed to delete rule');
     }
+  }
+
+  // Drag-and-drop handlers for field rules (org rules only)
+  function handleRuleDragStart(ruleId: string) {
+    setDraggedRuleId(ruleId);
+  }
+
+  function handleRuleDragOver(e: React.DragEvent, ruleId: string) {
+    e.preventDefault();
+    if (draggedRuleId && draggedRuleId !== ruleId) {
+      setDragOverRuleId(ruleId);
+    }
+  }
+
+  async function handleRuleDrop(e: React.DragEvent, targetRuleId: string) {
+    e.preventDefault();
+    if (!draggedRuleId || draggedRuleId === targetRuleId) {
+      setDraggedRuleId(null);
+      setDragOverRuleId(null);
+      return;
+    }
+
+    const draggedIndex = orgRules.findIndex(r => r.id === draggedRuleId);
+    const targetIndex = orgRules.findIndex(r => r.id === targetRuleId);
+
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    // Reorder locally
+    const newRules = [...orgRules];
+    const [removed] = newRules.splice(draggedIndex, 1);
+    newRules.splice(targetIndex, 0, removed);
+
+    setOrgRules(newRules);
+
+    // Call bulk-order API
+    try {
+      const orderedIds = newRules.map(r => r.id);
+      const res = await fetch('/api/dedup/survivorship-rules/bulk-order', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds }),
+      });
+
+      if (!res.ok) throw new Error('Failed to update order');
+
+      addToast('success', 'Rule order updated');
+    } catch (error) {
+      console.error('Failed to update rule order:', error);
+      addToast('error', 'Failed to update rule order');
+      await loadSurvivorshipRules(); // Reload to get correct order
+    } finally {
+      setDraggedRuleId(null);
+      setDragOverRuleId(null);
+    }
+  }
+
+  function handleRuleDragEnd() {
+    setDraggedRuleId(null);
+    setDragOverRuleId(null);
   }
 
   // ============================================================================
@@ -735,24 +861,35 @@ export default function UnifiedDedupConfigPage() {
   function getRuleBehaviorText(rule: SurvivorshipRule): string {
     switch (rule.rule_type) {
       case 'never_downgrade':
-        return 'Never use less advanced value';
+        // Show actual funnel progression
+        const funnel = rule.rule_config.value_order;
+        if (funnel && Array.isArray(funnel) && funnel.length > 0) {
+          return funnel.join(' > ');
+        }
+        return 'opportunity > salesqualifiedlead > ...';
       case 'prefer_nonempty':
-        return 'Prefer record with value';
+        return 'Keep any value over an empty field';
       case 'tld_disqualifier':
-        return 'Penalize mismatched TLDs';
+        return '.com vs .com.au reduces confidence';
+      case 'source_preference':
+        const sources = rule.rule_config.value_order;
+        if (sources && Array.isArray(sources) && sources.length > 0) {
+          return sources.join(' > ');
+        }
+        return 'graphiq > apollo > zoominfo > ...';
+      case 'most_recent':
+        return 'Prefer most recently updated value';
       case 'specific_value':
         const valueOrder = rule.rule_config.value_order;
         const preferredValue = rule.rule_config.preferred_value;
         if (valueOrder && valueOrder.length > 0) {
-          return `Prefer: ${valueOrder[0]} first`;
+          return `Prefer: ${valueOrder[0]}`;
         } else if (preferredValue) {
-          return `Always prefer: ${preferredValue}`;
+          return `Prefer: ${preferredValue}`;
         }
-        return 'Always prefer specific value';
+        return 'Prefer specific value';
       case 'prefer_if_populated':
         return 'Prefer record with non-zero value';
-      case 'source_preference':
-        return 'Prefer specific provider';
       case 'rollup':
         const aggregation = rule.rule_config.method || 'maximum';
         return `${aggregation.charAt(0).toUpperCase() + aggregation.slice(1)} of values`;
@@ -1213,7 +1350,7 @@ export default function UnifiedDedupConfigPage() {
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
-      {/* STEP 3: WHICH RECORD SURVIVES                                          */}
+      {/* STEP 3: MERGE RULES                                                    */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       <div style={{ display: 'flex', gap: 24, padding: '40px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#2E6BA8', fontFamily: F.serif, textTransform: 'uppercase', minWidth: 80 }}>
@@ -1221,277 +1358,243 @@ export default function UnifiedDedupConfigPage() {
         </div>
         <div style={{ flex: 1 }}>
           <h2 style={{ fontSize: 20, fontWeight: 600, fontFamily: F.serif, color: C.text, marginBottom: 8 }}>
-            WHICH RECORD SURVIVES
+            MERGE RULES
           </h2>
-          <p style={{ fontSize: 13, color: C.text3, lineHeight: 1.6, marginBottom: 24 }}>
-            When two records merge, which values win?
+          <p style={{ fontSize: 13, color: C.text3, lineHeight: 1.6, marginBottom: 32 }}>
+            When two records merge, Refyne applies these rules in order to determine which values survive.
           </p>
 
-          <div style={{ fontSize: 12, color: '#2E6BA8', marginBottom: 24, padding: 12, background: 'rgba(46, 107, 168, 0.1)', border: '1px solid rgba(46, 107, 168, 0.3)' }}>
-            Compound rules are checked first. If no compound rule matches, field rules apply one by one.
-          </div>
-
-          {/* 3a. Compound Rules */}
-          <div style={{ marginBottom: 40 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-                  Compound rules (checked first)
-                </h3>
-                <p style={{ fontSize: 12, color: C.text3 }}>
-                  If ALL these conditions match a record, that record survives.
-                </p>
+          {/* TIER ① - RECORD-LEVEL RULES */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'start', gap: 16, marginBottom: 16 }}>
+              <div style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: '#2E6BA8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#F9F8F5',
+                fontFamily: F.serif,
+                fontSize: 13,
+                fontWeight: 600,
+                flexShrink: 0
+              }}>
+                ①
               </div>
-              <button
-                onClick={() => setShowCompoundWizard(true)}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: 13,
-                  background: '#2E6BA8',
-                  color: 'white',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
-                <Plus size={14} /> Add compound rule
-              </button>
-            </div>
-
-            {compoundGroups.length === 0 ? (
-              <div style={{ padding: '40px 20px', textAlign: 'center', border: `1px solid ${C.border}`, background: C.surface }}>
-                <div style={{ fontSize: 13, color: C.text3, marginBottom: 16 }}>
-                  No compound rules yet. Compound rules are evaluated before individual field rules.
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4, fontFamily: F.sans }}>
+                  RECORD-LEVEL RULES
                 </div>
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
+                  If all conditions match one record, that record survives entirely
+                </div>
+
+                {compoundGroups.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'rgba(249, 248, 245, 0.4)', textAlign: 'center', padding: '24px 0' }}>
+                    No record-level rules configured.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {compoundGroups.map((group, index) => (
+                      <div
+                        key={group.id}
+                        draggable
+                        onDragStart={() => handleGroupDragStart(group.id)}
+                        onDragOver={(e) => handleGroupDragOver(e, group.id)}
+                        onDrop={(e) => handleGroupDrop(e, group.id)}
+                        onDragEnd={handleGroupDragEnd}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.04)',
+                          border: `1px solid rgba(255, 255, 255, 0.08)`,
+                          borderTop: dragOverGroupId === group.id ? '2px solid #2E6BA8' : undefined,
+                          padding: '12px 16px',
+                          opacity: draggedGroupId === group.id ? 0.4 : 1,
+                          cursor: 'grab',
+                          position: 'relative'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ color: 'rgba(249, 248, 245, 0.3)' }}>
+                              <DragHandle size={18} />
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 14, color: '#F9F8F5', fontFamily: F.sans }}>{group.name}</div>
+                              <div style={{ fontSize: 12, color: 'rgba(249, 248, 245, 0.6)', paddingLeft: 16, marginTop: 4 }}>
+                                {group.conditions.map((c, i) => (
+                                  <div key={i}>
+                                    {c.field_key} {getOperatorLabel(c.operator)}{c.comparison_value && ` ${c.comparison_value}`}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              onClick={() => handleEditCompoundGroup(group)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: 'rgba(249, 248, 245, 0.4)',
+                                padding: 0
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(249, 248, 245, 0.85)'}
+                              onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(249, 248, 245, 0.4)'}
+                            >
+                              <PencilIcon size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCompoundGroup(group.id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: 'rgba(249, 248, 245, 0.4)',
+                                padding: 0
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(249, 248, 245, 0.85)'}
+                              onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(249, 248, 245, 0.4)'}
+                            >
+                              <CloseIcon size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <button
                   onClick={() => setShowCompoundWizard(true)}
                   style={{
+                    marginTop: 16,
                     padding: '8px 16px',
                     fontSize: 13,
-                    background: '#2E6BA8',
-                    color: 'white',
-                    border: 'none',
+                    background: 'transparent',
+                    color: '#2E6BA8',
+                    border: '1px solid rgba(46, 107, 168, 0.5)',
                     cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
+                    fontFamily: F.sans
                   }}
                 >
-                  <Plus size={14} /> Add compound rule
+                  <Plus size={14} style={{ marginRight: 6 }} />
+                  Add record rule
                 </button>
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {(compoundGroups ?? []).map((group, index) => (
-                  <div key={group.id}>
-                    <div style={{ border: `1px solid ${C.border}`, background: C.surface, padding: '16px 20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>
-                          Group {index + 1}: {group.name}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <button
-                              onClick={() => handleReorderCompoundGroup(group.id, 'up')}
-                              disabled={index === 0}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: index === 0 ? 'not-allowed' : 'pointer',
-                                color: index === 0 ? C.border : C.text3,
-                                padding: 0,
-                                opacity: index === 0 ? 0.3 : 1,
-                              }}
-                            >
-                              <ArrowUp size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleReorderCompoundGroup(group.id, 'down')}
-                              disabled={index === compoundGroups.length - 1}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: index === compoundGroups.length - 1 ? 'not-allowed' : 'pointer',
-                                color: index === compoundGroups.length - 1 ? C.border : C.text3,
-                                padding: 0,
-                                opacity: index === compoundGroups.length - 1 ? 0.3 : 1,
-                              }}
-                            >
-                              <ArrowDown size={14} />
-                            </button>
-                          </div>
-                          <button
-                            onClick={() => handleEditCompoundGroup(group)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              color: C.text3,
-                              padding: 4,
-                            }}
-                          >
-                            <Pencil size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCompoundGroup(group.id)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              color: C.text3,
-                              padding: 4,
-                            }}
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div style={{ fontSize: 12, color: C.text3, marginBottom: 8 }}>
-                        Survive when ALL of these are true:
-                      </div>
-                      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                        {(group?.conditions ?? []).map((condition) => (
-                          <li key={condition.id} style={{ fontSize: 12, color: C.text2, marginBottom: 4, fontFamily: F.mono }}>
-                            {condition.field_key} {getOperatorLabel(condition.operator)}
-                            {condition.comparison_value && ` ${condition.comparison_value}`}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {index < compoundGroups.length - 1 && (
-                      <div style={{ textAlign: 'center', padding: '8px 0', fontSize: 11, color: C.text3, fontWeight: 600 }}>
-                        OR
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            </div>
           </div>
 
-          {/* 3b. Field Rules */}
-          <div>
-            <h3 style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 16 }}>
-              Field rules (applied field by field)
-            </h3>
-
-            {/* DEFAULT RULES */}
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 12 }}>
-                DEFAULT (always active)
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', border: `1px solid ${C.border}` }}>
-                <thead>
-                  <tr style={{ background: C.surface }}>
-                    <th style={{ padding: 12, textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                      Field
-                    </th>
-                    <th style={{ padding: 12, textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                      Rule
-                    </th>
-                    <th style={{ padding: 12, textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                      Behavior
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(defaultRules ?? []).map((rule) => (
-                    <tr key={rule.id} style={{ background: C.bg, borderBottom: `1px solid rgba(255, 255, 255, 0.04)` }}>
-                      <td style={{ padding: 12, fontSize: 13, color: C.text }}>{rule.field_key}</td>
-                      <td style={{ padding: 12, fontSize: 13, color: C.text }}>{getRuleTypeLabel(rule.rule_type)}</td>
-                      <td style={{ padding: 12, fontSize: 12, color: C.text3 }}>{getRuleBehaviorText(rule)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Tier Connector ① → ② */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, paddingLeft: 12 }}>
+            <div style={{ width: 1, height: 32, background: 'rgba(255, 255, 255, 0.1)' }} />
+            <div style={{ fontSize: 11, color: 'rgba(249, 248, 245, 0.4)', fontFamily: F.sans }}>
+              if no record rule matches
             </div>
+          </div>
 
-            {/* YOUR RULES */}
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 12 }}>
-                YOUR RULES
+          {/* TIER ② - FIELD-LEVEL RULES */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'start', gap: 16 }}>
+              <div style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: '#2E6BA8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#F9F8F5',
+                fontFamily: F.serif,
+                fontSize: 13,
+                fontWeight: 600,
+                flexShrink: 0
+              }}>
+                ②
               </div>
-              {orgRules.length === 0 ? (
-                <div style={{ padding: '32px 20px', textAlign: 'center', border: `1px solid ${C.border}`, background: C.surface }}>
-                  <div style={{ fontSize: 13, color: C.text3, marginBottom: 16 }}>
-                    No custom field rules yet.
-                  </div>
-                  <div style={{ fontSize: 12, color: C.text3 }}>
-                    Note: Field rule UI (Add rule modal) preserved from existing SurvivorshipRulesPanel component.
-                    Integration point for AddRuleModal would go here.
-                  </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4, fontFamily: F.sans }}>
+                  FIELD-LEVEL RULES
                 </div>
-              ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
+                  Applied field by field in priority order
+                </div>
+
+                {/* Unified Rules Table */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
                   <thead>
-                    <tr style={{ background: C.surface }}>
-                      <th style={{ padding: 12, textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase', width: '60px' }}>
-                        #
-                      </th>
-                      <th style={{ padding: 12, textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                        Field
-                      </th>
-                      <th style={{ padding: 12, textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                        Rule
-                      </th>
-                      <th style={{ padding: 12, textAlign: 'left', fontSize: 11, fontWeight: 600, color: C.text3, textTransform: 'uppercase' }}>
-                        Behavior
-                      </th>
-                      <th style={{ width: '100px' }}></th>
+                    <tr style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
+                      <th style={{ width: 32, padding: 12 }}></th>
+                      <th style={{ width: 200, padding: 12, textAlign: 'left', fontSize: 11, color: C.text3, fontFamily: F.sans }}>Field</th>
+                      <th style={{ width: 160, padding: 12, textAlign: 'left', fontSize: 11, color: C.text3, fontFamily: F.sans }}>Rule</th>
+                      <th style={{ padding: 12, textAlign: 'left', fontSize: 11, color: C.text3, fontFamily: F.sans }}>Behavior</th>
+                      <th style={{ width: 64, padding: 12 }}></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(orgRules ?? []).map((rule, index) => (
-                      <tr key={rule.id} style={{ background: C.bg, borderBottom: `1px solid rgba(255, 255, 255, 0.04)` }}>
-                        <td style={{ padding: 12, fontSize: 13, color: C.text3 }}>{index + 1}</td>
-                        <td style={{ padding: 12, fontSize: 13, color: C.text }}>{rule.field_key}</td>
-                        <td style={{ padding: 12, fontSize: 13, color: C.text }}>{getRuleTypeLabel(rule.rule_type)}</td>
-                        <td style={{ padding: 12, fontSize: 12, color: C.text3 }}>{getRuleBehaviorText(rule)}</td>
+                    {/* Default Rules (with lock icon) */}
+                    {defaultRules.map((rule) => (
+                      <tr key={rule.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                        <td style={{ padding: 12 }}>
+                          <div style={{ color: 'rgba(249, 248, 245, 0.2)' }}>
+                            <LockIcon size={18} />
+                          </div>
+                        </td>
+                        <td style={{ padding: 12, fontSize: 13, color: C.text, fontFamily: F.sans }}>{rule.field_key}</td>
+                        <td style={{ padding: 12, fontSize: 13, color: C.text, fontFamily: F.sans }}>{getRuleTypeLabel(rule.rule_type)}</td>
+                        <td style={{ padding: 12, fontSize: 12, color: C.text3, fontFamily: F.sans }}>{getRuleBehaviorText(rule)}</td>
+                        <td></td>
+                      </tr>
+                    ))}
+
+                    {/* Dashed Divider */}
+                    {defaultRules.length > 0 && orgRules.length > 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ borderTop: '1px dashed rgba(255, 255, 255, 0.12)', height: 1 }}></td>
+                      </tr>
+                    )}
+
+                    {/* Org Rules (with drag handle) */}
+                    {orgRules.map((rule) => (
+                      <tr
+                        key={rule.id}
+                        draggable
+                        onDragStart={() => handleRuleDragStart(rule.id)}
+                        onDragOver={(e) => handleRuleDragOver(e, rule.id)}
+                        onDrop={(e) => handleRuleDrop(e, rule.id)}
+                        onDragEnd={handleRuleDragEnd}
+                        style={{
+                          borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                          borderTop: dragOverRuleId === rule.id ? '2px solid #2E6BA8' : undefined,
+                          opacity: draggedRuleId === rule.id ? 0.4 : 1,
+                          cursor: 'grab'
+                        }}
+                      >
+                        <td style={{ padding: 12 }}>
+                          <div style={{ color: 'rgba(249, 248, 245, 0.3)' }}>
+                            <DragHandle size={18} />
+                          </div>
+                        </td>
+                        <td style={{ padding: 12, fontSize: 13, color: C.text, fontFamily: F.sans }}>{rule.field_key}</td>
+                        <td style={{ padding: 12, fontSize: 13, color: C.text, fontFamily: F.sans }}>{getRuleTypeLabel(rule.rule_type)}</td>
+                        <td style={{ padding: 12, fontSize: 12, color: C.text3, fontFamily: F.sans }}>{getRuleBehaviorText(rule)}</td>
                         <td style={{ padding: 12 }}>
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button
-                              onClick={() => handleReorderRule(rule.id, 'up')}
-                              disabled={index === 0}
-                              style={{
-                                padding: 4,
-                                background: 'transparent',
-                                border: 'none',
-                                cursor: index === 0 ? 'not-allowed' : 'pointer',
-                                color: index === 0 ? C.border : C.text3,
-                                opacity: index === 0 ? 0.3 : 1,
-                              }}
-                            >
-                              <ArrowUp size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleReorderRule(rule.id, 'down')}
-                              disabled={index === orgRules.length - 1}
-                              style={{
-                                padding: 4,
-                                background: 'transparent',
-                                border: 'none',
-                                cursor: index === orgRules.length - 1 ? 'not-allowed' : 'pointer',
-                                color: index === orgRules.length - 1 ? C.border : C.text3,
-                                opacity: index === orgRules.length - 1 ? 0.3 : 1,
-                              }}
-                            >
-                              <ArrowDown size={14} />
-                            </button>
-                            <button
                               onClick={() => handleDeleteRule(rule.id)}
                               style={{
-                                padding: 4,
-                                background: 'transparent',
+                                background: 'none',
                                 border: 'none',
                                 cursor: 'pointer',
-                                color: C.text3,
+                                color: 'rgba(249, 248, 245, 0.4)',
+                                padding: 0
                               }}
+                              onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(249, 248, 245, 0.85)'}
+                              onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(249, 248, 245, 0.4)'}
                             >
-                              <X size={14} />
+                              <CloseIcon size={18} />
                             </button>
                           </div>
                         </td>
@@ -1499,7 +1602,120 @@ export default function UnifiedDedupConfigPage() {
                     ))}
                   </tbody>
                 </table>
-              )}
+
+                <div style={{ textAlign: 'right', marginTop: 8, fontSize: 11, color: 'rgba(249, 248, 245, 0.35)', fontFamily: F.sans }}>
+                  Drag to reorder your rules. Rules apply top to bottom after defaults.
+                </div>
+
+                <button
+                  onClick={() => {/* TODO: Open AddRuleModal */}}
+                  style={{
+                    marginTop: 16,
+                    padding: '8px 16px',
+                    fontSize: 13,
+                    background: 'transparent',
+                    color: '#2E6BA8',
+                    border: '1px solid rgba(46, 107, 168, 0.5)',
+                    cursor: 'pointer',
+                    fontFamily: F.sans
+                  }}
+                >
+                  <Plus size={14} style={{ marginRight: 6 }} />
+                  Add field rule
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Tier Connector ② → ③ */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, paddingLeft: 12 }}>
+            <div style={{ width: 1, height: 32, background: 'rgba(255, 255, 255, 0.1)' }} />
+            <div style={{ fontSize: 11, color: 'rgba(249, 248, 245, 0.4)', fontFamily: F.sans }}>
+              always applied last
+            </div>
+          </div>
+
+          {/* TIER ③ - COMPLIANCE */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'start', gap: 16 }}>
+              <div style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: '#2E6BA8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#F9F8F5',
+                fontFamily: F.serif,
+                fontSize: 13,
+                fontWeight: 600,
+                flexShrink: 0
+              }}>
+                ③
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4, fontFamily: F.sans }}>
+                  COMPLIANCE
+                </div>
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
+                  Always uses most restrictive value
+                </div>
+
+                {/* Compliance Pills */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {complianceFields.map((field) => (
+                    <div
+                      key={field}
+                      style={{
+                        background: 'rgba(46, 107, 168, 0.2)',
+                        border: '1px solid rgba(46, 107, 168, 0.4)',
+                        padding: '4px 10px',
+                        fontSize: 13,
+                        color: '#F9F8F5',
+                        fontFamily: F.sans,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8
+                      }}
+                    >
+                      {field}
+                      <button
+                        onClick={() => removeComplianceField(field)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'rgba(249, 248, 245, 0.5)',
+                          padding: 0,
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(249, 248, 245, 0.9)'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(249, 248, 245, 0.5)'}
+                      >
+                        <CloseIcon size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => {/* TODO: Open FieldSearchCombobox for adding compliance field */}}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 13,
+                    background: 'transparent',
+                    color: '#2E6BA8',
+                    border: '1px solid rgba(46, 107, 168, 0.5)',
+                    cursor: 'pointer',
+                    fontFamily: F.sans
+                  }}
+                >
+                  <Plus size={14} style={{ marginRight: 6 }} />
+                  Add compliance field
+                </button>
+              </div>
             </div>
           </div>
         </div>
