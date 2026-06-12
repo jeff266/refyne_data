@@ -1,6 +1,6 @@
 'use client';
 
-// Cache bust v2: June 12 2026 17:45 - add HubSpot field dropdown for compliance fields
+// Cache bust v3: June 12 2026 18:10 - add defensive Array.isArray checks to prevent x.map errors
 /**
  * Unified Dedup Configuration
  *
@@ -994,7 +994,7 @@ export default function UnifiedDedupConfigPage() {
                     </div>
 
                     {/* Condition Rows */}
-                    {group.conditions.map((condition: any, condIdx: number) => (
+                    {Array.isArray(group.conditions) && group.conditions.map((condition: any, condIdx: number) => (
                       <div
                         key={condIdx}
                         style={{
@@ -1329,7 +1329,7 @@ export default function UnifiedDedupConfigPage() {
                         Survive when ALL of these are true:
                       </div>
                       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                        {group.conditions.map((condition) => (
+                        {Array.isArray(group.conditions) && group.conditions.map((condition) => (
                           <li key={condition.id} style={{ fontSize: 12, color: C.text2, marginBottom: 4, fontFamily: F.mono }}>
                             {condition.field_key} {getOperatorLabel(condition.operator)}
                             {condition.comparison_value && ` ${condition.comparison_value}`}
@@ -1552,7 +1552,7 @@ export default function UnifiedDedupConfigPage() {
                 }}
               >
                 <option value="">Select a field...</option>
-                {hubspotFieldOptions
+                {Array.isArray(hubspotFieldOptions) && hubspotFieldOptions
                   .filter(opt => !complianceFields.includes(opt.key) && !opt.key.startsWith('hs_object_'))
                   .map(opt => (
                     <option key={opt.key} value={opt.key}>
