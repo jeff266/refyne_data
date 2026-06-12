@@ -177,8 +177,20 @@ export async function POST(request: NextRequest) {
       name: error instanceof Error ? error.name : typeof error,
       raw: error
     });
+
+    // Better error serialization for database errors
+    let errorMessage = 'Unknown error';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'object' && error !== null) {
+      // Database error - serialize all properties
+      errorMessage = JSON.stringify(error, Object.getOwnPropertyNames(error));
+    } else {
+      errorMessage = String(error);
+    }
+
     return NextResponse.json(
-      { error: 'Failed to create group', details: error instanceof Error ? error.message : String(error) },
+      { error: 'Failed to create group', details: errorMessage },
       { status: 500 }
     );
   }
