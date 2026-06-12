@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
         group_id: group.id,
         field_key: c.field_key,
         operator: c.operator,
-        value: c.value ?? null,
+        comparison_value: c.value ?? null,
       }));
 
       const { error: conditionsError } = await supabaseAdmin

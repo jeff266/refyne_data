@@ -18,7 +18,7 @@ interface Condition {
   group_id: string;
   field_key: string;
   operator: string;
-  value?: string | null;
+  comparison_value?: string | null;
 }
 
 interface RuleGroup {
@@ -293,7 +293,7 @@ export function CompoundRulesPanel() {
                       fontFamily: F.mono,
                     }}>
                       {condition.field_key} {getOperatorLabel(condition.operator)}
-                      {condition.value && ` ${condition.value}`}
+                      {condition.comparison_value && ` ${condition.comparison_value}`}
                     </li>
                   ))}
                 </ul>

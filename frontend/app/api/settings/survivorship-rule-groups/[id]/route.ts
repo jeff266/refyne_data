@@ -98,7 +98,7 @@ export async function PATCH(
           group_id: groupId,
           field_key: c.field_key,
           operator: c.operator,
-          value: c.value ?? null,
+          comparison_value: c.value ?? null,
         }));
 
         const { error: insertError } = await supabaseAdmin

@@ -20,7 +20,7 @@ export interface SurvivorshipCondition {
   group_id: string;
   field_key: string;
   operator: 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq' | 'is_populated' | 'is_empty' | 'contains';
-  value?: string | null;
+  comparison_value?: string | null;
 }
 
 export interface GroupEvaluationResult {
@@ -117,7 +117,7 @@ export function evaluateCondition(
   condition: SurvivorshipCondition
 ): boolean {
   const value = record[condition.field_key];
-  const compValue = condition.value;
+  const compValue = condition.comparison_value;
 
   switch (condition.operator) {
     case 'is_populated':
