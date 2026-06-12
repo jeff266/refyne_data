@@ -25,6 +25,7 @@ interface HubSpotProperty {
   name: string;
   label: string;
   type: string;
+  options?: Array<{ label: string; value: string }>;
 }
 
 interface CompoundRuleWizardProps {
