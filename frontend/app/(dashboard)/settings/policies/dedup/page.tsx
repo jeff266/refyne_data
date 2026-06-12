@@ -1,6 +1,6 @@
 'use client';
 
-// Cache bust v4: June 12 2026 18:15 - comprehensive ?? [] pattern on ALL .map() calls
+// Cache bust v5: June 12 2026 18:20 - add ?? [] to imported constants (COMPANY_FIELDS, MATCH_TYPES, ACCURACY_LEVELS)
 /**
  * Unified Dedup Configuration
  *
@@ -1019,7 +1019,7 @@ export default function UnifiedDedupConfigPage() {
                           }}
                         >
                           <option value="">Select field...</option>
-                          {(activeTab === 'company' ? COMPANY_FIELDS : CONTACT_FIELDS).map((field) => (
+                          {((activeTab === 'company' ? COMPANY_FIELDS : CONTACT_FIELDS) ?? []).map((field) => (
                             <option key={field.value} value={field.value}>
                               {field.label}
                             </option>
@@ -1038,7 +1038,7 @@ export default function UnifiedDedupConfigPage() {
                             cursor: 'pointer',
                           }}
                         >
-                          {MATCH_TYPES.map((type) => (
+                          {(MATCH_TYPES ?? []).map((type) => (
                             <option key={type.value} value={type.value}>
                               {type.label}
                             </option>
@@ -1058,7 +1058,7 @@ export default function UnifiedDedupConfigPage() {
                               cursor: 'pointer',
                             }}
                           >
-                            {ACCURACY_LEVELS.map((level) => (
+                            {(ACCURACY_LEVELS ?? []).map((level) => (
                               <option key={level.value} value={level.value}>
                                 {level.label}
                               </option>
