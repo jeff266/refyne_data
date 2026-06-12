@@ -39,7 +39,7 @@ export default function SettingsLayout({
     'viewer';
 
   // Filter tabs based on role
-  const visibleTabs = TABS.filter((tab) => tab.roles.includes(userRole));
+  const visibleTabs = (TABS ?? []).filter((tab) => tab.roles.includes(userRole));
 
   return (
     <div style={{ padding: '28px 32px', fontFamily: F.sans }}>
@@ -62,7 +62,7 @@ export default function SettingsLayout({
           marginBottom: 32,
         }}
       >
-        {visibleTabs.map((tab) => {
+        {(visibleTabs ?? []).map((tab) => {
           const isActive = pathname === tab.path || pathname.startsWith(`${tab.path}/`);
           return (
             <Link
