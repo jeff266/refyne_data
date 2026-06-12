@@ -18,7 +18,7 @@ import { FieldSearchCombobox } from '@/components/ui/FieldSearchCombobox';
 interface Condition {
   field_key: string;
   operator: string;
-  comparison_value: string;
+  value: string;
 }
 
 interface HubSpotProperty {
@@ -38,7 +38,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
   const [step, setStep] = useState(1);
   const [groupName, setGroupName] = useState('');
   const [conditions, setConditions] = useState<Condition[]>([
-    { field_key: '', operator: '', comparison_value: '' },
+    { field_key: '', operator: '', value: '' },
   ]);
   const [properties, setProperties] = useState<HubSpotProperty[]>([]);
   const [loading, setLoading] = useState(false);
@@ -115,7 +115,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
   };
 
   const addCondition = () => {
-    setConditions([...conditions, { field_key: '', operator: '', comparison_value: '' }]);
+    setConditions([...conditions, { field_key: '', operator: '', value: '' }]);
   };
 
   const removeCondition = (index: number) => {
@@ -130,12 +130,12 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
     // Reset operator and value if field changes
     if (field === 'field_key') {
       updated[index].operator = '';
-      updated[index].comparison_value = '';
+      updated[index].value = '';
     }
 
     // Reset value if operator changes to is_populated/is_empty
     if (field === 'operator' && !needsValue(value)) {
-      updated[index].comparison_value = '';
+      updated[index].value = '';
     }
 
     setConditions(updated);
@@ -147,7 +147,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
 
   const canProceedToStep3 = () => {
     return conditions.every(c => {
-      return c.field_key && c.operator && (needsValue(c.operator) ? c.comparison_value : true);
+      return c.field_key && c.operator && (needsValue(c.operator) ? c.value : true);
     });
   };
 
@@ -166,7 +166,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
   const resetAndClose = () => {
     setStep(1);
     setGroupName('');
-    setConditions([{ field_key: '', operator: '', comparison_value: '' }]);
+    setConditions([{ field_key: '', operator: '', value: '' }]);
     onClose();
   };
 
@@ -326,8 +326,8 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
                       // Enum field - show dropdown
                       return (
                         <select
-                          value={condition.comparison_value}
-                          onChange={(e) => updateCondition(index, 'comparison_value', e.target.value)}
+                          value={condition.value}
+                          onChange={(e) => updateCondition(index, 'value', e.target.value)}
                           style={{
                             padding: '8px 10px',
                             fontSize: 13,
@@ -350,8 +350,8 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
                       return (
                         <input
                           type="text"
-                          value={condition.comparison_value}
-                          onChange={(e) => updateCondition(index, 'comparison_value', e.target.value)}
+                          value={condition.value}
+                          onChange={(e) => updateCondition(index, 'value', e.target.value)}
                           placeholder="Value"
                           style={{
                             padding: '8px 10px',
@@ -420,7 +420,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
                   }}>
                     <span style={{ position: 'absolute', left: 0, color: C.indigo }}>✓</span>
                     {getFieldLabel(condition.field_key)} {getPlainEnglishOperator(condition.operator)}
-                    {needsValue(condition.operator) && ` ${condition.comparison_value}`}
+                    {needsValue(condition.operator) && ` ${condition.value}`}
                   </li>
                 ))}
               </ul>

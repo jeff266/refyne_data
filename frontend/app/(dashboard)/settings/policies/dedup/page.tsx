@@ -71,7 +71,7 @@ interface CompoundCondition {
   group_id: string;
   field_key: string;
   operator: string;
-  comparison_value?: string | null;
+  value?: string | null;
 }
 
 interface SurvivorshipRule {
@@ -1331,7 +1331,7 @@ export default function UnifiedDedupConfigPage() {
                         {(group?.conditions ?? []).map((condition) => (
                           <li key={condition.id} style={{ fontSize: 12, color: C.text2, marginBottom: 4, fontFamily: F.mono }}>
                             {condition.field_key} {getOperatorLabel(condition.operator)}
-                            {condition.comparison_value && ` ${condition.comparison_value}`}
+                            {condition.value && ` ${condition.value}`}
                           </li>
                         ))}
                       </ul>

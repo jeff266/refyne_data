@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * PUT /api/settings/survivorship-rule-groups/bulk
  *
  * Atomically replace all groups for an org with a new set.
- * Body: { groups: Array<{ name, conditions: Array<{ field_key, operator, comparison_value }> }> }
+ * Body: { groups: Array<{ name, conditions: Array<{ field_key, operator, value }> }> }
  */
 export async function PUT(request: NextRequest) {
   let ctx;
@@ -76,7 +76,7 @@ export async function PUT(request: NextRequest) {
           group_id: group.id,
           field_key: c.field_key,
           operator: c.operator,
-          comparison_value: c.comparison_value ?? null,
+          value: c.value ?? null,
         }));
 
         const { error: conditionsError } = await supabaseAdmin

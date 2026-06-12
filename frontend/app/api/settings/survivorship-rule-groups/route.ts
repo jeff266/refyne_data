@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
  * POST /api/settings/survivorship-rule-groups
  *
  * Create a new group with conditions.
- * Body: { name: string, conditions: Array<{ field_key, operator, comparison_value }> }
+ * Body: { name: string, conditions: Array<{ field_key, operator, value }> }
  */
 export async function POST(request: NextRequest) {
   let ctx;
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
         group_id: group.id,
         field_key: c.field_key,
         operator: c.operator,
-        comparison_value: c.comparison_value ?? null,
+        value: c.value ?? null,
       }));
 
       const { error: conditionsError } = await supabaseAdmin
