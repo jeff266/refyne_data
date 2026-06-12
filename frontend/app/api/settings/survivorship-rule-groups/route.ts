@@ -25,12 +25,20 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    console.log('[Survivorship Groups GET] Fetching for org:', ctx.orgId);
+
     // Fetch groups
     const { data: groups, error: groupsError } = await supabaseAdmin
       .from('dedup_survivorship_rule_groups')
       .select('*')
       .eq('org_id', ctx.orgId)
       .order('group_priority', { ascending: true });
+
+    console.log('[Survivorship Groups GET] Groups query result:', {
+      groupCount: groups?.length,
+      hasError: !!groupsError,
+      error: groupsError ? JSON.stringify(groupsError, Object.getOwnPropertyNames(groupsError)) : null
+    });
 
     if (groupsError) throw groupsError;
 
@@ -40,13 +48,22 @@ export async function GET(request: NextRequest) {
     // Only query conditions if there are groups (Supabase .in() fails with empty array)
     let conditions: any[] = [];
     if (groupIds.length > 0) {
+      console.log('[Survivorship Groups GET] Fetching conditions for group IDs:', groupIds);
       const { data: conditionsData, error: conditionsError } = await supabaseAdmin
         .from('dedup_survivorship_rule_conditions')
         .select('*')
         .in('group_id', groupIds);
 
+      console.log('[Survivorship Groups GET] Conditions query result:', {
+        conditionCount: conditionsData?.length,
+        hasError: !!conditionsError,
+        error: conditionsError ? JSON.stringify(conditionsError, Object.getOwnPropertyNames(conditionsError)) : null
+      });
+
       if (conditionsError) throw conditionsError;
       conditions = conditionsData ?? [];
+    } else {
+      console.log('[Survivorship Groups GET] No groups found, skipping conditions query');
     }
 
     // Attach conditions to groups
@@ -57,9 +74,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ groups: groupsWithConditions });
   } catch (error) {
-    console.error('[Survivorship Groups] GET error:', error);
+    console.error('[Survivorship Groups GET] Error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error('[Survivorship Groups GET] Error stack:', error instanceof Error ? error.stack : 'No stack');
+    console.error('[Survivorship Groups GET] Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : typeof error,
+      raw: error
+    });
     return NextResponse.json(
-      { error: 'Failed to fetch groups' },
+      { error: 'Failed to fetch groups', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
@@ -143,9 +166,15 @@ export async function POST(request: NextRequest) {
       conditions: conditionsData ?? [],
     });
   } catch (error) {
-    console.error('[Survivorship Groups] POST error:', error);
+    console.error('[Survivorship Groups POST] Error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error('[Survivorship Groups POST] Error stack:', error instanceof Error ? error.stack : 'No stack');
+    console.error('[Survivorship Groups POST] Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : typeof error,
+      raw: error
+    });
     return NextResponse.json(
-      { error: 'Failed to create group' },
+      { error: 'Failed to create group', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

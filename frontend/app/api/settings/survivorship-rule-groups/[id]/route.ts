@@ -32,6 +32,12 @@ export async function PATCH(
     const body = await request.json();
     const { name, group_priority, is_active } = body;
 
+    console.log('[Survivorship Groups PATCH] Request:', {
+      groupId,
+      orgId: ctx.orgId,
+      updates: { name, group_priority, is_active }
+    });
+
     // Verify group belongs to this org
     const { data: existingGroup, error: fetchError } = await supabaseAdmin
       .from('dedup_survivorship_rule_groups')
@@ -54,12 +60,20 @@ export async function PATCH(
     if (is_active !== undefined) updates.is_active = is_active;
     updates.updated_at = new Date().toISOString();
 
+    console.log('[Survivorship Groups PATCH] Applying updates:', updates);
+
     const { data, error } = await supabaseAdmin
       .from('dedup_survivorship_rule_groups')
       .update(updates)
       .eq('id', groupId)
       .select()
       .single();
+
+    console.log('[Survivorship Groups PATCH] Update result:', {
+      hasData: !!data,
+      hasError: !!error,
+      error: error ? JSON.stringify(error, Object.getOwnPropertyNames(error)) : null
+    });
 
     if (error) throw error;
 
@@ -74,9 +88,15 @@ export async function PATCH(
       conditions: conditions ?? [],
     });
   } catch (error) {
-    console.error('[Survivorship Groups] PATCH error:', error);
+    console.error('[Survivorship Groups PATCH] Error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error('[Survivorship Groups PATCH] Error stack:', error instanceof Error ? error.stack : 'No stack');
+    console.error('[Survivorship Groups PATCH] Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : typeof error,
+      raw: error
+    });
     return NextResponse.json(
-      { error: 'Failed to update group' },
+      { error: 'Failed to update group', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
