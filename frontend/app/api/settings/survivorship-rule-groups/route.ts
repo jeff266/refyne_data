@@ -136,7 +136,6 @@ export async function POST(request: NextRequest) {
         org_id: ctx.orgId,
         name,
         group_priority: nextPriority,
-        is_active: true,
       })
       .select()
       .single();
