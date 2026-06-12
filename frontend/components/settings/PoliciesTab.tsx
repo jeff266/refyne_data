@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, PrimaryBtn } from '@/components/refyne';
-import { SurvivorshipRulesPanel } from '@/app/(dashboard)/settings/policies/components/SurvivorshipRulesPanel';
-import { CompoundRulesPanel } from '@/app/(dashboard)/settings/policies/components/CompoundRulesPanel';
+// REMOVED: SurvivorshipRulesPanel and CompoundRulesPanel - moved to unified dedup page
+// import { SurvivorshipRulesPanel } from '@/app/(dashboard)/settings/policies/components/SurvivorshipRulesPanel';
+// import { CompoundRulesPanel } from '@/app/(dashboard)/settings/policies/components/CompoundRulesPanel';
 
 interface OrgPolicies {
   write_policy_default: 'fill_empty' | 'overwrite' | 'per_field';
-  dedup_auto_merge_threshold: number | null;
+  // REMOVED: dedup_auto_merge_threshold - moved to unified dedup page
   // dedup_merge_survivor_rule deprecated - survivorship rules engine handles this
   nightly_scan_enabled: boolean;
   incremental_scan_enabled: boolean;
@@ -17,7 +18,7 @@ interface OrgPolicies {
 export function PoliciesTab() {
   const [policies, setPolicies] = useState<OrgPolicies>({
     write_policy_default: 'fill_empty',
-    dedup_auto_merge_threshold: null,
+    // REMOVED: dedup_auto_merge_threshold - moved to unified dedup page
     nightly_scan_enabled: true,
     incremental_scan_enabled: true,
   });
@@ -119,39 +120,7 @@ export function PoliciesTab() {
         </div>
       </Card>
 
-      {/* Dedup Policy */}
-      <Card style={{ marginBottom: 24 }}>
-        <div style={{ padding: 20, borderBottom: `1px solid ${C.border}` }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-            Dedup policy
-          </h3>
-        </div>
-        <div style={{ padding: 20 }}>
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 12 }}>
-              Auto-merge threshold
-            </div>
-            {[
-              { value: null, label: 'Never auto-merge', sub: 'always require manual review' },
-              { value: 90, label: 'High confidence only', sub: '(90%+)' },
-              { value: 75, label: 'Medium and above', sub: '(75%+)' },
-            ].map((opt) => (
-              <label key={String(opt.value)} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', marginBottom: 8 }}>
-                <input
-                  type="radio"
-                  checked={policies.dedup_auto_merge_threshold === opt.value}
-                  onChange={() => setPolicies({ ...policies, dedup_auto_merge_threshold: opt.value })}
-                  style={{ cursor: 'pointer' }}
-                />
-                <div>
-                  <span style={{ fontSize: 13, color: C.text }}>{opt.label}</span>
-                  <span style={{ fontSize: 11, color: C.text3, marginLeft: 8 }}>{opt.sub}</span>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-      </Card>
+      {/* REMOVED: Dedup Policy card - moved to unified dedup page at /settings/policies/dedup */}
 
       {/* Scan Policy */}
       <Card style={{ marginBottom: 24 }}>
@@ -221,29 +190,21 @@ export function PoliciesTab() {
         </div>
       </Card>
 
-      {/* Compound Survivorship Rules */}
-      <div style={{ marginTop: 48, marginBottom: 32 }}>
-        <CompoundRulesPanel />
-      </div>
+      {/* REMOVED: Compound Survivorship Rules, Survivorship Rules, and Dedup Merge Policies - all moved to unified dedup page at /settings/policies/dedup */}
 
-      {/* Survivorship Rules */}
-      <div style={{ marginBottom: 32 }}>
-        <SurvivorshipRulesPanel />
-      </div>
-
-      {/* Dedup Merge Policies */}
+      {/* Link to unified dedup configuration */}
       <Card style={{ marginBottom: 24 }}>
         <div style={{ padding: 20, borderBottom: `1px solid ${C.border}` }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-            Dedup merge policies
+            Dedup configuration
           </h3>
           <p style={{ fontSize: 12, color: C.text3 }}>
-            Advanced field-level merge rules and exclusion criteria
+            Configure how Refyne finds and merges duplicates
           </p>
         </div>
         <div style={{ padding: 20 }}>
           <div style={{ fontSize: 13, color: C.text2, marginBottom: 16 }}>
-            Configure how duplicate companies are merged together with field-level rules, compliance fields, and exclusion criteria.
+            Configure matching rules, auto-merge thresholds, survivorship rules, protected fields, and more.
           </div>
           <a
             href="/settings/policies/dedup"
@@ -251,15 +212,14 @@ export function PoliciesTab() {
               display: 'inline-block',
               padding: '8px 16px',
               fontSize: 13,
-              color: C.indigo,
-              background: 'white',
-              border: `1px solid ${C.indigo}`,
-              borderRadius: 6,
+              color: 'white',
+              background: C.indigo,
+              border: 'none',
               textDecoration: 'none',
               cursor: 'pointer',
             }}
           >
-            Configure merge policies →
+            Configure dedup settings →
           </a>
         </div>
       </Card>
