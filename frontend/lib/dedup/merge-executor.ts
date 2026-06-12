@@ -7,6 +7,7 @@
 
 import { supabase } from '../db/supabase';
 import { track } from '../telemetry/track';
+import { evaluateSurvivorshipGroups, SurvivorshipRuleGroup } from './survivorship-group-evaluator';
 
 export interface DedupPolicy {
   id: string;
@@ -119,6 +120,47 @@ export async function loadFieldExclusions(
     .eq('object_type', objectType);
 
   return data ?? [];
+}
+
+/**
+ * Load compound survivorship rule groups for an org.
+ */
+export async function loadSurvivorshipGroups(
+  orgId: string,
+  objectType: string = 'company'
+): Promise<SurvivorshipRuleGroup[]> {
+  if (!supabase) {
+    console.warn('[Merge Executor] Supabase not configured');
+    return [];
+  }
+
+  const { data: groups } = await supabase
+    .from('dedup_survivorship_rule_groups')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('object_type', objectType)
+    .eq('is_active', true)
+    .order('group_priority', { ascending: true });
+
+  if (!groups || groups.length === 0) {
+    return [];
+  }
+
+  // Load conditions for each group
+  const groupsWithConditions: SurvivorshipRuleGroup[] = [];
+  for (const group of groups) {
+    const { data: conditions } = await supabase
+      .from('dedup_survivorship_rule_conditions')
+      .select('*')
+      .eq('group_id', group.id);
+
+    groupsWithConditions.push({
+      ...group,
+      conditions: conditions ?? [],
+    });
+  }
+
+  return groupsWithConditions;
 }
 
 /**
@@ -562,11 +604,40 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
 
   console.log('[Merge Executor] Using policy:', policy.name);
 
+  // Load compound survivorship rule groups
+  const groups = await loadSurvivorshipGroups(orgId, 'company');
+  console.log(`[Merge Executor] Loaded ${groups.length} compound rule groups`);
+
+  // Evaluate groups to determine survivor (happens once for the cluster)
+  let effectiveMasterId = masterId;
+  let effectiveDuplicateIds = [...duplicateIds];
+  let groupResolution: string | null = null;
+
+  if (groups.length > 0 && duplicateIds.length > 0) {
+    const masterRecord = preMergeSnapshots[masterId] || {};
+    const firstDuplicateId = duplicateIds[0];
+    const duplicateRecord = preMergeSnapshots[firstDuplicateId] || {};
+
+    const groupResult = evaluateSurvivorshipGroups(masterRecord, duplicateRecord, groups);
+
+    if (groupResult && groupResult.matched) {
+      console.log(`[Merge Executor] Group matched: ${groupResult.matchedGroupName} (survivor: ${groupResult.survivor})`);
+      groupResolution = `group:${groupResult.matchedGroupName}`;
+
+      // If group selects duplicate as survivor, swap IDs
+      if (groupResult.survivor === 'duplicate') {
+        console.log('[Merge Executor] Swapping master/duplicate based on compound rule group');
+        effectiveMasterId = firstDuplicateId;
+        effectiveDuplicateIds = [masterId, ...duplicateIds.slice(1)];
+      }
+    }
+  }
+
   // Check exclusion rules
   const exclusionError = await checkExclusionRules(
     policy,
-    masterId,
-    duplicateIds,
+    effectiveMasterId,
+    effectiveDuplicateIds,
     preMergeSnapshots,
     accessToken
   );
@@ -574,7 +645,7 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
   if (exclusionError) {
     return {
       success: false,
-      masterId,
+      masterId: effectiveMasterId,
       mergedIds: [],
       appliedRules: {},
       error: exclusionError,
@@ -582,7 +653,7 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
   }
 
   // Execute HubSpot merge API for each duplicate
-  for (const duplicateId of duplicateIds) {
+  for (const duplicateId of effectiveDuplicateIds) {
     const mergeRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies/merge', {
       method: 'POST',
       headers: {
@@ -590,7 +661,7 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        primaryObjectId: masterId,
+        primaryObjectId: effectiveMasterId,
         objectIdToMerge: duplicateId,
       }),
     });
@@ -600,7 +671,7 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
       console.error(`[Merge Executor] HubSpot merge failed for ${duplicateId}:`, error);
       return {
         success: false,
-        masterId,
+        masterId: effectiveMasterId,
         mergedIds: [],
         appliedRules: {},
         error: `HubSpot merge API failed: ${error}`,
@@ -611,9 +682,14 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
   console.log('[Merge Executor] HubSpot merge completed');
 
   // Build merged properties using field rules
-  const masterSnapshot = preMergeSnapshots[masterId] || {};
+  const masterSnapshot = preMergeSnapshots[effectiveMasterId] || {};
   const mergedProperties: Record<string, any> = {};
   const appliedRules: Record<string, { rule: MergeRuleType; source: string }> = {};
+
+  // If group resolution happened, track it
+  if (groupResolution) {
+    appliedRules['__group_resolution__'] = { rule: 'keep_master' as MergeRuleType, source: groupResolution };
+  }
 
   // Get all unique fields from all records
   const allFields = new Set<string>();
@@ -622,7 +698,7 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
   }
 
   // Apply field rules for each duplicate (in order)
-  for (const duplicateId of duplicateIds) {
+  for (const duplicateId of effectiveDuplicateIds) {
     const duplicateSnapshot = preMergeSnapshots[duplicateId] || {};
 
     for (const field of Array.from(allFields)) {
@@ -655,7 +731,7 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
   for (const complianceField of policy.compliance_fields) {
     let mostRestrictive: any = masterSnapshot[complianceField];
 
-    for (const duplicateId of duplicateIds) {
+    for (const duplicateId of effectiveDuplicateIds) {
       const dupValue = preMergeSnapshots[duplicateId]?.[complianceField];
 
       // For opt-out/bounce fields, true is more restrictive
@@ -673,7 +749,7 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
   // Update master record with merged properties
   if (Object.keys(mergedProperties).length > 0) {
     const updateRes = await fetch(
-      `https://api.hubapi.com/crm/v3/objects/companies/${masterId}`,
+      `https://api.hubapi.com/crm/v3/objects/companies/${effectiveMasterId}`,
       {
         method: 'PATCH',
         headers: {
@@ -698,17 +774,18 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
     event: 'dedup_merge_executed',
     orgId,
     metadata: {
-      master_id: masterId,
-      duplicate_ids: duplicateIds,
-      duplicate_count: duplicateIds.length,
+      master_id: effectiveMasterId,
+      duplicate_ids: effectiveDuplicateIds,
+      duplicate_count: effectiveDuplicateIds.length,
       fields_updated: Object.keys(mergedProperties).length,
+      group_resolution: groupResolution,
     },
   });
 
   return {
     success: true,
-    masterId,
-    mergedIds: duplicateIds,
+    masterId: effectiveMasterId,
+    mergedIds: effectiveDuplicateIds,
     appliedRules,
   };
 }

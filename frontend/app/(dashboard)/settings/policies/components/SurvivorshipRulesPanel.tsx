@@ -177,8 +177,19 @@ export function SurvivorshipRulesPanel() {
       case 'most_recent':
         return 'Keep most recently updated value';
       case 'specific_value':
+        const valueOrder = rule.rule_config.value_order;
         const preferredValue = rule.rule_config.preferred_value;
-        return preferredValue ? `Always prefer: ${preferredValue}` : 'Always prefer specific value';
+        if (valueOrder && valueOrder.length > 0) {
+          return `Prefer: ${valueOrder[0]} first`;
+        } else if (preferredValue) {
+          return `Always prefer: ${preferredValue}`;
+        }
+        return 'Always prefer specific value';
+      case 'prefer_if_populated':
+        return 'Prefer record with non-zero value';
+      case 'rollup':
+        const aggregation = rule.rule_config.method || 'maximum';
+        return `${aggregation.charAt(0).toUpperCase() + aggregation.slice(1)} of values`;
       default:
         return '';
     }
@@ -193,6 +204,7 @@ export function SurvivorshipRulesPanel() {
       most_recent: 'Most recent',
       specific_value: 'Specific value',
       rollup: 'Rollup',
+      prefer_if_populated: 'Prefer if populated',
     };
     return labels[ruleType] || ruleType;
   };

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { Card, PrimaryBtn } from '@/components/refyne';
 import { SurvivorshipRulesPanel } from '@/app/(dashboard)/settings/policies/components/SurvivorshipRulesPanel';
+import { CompoundRulesPanel } from '@/app/(dashboard)/settings/policies/components/CompoundRulesPanel';
 
 interface OrgPolicies {
   write_policy_default: 'fill_empty' | 'overwrite' | 'per_field';
@@ -220,8 +221,13 @@ export function PoliciesTab() {
         </div>
       </Card>
 
-      {/* Survivorship Rules */}
+      {/* Compound Survivorship Rules */}
       <div style={{ marginTop: 48, marginBottom: 32 }}>
+        <CompoundRulesPanel />
+      </div>
+
+      {/* Survivorship Rules */}
+      <div style={{ marginBottom: 32 }}>
         <SurvivorshipRulesPanel />
       </div>
 

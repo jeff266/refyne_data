@@ -305,6 +305,31 @@ export function applyRules(
           rule: 'append',
         };
       }
+
+      // NEW: prefer_if_populated - prefer record with non-zero numeric value
+      if (rule.rule_type === 'prefer_if_populated') {
+        const masterNum = parseFloat(String(masterVal ?? '0'));
+        const dupNum = parseFloat(String(dupVal ?? '0'));
+
+        const masterPopulated = !isNaN(masterNum) && masterNum > 0;
+        const dupPopulated = !isNaN(dupNum) && dupNum > 0;
+
+        // If only one record has a value > 0, prefer that record
+        if (dupPopulated && !masterPopulated) {
+          winner = {
+            value: dupNum,
+            source: 'duplicate',
+            rule: 'prefer_if_populated',
+          };
+        } else if (masterPopulated && !dupPopulated) {
+          winner = {
+            value: masterNum,
+            source: 'master',
+            rule: 'prefer_if_populated',
+          };
+        }
+        // If both populated or both empty, fall through to master (default winner)
+      }
     }
 
     result[field] = winner;
