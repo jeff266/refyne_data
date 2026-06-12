@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
+import { useRole } from '@/hooks/useRole';
 // import { normalizeCompanyName } from '@/lib/names/normalizer'; // REMOVED: server-only import causes client-side crash
 import { SearchableCountrySelect } from '@/components/SearchableCountrySelect';
 
@@ -20,6 +21,7 @@ type StepId =
   | 'industry'
   | 'employee_count'
   | 'linkedin'
+  | 'dedup'
   | 'summary';
 
 interface SampleData {
@@ -204,10 +206,13 @@ function ProgressDots({ current, total }: ProgressDotsProps) {
 // Main Component
 // ─────────────────────────────────────────────────────────────
 
+const DEDUP_EXPLAINER_VIDEO_URL = '';
+
 export default function CalibratePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isRecalibrate = searchParams.get('mode') === 'recalibrate';
+  const { isAdmin } = useRole();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState<StepId[]>([]);
@@ -245,6 +250,12 @@ export default function CalibratePage() {
   const [companyNamePreviews, setCompanyNamePreviews] = useState<
     Array<{ before: string; after: string }>
   >([]);
+
+  // Dedup calibration state
+  const [dedupStatus, setDedupStatus] = useState<'scanning' | 'ready' | 'none' | 'summary'>('scanning');
+  const [dedupSamples, setDedupSamples] = useState<any[]>([]);
+  const [currentPairIndex, setCurrentPairIndex] = useState(0);
+  const [dedupDecisions, setDedupDecisions] = useState<Map<string, any>>(new Map());
 
   // Log page mount
   useEffect(() => {
@@ -299,6 +310,7 @@ export default function CalibratePage() {
           computedSteps.push('linkedin');
         }
 
+        computedSteps.push('dedup');
         computedSteps.push('summary');
         setSteps(computedSteps);
       } catch (err) {
@@ -466,6 +478,32 @@ export default function CalibratePage() {
   }
 
   const currentStepId = steps[currentStep];
+
+  // Fetch dedup samples when dedup step is reached
+  useEffect(() => {
+    if (currentStepId === 'dedup' && isAdmin) {
+      fetchDedupSamples();
+    }
+  }, [currentStepId, isAdmin]);
+
+  async function fetchDedupSamples() {
+    try {
+      setDedupStatus('scanning');
+      const res = await fetch('/api/onboarding/dedup-sample');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'ready' && data.pairs.length > 0) {
+          setDedupSamples(data.pairs);
+          setDedupStatus('ready');
+        } else if (data.status === 'none' || data.pairs.length === 0) {
+          setDedupStatus('none');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch dedup samples:', err);
+      setDedupStatus('none');
+    }
+  }
 
   return (
     <div
@@ -1106,7 +1144,297 @@ export default function CalibratePage() {
                 </div>
               )}
 
-              {/* Screen 9: Summary */}
+              {/* Screen 9: Dedup Calibration */}
+              {currentStepId === 'dedup' && (
+                <div>
+                  {!isAdmin ? (
+                    <div style={{ textAlign: 'center', padding: 40 }}>
+                      <h1 style={{ fontSize: 24, fontFamily: 'Lora, serif', color: C.text, marginBottom: 16, fontWeight: 600 }}>
+                        Admin configuration required
+                      </h1>
+                      <p style={{ fontSize: 14, color: C.text3, marginBottom: 24 }}>
+                        Only workspace admins can configure dedup calibration.
+                      </p>
+                      <button
+                        onClick={() => setCurrentStep(currentStep + 1)}
+                        style={{
+                          padding: '12px 24px',
+                          background: C.indigo,
+                          color: 'white',
+                          border: 'none',
+                          fontSize: 14,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          fontFamily: F.sans,
+                        }}
+                      >
+                        Continue →
+                      </button>
+                    </div>
+                  ) : dedupStatus === 'scanning' ? (
+                    <div style={{ textAlign: 'center', padding: 40 }}>
+                      <div style={{ fontSize: 48, marginBottom: 16 }}>
+                        <div style={{
+                          width: 48,
+                          height: 48,
+                          border: `4px solid ${C.border}`,
+                          borderTopColor: C.indigo,
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite',
+                          margin: '0 auto',
+                        }} />
+                      </div>
+                      <h1 style={{ fontSize: 24, fontFamily: 'Lora, serif', color: C.text, marginBottom: 8, fontWeight: 600 }}>
+                        Scanning your HubSpot for potential duplicates
+                      </h1>
+                      <p style={{ fontSize: 13, color: C.text3, marginBottom: 24 }}>
+                        This usually takes 30-60 seconds
+                      </p>
+                      <button
+                        onClick={() => setCurrentStep(currentStep + 1)}
+                        style={{
+                          padding: '10px 20px',
+                          background: 'transparent',
+                          color: C.text3,
+                          border: `1px solid ${C.border}`,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                          fontFamily: F.sans,
+                          marginTop: 24,
+                        }}
+                      >
+                        Skip for now - configure manually later
+                      </button>
+                    </div>
+                  ) : dedupStatus === 'none' ? (
+                    <div style={{ textAlign: 'center', padding: 40 }}>
+                      <div style={{ fontSize: 48, color: C.green, marginBottom: 16 }}>✓</div>
+                      <h1 style={{ fontSize: 24, fontFamily: 'Lora, serif', color: C.text, marginBottom: 8, fontWeight: 600 }}>
+                        Your HubSpot looks clean
+                      </h1>
+                      <p style={{ fontSize: 13, color: C.text3, marginBottom: 24 }}>
+                        No obvious duplicates found. Refyne will watch for new ones automatically.
+                      </p>
+                      <button
+                        onClick={() => setCurrentStep(currentStep + 1)}
+                        style={{
+                          padding: '12px 24px',
+                          background: C.indigo,
+                          color: 'white',
+                          border: 'none',
+                          fontSize: 14,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          fontFamily: F.sans,
+                        }}
+                      >
+                        Continue →
+                      </button>
+                    </div>
+                  ) : dedupStatus === 'summary' ? (
+                    <div>
+                      <div style={{ textAlign: 'center', marginBottom: 32 }}>
+                        <div style={{ fontSize: 48, color: C.green, marginBottom: 16 }}>✓</div>
+                        <h1 style={{ fontSize: 24, fontFamily: 'Lora, serif', color: C.text, marginBottom: 8, fontWeight: 600 }}>
+                          Refyne has learned your preferences
+                        </h1>
+                      </div>
+
+                      <div style={{ marginBottom: 32, padding: 20, background: C.surface, border: `1px solid ${C.border}` }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 8 }}>
+                          Calibration complete
+                        </div>
+                        <div style={{ fontSize: 12, color: C.text3, marginBottom: 16 }}>
+                          You reviewed {dedupDecisions.size} pairs
+                        </div>
+                      </div>
+
+                      {DEDUP_EXPLAINER_VIDEO_URL ? (
+                        <div style={{ marginBottom: 32 }}>
+                          <video src={DEDUP_EXPLAINER_VIDEO_URL} controls style={{ width: '100%', maxWidth: 640, margin: '0 auto', display: 'block' }} />
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 32 }}>
+                          <div style={{ padding: 20, background: C.surface, border: `1px solid ${C.border}`, textAlign: 'center' }}>
+                            <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 8 }}>Find duplicates</div>
+                            <div style={{ fontSize: 12, color: C.text3 }}>
+                              Refyne scans nightly for duplicates
+                            </div>
+                          </div>
+                          <div style={{ padding: 20, background: C.surface, border: `1px solid ${C.border}`, textAlign: 'center' }}>
+                            <div style={{ fontSize: 32, marginBottom: 8 }}>👁</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 8 }}>Review</div>
+                            <div style={{ fontSize: 12, color: C.text3 }}>
+                              You approve or Refyne auto-merges
+                            </div>
+                          </div>
+                          <div style={{ padding: 20, background: C.surface, border: `1px solid ${C.border}`, textAlign: 'center' }}>
+                            <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 8 }}>Merge</div>
+                            <div style={{ fontSize: 12, color: C.text3 }}>
+                              Best values survive. All history kept
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => setCurrentStep(currentStep + 1)}
+                        style={{
+                          padding: '12px 24px',
+                          background: C.indigo,
+                          color: 'white',
+                          border: 'none',
+                          fontSize: 14,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          fontFamily: F.sans,
+                        }}
+                      >
+                        Continue to finish setup →
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <h1 style={{ fontSize: 24, fontFamily: 'Lora, serif', color: C.text, marginBottom: 8, fontWeight: 600 }}>
+                        Help Refyne learn your preferences
+                      </h1>
+                      <p style={{ fontSize: 13, color: C.text3, marginBottom: 24 }}>
+                        Review a few potential duplicates from your real data. This takes about 2 minutes.
+                      </p>
+
+                      {dedupSamples.length > 0 && (
+                        <div style={{ marginBottom: 32 }}>
+                          <div style={{ fontSize: 12, color: C.text3, marginBottom: 16, textAlign: 'right' }}>
+                            {currentPairIndex + 1} / {dedupSamples.length} reviewed
+                          </div>
+
+                          {dedupSamples[currentPairIndex] && (
+                            <div style={{ border: `1px solid ${C.border}`, background: C.surface }}>
+                              <div style={{ padding: 16, borderBottom: `1px solid ${C.border}`, background: C.bg }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: dedupSamples[currentPairIndex].grade === 'A' ? C.green : C.indigo }}>
+                                  Grade {dedupSamples[currentPairIndex].grade}
+                                </span>
+                                <span style={{ fontSize: 12, color: C.text3, marginLeft: 8 }}>
+                                  {Math.round(dedupSamples[currentPairIndex].confidence * 100)}% confidence
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+                                <div style={{ padding: 20 }}>
+                                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>
+                                    {dedupSamples[currentPairIndex].company_a.name}
+                                  </div>
+                                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
+                                    {dedupSamples[currentPairIndex].company_a.domain}
+                                  </div>
+                                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
+                                    {dedupSamples[currentPairIndex].company_a.city && dedupSamples[currentPairIndex].company_a.state
+                                      ? `${dedupSamples[currentPairIndex].company_a.city}, ${dedupSamples[currentPairIndex].company_a.state}`
+                                      : dedupSamples[currentPairIndex].company_a.city || dedupSamples[currentPairIndex].company_a.state}
+                                  </div>
+                                </div>
+
+                                <div style={{ padding: 20, borderLeft: `1px solid ${C.border}` }}>
+                                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 12 }}>
+                                    {dedupSamples[currentPairIndex].company_b.name}
+                                  </div>
+                                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
+                                    {dedupSamples[currentPairIndex].company_b.domain}
+                                  </div>
+                                  <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
+                                    {dedupSamples[currentPairIndex].company_b.city && dedupSamples[currentPairIndex].company_b.state
+                                      ? `${dedupSamples[currentPairIndex].company_b.city}, ${dedupSamples[currentPairIndex].company_b.state}`
+                                      : dedupSamples[currentPairIndex].company_b.city || dedupSamples[currentPairIndex].company_b.state}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div style={{ padding: 20, borderTop: `1px solid ${C.border}`, display: 'flex', gap: 12, justifyContent: 'center' }}>
+                                <button
+                                  onClick={() => {
+                                    const newDecisions = new Map(dedupDecisions);
+                                    newDecisions.set(dedupSamples[currentPairIndex].pair_id, { verdict: 'not_duplicate' });
+                                    setDedupDecisions(newDecisions);
+                                    if (currentPairIndex < dedupSamples.length - 1) {
+                                      setCurrentPairIndex(currentPairIndex + 1);
+                                    } else {
+                                      setDedupStatus('summary');
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '10px 20px',
+                                    background: 'transparent',
+                                    color: C.text2,
+                                    border: `1px solid ${C.border}`,
+                                    fontSize: 13,
+                                    cursor: 'pointer',
+                                    fontFamily: F.sans,
+                                  }}
+                                >
+                                  Not a duplicate
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    const newDecisions = new Map(dedupDecisions);
+                                    newDecisions.set(dedupSamples[currentPairIndex].pair_id, { verdict: 'duplicate', survivor_preference: 'auto' });
+                                    setDedupDecisions(newDecisions);
+                                    if (currentPairIndex < dedupSamples.length - 1) {
+                                      setCurrentPairIndex(currentPairIndex + 1);
+                                    } else {
+                                      setDedupStatus('summary');
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '10px 20px',
+                                    background: C.indigo,
+                                    color: 'white',
+                                    border: 'none',
+                                    fontSize: 13,
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    fontFamily: F.sans,
+                                  }}
+                                >
+                                  Duplicate
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    const newDecisions = new Map(dedupDecisions);
+                                    newDecisions.set(dedupSamples[currentPairIndex].pair_id, { verdict: 'unsure' });
+                                    setDedupDecisions(newDecisions);
+                                    if (currentPairIndex < dedupSamples.length - 1) {
+                                      setCurrentPairIndex(currentPairIndex + 1);
+                                    } else {
+                                      setDedupStatus('summary');
+                                    }
+                                  }}
+                                  style={{
+                                    background: 'transparent',
+                                    color: C.text3,
+                                    border: 'none',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                    fontFamily: F.sans,
+                                    textDecoration: 'underline',
+                                  }}
+                                >
+                                  Skip
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Screen 10: Summary */}
               {currentStepId === 'summary' && (
                 <div>
                   <h1 style={{ fontSize: 28, fontFamily: 'Lora, serif', color: C.text, marginBottom: 32, fontWeight: 600 }}>

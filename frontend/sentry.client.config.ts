@@ -10,6 +10,11 @@ Sentry.init({
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
 
+  // Replay sample rates (required even if replay is added dynamically)
+  // These prevent the "Replay is disabled" warning
+  replaysSessionSampleRate: 0.0, // Don't capture sessions by default (enabled after consent)
+  replaysOnErrorSampleRate: 0.0, // Don't capture errors by default (enabled after consent)
+
   // NOTE: Replay integration is NOT added on init
   // It's added dynamically after user consent via enableSentryReplay()
   integrations: [],
@@ -78,6 +83,14 @@ export function enableSentryReplay() {
   const client = Sentry.getClient();
   if (!client) {
     console.warn('[Sentry] Cannot enable replay: client not initialized');
+    return;
+  }
+
+  // Check if replay integration already exists in the client
+  const existingReplay = client.getIntegrationByName('Replay');
+  if (existingReplay) {
+    console.log('[Sentry] Session replay already enabled, skipping');
+    replayEnabled = true;
     return;
   }
 

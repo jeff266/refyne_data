@@ -36,17 +36,23 @@ export async function GET(request: NextRequest) {
 
     // Fetch all conditions for these groups
     const groupIds = (groups ?? []).map(g => g.id);
-    const { data: conditions, error: conditionsError } = await supabaseAdmin
-      .from('dedup_survivorship_rule_conditions')
-      .select('*')
-      .in('group_id', groupIds);
 
-    if (conditionsError) throw conditionsError;
+    // Only query conditions if there are groups (Supabase .in() fails with empty array)
+    let conditions: any[] = [];
+    if (groupIds.length > 0) {
+      const { data: conditionsData, error: conditionsError } = await supabaseAdmin
+        .from('dedup_survivorship_rule_conditions')
+        .select('*')
+        .in('group_id', groupIds);
+
+      if (conditionsError) throw conditionsError;
+      conditions = conditionsData ?? [];
+    }
 
     // Attach conditions to groups
     const groupsWithConditions = (groups ?? []).map(group => ({
       ...group,
-      conditions: (conditions ?? []).filter(c => c.group_id === group.id),
+      conditions: conditions.filter(c => c.group_id === group.id),
     }));
 
     return NextResponse.json({ groups: groupsWithConditions });

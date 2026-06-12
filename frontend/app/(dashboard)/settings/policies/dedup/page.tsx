@@ -247,10 +247,16 @@ export default function UnifiedDedupConfigPage() {
       const res = await fetch('/api/settings/survivorship-rule-groups');
       if (res.ok) {
         const data = await res.json();
-        setCompoundGroups(data.groups || []);
+        // Defensive: ensure we always set an array, even if API shape changes
+        const groups = Array.isArray(data) ? data : (data?.groups ?? []);
+        setCompoundGroups(groups);
+      } else {
+        // Explicitly set empty array on error to prevent undefined state
+        setCompoundGroups([]);
       }
     } catch (error) {
       console.error('Failed to load compound groups:', error);
+      setCompoundGroups([]);
     }
   }
 
