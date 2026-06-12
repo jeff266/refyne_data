@@ -14,6 +14,7 @@ import { C, F } from '@/lib/design-tokens';
 import { X } from 'lucide-react';
 import { SourceRankEditor } from './SourceRankEditor';
 import { OrderEditor } from './OrderEditor';
+import { FieldSearchCombobox } from '@/components/ui/FieldSearchCombobox';
 
 interface AddRuleModalProps {
   isOpen: boolean;
@@ -424,30 +425,14 @@ export function AddRuleModal({ isOpen, onClose, onSave, fieldOptions }: AddRuleM
               {fieldScope === 'specific' && (
                 <div>
                   <div style={{ fontSize: 13, color: C.text, marginBottom: 8 }}>Field</div>
-                  <select
-                    value={selectedField}
-                    onChange={(e) => handleFieldChange(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      fontSize: 13,
-                      background: C.surface,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: 0,
-                      color: C.text,
-                      outline: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <option value="">Select a field...</option>
-                    {fieldOptions
+                  <FieldSearchCombobox
+                    properties={fieldOptions
                       .filter((f) => f.key !== '*')
-                      .map((field) => (
-                        <option key={field.key} value={field.key}>
-                          {field.label}
-                        </option>
-                      ))}
-                  </select>
+                      .map((f) => ({ name: f.key, label: f.label, type: f.type }))}
+                    value={selectedField}
+                    onChange={handleFieldChange}
+                    placeholder="Search fields..."
+                  />
                 </div>
               )}
             </div>

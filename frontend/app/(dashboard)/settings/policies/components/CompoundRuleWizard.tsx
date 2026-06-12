@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { X } from 'lucide-react';
 import { PrimaryBtn, GhostBtn } from '@/components/refyne';
+import { FieldSearchCombobox } from '@/components/ui/FieldSearchCombobox';
 
 interface Condition {
   field_key: string;
@@ -280,25 +281,12 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
                   marginBottom: 12,
                 }}>
                   {/* Field */}
-                  <select
+                  <FieldSearchCombobox
+                    properties={properties}
                     value={condition.field_key}
-                    onChange={(e) => updateCondition(index, 'field_key', e.target.value)}
-                    style={{
-                      padding: '8px 10px',
-                      fontSize: 13,
-                      background: C.bg,
-                      border: `1px solid ${C.border}`,
-                      color: C.text,
-                      fontFamily: F.sans,
-                    }}
-                  >
-                    <option value="">Select field</option>
-                    {(properties ?? []).map(prop => (
-                      <option key={prop.name} value={prop.name}>
-                        {prop.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(fieldKey) => updateCondition(index, 'field_key', fieldKey)}
+                    placeholder="Search fields..."
+                  />
 
                   {/* Operator */}
                   <select

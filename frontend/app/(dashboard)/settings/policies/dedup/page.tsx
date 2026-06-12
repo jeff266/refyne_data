@@ -20,6 +20,7 @@ import { Plus, ArrowUp, ArrowDown, X, Lock } from 'lucide-react';
 import { useRole } from '@/hooks/useRole';
 import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
 import { CompoundRuleWizard } from '../components/CompoundRuleWizard';
+import { FieldSearchCombobox } from '@/components/ui/FieldSearchCombobox';
 import {
   COMPANY_FIELDS,
   CONTACT_FIELDS,
@@ -1006,25 +1007,15 @@ export default function UnifiedDedupConfigPage() {
                           borderBottom: condIdx < group.conditions.length - 1 ? `1px solid rgba(255, 255, 255, 0.04)` : 'none',
                         }}
                       >
-                        <select
+                        <FieldSearchCombobox
+                          properties={(activeTab === 'company' ? COMPANY_FIELDS : CONTACT_FIELDS).map(f => ({
+                            name: f.value,
+                            label: f.label,
+                          }))}
                           value={condition.field}
-                          onChange={(e) => updateCondition(groupIdx, condIdx, { field: e.target.value })}
-                          style={{
-                            padding: '8px 12px',
-                            fontSize: 13,
-                            border: `1px solid ${C.border}`,
-                            background: C.surface,
-                            color: C.text,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <option value="">Select field...</option>
-                          {((activeTab === 'company' ? COMPANY_FIELDS : CONTACT_FIELDS) ?? []).map((field) => (
-                            <option key={field.value} value={field.value}>
-                              {field.label}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(fieldKey) => updateCondition(groupIdx, condIdx, { field: fieldKey })}
+                          placeholder="Search fields..."
+                        />
 
                         <select
                           value={condition.match_type}
@@ -1538,28 +1529,16 @@ export default function UnifiedDedupConfigPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <select
-                value={newComplianceField}
-                onChange={(e) => setNewComplianceField(e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  fontSize: 14,
-                  fontFamily: 'monospace',
-                  border: `1px solid ${C.border}`,
-                  background: 'white',
-                  color: C.text,
-                }}
-              >
-                <option value="">Select a field...</option>
-                {(hubspotFieldOptions ?? [])
-                  .filter(opt => !complianceFields.includes(opt.key) && !opt.key.startsWith('hs_object_'))
-                  .map(opt => (
-                    <option key={opt.key} value={opt.key}>
-                      {opt.label} ({opt.key})
-                    </option>
-                  ))}
-              </select>
+              <div style={{ flex: 1 }}>
+                <FieldSearchCombobox
+                  properties={(hubspotFieldOptions ?? [])
+                    .filter(opt => !complianceFields.includes(opt.key) && !opt.key.startsWith('hs_object_'))
+                    .map(opt => ({ name: opt.key, label: opt.label, type: opt.type }))}
+                  value={newComplianceField}
+                  onChange={setNewComplianceField}
+                  placeholder="Search fields..."
+                />
+              </div>
               <button
                 onClick={addComplianceField}
                 disabled={!newComplianceField}
