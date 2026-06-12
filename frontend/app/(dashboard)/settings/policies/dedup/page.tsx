@@ -1,6 +1,6 @@
 'use client';
 
-// Cache bust v3: June 12 2026 18:10 - add defensive Array.isArray checks to prevent x.map errors
+// Cache bust v4: June 12 2026 18:15 - comprehensive ?? [] pattern on ALL .map() calls
 /**
  * Unified Dedup Configuration
  *
@@ -601,7 +601,7 @@ export default function UnifiedDedupConfigPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         objectType: activeTab,
-        groups: editingGroups.map((group) => ({
+        groups: (editingGroups ?? []).map((group) => ({
           name: group.name || `Group ${group.group_order}`,
           group_order: group.group_order,
           conditions: group.conditions,
@@ -893,7 +893,7 @@ export default function UnifiedDedupConfigPage() {
             </div>
           ) : (
             <div style={{ marginBottom: 24 }}>
-              {editingGroups.map((group, groupIdx) => (
+              {(editingGroups ?? []).map((group, groupIdx) => (
                 <div key={group.id || groupIdx} style={{ marginBottom: 24 }}>
                   {/* Group Header */}
                   <div
@@ -994,7 +994,7 @@ export default function UnifiedDedupConfigPage() {
                     </div>
 
                     {/* Condition Rows */}
-                    {Array.isArray(group.conditions) && group.conditions.map((condition: any, condIdx: number) => (
+                    {(group.conditions ?? []).map((condition: any, condIdx: number) => (
                       <div
                         key={condIdx}
                         style={{
@@ -1272,7 +1272,7 @@ export default function UnifiedDedupConfigPage() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {compoundGroups.map((group, index) => (
+                {(compoundGroups ?? []).map((group, index) => (
                   <div key={group.id}>
                     <div style={{ border: `1px solid ${C.border}`, background: C.surface, padding: '16px 20px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -1329,7 +1329,7 @@ export default function UnifiedDedupConfigPage() {
                         Survive when ALL of these are true:
                       </div>
                       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                        {Array.isArray(group.conditions) && group.conditions.map((condition) => (
+                        {(group.conditions ?? []).map((condition) => (
                           <li key={condition.id} style={{ fontSize: 12, color: C.text2, marginBottom: 4, fontFamily: F.mono }}>
                             {condition.field_key} {getOperatorLabel(condition.operator)}
                             {condition.comparison_value && ` ${condition.comparison_value}`}
@@ -1375,7 +1375,7 @@ export default function UnifiedDedupConfigPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {defaultRules.map((rule) => (
+                  {(defaultRules ?? []).map((rule) => (
                     <tr key={rule.id} style={{ background: C.bg, borderBottom: `1px solid rgba(255, 255, 255, 0.04)` }}>
                       <td style={{ padding: 12, fontSize: 13, color: C.text }}>{rule.field_key}</td>
                       <td style={{ padding: 12, fontSize: 13, color: C.text }}>{getRuleTypeLabel(rule.rule_type)}</td>
@@ -1421,7 +1421,7 @@ export default function UnifiedDedupConfigPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {orgRules.map((rule, index) => (
+                    {(orgRules ?? []).map((rule, index) => (
                       <tr key={rule.id} style={{ background: C.bg, borderBottom: `1px solid rgba(255, 255, 255, 0.04)` }}>
                         <td style={{ padding: 12, fontSize: 13, color: C.text3 }}>{index + 1}</td>
                         <td style={{ padding: 12, fontSize: 13, color: C.text }}>{rule.field_key}</td>
@@ -1506,7 +1506,7 @@ export default function UnifiedDedupConfigPage() {
             </p>
 
             <div style={{ marginBottom: 12 }}>
-              {complianceFields.map((field) => (
+              {(complianceFields ?? []).map((field) => (
                 <div
                   key={field}
                   style={{
@@ -1552,7 +1552,7 @@ export default function UnifiedDedupConfigPage() {
                 }}
               >
                 <option value="">Select a field...</option>
-                {Array.isArray(hubspotFieldOptions) && hubspotFieldOptions
+                {(hubspotFieldOptions ?? [])
                   .filter(opt => !complianceFields.includes(opt.key) && !opt.key.startsWith('hs_object_'))
                   .map(opt => (
                     <option key={opt.key} value={opt.key}>

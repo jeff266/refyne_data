@@ -266,7 +266,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
                 AND logic: ALL conditions must match for this group to select a survivor.
               </p>
 
-              {conditions.map((condition, index) => (
+              {(conditions ?? []).map((condition, index) => (
                 <div key={index} style={{
                   display: 'grid',
                   gridTemplateColumns: needsValue(condition.operator) ? '1fr 1fr 1fr 32px' : '1fr 1fr 32px',
@@ -287,7 +287,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
                     }}
                   >
                     <option value="">Select field</option>
-                    {properties.map(prop => (
+                    {(properties ?? []).map(prop => (
                       <option key={prop.name} value={prop.name}>
                         {prop.label}
                       </option>
@@ -310,7 +310,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
                     }}
                   >
                     <option value="">Select operator</option>
-                    {getOperatorOptions(condition.field_key).map(opt => (
+                    {(getOperatorOptions(condition.field_key) ?? []).map(opt => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
@@ -379,7 +379,7 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
               </p>
 
               <ul style={{ listStyle: 'none', padding: 0, marginBottom: 16 }}>
-                {conditions.map((condition, index) => (
+                {(conditions ?? []).map((condition, index) => (
                   <li key={index} style={{
                     fontSize: 13,
                     color: C.text,

@@ -306,7 +306,7 @@ export function SurvivorshipRulesPanel() {
           </div>
 
           {/* Table rows */}
-          {defaultRules.map((rule) => (
+          {(defaultRules ?? []).map((rule) => (
             <div
               key={rule.id}
               style={{
@@ -434,7 +434,7 @@ export function SurvivorshipRulesPanel() {
             </div>
 
             {/* Table rows */}
-            {orgRules.map((rule, index) => (
+            {(orgRules ?? []).map((rule, index) => (
               <div
                 key={rule.id}
                 style={{
