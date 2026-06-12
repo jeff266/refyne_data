@@ -13,7 +13,7 @@
  * 6. BLOCKED MERGES - Block conditions + excluded domains
  */
 
-import React, { useState, useEffect, Component } from 'react';
+import { useState, useEffect } from 'react';
 import { C, F } from '@/lib/design-tokens';
 import { addToast } from '@/components/ui/toast';
 import { Plus, ArrowUp, ArrowDown, X, Lock } from 'lucide-react';
@@ -35,49 +35,6 @@ import {
   COMPLIANCE_FIELDS,
   isComplianceField,
 } from '@/lib/dedup/field-exclusions-ui';
-
-// ============================================================================
-// ERROR BOUNDARY - Debug crash location
-// ============================================================================
-
-class ErrorBoundary extends Component<
-  { children: React.ReactNode },
-  { error: Error | null }
-> {
-  state = { error: null as Error | null };
-
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: any) {
-    console.error('ErrorBoundary caught:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.error) {
-      return (
-        <div style={{ padding: 20, color: 'red', fontFamily: 'monospace' }}>
-          <h3 style={{ color: 'red', marginBottom: 16 }}>Debug: Crash Location Found</h3>
-          <p style={{ marginBottom: 8 }}>
-            <strong>Error:</strong> {this.state.error.message}
-          </p>
-          <pre style={{
-            background: '#000',
-            color: '#0f0',
-            padding: 16,
-            overflow: 'auto',
-            fontSize: 12,
-            lineHeight: 1.5,
-          }}>
-            {this.state.error.stack}
-          </pre>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -819,8 +776,7 @@ export default function UnifiedDedupConfigPage() {
   }
 
   return (
-    <ErrorBoundary>
-      <div style={{ padding: 32, maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ padding: 32, maxWidth: 1200, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 48 }}>
         <h1 style={{ fontSize: 28, fontWeight: 600, color: C.text, marginBottom: 8, fontFamily: F.serif }}>
@@ -1811,7 +1767,6 @@ export default function UnifiedDedupConfigPage() {
         onClose={() => setShowCompoundWizard(false)}
         onSave={handleSaveCompoundGroup}
       />
-      </div>
-    </ErrorBoundary>
+    </div>
   );
 }

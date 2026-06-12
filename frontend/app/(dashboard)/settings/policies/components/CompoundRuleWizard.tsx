@@ -55,7 +55,13 @@ export function CompoundRuleWizard({ isOpen, onClose, onSave }: CompoundRuleWiza
       const res = await fetch('/api/hubspot/properties?objectType=company');
       if (res.ok) {
         const data = await res.json();
-        setProperties(data.properties || []);
+        // API returns {standard: [...], custom: [...]}, flatten to array
+        const props = data.properties || {};
+        const allProperties = [
+          ...(Array.isArray(props.standard) ? props.standard : []),
+          ...(Array.isArray(props.custom) ? props.custom : []),
+        ];
+        setProperties(allProperties);
       }
     } catch (error) {
       console.error('Failed to load properties:', error);
