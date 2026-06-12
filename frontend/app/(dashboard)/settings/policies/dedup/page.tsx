@@ -402,13 +402,21 @@ export default function UnifiedDedupConfigPage() {
 
   async function handleSaveCompoundGroup(group: { name: string; conditions: any[] }) {
     try {
+      console.log('[handleSaveCompoundGroup] Saving group:', JSON.stringify(group, null, 2));
+
       const res = await fetch('/api/settings/survivorship-rule-groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(group),
       });
 
-      if (!res.ok) throw new Error('Failed to create group');
+      console.log('[handleSaveCompoundGroup] Response status:', res.status);
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error('[handleSaveCompoundGroup] Error response:', errorData);
+        throw new Error(errorData.details || 'Failed to create group');
+      }
 
       addToast('success', 'Compound rule created');
       await loadCompoundGroups();

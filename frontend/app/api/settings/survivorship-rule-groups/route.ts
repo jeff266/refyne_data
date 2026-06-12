@@ -106,7 +106,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, conditions } = body;
 
+    console.log('[Survivorship Groups POST] Request body:', JSON.stringify(body, null, 2));
+    console.log('[Survivorship Groups POST] Org ID:', ctx.orgId);
+
     if (!name || !conditions || !Array.isArray(conditions)) {
+      console.error('[Survivorship Groups POST] Validation failed:', { name, conditions, isArray: Array.isArray(conditions) });
       return NextResponse.json(
         { error: 'Missing required fields: name, conditions (array)' },
         { status: 400 }
