@@ -375,7 +375,7 @@ describe('Workspace Context', () => {
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'claude-sonnet-4-6-20241022',
+        model: 'claude-sonnet-4-6',
         max_tokens: 500,
       })
     );
