@@ -706,43 +706,43 @@ export default function UnifiedDedupConfigPage() {
 
   async function handleSaveAll() {
     setSaving(true);
+    const failures: string[] = [];
+
     try {
-      // Save in parallel where possible
-      await Promise.all([
-        // Step 1: Signal groups
-        saveSignalGroups().catch(err => {
-          console.error('[Save] Signal groups failed:', err);
-          throw err;
-        }),
-
-        // Step 2: Auto-merge threshold
-        saveOrgPolicies().catch(err => {
-          console.error('[Save] Org policies failed:', err);
-          throw err;
-        }),
-
-        // Step 4: Protected fields (field exclusions)
-        saveFieldExclusions().catch(err => {
-          console.error('[Save] Field exclusions failed:', err);
-          throw err;
-        }),
-
-        // Step 5: Hierarchy & owners
-        saveDedupConfig().catch(err => {
-          console.error('[Save] Dedup config failed:', err);
-          throw err;
-        }),
-
-        // Step 6: Blocked merges
-        saveDedupPolicies().catch(err => {
-          console.error('[Save] Dedup policies failed:', err);
-          throw err;
-        }),
+      // Each save function returns true (success) or false (failed/skipped)
+      const [
+        signalGroupsOk,
+        orgPoliciesOk,
+        fieldExclusionsOk,
+        dedupConfigOk,
+        dedupPoliciesOk,
+      ] = await Promise.all([
+        saveSignalGroups(),
+        saveOrgPolicies(),
+        saveFieldExclusions(),
+        saveDedupConfig(),
+        saveDedupPolicies(),
       ]);
+
+      // Collect failures
+      if (!signalGroupsOk) failures.push('Matching Rules (Step 1)');
+      if (!orgPoliciesOk) failures.push('Auto-merge (Step 2)');
+      if (!fieldExclusionsOk) failures.push('Protected Fields (Step 4)');
+      if (!dedupConfigOk) failures.push('Hierarchy & Owners (Step 5)');
+      if (!dedupPoliciesOk) failures.push('Blocked Merges (Step 6)');
 
       // Step 3a and 3b (compound rules and field rules) are saved via modals, no action needed here
 
-      addToast('success', 'Dedup configuration saved');
+      // Show appropriate notification
+      if (failures.length === 0) {
+        addToast('success', 'All settings saved successfully');
+      } else if (failures.length === 5) {
+        addToast('error', 'Failed to save all settings. Check console for details.');
+      } else {
+        // Partial save - show as success but mention what didn't save
+        addToast('success', `Settings saved. ${failures.join(', ')} skipped (check Step 1 validation).`);
+      }
+
       await loadAllConfig();
     } catch (error) {
       console.error('Failed to save configuration:', error);
@@ -752,11 +752,11 @@ export default function UnifiedDedupConfigPage() {
     }
   }
 
-  async function saveSignalGroups() {
+  async function saveSignalGroups(): Promise<boolean> {
     // Skip if no groups configured (allow partial saves)
     if (!editingGroups || editingGroups.length === 0) {
       console.log('[Save Signal Groups] Skipping - no groups configured');
-      return;
+      return true; // Not an error, just nothing to save
     }
 
     // Validate
@@ -777,7 +777,7 @@ export default function UnifiedDedupConfigPage() {
       setGroupErrors(errors);
       console.warn('[Save Signal Groups] Skipping - validation errors:', errors);
       // Don't throw - just skip saving signal groups but allow other steps to save
-      return;
+      return false; // Failed validation
     }
 
     setGroupErrors({});
@@ -799,11 +799,13 @@ export default function UnifiedDedupConfigPage() {
       const error = await res.json().catch(() => ({}));
       console.error('[Save Signal Groups] API error:', error);
       // Don't throw - just skip this step but allow other steps to save
-      return;
+      return false; // Failed
     }
+
+    return true; // Success
   }
 
-  async function saveOrgPolicies() {
+  async function saveOrgPolicies(): Promise<boolean> {
     const res = await fetch('/api/org/policies', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -815,11 +817,13 @@ export default function UnifiedDedupConfigPage() {
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       console.error('[Save Org Policies] Error:', error);
-      return;
+      return false;
     }
+
+    return true;
   }
 
-  async function saveFieldExclusions() {
+  async function saveFieldExclusions(): Promise<boolean> {
     // Build exclusions from all three subsections
     const exclusions: any[] = [];
 
@@ -855,11 +859,13 @@ export default function UnifiedDedupConfigPage() {
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       console.error('[Save Field Exclusions] Error:', error);
-      throw new Error(error.error || 'Failed to save field exclusions');
+      return false;
     }
+
+    return true;
   }
 
-  async function saveDedupConfig() {
+  async function saveDedupConfig(): Promise<boolean> {
     const res = await fetch('/api/dedup/config', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -874,11 +880,13 @@ export default function UnifiedDedupConfigPage() {
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       console.error('[Save Dedup Config] Error:', error);
-      return;
+      return false;
     }
+
+    return true;
   }
 
-  async function saveDedupPolicies() {
+  async function saveDedupPolicies(): Promise<boolean> {
     const res = await fetch('/api/settings/dedup-policies', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -894,8 +902,10 @@ export default function UnifiedDedupConfigPage() {
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       console.error('[Save Dedup Policies] Error:', error);
-      return;
+      return false;
     }
+
+    return true;
   }
 
   // ============================================================================
