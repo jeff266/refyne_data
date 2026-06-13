@@ -101,7 +101,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ exclusions: complianceFields || [] });
     }
 
-    // Insert new custom exclusions
+    // Upsert exclusions (insert or update if already exists)
     const exclusionsToInsert = exclusions.map((excl) => ({
       org_id: ctx.orgId,
       object_type: objectType,
@@ -112,11 +112,16 @@ export async function PUT(request: NextRequest) {
 
     const { error: insertError } = await supabase
       .from('dedup_field_exclusions')
-      .insert(exclusionsToInsert);
+      .upsert(exclusionsToInsert, {
+        onConflict: 'org_id,object_type,field_name',
+      });
 
     if (insertError) {
       console.error('[Field Exclusions Bulk] Insert error:', insertError);
-      return NextResponse.json({ error: 'Failed to insert exclusions' }, { status: 500 });
+      return NextResponse.json({
+        error: 'Failed to insert exclusions',
+        details: insertError.message
+      }, { status: 500 });
     }
 
     // Fetch all exclusions (compliance + custom) to return

@@ -755,6 +755,7 @@ export default function UnifiedDedupConfigPage() {
   async function saveSignalGroups() {
     // Skip if no groups configured (allow partial saves)
     if (!editingGroups || editingGroups.length === 0) {
+      console.log('[Save Signal Groups] Skipping - no groups configured');
       return;
     }
 
@@ -774,7 +775,9 @@ export default function UnifiedDedupConfigPage() {
 
     if (Object.keys(errors).length > 0) {
       setGroupErrors(errors);
-      throw new Error('Signal groups validation failed');
+      console.warn('[Save Signal Groups] Skipping - validation errors:', errors);
+      // Don't throw - just skip saving signal groups but allow other steps to save
+      return;
     }
 
     setGroupErrors({});
