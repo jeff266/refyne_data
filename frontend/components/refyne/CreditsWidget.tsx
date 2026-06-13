@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { C, F } from '@/lib/design-tokens';
 import { TrendingUp, AlertTriangle, AlertCircle } from 'lucide-react';
+import { useEntitlements, shouldShowUpgradePrompts } from '@/lib/billing/use-entitlements';
 
 interface UsageData {
   metering: {
@@ -16,6 +17,7 @@ interface UsageData {
 export function CreditsWidget() {
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { subscription_tier } = useEntitlements();
 
   useEffect(() => {
     fetch('/api/usage/refyne-search?period=current_month')
@@ -58,64 +60,84 @@ export function CreditsWidget() {
   }
 
   return (
-    <Link
-      href="/settings/usage"
-      style={{
-        display: 'block',
-        padding: '8px 10px',
-        borderRadius: 7,
-        background: bgColor,
-        border: `1px solid ${C.border}`,
-        textDecoration: 'none',
-        marginBottom: 8,
-        transition: 'opacity 0.15s',
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
-      onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-    >
-      <div
+    <div style={{ marginBottom: 8 }}>
+      <Link
+        href="/settings/usage"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 4,
+          display: 'block',
+          padding: '8px 10px',
+          borderRadius: 7,
+          background: bgColor,
+          border: `1px solid ${C.border}`,
+          textDecoration: 'none',
+          transition: 'opacity 0.15s',
         }}
+        onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+        onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
       >
         <div
           style={{
-            fontSize: 10,
-            fontWeight: 600,
-            color: C.text3,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            fontFamily: F.mono,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 4,
           }}
         >
-          Credits
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: C.text3,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              fontFamily: F.mono,
+            }}
+          >
+            Credits
+          </div>
+          <Icon size={12} color={iconColor} />
         </div>
-        <Icon size={12} color={iconColor} />
-      </div>
-      <div
-        style={{
-          fontSize: 18,
-          fontWeight: 700,
-          color: textColor,
-          fontFamily: F.sans,
-          letterSpacing: '-0.02em',
-          marginBottom: 2,
-        }}
-      >
-        {Math.round(percentage)}%
-      </div>
-      <div
-        style={{
-          fontSize: 11,
-          color: C.text3,
-          fontFamily: F.sans,
-        }}
-      >
-        {credits_used.toLocaleString()} / {credits_included.toLocaleString()}
-      </div>
-    </Link>
+        <div
+          style={{
+            fontSize: 18,
+            fontWeight: 700,
+            color: textColor,
+            fontFamily: F.sans,
+            letterSpacing: '-0.02em',
+            marginBottom: 2,
+          }}
+        >
+          {Math.round(percentage)}%
+        </div>
+        <div
+          style={{
+            fontSize: 11,
+            color: C.text3,
+            fontFamily: F.sans,
+          }}
+        >
+          {credits_used.toLocaleString()} / {credits_included.toLocaleString()}
+        </div>
+      </Link>
+      {percentage >= 100 && shouldShowUpgradePrompts(subscription_tier) && (
+        <Link
+          href="/settings/billing"
+          style={{
+            display: 'block',
+            padding: '6px 10px',
+            fontSize: 11,
+            fontWeight: 600,
+            color: C.accent,
+            textDecoration: 'none',
+            textAlign: 'center',
+            fontFamily: F.sans,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+          onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+        >
+          Add credits →
+        </Link>
+      )}
+    </div>
   );
 }
