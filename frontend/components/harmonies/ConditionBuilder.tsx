@@ -17,6 +17,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, X, AlertTriangle } from 'lucide-react';
 import { C, F } from '@/lib/design-tokens';
+import { CloseIcon } from '@/components/ui/icons/CloseIcon';
 import { HubSpotPropertyPicker } from './HubSpotPropertyPicker';
 import {
   OPERATORS_BY_TYPE,
@@ -265,7 +266,6 @@ export function ConditionBuilder({ value, onChange, objectType }: ConditionBuild
           style={{
             padding: '4px 24px 4px 8px',
             border: `1px solid ${C.border2}`,
-            borderRadius: 6,
             background: C.surface,
             color: C.text,
             fontSize: 12,
@@ -343,7 +343,6 @@ export function ConditionBuilder({ value, onChange, objectType }: ConditionBuild
           marginTop: 16,
           padding: '8px 12px',
           border: `1px dashed ${C.border2}`,
-          borderRadius: 6,
           background: 'transparent',
           color: C.text2,
           fontSize: 12,
@@ -397,10 +396,10 @@ function ConditionGroupComponent({
   return (
     <div
       style={{
-        border: `1px solid ${C.border2}`,
-        borderRadius: 8,
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.1)',
         padding: 16,
-        background: C.surface,
+        marginBottom: 12,
       }}
     >
       {/* Group header */}
@@ -409,11 +408,22 @@ function ConditionGroupComponent({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          paddingBottom: 12,
           marginBottom: 12,
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: C.text3, fontSize: 11, fontWeight: 600 }}>
+          <span
+            style={{
+              color: C.text3,
+              fontSize: 10,
+              fontWeight: 600,
+              fontFamily: F.sans,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+            }}
+          >
             GROUP {groupIndex + 1}
           </span>
           <span style={{ color: C.text3, fontSize: 11 }}>Match</span>
@@ -423,7 +433,6 @@ function ConditionGroupComponent({
             style={{
               padding: '2px 20px 2px 6px',
               border: `1px solid ${C.border2}`,
-              borderRadius: 4,
               background: C.bg,
               color: C.text,
               fontSize: 11,
@@ -443,16 +452,19 @@ function ConditionGroupComponent({
           <button
             onClick={onRemoveGroup}
             style={{
-              padding: 4,
+              padding: 0,
               border: 'none',
               background: 'transparent',
               color: C.text3,
               cursor: 'pointer',
-              borderRadius: 4,
+              display: 'flex',
+              alignItems: 'center',
             }}
+            onMouseEnter={e => (e.currentTarget.style.color = C.text)}
+            onMouseLeave={e => (e.currentTarget.style.color = C.text3)}
             title="Remove group"
           >
-            <X size={14} />
+            <CloseIcon />
           </button>
         )}
       </div>
@@ -482,22 +494,19 @@ function ConditionGroupComponent({
       <button
         onClick={onAddCondition}
         style={{
-          marginTop: 8,
-          padding: '6px 10px',
-          border: `1px dashed ${C.border}`,
-          borderRadius: 4,
+          marginTop: 12,
+          padding: 0,
+          border: 'none',
           background: 'transparent',
-          color: C.text3,
-          fontSize: 11,
-          fontWeight: 500,
+          color: C.indigo,
+          fontSize: 13,
+          fontFamily: F.sans,
           cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
         }}
+        onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
+        onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}
       >
-        <Plus size={12} />
-        Add condition
+        + Add condition
       </button>
     </div>
   );
@@ -563,7 +572,6 @@ function ConditionRow({
               padding: '4px 8px',
               background: '#FEF3C7',
               border: '1px solid #F59E0B',
-              borderRadius: 4,
               fontSize: 11,
               color: '#92400E',
               display: 'flex',
@@ -587,7 +595,6 @@ function ConditionRow({
             width: '100%',
             padding: '8px 24px 8px 10px',
             border: `1px solid ${C.border2}`,
-            borderRadius: 6,
             background: condition.field ? C.bg : C.surface,
             color: condition.field ? C.text : C.text3,
             fontSize: 12,
@@ -621,7 +628,6 @@ function ConditionRow({
           background: 'transparent',
           color: canRemove ? C.text3 : C.border2,
           cursor: canRemove ? 'pointer' : 'not-allowed',
-          borderRadius: 4,
           flexShrink: 0,
         }}
         title={canRemove ? 'Remove condition' : 'Cannot remove last condition'}
@@ -681,7 +687,6 @@ function ValueInput({ condition, onChange, disabled }: ValueInputProps) {
             flex: 1,
             padding: '8px 10px',
             border: `1px solid ${C.border2}`,
-            borderRadius: 6,
             background: disabled ? C.surface : C.bg,
             color: C.text,
             fontSize: 12,
@@ -701,7 +706,6 @@ function ValueInput({ condition, onChange, disabled }: ValueInputProps) {
             flex: 1,
             padding: '8px 10px',
             border: `1px solid ${C.border2}`,
-            borderRadius: 6,
             background: disabled ? C.surface : C.bg,
             color: C.text,
             fontSize: 12,
@@ -725,7 +729,6 @@ function ValueInput({ condition, onChange, disabled }: ValueInputProps) {
             gap: 6,
             padding: '6px 8px',
             border: `1px solid ${C.border2}`,
-            borderRadius: 6,
             background: disabled ? C.surface : C.bg,
             minHeight: 38,
           }}
@@ -736,7 +739,6 @@ function ValueInput({ condition, onChange, disabled }: ValueInputProps) {
               style={{
                 padding: '4px 8px',
                 background: C.border,
-                borderRadius: 4,
                 fontSize: 11,
                 color: C.text,
                 display: 'flex',
@@ -806,7 +808,6 @@ function ValueInput({ condition, onChange, disabled }: ValueInputProps) {
             width: 80,
             padding: '8px 10px',
             border: `1px solid ${C.border2}`,
-            borderRadius: 6,
             background: disabled ? C.surface : C.bg,
             color: C.text,
             fontSize: 12,
@@ -829,7 +830,6 @@ function ValueInput({ condition, onChange, disabled }: ValueInputProps) {
           width: '100%',
           padding: '8px 10px',
           border: `1px solid ${C.border2}`,
-          borderRadius: 6,
           background: disabled ? C.surface : C.bg,
           color: C.text,
           fontSize: 12,
@@ -851,7 +851,6 @@ function ValueInput({ condition, onChange, disabled }: ValueInputProps) {
           width: '100%',
           padding: '8px 10px',
           border: `1px solid ${C.border2}`,
-          borderRadius: 6,
           background: disabled ? C.surface : C.bg,
           color: C.text,
           fontSize: 12,
@@ -872,7 +871,6 @@ function ValueInput({ condition, onChange, disabled }: ValueInputProps) {
         width: '100%',
         padding: '8px 10px',
         border: `1px solid ${C.border2}`,
-        borderRadius: 6,
         background: disabled ? C.surface : C.bg,
         color: C.text,
         fontSize: 12,
