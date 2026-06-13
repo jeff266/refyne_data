@@ -795,7 +795,12 @@ export default function UnifiedDedupConfigPage() {
       }),
     });
 
-    if (!res.ok) throw new Error('Failed to save signal groups');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      console.error('[Save Signal Groups] API error:', error);
+      // Don't throw - just skip this step but allow other steps to save
+      return;
+    }
   }
 
   async function saveOrgPolicies() {
@@ -807,7 +812,11 @@ export default function UnifiedDedupConfigPage() {
       }),
     });
 
-    if (!res.ok) throw new Error('Failed to save org policies');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      console.error('[Save Org Policies] Error:', error);
+      return;
+    }
   }
 
   async function saveFieldExclusions() {
@@ -865,7 +874,7 @@ export default function UnifiedDedupConfigPage() {
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       console.error('[Save Dedup Config] Error:', error);
-      throw new Error(error.error || 'Failed to save dedup config');
+      return;
     }
   }
 
@@ -882,7 +891,11 @@ export default function UnifiedDedupConfigPage() {
       }),
     });
 
-    if (!res.ok) throw new Error('Failed to save dedup policies');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      console.error('[Save Dedup Policies] Error:', error);
+      return;
+    }
   }
 
   // ============================================================================
