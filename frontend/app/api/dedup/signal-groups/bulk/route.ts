@@ -114,7 +114,7 @@ export async function PUT(request: NextRequest) {
 
       for (const condition of group.conditions) {
         conditionsToInsert.push({
-          signal_group_id: insertedGroup.id,
+          group_id: insertedGroup.id,
           field: condition.field,
           match_type: condition.match_type,
           fuzzy_threshold: condition.fuzzy_threshold ?? 0.85,
@@ -129,7 +129,14 @@ export async function PUT(request: NextRequest) {
 
     if (conditionInsertError) {
       console.error('[Signal Groups Bulk] Condition insert error:', conditionInsertError);
-      return NextResponse.json({ error: 'Failed to insert conditions' }, { status: 500 });
+      console.error('[Signal Groups Bulk] Attempted to insert conditions:', JSON.stringify(conditionsToInsert, null, 2));
+      console.error('[Signal Groups Bulk] From groups:', JSON.stringify(groups, null, 2));
+      return NextResponse.json({
+        error: 'Failed to insert conditions',
+        details: conditionInsertError.message,
+        hint: conditionInsertError.hint,
+        code: conditionInsertError.code
+      }, { status: 500 });
     }
 
     // Fetch complete groups with conditions to return
