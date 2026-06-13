@@ -714,6 +714,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
               selected={gradeFilter === 'all'}
               onClick={() => {
                 setGradeFilter('all');
+                setStatusFilter('all');
                 setPage(1);
               }}
             />
@@ -725,6 +726,7 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                 selected={gradeFilter === g}
                 onClick={() => {
                   setGradeFilter(g);
+                  setStatusFilter('all');
                   setPage(1);
                 }}
               />

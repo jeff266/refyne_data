@@ -16,7 +16,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 });
 
-const CONTEXT_MODEL = 'claude-sonnet-4-6-20241022';
+const CONTEXT_MODEL = 'claude-sonnet-4-6';
 
 export interface RawFacts {
   hubspot_connection: {
