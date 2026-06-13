@@ -162,9 +162,14 @@ History: ${JSON.stringify(older)}`,
 }
 
 export async function POST(req: NextRequest) {
-  console.log('[Assistant] Step 1a: Function entered');
-  console.log('[Assistant] Step 1b: Request URL:', req.url);
-  console.log('[Assistant] Step 1c: Request method:', req.method);
+  try {
+    console.log('[Assistant] DEPLOYMENT: 2026-06-13-00:00 - Function entered');
+    console.log('[Assistant] Step 1a: Function entered');
+    console.log('[Assistant] Step 1b: Request URL:', req.url);
+    console.log('[Assistant] Step 1c: Request method:', req.method);
+  } catch (logError) {
+    console.error('[Assistant] ERROR IN INITIAL LOGGING:', logError);
+  }
 
   // 1. Auth
   let ctx;
