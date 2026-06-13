@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest) {
     // Validate request body
     const dedupConfigSchema = z.object({
       inactive_owner_action: z.enum(['warn', 'assign_fallback', 'leave_unassigned']).optional(),
-      inactive_owner_fallback_id: z.string().optional(),
+      inactive_owner_fallback_id: z.string().nullable().optional(),
       parent_child_awareness: z.boolean().optional(),
       require_closed_won_survivor: z.boolean().optional(),
     });

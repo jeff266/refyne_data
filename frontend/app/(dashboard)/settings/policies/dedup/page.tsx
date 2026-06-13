@@ -177,6 +177,7 @@ export default function UnifiedDedupConfigPage() {
   const [requireClosedWonSurvivor, setRequireClosedWonSurvivor] = useState(false);
   const [inactiveOwnerAction, setInactiveOwnerAction] = useState('warn');
   const [inactiveOwnerFallbackId, setInactiveOwnerFallbackId] = useState('');
+  const [hubspotOwners, setHubspotOwners] = useState<Array<{ id: string; name: string; email: string | null }>>([]);
 
   // ──────────────────────────────────────────────────────────────────────
   // STATE - Step 6: Blocked Merges
@@ -203,6 +204,7 @@ export default function UnifiedDedupConfigPage() {
         loadSurvivorshipRules(),
         loadFieldExclusions(),
         loadDedupPolicies(),
+        loadHubSpotOwners(),
       ]);
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -238,6 +240,19 @@ export default function UnifiedDedupConfigPage() {
       }
     } catch (error) {
       console.error('Failed to load dedup config:', error);
+    }
+  }
+
+  async function loadHubSpotOwners() {
+    try {
+      const res = await fetch('/api/hubspot/owners');
+      if (res.ok) {
+        const data = await res.json();
+        setHubspotOwners(data.owners || []);
+      }
+    } catch (error) {
+      console.error('Failed to load HubSpot owners:', error);
+      setHubspotOwners([]);
     }
   }
 
@@ -695,19 +710,34 @@ export default function UnifiedDedupConfigPage() {
       // Save in parallel where possible
       await Promise.all([
         // Step 1: Signal groups
-        saveSignalGroups(),
+        saveSignalGroups().catch(err => {
+          console.error('[Save] Signal groups failed:', err);
+          throw err;
+        }),
 
         // Step 2: Auto-merge threshold
-        saveOrgPolicies(),
+        saveOrgPolicies().catch(err => {
+          console.error('[Save] Org policies failed:', err);
+          throw err;
+        }),
 
         // Step 4: Protected fields (field exclusions)
-        saveFieldExclusions(),
+        saveFieldExclusions().catch(err => {
+          console.error('[Save] Field exclusions failed:', err);
+          throw err;
+        }),
 
         // Step 5: Hierarchy & owners
-        saveDedupConfig(),
+        saveDedupConfig().catch(err => {
+          console.error('[Save] Dedup config failed:', err);
+          throw err;
+        }),
 
         // Step 6: Blocked merges
-        saveDedupPolicies(),
+        saveDedupPolicies().catch(err => {
+          console.error('[Save] Dedup policies failed:', err);
+          throw err;
+        }),
       ]);
 
       // Step 3a and 3b (compound rules and field rules) are saved via modals, no action needed here
@@ -716,13 +746,18 @@ export default function UnifiedDedupConfigPage() {
       await loadAllConfig();
     } catch (error) {
       console.error('Failed to save configuration:', error);
-      addToast('error', 'Failed to save configuration');
+      addToast('error', `Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setSaving(false);
     }
   }
 
   async function saveSignalGroups() {
+    // Skip if no groups configured (allow partial saves)
+    if (!editingGroups || editingGroups.length === 0) {
+      return;
+    }
+
     // Validate
     const errors: Record<number, string> = {};
     editingGroups.forEach((group, idx) => {
@@ -805,7 +840,11 @@ export default function UnifiedDedupConfigPage() {
       }),
     });
 
-    if (!res.ok) throw new Error('Failed to save field exclusions');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      console.error('[Save Field Exclusions] Error:', error);
+      throw new Error(error.error || 'Failed to save field exclusions');
+    }
   }
 
   async function saveDedupConfig() {
@@ -820,7 +859,11 @@ export default function UnifiedDedupConfigPage() {
       }),
     });
 
-    if (!res.ok) throw new Error('Failed to save dedup config');
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      console.error('[Save Dedup Config] Error:', error);
+      throw new Error(error.error || 'Failed to save dedup config');
+    }
   }
 
   async function saveDedupPolicies() {
@@ -1423,7 +1466,7 @@ export default function UnifiedDedupConfigPage() {
                             <div>
                               <div style={{ fontSize: 14, color: '#F9F8F5', fontFamily: F.sans }}>{group.name}</div>
                               <div style={{ fontSize: 12, color: 'rgba(249, 248, 245, 0.6)', paddingLeft: 16, marginTop: 4 }}>
-                                {group.conditions.map((c, i) => (
+                                {(group.conditions ?? []).map((c, i) => (
                                   <div key={i}>
                                     {c.field_key} {getOperatorLabel(c.operator)}{c.comparison_value && ` ${c.comparison_value}`}
                                   </div>
@@ -1664,7 +1707,7 @@ export default function UnifiedDedupConfigPage() {
 
                 {/* Compliance Pills */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                  {complianceFields.map((field) => (
+                  {(complianceFields ?? []).map((field) => (
                     <div
                       key={field}
                       style={{
@@ -1894,23 +1937,29 @@ export default function UnifiedDedupConfigPage() {
             {inactiveOwnerAction === 'assign_fallback' && (
               <div>
                 <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 8 }}>
-                  Fallback Owner ID
+                  Fallback Owner
                 </div>
-                <input
-                  type="text"
+                <select
                   value={inactiveOwnerFallbackId}
                   onChange={(e) => setInactiveOwnerFallbackId(e.target.value)}
-                  placeholder="HubSpot owner ID"
                   style={{
                     padding: '10px 12px',
                     fontSize: 13,
-                    fontFamily: 'monospace',
                     border: `1px solid ${C.border}`,
                     background: C.bg,
                     color: C.text,
+                    cursor: 'pointer',
                     width: 300,
                   }}
-                />
+                >
+                  <option value="">Select owner...</option>
+                  {hubspotOwners.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.name}
+                      {owner.email && owner.name !== owner.email ? ` (${owner.email})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
           </div>
