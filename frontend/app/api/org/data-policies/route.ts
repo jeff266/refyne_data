@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { supabase } from '@/lib/db/supabase';
+import { supabaseAdminAdmin } from '@/lib/db/admin-client';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 export interface DataPolicies {
@@ -25,20 +25,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    if (!supabase) {
+    if (!supabaseAdmin) {
       return NextResponse.json(
         { error: 'Database not configured' },
         { status: 500 }
       );
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('workspace_entitlements')
       .select('existing_value_policy, overwrite_stale_days, conflict_resolution, dedup_preflight')
       .eq('org_id', ctx.orgId)
       .single();
 
     if (error || !data) {
+      console.error('[Data Policies] Query error:', error);
+      console.error('[Data Policies] No data returned for org:', ctx.orgId);
       return NextResponse.json(
         { error: 'Failed to fetch policies' },
         { status: 500 }
@@ -76,7 +78,7 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    if (!supabase) {
+    if (!supabaseAdmin) {
       return NextResponse.json(
         { error: 'Database not configured' },
         { status: 500 }
@@ -104,7 +106,7 @@ export async function PUT(request: NextRequest) {
       updates.dedup_preflight = body.dedupPreflight;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('workspace_entitlements')
       .update(updates)
       .eq('org_id', ctx.orgId)
@@ -120,7 +122,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Log to org_events
-    await supabase.from('org_events').insert({
+    await supabaseAdmin.from('org_events').insert({
       org_id: ctx.orgId,
       user_id: ctx.userId,
       action: 'policy_changed',

@@ -162,31 +162,46 @@ History: ${JSON.stringify(older)}`,
 }
 
 export async function POST(req: NextRequest) {
+  console.log('[Assistant] Step 1: Starting request');
+
   // 1. Auth
   let ctx;
   try {
     ctx = await getOrgContext();
   } catch (e) {
+    console.log('[Assistant] Step 1: Auth failed');
     return authError(e) ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  console.log('[Assistant] Step 2: Auth success, orgId:', ctx.orgId);
+
   try {
     if (!ctx.userId) {
+      console.log('[Assistant] Step 2: No userId');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    console.log('[Assistant] Step 3: Checking rate limit');
     // 2. Rate limit (per user, not org)
     const limited = await checkRateLimit(rateLimiters.assistant, ctx.userId);
-    if (limited) return limited;
+    if (limited) {
+      console.log('[Assistant] Step 3: Rate limited');
+      return limited;
+    }
 
+    console.log('[Assistant] Step 4: Parsing body');
     // 3. Parse and validate body
     const body = await req.json();
     const { message, history, suggestionClicked } = body;
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      console.log('[Assistant] Step 4: Invalid message');
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
+    console.log('[Assistant] Step 5: Message validated, length:', message.length);
+
+    console.log('[Assistant] Step 6: Loading workspace context');
     // 4. Load workspace context
     const { data: wsContext } = await supabaseAdmin
       .from('workspace_context')
@@ -195,20 +210,26 @@ export async function POST(req: NextRequest) {
       .single();
 
     let contextText = wsContext?.interpreted_context || '';
+    console.log('[Assistant] Step 6: Context loaded, has context:', !!contextText);
 
     // First-time: build context synchronously (adds ~1-2s to first message, cached after)
     if (!contextText) {
+      console.log('[Assistant] Step 7: Building workspace context');
       try {
         contextText = await buildWorkspaceContext(ctx.orgId, 'first_chat');
+        console.log('[Assistant] Step 7: Context built successfully');
       } catch (err) {
-        console.error('[Assistant] Context build failed:', err);
+        console.error('[Assistant] Step 7: Context build failed:', err);
         contextText = ''; // graceful degradation
       }
     }
 
+    console.log('[Assistant] Step 8: Compacting history, history length:', history?.length || 0);
     // 5. Compact history if needed
     const processedHistory = await compactHistory(history || []);
+    console.log('[Assistant] Step 8: History compacted, processed length:', processedHistory.length);
 
+    console.log('[Assistant] Step 9: Building messages array');
     // 6. Build messages array
     const messages: Anthropic.MessageParam[] = [
       ...processedHistory.map((msg) => ({
@@ -217,7 +238,9 @@ export async function POST(req: NextRequest) {
       })),
       { role: 'user' as const, content: message },
     ];
+    console.log('[Assistant] Step 9: Messages built, total:', messages.length);
 
+    console.log('[Assistant] Step 10: Logging question');
     // 7. Log question (non-blocking - fire and forget, before streaming)
     const normalized = normalizeQuestion(message);
     supabaseAdmin
@@ -230,6 +253,7 @@ export async function POST(req: NextRequest) {
         suggestion_clicked: suggestionClicked === true,
       });
 
+    console.log('[Assistant] Step 11: Building system blocks');
     // 8. Build system blocks with workspace context
     const systemBlocks: Anthropic.Messages.TextBlockParam[] = [
       {
@@ -251,7 +275,9 @@ export async function POST(req: NextRequest) {
         cache_control: { type: 'ephemeral' },
       });
     }
+    console.log('[Assistant] Step 11: System blocks built, count:', systemBlocks.length);
 
+    console.log('[Assistant] Step 12: Creating Anthropic stream');
     // 9. Stream Claude response with cached system prompts
     const stream = await anthropic.messages.stream({
       model: 'claude-haiku-4-5-20251001',
@@ -259,7 +285,9 @@ export async function POST(req: NextRequest) {
       system: systemBlocks,
       messages,
     });
+    console.log('[Assistant] Step 12: Stream created successfully');
 
+    console.log('[Assistant] Step 13: Returning streaming response');
     // 8. Return streaming response
     return new Response(stream.toReadableStream(), {
       headers: {
@@ -269,7 +297,8 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    console.error('Assistant chat error:', error);
+    console.error('[Assistant] ERROR: Caught exception:', error);
+    console.error('[Assistant] ERROR: Stack:', error instanceof Error ? error.stack : 'No stack');
     return NextResponse.json(
       { error: 'Failed to get response from assistant' },
       { status: 500 }
