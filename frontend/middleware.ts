@@ -20,6 +20,11 @@ const isPublicRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, request) => {
   const { pathname } = request.nextUrl;
 
+  // Log ALL assistant chat requests
+  if (pathname === '/api/assistant/chat') {
+    console.log('[Middleware] Assistant chat request detected');
+  }
+
   // In development, skip auth PROTECTION but still process Clerk session
   // This allows getOrgContext() to work correctly in API routes
   const isDevelopment = process.env.NODE_ENV === 'development';
@@ -33,7 +38,13 @@ export default clerkMiddleware(async (auth, request) => {
 
   // Production: require auth for non-public routes
   if (!isPublicRoute(request)) {
+    if (pathname === '/api/assistant/chat') {
+      console.log('[Middleware] Calling auth().protect() for assistant');
+    }
     await auth().protect();
+    if (pathname === '/api/assistant/chat') {
+      console.log('[Middleware] auth().protect() completed for assistant');
+    }
   }
 
   // Onboarding redirect logic (runs after auth)
@@ -77,6 +88,10 @@ export default clerkMiddleware(async (auth, request) => {
         console.log('[Middleware] Allowing onboarding access - reconnecting or recalibrating');
       }
     }
+  }
+
+  if (pathname === '/api/assistant/chat') {
+    console.log('[Middleware] Passing assistant chat to route handler');
   }
 
   return NextResponse.next();

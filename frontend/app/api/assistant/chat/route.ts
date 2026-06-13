@@ -162,18 +162,23 @@ History: ${JSON.stringify(older)}`,
 }
 
 export async function POST(req: NextRequest) {
-  console.log('[Assistant] Step 1: Starting request');
+  console.log('[Assistant] Step 1a: Function entered');
+  console.log('[Assistant] Step 1b: Request URL:', req.url);
+  console.log('[Assistant] Step 1c: Request method:', req.method);
 
   // 1. Auth
   let ctx;
   try {
+    console.log('[Assistant] Step 1d: Calling getOrgContext');
     ctx = await getOrgContext();
+    console.log('[Assistant] Step 1e: getOrgContext returned:', ctx ? 'success' : 'null');
   } catch (e) {
-    console.log('[Assistant] Step 1: Auth failed');
+    console.log('[Assistant] Step 1f: Auth failed, error:', e);
+    console.error('[Assistant] Auth error stack:', e instanceof Error ? e.stack : 'no stack');
     return authError(e) ?? NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  console.log('[Assistant] Step 2: Auth success, orgId:', ctx.orgId);
+  console.log('[Assistant] Step 2: Auth success, orgId:', ctx.orgId, 'userId:', ctx.userId);
 
   try {
     if (!ctx.userId) {
@@ -289,16 +294,19 @@ export async function POST(req: NextRequest) {
 
     console.log('[Assistant] Step 13: Returning streaming response');
     // 8. Return streaming response
-    return new Response(stream.toReadableStream(), {
+    const response = new Response(stream.toReadableStream(), {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
       },
     });
+    console.log('[Assistant] Step 14: Response created, returning');
+    return response;
   } catch (error: unknown) {
-    console.error('[Assistant] ERROR: Caught exception:', error);
+    console.error('[Assistant] ERROR: Caught exception at step:', error);
     console.error('[Assistant] ERROR: Stack:', error instanceof Error ? error.stack : 'No stack');
+    console.error('[Assistant] ERROR: Message:', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
       { error: 'Failed to get response from assistant' },
       { status: 500 }
