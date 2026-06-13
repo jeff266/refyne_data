@@ -1,10 +1,14 @@
 /**
+ * DORMANT FEATURE - Benchmark deactivated June 2026
+ *
  * Provider Benchmark Stream API
  *
  * GET /api/enrich/benchmark/stream?objectType=company|contact
  *
  * Tests providers (Apollo, Refyne Data/GraphIQ) against a statistically significant
  * sample of the user's database using SSE for live progress updates.
+ *
+ * Route remains in place but UI access removed. Can be fully deleted in future cleanup.
  */
 
 import { NextRequest } from 'next/server';
