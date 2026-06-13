@@ -30,7 +30,7 @@ export function UpgradeLink({
       <a
         href={href}
         style={{
-          color: C.accent,
+          color: C.indigo,
           textDecoration: 'none',
           fontWeight: 500
         }}

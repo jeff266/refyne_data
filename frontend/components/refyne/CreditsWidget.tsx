@@ -127,7 +127,7 @@ export function CreditsWidget() {
             padding: '6px 10px',
             fontSize: 11,
             fontWeight: 600,
-            color: C.accent,
+            color: C.indigo,
             textDecoration: 'none',
             textAlign: 'center',
             fontFamily: F.sans,
