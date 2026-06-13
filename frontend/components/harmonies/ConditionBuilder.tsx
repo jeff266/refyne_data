@@ -400,6 +400,8 @@ function ConditionGroupComponent({
         border: '1px solid rgba(255,255,255,0.1)',
         padding: 16,
         marginBottom: 12,
+        maxWidth: '100%',
+        overflow: 'hidden',
       }}
     >
       {/* Group header */}
@@ -470,7 +472,7 @@ function ConditionGroupComponent({
       </div>
 
       {/* Conditions */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: '100%' }}>
         {group.conditions.map((condition, conditionIndex) => (
           <ConditionRow
             key={conditionIndex}
@@ -554,10 +556,11 @@ function ConditionRow({
         display: 'flex',
         alignItems: 'flex-start',
         gap: 8,
+        maxWidth: '100%',
       }}
     >
       {/* Field picker */}
-      <div style={{ flex: '0 0 200px' }}>
+      <div style={{ flex: '1 1 200px', minWidth: 0 }}>
         <HubSpotPropertyPicker
           objectType={objectType}
           value={condition.field}
@@ -586,7 +589,7 @@ function ConditionRow({
       </div>
 
       {/* Operator picker */}
-      <div style={{ flex: '0 0 140px' }}>
+      <div style={{ flex: '0 1 140px', minWidth: 0 }}>
         <select
           value={condition.operator}
           onChange={e => onOperatorChange(e.target.value)}
@@ -610,7 +613,7 @@ function ConditionRow({
       </div>
 
       {/* Value input */}
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <ValueInput
           condition={condition}
           onChange={onValueChange}
