@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, getOrgContext, authError } from '@/lib/auth/clerk-helpers';
-import { supabaseAdminAdmin } from '@/lib/db/admin-client';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
 
 export interface DataPolicies {
