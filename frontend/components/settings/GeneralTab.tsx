@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { C, F } from '@/lib/design-tokens';
 import { Card, Toggle, PrimaryBtn, GhostBtn } from '@/components/refyne';
 import { useRole } from '@/hooks/useRole';
 import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
+import { useEntitlements, shouldShowUpgradePrompts } from '@/lib/billing/use-entitlements';
 
 interface GeneralSettings {
   workspaceName: string | null;
@@ -35,6 +37,7 @@ const TIMEZONES = [
 export function GeneralTab() {
   const { isAdmin } = useRole();
   const router = useRouter();
+  const { subscription_tier } = useEntitlements();
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -492,9 +495,26 @@ export function GeneralTab() {
                     disabled
                     style={{ cursor: 'not-allowed' }}
                   />
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 13, color: C.text }}>Every 6 hours</span>
-                    <span style={{ fontSize: 11, color: C.amber, marginLeft: 8 }}>🔒 Growth</span>
+                    {shouldShowUpgradePrompts(subscription_tier) ? (
+                      <Link
+                        href="/settings/billing"
+                        style={{
+                          fontSize: 11,
+                          color: C.amber,
+                          textDecoration: 'none',
+                          fontWeight: 500,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                        onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+                      >
+                        🔒 Growth →
+                      </Link>
+                    ) : (
+                      <span style={{ fontSize: 11, color: C.amber }}>🔒 Growth</span>
+                    )}
                   </div>
                 </label>
 
@@ -506,9 +526,26 @@ export function GeneralTab() {
                     disabled
                     style={{ cursor: 'not-allowed' }}
                   />
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 13, color: C.text }}>Hourly</span>
-                    <span style={{ fontSize: 11, color: C.indigo, marginLeft: 8 }}>🔒 Scale</span>
+                    {shouldShowUpgradePrompts(subscription_tier) ? (
+                      <Link
+                        href="/settings/billing"
+                        style={{
+                          fontSize: 11,
+                          color: C.indigo,
+                          textDecoration: 'none',
+                          fontWeight: 500,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                        onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+                      >
+                        🔒 Scale →
+                      </Link>
+                    ) : (
+                      <span style={{ fontSize: 11, color: C.indigo }}>🔒 Scale</span>
+                    )}
                   </div>
                 </label>
 
