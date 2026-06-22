@@ -210,6 +210,7 @@ export async function GET(request: NextRequest) {
           org_id: stateRecord.org_id,
           portal_id: portalId,
           hub_id: hubId,
+          name: `HubSpot Portal ${portalId}`, // Add default name
           access_token: encryptedAccessToken,
           refresh_token: encryptedRefreshToken,
           token_expires_at: expiresAt.toISOString(),
