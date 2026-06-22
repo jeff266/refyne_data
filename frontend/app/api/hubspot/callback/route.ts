@@ -184,8 +184,11 @@ export async function GET(request: NextRequest) {
       if (updateError) {
         console.error('[OAuth Callback] Failed to update connection:', updateError);
         console.error('[OAuth Callback] Update error details:', JSON.stringify(updateError, null, 2));
+
+        // Show error in URL for debugging
+        const errorMsg = encodeURIComponent(updateError.message || JSON.stringify(updateError));
         return NextResponse.redirect(
-          `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=save_failed`
+          `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=save_failed&debug=${errorMsg}`
         );
       }
     } else {
@@ -227,8 +230,11 @@ export async function GET(request: NextRequest) {
           hub_id: hubId,
           connection_status: 'active',
         }, null, 2));
+
+        // Show error in URL for debugging
+        const errorMsg = encodeURIComponent(insertError.message || JSON.stringify(insertError));
         return NextResponse.redirect(
-          `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=save_failed`
+          `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=save_failed&debug=${errorMsg}`
         );
       }
 
