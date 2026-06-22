@@ -150,12 +150,12 @@ export async function GET(request: NextRequest) {
 
     console.log('[OAuth Callback] Portal info:', { portalId, scopeCount: scopes.length });
 
-    // Check if connection exists
-    console.log('[OAuth Callback] Checking for existing connection');
+    // Check if connection exists (by portal_id, not org_id - a portal can only be connected once)
+    console.log('[OAuth Callback] Checking for existing connection for portal:', portalId);
     const { data: existingConnection } = await supabaseAdmin
       .from('hubspot_connections')
-      .select('id, encrypted_token, scopes, has_export_scope')
-      .eq('org_id', stateRecord.org_id)
+      .select('id, encrypted_token, scopes, has_export_scope, org_id')
+      .eq('portal_id', portalId)
       .maybeSingle();
 
     console.log('[OAuth Callback] Existing connection:', existingConnection ? 'found' : 'not found');
@@ -169,6 +169,7 @@ export async function GET(request: NextRequest) {
       const { error: updateError } = await supabaseAdmin
         .from('hubspot_connections')
         .update({
+          org_id: stateRecord.org_id, // Transfer connection to new org if needed
           portal_id: portalId,
           hub_id: hubId,
           access_token: encryptedAccessToken,
@@ -179,7 +180,7 @@ export async function GET(request: NextRequest) {
           last_active_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('org_id', stateRecord.org_id);
+        .eq('id', existingConnection.id);
 
       if (updateError) {
         console.error('[OAuth Callback] Failed to update connection:', updateError);
