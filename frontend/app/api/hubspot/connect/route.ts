@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { validateToken, saveConnection, getConnection, deleteConnection, HubSpotClient } from '@/lib/hubspot';
 import { upsertSchemaFieldMappings } from '@/lib/hubspot/repository';
-import { supabase } from '@/lib/db/supabase';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { requireAdmin } from '@/lib/auth/roles';
 import { captureWithOrgContext } from '@/lib/monitoring/sentry';
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!supabase) {
+    if (!supabaseAdmin) {
       console.error('[HubSpot Connect] Supabase not configured');
       return NextResponse.json(
         { error: 'Database not configured' },
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
     console.log('[HubSpot Connect] Storing in database with return_to:', validatedReturnTo);
 
     // Store state in database for CSRF protection
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('hubspot_oauth_states')
       .insert({
         state,

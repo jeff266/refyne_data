@@ -182,7 +182,8 @@ export async function GET(request: NextRequest) {
         .eq('org_id', stateRecord.org_id);
 
       if (updateError) {
-        console.error('Failed to update connection:', updateError);
+        console.error('[OAuth Callback] Failed to update connection:', updateError);
+        console.error('[OAuth Callback] Update error details:', JSON.stringify(updateError, null, 2));
         return NextResponse.redirect(
           `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=save_failed`
         );
@@ -218,7 +219,14 @@ export async function GET(request: NextRequest) {
         });
 
       if (insertError) {
-        console.error('Failed to create connection:', insertError);
+        console.error('[OAuth Callback] Failed to create connection:', insertError);
+        console.error('[OAuth Callback] Insert error details:', JSON.stringify(insertError, null, 2));
+        console.error('[OAuth Callback] Attempted insert data:', JSON.stringify({
+          org_id: stateRecord.org_id,
+          portal_id: portalId,
+          hub_id: hubId,
+          connection_status: 'active',
+        }, null, 2));
         return NextResponse.redirect(
           `${process.env.NEXT_PUBLIC_APP_URL}/connections?error=save_failed`
         );
