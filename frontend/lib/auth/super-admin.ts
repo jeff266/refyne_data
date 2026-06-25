@@ -29,7 +29,8 @@ export async function requireSuperAdmin(): Promise<void> {
     );
   }
 
-  const refyneRole = sessionClaims.public_metadata?.refyne_role;
+  const metadata = sessionClaims.public_metadata as { refyne_role?: string } | undefined;
+  const refyneRole = metadata?.refyne_role;
 
   if (refyneRole !== 'super_admin') {
     throw NextResponse.json(
@@ -50,7 +51,8 @@ export async function checkIsSuperAdmin(): Promise<boolean> {
     return false;
   }
 
-  const refyneRole = sessionClaims.public_metadata?.refyne_role;
+  const metadata = sessionClaims.public_metadata as { refyne_role?: string } | undefined;
+  const refyneRole = metadata?.refyne_role;
   return refyneRole === 'super_admin';
 }
 
@@ -65,6 +67,7 @@ export async function getSuperAdminUserId(): Promise<string | null> {
     return null;
   }
 
-  const refyneRole = sessionClaims.public_metadata?.refyne_role;
+  const metadata = sessionClaims.public_metadata as { refyne_role?: string } | undefined;
+  const refyneRole = metadata?.refyne_role;
   return refyneRole === 'super_admin' ? userId : null;
 }
