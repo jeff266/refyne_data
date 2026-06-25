@@ -9,14 +9,14 @@ interface Org {
   plan: string;
   plan_override: string | null;
   plan_override_reason: string | null;
-  trial_status: string;
+  trial_state: string;
   trial_ends_at: string | null;
   trial_extended_by_days: number;
   is_trial_expired: boolean;
   credits_used: number;
   credits_total: number;
   hubspot_connected: boolean;
-  member_count: number;
+  member_count: number | null;
 }
 
 export default function OrgsTab() {
@@ -206,8 +206,9 @@ export default function OrgsTab() {
           <thead>
             <tr style={{ borderBottom: `1px solid ${C.border}` }}>
               <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Org name</th>
+              <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Members</th>
               <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Plan</th>
-              <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Trial status</th>
+              <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Trial</th>
               <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Credits</th>
               <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>HubSpot</th>
               <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Actions</th>
@@ -217,8 +218,10 @@ export default function OrgsTab() {
             {orgs.map((org) => (
               <tr key={org.org_id} style={{ borderBottom: `1px solid ${C.border}` }}>
                 <td style={{ padding: 12, color: C.text, fontSize: 14 }}>
-                  <div>{org.name}</div>
-                  <div style={{ fontSize: 12, color: C.text3 }}>{org.member_count} members</div>
+                  {org.name}
+                </td>
+                <td style={{ padding: 12, color: C.text2, fontSize: 14 }}>
+                  {org.member_count !== null ? `${org.member_count} members` : '-- members'}
                 </td>
                 <td style={{ padding: 12 }}>
                   {org.plan_override ? (
@@ -239,8 +242,10 @@ export default function OrgsTab() {
                     </span>
                   )}
                 </td>
-                <td style={{ padding: 12, color: C.text2, fontSize: 14 }}>
-                  {org.trial_status}
+                <td style={{ padding: 12, fontSize: 14 }}>
+                  <span style={{ color: org.trial_state === 'Expired' ? C.red : C.text2 }}>
+                    {org.trial_state}
+                  </span>
                 </td>
                 <td style={{ padding: 12, color: C.text2, fontSize: 14, fontFamily: F.mono }}>
                   {org.credits_used} / {org.credits_total}

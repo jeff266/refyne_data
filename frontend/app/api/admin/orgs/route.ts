@@ -65,67 +65,88 @@ export async function GET() {
       creditsByOrg.set(grant.org_id, current + grant.credits);
     });
 
-    // Get org names from Clerk
+    // Fix 1: Fetch all Clerk orgs upfront
     const client = await clerkClient();
-    const orgs = await Promise.all(
-      (orgBillingRecords || []).map(async (billing) => {
-        let orgName = billing.org_id; // fallback
-        let memberCount = 0;
+    const { data: clerkOrgs } = await client.organizations.getOrganizationList({
+      limit: 100,
+    });
 
-        try {
-          const org = await client.organizations.getOrganization({
-            organizationId: billing.org_id,
-          });
-          orgName = org.name;
-          memberCount = org.membersCount || 0;
-        } catch (err) {
-          console.warn(`Failed to fetch org ${billing.org_id} from Clerk:`, err);
-        }
+    const orgNameMap = new Map<string, string>();
+    clerkOrgs.forEach((org) => {
+      orgNameMap.set(org.id, org.name);
+    });
 
-        // Determine effective plan
-        const effectivePlan = billing.plan_override || billing.subscription_tier || 'trial';
+    // Fix 2: Fetch member counts in parallel with Promise.allSettled
+    const memberCountPromises = (orgBillingRecords || []).map(async (billing) => {
+      try {
+        const { data: memberships } = await client.organizations.getOrganizationMembershipList({
+          organizationId: billing.org_id,
+          limit: 100,
+        });
+        return { org_id: billing.org_id, count: memberships?.length || 0 };
+      } catch (err) {
+        return { org_id: billing.org_id, count: null };
+      }
+    });
 
-        // Calculate trial status
-        const now = new Date();
-        const trialEndsAt = billing.trial_ends_at ? new Date(billing.trial_ends_at) : null;
-        const isTrialExpired = trialEndsAt ? trialEndsAt < now : false;
-        const daysRemaining = trialEndsAt
-          ? Math.ceil((trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-          : null;
+    const memberCountResults = await Promise.allSettled(memberCountPromises);
+    const memberCountMap = new Map<string, number | null>();
+    memberCountResults.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        memberCountMap.set(result.value.org_id, result.value.count);
+      }
+    });
 
-        // Get trial status display
-        let trialStatus = 'Paid';
-        if (billing.subscription_tier === 'trial' && !billing.plan_override) {
+    // Fix 3: Separate plan and trial status
+    const orgs = (orgBillingRecords || []).map((billing) => {
+      const orgName = orgNameMap.get(billing.org_id) || 'Unknown org';
+      const memberCount = memberCountMap.get(billing.org_id);
+
+      // Determine effective plan
+      const effectivePlan = billing.plan_override || billing.subscription_tier || 'trial';
+
+      // Calculate trial state (separate from plan)
+      const now = new Date();
+      const trialEndsAt = billing.trial_ends_at ? new Date(billing.trial_ends_at) : null;
+      const isTrialExpired = trialEndsAt ? trialEndsAt < now : false;
+      const daysRemaining = trialEndsAt
+        ? Math.ceil((trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      // Trial state: only show if not on paid plan and no override
+      let trialState = 'N/A';
+      if (billing.subscription_status !== 'active' && !billing.plan_override) {
+        if (billing.trial_ends_at) {
           if (isTrialExpired) {
-            trialStatus = 'Expired';
-          } else if (daysRemaining !== null) {
-            trialStatus = `${daysRemaining} days`;
+            trialState = 'Expired';
+          } else if (daysRemaining !== null && daysRemaining > 0) {
+            trialState = `${daysRemaining} days left`;
           }
         }
+      }
 
-        // Calculate credits (base trial credits + admin grants)
-        const baseCredits = 50; // TODO: Make this configurable
-        const grantedCredits = creditsByOrg.get(billing.org_id) || 0;
-        const totalCredits = baseCredits + grantedCredits;
+      // Calculate credits (base trial credits + admin grants)
+      const baseCredits = 50;
+      const grantedCredits = creditsByOrg.get(billing.org_id) || 0;
+      const totalCredits = baseCredits + grantedCredits;
 
-        return {
-          org_id: billing.org_id,
-          name: orgName,
-          plan: effectivePlan,
-          plan_override: billing.plan_override,
-          plan_override_reason: billing.plan_override_reason,
-          trial_status: trialStatus,
-          trial_ends_at: billing.trial_ends_at,
-          trial_extended_by_days: billing.trial_extended_by_days || 0,
-          is_trial_expired: isTrialExpired,
-          credits_used: 0, // TODO: Calculate from usage
-          credits_total: totalCredits,
-          hubspot_connected: connectedOrgIds.has(billing.org_id),
-          member_count: memberCount,
-          created_at: billing.created_at,
-        };
-      })
-    );
+      return {
+        org_id: billing.org_id,
+        name: orgName,
+        plan: effectivePlan,
+        plan_override: billing.plan_override,
+        plan_override_reason: billing.plan_override_reason,
+        trial_state: trialState,
+        trial_ends_at: billing.trial_ends_at,
+        trial_extended_by_days: billing.trial_extended_by_days || 0,
+        is_trial_expired: isTrialExpired,
+        credits_used: 0, // TODO: Calculate from usage
+        credits_total: totalCredits,
+        hubspot_connected: connectedOrgIds.has(billing.org_id),
+        member_count: memberCount,
+        created_at: billing.created_at,
+      };
+    });
 
     return NextResponse.json({ orgs });
   } catch (error) {
