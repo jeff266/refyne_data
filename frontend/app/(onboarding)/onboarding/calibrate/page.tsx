@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { C, F } from '@/lib/design-tokens';
 import { useRole } from '@/hooks/useRole';
@@ -208,7 +208,7 @@ function ProgressDots({ current, total }: ProgressDotsProps) {
 
 const DEDUP_EXPLAINER_VIDEO_URL = '';
 
-export default function CalibratePage() {
+function CalibratePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isRecalibrate = searchParams.get('mode') === 'recalibrate';
@@ -1823,5 +1823,29 @@ export default function CalibratePage() {
         </>
       )}
     </div>
+  );
+}
+
+// Wrap in Suspense to handle useSearchParams()
+export default function CalibratePage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '100vh',
+            fontFamily: F.sans,
+            color: C.text3,
+          }}
+        >
+          Loading wizard...
+        </div>
+      }
+    >
+      <CalibratePageInner />
+    </Suspense>
   );
 }
