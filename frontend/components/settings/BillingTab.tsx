@@ -50,6 +50,8 @@ export function BillingTab() {
   const [billing, setBilling] = useState<BillingEntitlements | null>(null);
   const [prices, setPrices] = useState<Prices | null>(null);
   const [loading, setLoading] = useState(true);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchBillingData();
@@ -76,19 +78,27 @@ export function BillingTab() {
   }
 
   async function handleManageSubscription() {
+    setPortalLoading(true);
+    setPortalError(null);
+
     try {
       const res = await fetch('/api/billing/portal', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
-        window.location.href = data.url;
+        window.open(data.url, '_blank');
       } else {
         const error = await res.json();
-        if (error.error === 'no_subscription') {
-          alert('No subscription found. Please upgrade first.');
+        if (error.error === 'no_customer') {
+          setPortalError('No billing account found. Upgrade to access billing history.');
+        } else {
+          setPortalError('Failed to open billing portal. Please try again.');
         }
       }
     } catch (error) {
       console.error('Failed to open portal:', error);
+      setPortalError('Failed to open billing portal. Please try again.');
+    } finally {
+      setPortalLoading(false);
     }
   }
 
@@ -229,21 +239,23 @@ export function BillingTab() {
           {/* Right: Action button */}
           <div>
             {isAdmin ? (
-              <>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
                 {hasStripeCustomer && (
                   <button
                     onClick={handleManageSubscription}
+                    disabled={portalLoading}
                     style={{
                       padding: '10px 20px',
-                      background: C.text,
+                      background: portalLoading ? C.text3 : C.text,
                       color: C.surface,
                       border: 'none',
                       fontSize: 14,
                       fontWeight: 500,
-                      cursor: 'pointer',
+                      cursor: portalLoading ? 'not-allowed' : 'pointer',
+                      opacity: portalLoading ? 0.6 : 1,
                     }}
                   >
-                    Manage subscription
+                    {portalLoading ? 'Opening...' : 'Manage billing'}
                   </button>
                 )}
                 {isTrial && (
@@ -265,20 +277,32 @@ export function BillingTab() {
                 {isPastDue && (
                   <button
                     onClick={handleManageSubscription}
+                    disabled={portalLoading}
                     style={{
                       padding: '10px 20px',
-                      background: C.amber,
+                      background: portalLoading ? C.text3 : C.amber,
                       color: '#fff',
                       border: 'none',
                       fontSize: 14,
                       fontWeight: 500,
-                      cursor: 'pointer',
+                      cursor: portalLoading ? 'not-allowed' : 'pointer',
+                      opacity: portalLoading ? 0.6 : 1,
                     }}
                   >
-                    Update payment
+                    {portalLoading ? 'Opening...' : 'Update payment'}
                   </button>
                 )}
-              </>
+                {portalError && (
+                  <div style={{
+                    fontSize: 13,
+                    color: C.red,
+                    maxWidth: 250,
+                    textAlign: 'right',
+                  }}>
+                    {portalError}
+                  </div>
+                )}
+              </div>
             ) : (
               <AdminOnlyNotice action="manage billing" />
             )}

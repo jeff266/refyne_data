@@ -36,3 +36,4 @@ next-env.d.ts
 
 # Generated files
 /lib/harmonies/library/generated-bundle.ts
+.live-price-ids.json

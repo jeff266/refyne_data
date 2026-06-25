@@ -10,7 +10,13 @@ import { requireAdmin } from '@/lib/auth/roles';
  * Create Stripe customer portal session for subscription management.
  * Returns URL to redirect user to Stripe's hosted portal.
  *
- * Auth: Requires authenticated user
+ * PREREQUISITE: Stripe Customer Portal must be configured in Stripe Dashboard
+ * at Billing > Customer Portal. Enable:
+ * - Invoice history (required)
+ * - Payment method management (required)
+ * - Subscription cancellation (optional, configure per business policy)
+ *
+ * Auth: Requires authenticated user with admin role
  */
 export async function POST() {
   let ctx;
@@ -20,7 +26,12 @@ export async function POST() {
     return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
-  requireAdmin(ctx.orgRole);
+  try {
+    requireAdmin(ctx.orgRole);
+  } catch (e) {
+    if (e instanceof Response) return e;
+    throw e;
+  }
 
   try {
     // Query org_billing for stripe_customer_id
@@ -32,7 +43,7 @@ export async function POST() {
 
     if (error || !billing?.stripe_customer_id) {
       return NextResponse.json(
-        { error: 'no_subscription' },
+        { error: 'no_customer' },
         { status: 400 }
       );
     }
@@ -41,7 +52,7 @@ export async function POST() {
     const stripeClient = getStripeClient();
     const session = await stripeClient.billingPortal.sessions.create({
       customer: billing.stripe_customer_id,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=billing`,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing`,
     });
 
     return NextResponse.json({ url: session.url });
