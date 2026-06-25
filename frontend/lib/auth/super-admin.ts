@@ -1,4 +1,4 @@
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 /**
@@ -20,17 +20,19 @@ import { NextResponse } from 'next/server';
  * Use in API routes to protect admin endpoints.
  */
 export async function requireSuperAdmin(): Promise<void> {
-  const { sessionClaims } = await auth();
+  const { userId } = await auth();
 
-  if (!sessionClaims) {
+  if (!userId) {
     throw NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 }
     );
   }
 
-  const metadata = sessionClaims.public_metadata as { refyne_role?: string } | undefined;
-  const refyneRole = metadata?.refyne_role;
+  // Fetch user metadata from Clerk API (not in session claims)
+  const client = await clerkClient();
+  const user = await client.users.getUser(userId);
+  const refyneRole = user.publicMetadata?.refyne_role;
 
   if (refyneRole !== 'super_admin') {
     throw NextResponse.json(
@@ -45,15 +47,20 @@ export async function requireSuperAdmin(): Promise<void> {
  * Use in page components for conditional rendering or redirects.
  */
 export async function checkIsSuperAdmin(): Promise<boolean> {
-  const { sessionClaims } = await auth();
+  const { userId } = await auth();
 
-  if (!sessionClaims) {
+  if (!userId) {
     return false;
   }
 
-  const metadata = sessionClaims.public_metadata as { refyne_role?: string } | undefined;
-  const refyneRole = metadata?.refyne_role;
-  return refyneRole === 'super_admin';
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const refyneRole = user.publicMetadata?.refyne_role;
+    return refyneRole === 'super_admin';
+  } catch (err) {
+    return false;
+  }
 }
 
 /**
@@ -61,13 +68,18 @@ export async function checkIsSuperAdmin(): Promise<boolean> {
  * Returns null if not authenticated or not a super admin.
  */
 export async function getSuperAdminUserId(): Promise<string | null> {
-  const { sessionClaims, userId } = await auth();
+  const { userId } = await auth();
 
-  if (!sessionClaims || !userId) {
+  if (!userId) {
     return null;
   }
 
-  const metadata = sessionClaims.public_metadata as { refyne_role?: string } | undefined;
-  const refyneRole = metadata?.refyne_role;
-  return refyneRole === 'super_admin' ? userId : null;
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const refyneRole = user.publicMetadata?.refyne_role;
+    return refyneRole === 'super_admin' ? userId : null;
+  } catch (err) {
+    return null;
+  }
 }
