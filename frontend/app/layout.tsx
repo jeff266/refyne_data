@@ -69,6 +69,18 @@ export default function RootLayout({
                 border: '1px solid rgba(46,107,168,0.4)',
                 color: '#F9F8F5',
               },
+              formFieldLabel: {
+                color: '#F9F8F5',
+              },
+              formFieldAction: {
+                color: '#F9F8F5',
+              },
+              avatarImageActions: {
+                color: '#F9F8F5',
+              },
+              avatarImageActionsUpload: {
+                color: '#F9F8F5',
+              },
               // Org switcher
               organizationSwitcherPopoverCard: {
                 borderRadius: 0,
