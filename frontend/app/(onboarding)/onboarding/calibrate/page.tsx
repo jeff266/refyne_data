@@ -431,6 +431,16 @@ function CalibratePageInner() {
     */
   }, [sampleData, currentStep, steps, answers.company_name]);
 
+  // Compute current step ID (must be before early returns to avoid hook order issues)
+  const currentStepId = steps[currentStep];
+
+  // Fetch dedup samples when dedup step is reached (must be before early returns)
+  useEffect(() => {
+    if (currentStepId === 'dedup' && isAdmin) {
+      fetchDedupSamples();
+    }
+  }, [currentStepId, isAdmin]);
+
   if (isLoading) {
     return (
       <div
@@ -479,15 +489,6 @@ function CalibratePageInner() {
       </div>
     );
   }
-
-  const currentStepId = steps[currentStep];
-
-  // Fetch dedup samples when dedup step is reached
-  useEffect(() => {
-    if (currentStepId === 'dedup' && isAdmin) {
-      fetchDedupSamples();
-    }
-  }, [currentStepId, isAdmin]);
 
   async function fetchDedupSamples() {
     try {
