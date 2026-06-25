@@ -38,6 +38,41 @@ export default function RootLayout({
         <ClerkProvider
           signUpFallbackRedirectUrl="/onboarding"
           signInFallbackRedirectUrl="/dashboard"
+          appearance={{
+            variables: {
+              colorBackground: '#162944',
+              colorInputBackground: '#1a3352',
+              colorText: '#F9F8F5',
+              colorTextSecondary: '#94a3b8',
+              colorPrimary: '#2E6BA8',
+              colorDanger: '#ef4444',
+              borderRadius: '0px',
+              fontFamily: 'Jost, sans-serif',
+            },
+            elements: {
+              card: {
+                borderRadius: 0,
+                backgroundColor: '#162944',
+                border: '1px solid rgba(46,107,168,0.3)',
+                boxShadow: 'none',
+              },
+              modalContent: { borderRadius: 0 },
+              modalCloseButton: { color: '#F9F8F5' },
+              formButtonPrimary: {
+                borderRadius: 0,
+                backgroundColor: '#2E6BA8',
+                color: '#F9F8F5',
+              },
+              formFieldInput: {
+                borderRadius: 0,
+                backgroundColor: '#1a3352',
+                border: '1px solid rgba(46,107,168,0.4)',
+                color: '#F9F8F5',
+              },
+              organizationSwitcherPopoverCard: { borderRadius: 0 },
+              organizationPreviewAvatarBox: { borderRadius: 0 },
+            },
+          }}
         >
           <CleanUrl />
           {children}
