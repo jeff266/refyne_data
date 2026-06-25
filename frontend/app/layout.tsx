@@ -69,8 +69,24 @@ export default function RootLayout({
                 border: '1px solid rgba(46,107,168,0.4)',
                 color: '#F9F8F5',
               },
-              organizationSwitcherPopoverCard: { borderRadius: 0 },
+              // Org switcher
+              organizationSwitcherPopoverCard: {
+                borderRadius: 0,
+                backgroundColor: '#162944',
+              },
               organizationPreviewAvatarBox: { borderRadius: 0 },
+              organizationSwitcherPopoverActionButton: {
+                color: '#F9F8F5',
+              },
+              organizationSwitcherPopoverActionButtonText: {
+                color: '#F9F8F5',
+              },
+              organizationPreviewMainIdentifier: {
+                color: '#F9F8F5',
+              },
+              organizationPreviewSecondaryIdentifier: {
+                color: '#94a3b8',
+              },
             },
           }}
         >
