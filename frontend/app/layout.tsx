@@ -22,9 +22,6 @@ const jost = Jost({
 export const metadata: Metadata = {
   title: 'Refyne',
   description: 'Data layer for revenue operations',
-  icons: {
-    icon: '/favicon.ico',
-  },
 };
 
 export default function RootLayout({
