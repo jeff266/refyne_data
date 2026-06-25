@@ -7,6 +7,9 @@ import { useRole } from '@/hooks/useRole';
 // import { normalizeCompanyName } from '@/lib/names/normalizer'; // REMOVED: server-only import causes client-side crash
 import { SearchableCountrySelect } from '@/components/SearchableCountrySelect';
 
+// Force dynamic rendering for useSearchParams()
+export const dynamic = 'force-dynamic';
+
 // ─────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────
