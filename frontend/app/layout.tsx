@@ -110,6 +110,16 @@ export default function RootLayout({
               userButtonPopoverActionButtonIcon: {
                 color: '#F9F8F5',
               },
+              // Social login buttons
+              socialButtonsBlockButton: {
+                borderRadius: 0,
+                backgroundColor: '#1a3352',
+                border: '1px solid rgba(46,107,168,0.4)',
+                color: '#F9F8F5',
+              },
+              socialButtonsBlockButtonText: {
+                color: '#F9F8F5',
+              },
             },
           }}
         >
