@@ -96,6 +96,20 @@ export default function RootLayout({
               organizationPreviewSecondaryIdentifier: {
                 color: '#94a3b8',
               },
+              // User button menu
+              userButtonPopoverCard: {
+                borderRadius: 0,
+                backgroundColor: '#162944',
+              },
+              userButtonPopoverActionButton: {
+                color: '#F9F8F5',
+              },
+              userButtonPopoverActionButtonText: {
+                color: '#F9F8F5',
+              },
+              userButtonPopoverActionButtonIcon: {
+                color: '#F9F8F5',
+              },
             },
           }}
         >
