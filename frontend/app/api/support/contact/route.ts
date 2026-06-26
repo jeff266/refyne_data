@@ -75,7 +75,7 @@ ${message}`;
     await resend.emails.send({
       from: 'Refyne Support <hello@refynedata.com>',
       to: 'jeff@revopsimpact.us',
-      subject: `[Refyne Support] ${subject}`,
+      subject: 'Support inquiry for Refyne Data',
       text: emailBody,
       replyTo: email, // Allow direct reply to the user
     });
