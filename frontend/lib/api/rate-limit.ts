@@ -48,6 +48,14 @@ export const rateLimiters = {
     prefix: 'rl:assistant',
     // 20 messages per hour per user
   }),
+
+  // Support contact form - per IP (public route)
+  supportContact: new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(3, '1 h'),
+    prefix: 'rl:support',
+    // 3 messages per hour per IP
+  }),
 };
 
 export async function checkRateLimit(
