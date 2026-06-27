@@ -336,10 +336,7 @@ export default function HomePage() {
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 1,
-          background: C.border,
-          borderRadius: 12,
-          overflow: 'hidden',
+          gap: 16,
         }}>
           {[
             { label: 'CRM data decays per year', value: '30%' },
@@ -348,14 +345,16 @@ export default function HomePage() {
             { label: 'average portal grade', value: 'A' },
           ].map((stat, i) => (
             <div key={i} style={{
-              padding: 28,
+              padding: 32,
               background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 12,
               textAlign: 'center',
             }}>
-              <div style={{ fontSize: 36, fontWeight: 700, color: C.indigo, fontFamily: F.mono, marginBottom: 8 }}>
+              <div style={{ fontSize: 42, fontWeight: 700, color: i === 0 ? C.indigo : C.text, fontFamily: F.mono, marginBottom: 12 }}>
                 {stat.value}
               </div>
-              <div style={{ fontSize: 12, color: C.text2 }}>
+              <div style={{ fontSize: 13, color: C.text2 }}>
                 {stat.label}
               </div>
             </div>
@@ -370,26 +369,25 @@ export default function HomePage() {
         borderTop: `1px solid ${C.border}`,
       }}>
         <div style={{ textAlign: 'center', marginBottom: 52 }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: C.indigo,
+            letterSpacing: '0.15em',
+            marginBottom: 16,
+          }}>
+            FIELD-BY-FIELD
+          </div>
           <h2 style={{
-            fontSize: 38,
+            fontSize: 48,
             fontWeight: 700,
             fontFamily: F.serif,
             color: C.text,
             lineHeight: 1.15,
-            marginBottom: 16,
             letterSpacing: '-0.03em',
           }}>
-            Field-by-field
-          </h2>
-          <p style={{
-            fontSize: 18,
-            color: C.text2,
-            lineHeight: 1.6,
-            maxWidth: 600,
-            margin: '0 auto',
-          }}>
             Every change, previewed before it ships.
-          </p>
+          </h2>
         </div>
 
         <div style={{
@@ -472,31 +470,30 @@ export default function HomePage() {
         borderTop: `1px solid ${C.border}`,
       }}>
         <div style={{ textAlign: 'center', marginBottom: 52 }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: C.indigo,
+            letterSpacing: '0.15em',
+            marginBottom: 16,
+          }}>
+            WHAT REFYNE DOES
+          </div>
           <h2 style={{
-            fontSize: 38,
+            fontSize: 48,
             fontWeight: 700,
             fontFamily: F.serif,
             color: C.text,
             lineHeight: 1.15,
-            marginBottom: 16,
             letterSpacing: '-0.03em',
           }}>
-            Everything your HubSpot data needs.
-          </h2>
-          <p style={{
-            fontSize: 18,
-            color: C.text2,
-            lineHeight: 1.6,
-            maxWidth: 600,
-            margin: '0 auto',
-          }}>
             Everything your CRM data needs.
-          </p>
+          </h2>
         </div>
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gridTemplateColumns: 'repeat(2, 1fr)',
           gap: 20,
         }}>
           {[
@@ -575,8 +572,17 @@ export default function HomePage() {
         borderTop: `1px solid ${C.border}`,
       }}>
         <div style={{ textAlign: 'center', marginBottom: 52 }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: C.indigo,
+            letterSpacing: '0.15em',
+            marginBottom: 16,
+          }}>
+            HOW IT WORKS
+          </div>
           <h2 style={{
-            fontSize: 38,
+            fontSize: 48,
             fontWeight: 700,
             fontFamily: F.serif,
             color: C.text,
@@ -599,42 +605,48 @@ export default function HomePage() {
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gridTemplateColumns: 'repeat(3, 1fr)',
           gap: 20,
         }}>
           {[
             {
-              number: '01',
+              number: 1,
               title: 'Connect HubSpot',
               description: 'OAuth in 60 seconds. No private app tokens, no manual config.',
             },
             {
-              number: '02',
+              number: 2,
               title: 'Set your standards',
               description: 'Pick pre-built rules or define your own. Preview every change first.',
             },
             {
-              number: '03',
+              number: 3,
               title: 'Watch it run',
               description: 'Refyne scans nightly and writes clean values back to HubSpot.',
             },
           ].map((step, i) => (
             <div key={i} style={{
-              padding: 28,
+              padding: 32,
               background: C.surface,
               border: `1px solid ${C.border}`,
-              borderRadius: 0,
+              borderRadius: 12,
               display: 'flex',
               flexDirection: 'column',
-              gap: 16,
+              gap: 20,
             }}>
               <div style={{
-                fontSize: 48,
+                width: 48,
+                height: 48,
+                borderRadius: '50%',
+                background: 'rgba(99,102,241,0.15)',
+                border: `2px solid ${C.indigo}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 20,
                 fontWeight: 700,
-                fontFamily: F.mono,
-                color: C.indigoBrd,
-                lineHeight: 1,
-                letterSpacing: '-0.04em',
+                fontFamily: F.sans,
+                color: C.indigo,
               }}>
                 {step.number}
               </div>
