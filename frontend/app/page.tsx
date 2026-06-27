@@ -201,7 +201,7 @@ export default function HomePage() {
           width: '100%',
           background: C.surface,
           border: `1px solid ${C.border}`,
-          borderRadius: 0,
+          borderRadius: 12,
           padding: 32,
         }}>
           {/* Card header */}
@@ -314,7 +314,7 @@ export default function HomePage() {
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 1,
           background: C.border,
-          borderRadius: 0,
+          borderRadius: 12,
           overflow: 'hidden',
         }}>
           {[
