@@ -108,7 +108,7 @@ async function sendSubscriptionEmail() {
     userName: 'Jeff',
     tier: 'growth',
     billingPeriod: 'monthly',
-    amount: 19900, // $199
+    amount: 24900, // $249
     nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',

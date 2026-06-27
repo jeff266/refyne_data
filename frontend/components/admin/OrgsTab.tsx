@@ -354,9 +354,9 @@ export default function OrgsTab() {
                     }}
                   >
                     <option value="">Clear override (revert to Stripe)</option>
-                    <option value="growth">Growth ($199)</option>
-                    <option value="scale">Scale ($349)</option>
-                    <option value="enterprise">Enterprise ($599)</option>
+                    <option value="growth">Growth ($249)</option>
+                    <option value="scale">Scale ($399)</option>
+                    <option value="enterprise">Enterprise (contact sales)</option>
                   </select>
                 </div>
                 <div style={{ marginBottom: 20 }}>

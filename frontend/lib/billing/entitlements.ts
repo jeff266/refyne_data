@@ -8,6 +8,11 @@
  * - Use PostgreSQL VIEW for single-query performance
  * - No Redis (adds complexity, stale data risk)
  * - Atomic operations via RPC (no race conditions)
+ *
+ * NOTE: Record limits per plan are defined in lib/billing/plan-features.ts
+ * (starter: 25K, growth: 75K, scale: 200K, enterprise: unlimited).
+ * Record limit enforcement against HubSpot connection data is not yet implemented.
+ * See getRecordLimit() in plan-features.ts for defined limits and TODO.
  */
 
 import { supabaseAdmin } from '@/lib/db/admin-client';

@@ -26,6 +26,7 @@ export interface PlanFeatures {
   max_portals: number;
   max_operators: number; // total non-viewer seats
   max_admins: number;
+  max_records: number; // HubSpot record count limit
 }
 
 export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
@@ -41,6 +42,7 @@ export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
     max_portals: 1,
     max_operators: 3,
     max_admins: 1,
+    max_records: 25_000, // trial uses starter limits
   },
   trial_expired: {
     normalize: false,
@@ -54,6 +56,7 @@ export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
     max_portals: 1,
     max_operators: 0,
     max_admins: 1,
+    max_records: 0, // read-only after trial expiration
   },
   prospect_solo: {
     normalize: false,
@@ -67,6 +70,7 @@ export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
     max_portals: 1,
     max_operators: 1,
     max_admins: 1,
+    max_records: Infinity, // prospect plans not record-limited
   },
   prospect_team: {
     normalize: false,
@@ -80,6 +84,7 @@ export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
     max_portals: 1,
     max_operators: 5,
     max_admins: 2,
+    max_records: Infinity, // prospect plans not record-limited
   },
   starter: {
     normalize: true,
@@ -93,6 +98,7 @@ export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
     max_portals: 1,
     max_operators: 3,
     max_admins: 1,
+    max_records: 25_000, // up to 25,000 records
   },
   growth: {
     normalize: true,
@@ -106,6 +112,7 @@ export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
     max_portals: 3,
     max_operators: 10,
     max_admins: 2,
+    max_records: 75_000, // up to 75,000 records
   },
   scale: {
     normalize: true,
@@ -119,6 +126,7 @@ export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
     max_portals: 10,
     max_operators: 9999,
     max_admins: 5,
+    max_records: 200_000, // up to 200,000 records
   },
   enterprise: {
     normalize: true,
@@ -132,6 +140,7 @@ export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
     max_portals: 9999,
     max_operators: 9999,
     max_admins: 9999,
+    max_records: Infinity, // 200,000+ records, no enforced limit
   },
 };
 
@@ -221,3 +230,29 @@ export const PLAN_PRICING: Record<Exclude<Plan, 'trialing' | 'trial_expired'>, P
     description: 'Custom limits and pricing',
   },
 };
+
+// IMPORTANT: Stripe price objects must be updated in the Stripe dashboard
+// to match these amounts. Stripe does not allow editing existing price objects --
+// archive old prices and create new ones for $149, $249, $399. Update
+// STRIPE_PRICE_ID_STARTER, STRIPE_PRICE_ID_GROWTH, STRIPE_PRICE_ID_SCALE
+// env vars after creating new prices.
+
+/**
+ * Get record limit for a plan.
+ *
+ * @param plan - Plan to get limit for
+ * @returns Maximum HubSpot record count allowed for this plan
+ *
+ * @example
+ * getRecordLimit('starter') // 25_000
+ * getRecordLimit('enterprise') // Infinity
+ *
+ * TODO: Wire this to enforcement logic. Currently defined but not enforced.
+ * Enforcement will require:
+ * 1. Fetching HubSpot record count from connections table or live API
+ * 2. Comparing against this limit during onboarding/upgrade flows
+ * 3. Blocking new connections if record count exceeds plan limit
+ */
+export function getRecordLimit(plan: Plan): number {
+  return PLAN_FEATURES[plan].max_records;
+}

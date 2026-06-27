@@ -659,7 +659,7 @@ export default function HomePage() {
             marginBottom: 16,
             letterSpacing: '-0.03em',
           }}>
-            One price. Unlimited seats. Unlimited records.
+            One price. Unlimited seats.
           </h2>
           <p style={{
             fontSize: 18,
@@ -669,7 +669,7 @@ export default function HomePage() {
             maxWidth: 600,
             margin: '0 auto 32px',
           }}>
-            Most data tools charge per user or per record. Refyne charges per HubSpot portal. Starting at $149/mo.
+            Most data tools charge per user or per record. Refyne charges per HubSpot portal, based on your record volume. Starting at $149/mo.
           </p>
           <Link
             href="/pricing"
