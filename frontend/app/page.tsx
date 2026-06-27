@@ -137,7 +137,7 @@ export default function HomePage() {
           marginBottom: 40,
           maxWidth: 640,
         }}>
-          Refyne audits your HubSpot data in real time, assigns a grade, and keeps it clean — automatically.
+          Refyne audits your HubSpot data in real time, assigns a grade, and keeps it clean. Automatically.
         </p>
 
         {/* CTAs */}
