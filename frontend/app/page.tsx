@@ -67,6 +67,9 @@ export default function HomePage() {
             <Link href="/pricing" style={{ fontSize: 15, color: C.text2, fontWeight: 500 }}>
               Pricing
             </Link>
+            <Link href="/docs" style={{ fontSize: 15, color: C.text2, fontWeight: 500 }}>
+              Docs
+            </Link>
             <Link href="/sign-in" style={{ fontSize: 15, color: C.text2, fontWeight: 500 }}>
               Sign in
             </Link>
@@ -137,7 +140,7 @@ export default function HomePage() {
           marginBottom: 40,
           maxWidth: 640,
         }}>
-          Refyne audits your HubSpot data in real time, assigns a grade, and keeps it clean. Automatically.
+          Refyne scores every record, fixes what's broken, and keeps your portal at an A. Automatically, every night.
         </p>
 
         {/* CTAs */}
@@ -205,21 +208,18 @@ export default function HomePage() {
           padding: 32,
         }}>
           {/* Card header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <h3 style={{ fontSize: 18, fontWeight: 600, color: C.text, fontFamily: F.sans }}>
-              Portal Health
+              Portal health
             </h3>
-            <div style={{
-              padding: '6px 12px',
-              background: 'rgba(34,197,94,0.15)',
-              border: '1px solid rgba(34,197,94,0.4)',
-              borderRadius: 0,
-              fontSize: 12,
-              fontWeight: 600,
-              color: 'rgba(34,197,94,1)',
-            }}>
-              ACTIVE
+            <div style={{ fontSize: 12, color: C.text3 }}>
+              Synced 4m ago
             </div>
+          </div>
+
+          {/* Progress message */}
+          <div style={{ fontSize: 14, color: C.text2, marginBottom: 24 }}>
+            +18 points since you connected. 312 issues fixed this week.
           </div>
 
           {/* Grade display */}
@@ -244,37 +244,34 @@ export default function HomePage() {
             </div>
 
             {/* Stats */}
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              <div>
-                <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
-                  Clean records
-                </div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: C.text, fontFamily: F.mono }}>
-                  8,247
-                </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>
+                Data health: Excellent
               </div>
-              <div>
-                <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
-                  Fixed last 7d
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: C.text3, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Duplicates
+                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: C.text, fontFamily: F.mono }}>
+                    0
+                  </div>
                 </div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: C.text, fontFamily: F.mono }}>
-                  142
+                <div>
+                  <div style={{ fontSize: 11, color: C.text3, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Formatted
+                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: C.text, fontFamily: F.mono }}>
+                    100%
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
-                  Duplicates merged
-                </div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: C.text, fontFamily: F.mono }}>
-                  23
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
-                  Compliance
-                </div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: 'rgba(34,197,94,1)', fontFamily: F.mono }}>
-                  98%
+                <div>
+                  <div style={{ fontSize: 11, color: C.text3, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Enriched
+                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: C.text, fontFamily: F.mono }}>
+                    87%
+                  </div>
                 </div>
               </div>
             </div>
@@ -286,9 +283,9 @@ export default function HomePage() {
               RECENT ACTIVITY
             </div>
             {[
-              { time: '2m ago', action: 'Normalized 12 company names' },
-              { time: '1h ago', action: 'Merged 3 duplicate contacts' },
-              { time: '4h ago', action: 'Fixed 8 phone number formats' },
+              { icon: '✓', action: 'Merged Acme Corp · 2 records', time: '02:14' },
+              { icon: '✓', action: 'Normalized 128 phone numbers', time: '02:14' },
+              { icon: '↑', action: 'Enriched 41 industry fields', time: '02:13' },
             ].map((item, i) => (
               <div key={i} style={{
                 display: 'flex',
@@ -296,7 +293,10 @@ export default function HomePage() {
                 padding: '10px 0',
                 borderBottom: i < 2 ? `1px solid rgba(255,255,255,0.05)` : 'none',
               }}>
-                <span style={{ fontSize: 13, color: C.text }}>{item.action}</span>
+                <span style={{ fontSize: 13, color: C.text }}>
+                  <span style={{ color: C.text3, marginRight: 8 }}>{item.icon}</span>
+                  {item.action}
+                </span>
                 <span style={{ fontSize: 12, color: C.text3 }}>{item.time}</span>
               </div>
             ))}
@@ -318,10 +318,10 @@ export default function HomePage() {
           overflow: 'hidden',
         }}>
           {[
-            { label: 'Companies normalized', value: '12,482' },
-            { label: 'Fields corrected', value: '34,291' },
-            { label: 'Duplicates prevented', value: '856' },
-            { label: 'Data quality score', value: '94%' },
+            { label: 'CRM data decays per year', value: '30%' },
+            { label: 'records cleaned to date', value: '2.1M' },
+            { label: 'to connect your portal', value: '60s' },
+            { label: 'average portal grade', value: 'A' },
           ].map((stat, i) => (
             <div key={i} style={{
               padding: 28,
@@ -355,7 +355,7 @@ export default function HomePage() {
             marginBottom: 16,
             letterSpacing: '-0.03em',
           }}>
-            Field-by-field cleanup.
+            Field-by-field
           </h2>
           <p style={{
             fontSize: 18,
@@ -364,7 +364,7 @@ export default function HomePage() {
             maxWidth: 600,
             margin: '0 auto',
           }}>
-            See exactly what Refyne fixes before it touches your CRM.
+            Every change, previewed before it ships.
           </p>
         </div>
 
@@ -419,10 +419,10 @@ export default function HomePage() {
             </thead>
             <tbody>
               {[
-                { field: 'Company', before: 'acme corp.', after: 'Acme Corporation' },
-                { field: 'Phone', before: '4155551234', after: '+1 (415) 555-1234' },
-                { field: 'Industry', before: 'Software / SaaS', after: 'Software' },
-                { field: 'LinkedIn', before: 'linkedin.com/company/acme-corp/', after: 'linkedin.com/company/acme-corp' },
+                { field: 'company', before: 'ACME CORP.', after: 'Acme Corp' },
+                { field: 'phone', before: '(415) 555-2671', after: '+1 415-555-2671' },
+                { field: 'industry', before: '(empty)', after: 'B2B SaaS' },
+                { field: 'linkedin', before: '/company/acme/about/', after: '/company/acme' },
               ].map((row, i) => (
                 <tr key={i} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
                   <td style={{ padding: '14px 16px', fontSize: 13, color: C.text2, fontWeight: 600 }}>
@@ -466,7 +466,7 @@ export default function HomePage() {
             maxWidth: 600,
             margin: '0 auto',
           }}>
-            Normalize, dedup, and enrich in one place.
+            Everything your CRM data needs.
           </p>
         </div>
 
@@ -478,25 +478,25 @@ export default function HomePage() {
           {[
             {
               title: 'Normalize',
-              description: 'Standardize formats across every field. Phone numbers, company names, industry values - all consistent, all automatic.',
+              description: 'Phone numbers, LinkedIn URLs, and industry values standardized across every record. Define your rules once; Refyne applies them everywhere.',
               badge: 'ACTIVE',
               badgeColor: 'rgba(34,197,94,1)',
             },
             {
               title: 'Dedup',
-              description: 'Find and merge duplicates with confidence scoring. Grade A matches merge automatically, lower grades queue for review.',
-              badge: 'NIGHTLY',
-              badgeColor: C.indigo,
+              description: 'Refyne scans HubSpot nightly, groups duplicates by confidence grade, and applies your merge rules automatically.',
+              badge: 'ACTIVE',
+              badgeColor: 'rgba(34,197,94,1)',
             },
             {
               title: 'Enrich',
-              description: 'Fill empty fields using Apollo, ZoomInfo, or Refyne Search. Bring your own API keys. No markup, pay providers directly.',
+              description: 'Empty fields filled from your own provider accounts like Apollo, ZoomInfo, and Cognism, or Refyne Search. Bring your keys, no markup.',
               badge: 'ACTIVE',
               badgeColor: 'rgba(34,197,94,1)',
             },
             {
               title: 'Always On',
-              description: 'Nightly scans catch issues before they affect your pipeline. Weekly digest emails show what changed and what was fixed.',
+              description: 'Nightly scans surface new issues before they hit your pipeline. Weekly digests show exactly what changed and what was fixed.',
               badge: 'NIGHTLY',
               badgeColor: C.indigo,
             },
@@ -582,17 +582,17 @@ export default function HomePage() {
             {
               number: '01',
               title: 'Connect HubSpot',
-              description: 'OAuth connection in 60 seconds. Refyne reads your portal schema and starts analyzing immediately.',
+              description: 'OAuth in 60 seconds. No private app tokens, no manual config.',
             },
             {
               number: '02',
-              title: 'Review & approve',
-              description: 'See every proposed change before it touches your CRM. Preview exactly what will be normalized, merged, or enriched.',
+              title: 'Set your standards',
+              description: 'Pick pre-built rules or define your own. Preview every change first.',
             },
             {
               number: '03',
               title: 'Watch it run',
-              description: 'Refyne scans nightly, fixes issues automatically, and emails you a summary. Your data quality improves while you sleep.',
+              description: 'Refyne scans nightly and writes clean values back to HubSpot.',
             },
           ].map((step, i) => (
             <div key={i} style={{
@@ -669,7 +669,7 @@ export default function HomePage() {
             maxWidth: 600,
             margin: '0 auto 32px',
           }}>
-            Most data tools charge per user or per record. Refyne charges per HubSpot portal, based on your record volume. Starting at $149/mo.
+            Priced per HubSpot portal with simple record tiers, and unlimited seats on every plan. Starting at $149/mo.
           </p>
           <Link
             href="/pricing"
@@ -721,8 +721,8 @@ export default function HomePage() {
             {[
               { label: 'Pricing', href: '/pricing' },
               { label: 'Privacy', href: '/privacy' },
-              { label: 'Security', href: '/security' },
               { label: 'Terms', href: '/terms' },
+              { label: 'Docs', href: '/docs' },
               { label: 'Support', href: '/support' },
             ].map(link => (
               <Link key={link.href} href={link.href} style={{

@@ -35,6 +35,9 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
             <Link href="/pricing" style={{ fontSize: 15, fontWeight: 500, color: C.text2, textDecoration: 'none' }}>
               Pricing
             </Link>
+            <Link href="/docs" style={{ fontSize: 15, fontWeight: 500, color: C.text2, textDecoration: 'none' }}>
+              Docs
+            </Link>
             <Link href="/sign-in" style={{ fontSize: 15, fontWeight: 500, color: C.text2, textDecoration: 'none' }}>
               Sign in
             </Link>
@@ -101,11 +104,11 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
             <Link href="/privacy" style={{ fontSize: 13, color: C.text2, textDecoration: 'none' }}>
               Privacy
             </Link>
-            <Link href="/security" style={{ fontSize: 13, color: C.text2, textDecoration: 'none' }}>
-              Security
-            </Link>
             <Link href="/terms" style={{ fontSize: 13, color: C.text2, textDecoration: 'none' }}>
               Terms
+            </Link>
+            <Link href="/docs" style={{ fontSize: 13, color: C.text2, textDecoration: 'none' }}>
+              Docs
             </Link>
             <Link href="/support" style={{ fontSize: 13, color: C.text2, textDecoration: 'none' }}>
               Support
