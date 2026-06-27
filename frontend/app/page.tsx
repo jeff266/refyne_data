@@ -104,20 +104,23 @@ function StepCard({ number, title, description }: {
   );
 }
 
-const RefyneMark = ({ size = 28 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
-    <rect width="28" height="28" rx="7" fill="url(#rmark)" />
-    <path d="M9 8.5h5.5c2.2 0 3.5 1.2 3.5 3s-1.3 3-3.5 3H9V8.5z"
-      stroke="rgba(255,255,255,0.9)" strokeWidth="1.6" strokeLinejoin="round" />
-    <path d="M9 14.5l6 5" stroke="rgba(255,255,255,0.9)"
-      strokeWidth="1.6" strokeLinecap="round" />
-    <defs>
-      <linearGradient id="rmark" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#818CF8" />
-        <stop offset="1" stopColor="#4338CA" />
-      </linearGradient>
-    </defs>
-  </svg>
+const RefyneMark = ({ size = 34 }: { size?: number }) => (
+  <div style={{
+    width: size,
+    height: size,
+    borderRadius: 0,
+    background: `linear-gradient(135deg, ${C.indigo}, #5a59e0)`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: size * 0.56,
+    fontWeight: 700,
+    fontFamily: F.serif,
+    color: '#fff',
+    boxShadow: '0 4px 14px rgba(98,96,230,.45)',
+  }}>
+    R
+  </div>
 );
 
 // ── Page ────────────────────────────────────────────────────────────
@@ -149,43 +152,40 @@ export default function HomePage() {
       <header style={{
         position: 'sticky', top: 0, zIndex: 50,
         borderBottom: `1px solid ${C.border}`,
-        background: 'rgba(9,9,11,0.85)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
+        background: C.sidebar,
       }}>
         <div style={{
-          maxWidth: 1100, margin: '0 auto',
-          padding: '0 24px', height: 60,
+          maxWidth: 1280, margin: '0 auto',
+          padding: '20px 48px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <RefyneMark size={28} />
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none' }}>
+            <RefyneMark size={34} />
             <span style={{
-              fontSize: 16, fontWeight: 700, color: C.text,
-              letterSpacing: '-0.02em',
+              fontSize: 20, fontWeight: 700, color: C.text,
+              letterSpacing: '-.01em',
+              fontFamily: F.serif,
             }}>
               Refyne
             </span>
-          </div>
+          </Link>
 
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-            <Link href="/pricing" style={{ fontSize: 13, color: C.text2, fontWeight: 500 }}>
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 34 }}>
+            <Link href="/pricing" style={{ fontSize: 15, color: C.text2, fontWeight: 500 }}>
               Pricing
             </Link>
-            <Link href="/docs" style={{ fontSize: 13, color: C.text2, fontWeight: 500 }}>
-              Docs
-            </Link>
-            <Link href="/sign-in" style={{ fontSize: 13, color: C.text2, fontWeight: 500 }}>
+            <Link href="/sign-in" style={{ fontSize: 15, color: C.text2, fontWeight: 500 }}>
               Sign in
             </Link>
             <Link href="/sign-up" style={{
-              display: 'inline-flex', alignItems: 'center',
-              padding: '7px 16px',
-              background: `linear-gradient(to bottom, ${C.indigo}, ${C.indigoDk})`,
-              color: '#fff', borderRadius: 8,
-              fontSize: 13, fontWeight: 600,
-              letterSpacing: '-0.01em',
-              boxShadow: '0 0 0 1px rgba(99,102,241,0.3), 0 1px 3px rgba(0,0,0,0.4)',
+              fontSize: 15,
+              fontWeight: 600,
+              color: '#fff',
+              background: `linear-gradient(135deg, #7c7bff, #6260e6)`,
+              padding: '11px 20px',
+              borderRadius: 0,
+              textDecoration: 'none',
+              boxShadow: '0 6px 18px rgba(98,96,230,.4)',
             }}>
               Get started
             </Link>
@@ -792,29 +792,38 @@ export default function HomePage() {
       {/* ── Footer ───────────────────────────────────────────────── */}
       <footer style={{
         borderTop: `1px solid ${C.border}`,
-        padding: '32px 24px',
+        background: C.sidebar,
+        padding: '26px 48px',
       }}>
         <div style={{
-          maxWidth: 1100, margin: '0 auto',
+          maxWidth: 1280, margin: '0 auto',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          flexWrap: 'wrap', gap: 16,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <RefyneMark size={20} />
-            <span style={{ fontSize: 13, color: C.text3 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none' }}>
+              <RefyneMark size={28} />
+              <span style={{
+                fontSize: 16, fontWeight: 600, color: C.text,
+                letterSpacing: '-.01em',
+                fontFamily: F.serif,
+              }}>
+                Refyne
+              </span>
+            </Link>
+            <span style={{ fontSize: 13, color: C.text3, marginLeft: 8 }}>
               © 2026 RevOps Impact LLC
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 26 }}>
             {[
               { label: 'Pricing', href: '/pricing' },
               { label: 'Privacy', href: '/privacy' },
+              { label: 'Security', href: '/security' },
               { label: 'Terms', href: '/terms' },
-              { label: 'Docs', href: '/docs' },
-              { label: 'Support', href: 'mailto:jeff@revopsimpact.us' },
+              { label: 'Support', href: '/support' },
             ].map(link => (
               <Link key={link.href} href={link.href} style={{
-                fontSize: 13, color: C.text3,
+                fontSize: 13, color: C.text2, textDecoration: 'none',
               }}>
                 {link.label}
               </Link>
