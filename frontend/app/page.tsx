@@ -1,108 +1,10 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { C, F } from '@/lib/design-tokens';
+import { Check } from 'lucide-react';
 
 // ── Sub-components ──────────────────────────────────────────────────
-
-function HubSpotBadge() {
-  return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 8,
-      padding: '6px 14px',
-      background: C.surface,
-      border: `1px solid ${C.border2}`,
-      borderRadius: 100,
-      fontSize: 12, color: C.text2,
-      fontFamily: F.sans,
-    }}>
-      <span style={{
-        display: 'inline-block', width: 8, height: 8,
-        borderRadius: '50%', background: C.green,
-      }} />
-      Official HubSpot Technology Partner
-    </div>
-  );
-}
-
-function FeatureCard({ icon, title, description }: {
-  icon: string, title: string, description: string
-}) {
-  return (
-    <div style={{
-      padding: '28px',
-      background: C.surface,
-      border: `1px solid ${C.border}`,
-      borderRadius: 16,
-      display: 'flex', flexDirection: 'column', gap: 14,
-    }}>
-      <div style={{
-        width: 44, height: 44, borderRadius: 10,
-        background: C.indigoDim,
-        border: `1px solid ${C.indigoBrd}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 20,
-      }}>
-        {icon}
-      </div>
-      <div>
-        <div style={{
-          fontSize: 16, fontWeight: 600, color: C.text,
-          marginBottom: 8, letterSpacing: '-0.02em',
-          fontFamily: F.sans,
-        }}>
-          {title}
-        </div>
-        <div style={{
-          fontSize: 14, color: C.text2, lineHeight: 1.6,
-          fontFamily: F.sans,
-        }}>
-          {description}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StepCard({ number, title, description }: {
-  number: string, title: string, description: string
-}) {
-  return (
-    <div style={{
-      padding: '28px',
-      background: C.surface,
-      border: `1px solid ${C.border}`,
-      borderRadius: 16,
-      display: 'flex', flexDirection: 'column', gap: 16,
-    }}>
-      <div style={{
-        fontSize: 48, fontWeight: 700,
-        fontFamily: F.mono,
-        color: C.indigoBrd,
-        lineHeight: 1,
-        letterSpacing: '-0.04em',
-      }}>
-        {number}
-      </div>
-      <div>
-        <div style={{
-          fontSize: 16, fontWeight: 600, color: C.text,
-          marginBottom: 8, letterSpacing: '-0.02em',
-          fontFamily: F.sans,
-        }}>
-          {title}
-        </div>
-        <div style={{
-          fontSize: 14, color: C.text2, lineHeight: 1.6,
-          fontFamily: F.sans,
-        }}>
-          {description}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const RefyneMark = ({ size = 34 }: { size?: number }) => (
   <div style={{
@@ -126,15 +28,6 @@ const RefyneMark = ({ size = 34 }: { size?: number }) => (
 // ── Page ────────────────────────────────────────────────────────────
 
 export default function HomePage() {
-  const [email, setEmail] = useState('');
-
-  const handleStartTrial = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (email) {
-      e.preventDefault();
-      window.location.href = `https://app.refynedata.com/sign-up?email=${encodeURIComponent(email)}`;
-    }
-  };
-
   return (
     <div style={{
       minHeight: '100vh',
@@ -195,316 +88,299 @@ export default function HomePage() {
 
       {/* ── Hero ─────────────────────────────────────────────────── */}
       <section style={{
-        maxWidth: 1100, margin: '0 auto',
-        padding: '96px 24px 80px',
+        maxWidth: 1280, margin: '0 auto',
+        padding: '96px 48px 80px',
         textAlign: 'center',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28,
       }}>
-        <HubSpotBadge />
-
-        <h1 style={{
-          fontSize: 'clamp(40px, 6vw, 68px)',
-          fontWeight: 800,
-          color: C.text,
-          lineHeight: 1.05,
-          letterSpacing: '-0.04em',
-          maxWidth: 700,
+        {/* Badge */}
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 14px',
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 0,
         }}>
-          Your HubSpot data.{' '}
+          <Check size={15} color="#9dffe5" strokeWidth={2.5} />
           <span style={{
-            background: `linear-gradient(135deg, ${C.indigoLt} 0%, ${C.indigo} 100%)`,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
+            fontSize: 13,
+            fontWeight: 600,
+            color: '#ccc',
+            letterSpacing: '0.02em',
           }}>
-            Finally clean.
+            OFFICIAL HUBSPOT TECHNOLOGY PARTNER
           </span>
-        </h1>
-
-        {/* Two-tone subtitle */}
-        <h2 style={{
-          fontSize: 'clamp(18px, 2.5vw, 24px)',
-          fontWeight: 700,
-          color: 'rgba(249,248,245,0.4)',
-          lineHeight: 1.3,
-          letterSpacing: '-0.02em',
-          maxWidth: 600,
-          marginTop: -16,
-        }}>
-          No manual cleanup. No spreadsheets. No data team required.
-        </h2>
-
-        <p style={{
-          fontSize: 18, color: C.text2, lineHeight: 1.65,
-          maxWidth: 600, fontWeight: 400,
-        }}>
-          Refyne normalizes formats, removes duplicates, and fixes data quality issues automatically, so your team always works from a single source of truth.
-        </p>
-
-        {/* Email capture */}
-        <div style={{ width: '100%', maxWidth: 380, marginTop: 8 }}>
-          <input
-            type="email"
-            placeholder="Work email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{
-              width: '100%',
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: 6,
-              padding: '12px 16px',
-              color: C.text,
-              fontFamily: F.sans,
-              fontSize: 16,
-              marginBottom: 12,
-              outline: 'none',
-            }}
-          />
         </div>
 
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {/* Headline */}
+        <h1 style={{
+          fontSize: 72,
+          fontWeight: 700,
+          fontFamily: F.serif,
+          color: C.text,
+          lineHeight: 1.1,
+          marginBottom: 24,
+          maxWidth: 900,
+          letterSpacing: '-0.02em',
+        }}>
+          Your HubSpot data, <span style={{ color: C.indigo }}>graded</span> and <span style={{ color: C.indigo }}>clean</span>.
+        </h1>
+
+        {/* Subheadline */}
+        <p style={{
+          fontSize: 20,
+          fontFamily: F.sans,
+          color: C.text2,
+          lineHeight: 1.6,
+          marginBottom: 40,
+          maxWidth: 640,
+        }}>
+          Refyne audits your HubSpot data in real time, assigns a grade, and keeps it clean — automatically.
+        </p>
+
+        {/* CTAs */}
+        <div style={{
+          display: 'flex',
+          gap: 12,
+          marginBottom: 12,
+        }}>
           <Link
-            href={email ? `https://app.refynedata.com/sign-up?email=${encodeURIComponent(email)}` : '/sign-up'}
-            onClick={handleStartTrial}
+            href="/sign-up"
             style={{
-              display: 'inline-flex', alignItems: 'center',
-              padding: '13px 32px',
-              background: `linear-gradient(to bottom, ${C.indigo}, ${C.indigoDk})`,
-              color: '#fff', borderRadius: 10,
-              fontSize: 15, fontWeight: 600,
-              letterSpacing: '-0.01em',
-              boxShadow: '0 0 0 1px rgba(99,102,241,0.3), 0 2px 10px rgba(0,0,0,0.4)',
+              padding: '14px 28px',
+              background: `linear-gradient(135deg, #7c7bff, #6260e6)`,
+              border: 'none',
+              borderRadius: 0,
+              fontSize: 15,
+              fontWeight: 600,
+              fontFamily: F.sans,
+              color: '#fff',
+              textDecoration: 'none',
+              boxShadow: '0 6px 18px rgba(98,96,230,.4)',
             }}
           >
             Start free trial
           </Link>
-          <Link href="/pricing" style={{
-            display: 'inline-flex', alignItems: 'center',
-            padding: '13px 32px',
-            border: `1px solid ${C.border2}`,
-            color: C.text2, borderRadius: 10,
-            fontSize: 15, fontWeight: 500,
-            letterSpacing: '-0.01em',
-          }}>
-            View pricing →
+          <Link
+            href="/pricing"
+            style={{
+              padding: '14px 28px',
+              background: 'transparent',
+              border: `1px solid ${C.border}`,
+              borderRadius: 0,
+              fontSize: 15,
+              fontWeight: 600,
+              fontFamily: F.sans,
+              color: C.text,
+              textDecoration: 'none',
+            }}
+          >
+            View pricing
           </Link>
         </div>
 
-        {/* Trust Signal */}
         <p style={{
-          fontSize: 13, color: C.text2, fontWeight: 400,
-          fontFamily: F.sans, marginTop: 8,
+          fontSize: 13,
+          color: C.text3,
+          fontFamily: F.sans,
         }}>
-          No credit card required. 14-day free trial. Cancel anytime.
+          14-day free trial · No credit card required
         </p>
+      </section>
 
-        {/* Product UI Preview Placeholder */}
+      {/* ── Portal Health Card ───────────────────────────────────── */}
+      <section style={{
+        maxWidth: 1280, margin: '0 auto',
+        padding: '0 48px 80px',
+        display: 'flex', justifyContent: 'center',
+      }}>
         <div style={{
-          maxWidth: 700,
-          marginTop: 48,
+          maxWidth: 900,
           width: '100%',
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderRadius: 0,
+          padding: 32,
         }}>
-          <div style={{
-            background: '#1C3654',
-            border: '1px solid rgba(255,255,255,0.1)',
-            overflow: 'hidden',
-          }}>
-            {/* Table header */}
+          {/* Card header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600, color: C.text, fontFamily: F.sans }}>
+              Portal Health
+            </h3>
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: '80px 1fr 120px',
-              padding: '12px 16px',
-              borderBottom: '1px solid rgba(255,255,255,0.1)',
-              background: 'rgba(0,0,0,0.2)',
-              fontSize: 11,
+              padding: '6px 12px',
+              background: 'rgba(34,197,94,0.15)',
+              border: '1px solid rgba(34,197,94,0.4)',
+              borderRadius: 0,
+              fontSize: 12,
               fontWeight: 600,
-              color: C.text3,
-              fontFamily: F.sans,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
+              color: 'rgba(34,197,94,1)',
             }}>
-              <div>Grade</div>
-              <div>Cluster</div>
-              <div>Size</div>
-            </div>
-
-            {/* Table rows */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '80px 1fr 120px',
-              padding: '14px 16px',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
-              alignItems: 'center',
-            }}>
-              <div style={{
-                display: 'inline-block',
-                width: 24, height: 24,
-                background: 'rgba(34,197,94,0.15)',
-                border: '1px solid rgba(34,197,94,0.4)',
-                color: 'rgba(34,197,94,1)',
-                fontWeight: 700,
-                fontSize: 12,
-                fontFamily: F.mono,
-                textAlign: 'center',
-                lineHeight: '24px',
-              }}>
-                A
-              </div>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>
-                  Acme Corp
-                </div>
-                <div style={{ fontSize: 11, color: C.text3, fontFamily: F.mono }}>
-                  Domain exact
-                </div>
-              </div>
-              <div style={{ fontSize: 13, color: C.text2 }}>2 records</div>
-            </div>
-
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '80px 1fr 120px',
-              padding: '14px 16px',
-              alignItems: 'center',
-            }}>
-              <div style={{
-                display: 'inline-block',
-                width: 24, height: 24,
-                background: 'rgba(34,197,94,0.15)',
-                border: '1px solid rgba(34,197,94,0.4)',
-                color: 'rgba(34,197,94,1)',
-                fontWeight: 700,
-                fontSize: 12,
-                fontFamily: F.mono,
-                textAlign: 'center',
-                lineHeight: '24px',
-              }}>
-                A
-              </div>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 4 }}>
-                  Kickstarter
-                </div>
-                <div style={{ fontSize: 11, color: C.text3, fontFamily: F.mono }}>
-                  Domain exact · Name 25%
-                </div>
-              </div>
-              <div style={{ fontSize: 13, color: C.text2 }}>2 records</div>
+              ACTIVE
             </div>
           </div>
 
-          <p style={{
-            marginTop: 12,
-            fontSize: 11,
-            color: C.text3,
-            textAlign: 'center',
-            fontFamily: F.sans,
-          }}>
-            Live dedup queue - actual product
-          </p>
+          {/* Grade display */}
+          <div style={{ display: 'flex', gap: 32, marginBottom: 32, alignItems: 'center' }}>
+            <div style={{
+              width: 120,
+              height: 120,
+              borderRadius: 0,
+              background: 'rgba(34,197,94,0.15)',
+              border: '2px solid rgba(34,197,94,0.4)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <div style={{ fontSize: 48, fontWeight: 700, color: 'rgba(34,197,94,1)', fontFamily: F.mono }}>
+                A
+              </div>
+              <div style={{ fontSize: 14, color: C.text3, fontFamily: F.mono }}>
+                94/100
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div>
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
+                  Clean records
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: C.text, fontFamily: F.mono }}>
+                  8,247
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
+                  Fixed last 7d
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: C.text, fontFamily: F.mono }}>
+                  142
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
+                  Duplicates merged
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: C.text, fontFamily: F.mono }}>
+                  23
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: C.text3, marginBottom: 4 }}>
+                  Compliance
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: 'rgba(34,197,94,1)', fontFamily: F.mono }}>
+                  98%
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Activity feed */}
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+            <div style={{ fontSize: 12, color: C.text3, marginBottom: 12, fontWeight: 600 }}>
+              RECENT ACTIVITY
+            </div>
+            {[
+              { time: '2m ago', action: 'Normalized 12 company names' },
+              { time: '1h ago', action: 'Merged 3 duplicate contacts' },
+              { time: '4h ago', action: 'Fixed 8 phone number formats' },
+            ].map((item, i) => (
+              <div key={i} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: '10px 0',
+                borderBottom: i < 2 ? `1px solid rgba(255,255,255,0.05)` : 'none',
+              }}>
+                <span style={{ fontSize: 13, color: C.text }}>{item.action}</span>
+                <span style={{ fontSize: 12, color: C.text3 }}>{item.time}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* ── Features ─────────────────────────────────────────────── */}
+      {/* ── Stats Bar ────────────────────────────────────────────── */}
       <section style={{
-        maxWidth: 1100, margin: '0 auto',
-        padding: '72px 24px',
-        borderTop: `1px solid ${C.border}`,
+        maxWidth: 1280, margin: '0 auto',
+        padding: '0 48px 80px',
       }}>
-        <div style={{ textAlign: 'center', marginBottom: 52 }}>
-          <div style={{
-            fontSize: 11, color: C.indigoLt, fontWeight: 600,
-            letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14,
-          }}>
-            What Refyne does
-          </div>
-          <h2 style={{
-            fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700, color: C.text,
-            letterSpacing: '-0.03em', lineHeight: 1.15,
-          }}>
-            Everything your CRM data needs.
-          </h2>
-          <h2 style={{
-            fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700,
-            color: 'rgba(249,248,245,0.4)',
-            letterSpacing: '-0.03em', lineHeight: 1.15,
-            marginTop: 4,
-          }}>
-            One tool. No integrations required.
-          </h2>
-        </div>
-
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
-          gap: 16,
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 1,
+          background: C.border,
+          borderRadius: 0,
+          overflow: 'hidden',
         }}>
-          <FeatureCard
-            icon="↕"
-            title="Normalize"
-            description='"Acme Corp", "acme corp", and "ACME CORP." are three different companies in your CRM. Refyne makes them one. Phone numbers, LinkedIn URLs, and industry values standardized across every record. Define your rules once. Refyne applies them everywhere, automatically.'
-          />
-          <FeatureCard
-            icon="⚡"
-            title="Dedup"
-            description="Duplicate records corrupt your pipeline, inflate your contact counts, and send the same email twice. Refyne scans your HubSpot nightly, groups duplicates by confidence grade, and applies your merge rules automatically."
-          />
-          <FeatureCard
-            icon="📊"
-            title="Enrich"
-            description="Empty fields mean missing context. Refyne fills them using your existing provider accounts - Apollo, ZoomInfo, Cognism - or Refyne Search, our built-in enrichment engine. Bring your own keys. Pay your providers directly. No markup."
-          />
-          <FeatureCard
-            icon="🔔"
-            title="Always On"
-            description="Your CRM data degrades 30% every year. Refyne watches it while you sleep. Nightly scans surface new issues before they affect your pipeline. Weekly digest emails show exactly what changed and what was fixed. No login required."
-          />
+          {[
+            { label: 'Companies normalized', value: '12,482' },
+            { label: 'Fields corrected', value: '34,291' },
+            { label: 'Duplicates prevented', value: '856' },
+            { label: 'Data quality score', value: '94%' },
+          ].map((stat, i) => (
+            <div key={i} style={{
+              padding: 28,
+              background: C.surface,
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 36, fontWeight: 700, color: C.indigo, fontFamily: F.mono, marginBottom: 8 }}>
+                {stat.value}
+              </div>
+              <div style={{ fontSize: 12, color: C.text2 }}>
+                {stat.label}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* ── Comparison Table ─────────────────────────────────────── */}
+      {/* ── Field Preview ────────────────────────────────────────── */}
       <section style={{
-        maxWidth: 1100, margin: '0 auto',
-        padding: '72px 24px',
+        maxWidth: 1280, margin: '0 auto',
+        padding: '80px 48px',
         borderTop: `1px solid ${C.border}`,
       }}>
         <div style={{ textAlign: 'center', marginBottom: 52 }}>
           <h2 style={{
-            fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700, color: C.text,
-            letterSpacing: '-0.03em', lineHeight: 1.15,
+            fontSize: 38,
+            fontWeight: 700,
+            fontFamily: F.serif,
+            color: C.text,
+            lineHeight: 1.15,
+            marginBottom: 16,
+            letterSpacing: '-0.03em',
           }}>
-            For RevOps teams, not IT projects.
-          </h2>
-          <h2 style={{
-            fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700,
-            color: 'rgba(249,248,245,0.4)',
-            letterSpacing: '-0.03em', lineHeight: 1.15,
-            marginTop: 4,
-          }}>
-            That's the point.
+            Field-by-field cleanup.
           </h2>
           <p style={{
-            fontSize: 16, color: C.text2, lineHeight: 1.6,
-            maxWidth: 600, margin: '16px auto 0',
+            fontSize: 18,
+            color: C.text2,
+            lineHeight: 1.6,
+            maxWidth: 600,
+            margin: '0 auto',
           }}>
-            Blank workflows. Implementation fees. Months to value. Those are bugs, not features.
+            See exactly what Refyne fixes before it touches your CRM.
           </p>
         </div>
 
         <div style={{
-          overflow: 'auto',
+          maxWidth: 900,
+          margin: '0 auto',
+          background: C.surface,
           border: `1px solid ${C.border}`,
+          borderRadius: 0,
+          overflow: 'hidden',
         }}>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontFamily: F.sans,
-          }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'rgba(0,0,0,0.2)' }}>
                 <th style={{
-                  padding: '16px',
+                  padding: 16,
                   textAlign: 'left',
                   fontSize: 11,
                   fontWeight: 600,
@@ -512,25 +388,12 @@ export default function HomePage() {
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                   borderBottom: `1px solid ${C.border}`,
-                }}></th>
-                <th style={{
-                  padding: '16px',
-                  textAlign: 'center',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: C.text,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  background: 'rgba(46,107,168,0.15)',
-                  border: '1px solid rgba(46,107,168,0.4)',
-                  borderBottom: '1px solid rgba(46,107,168,0.4)',
                 }}>
-                  <div style={{ marginBottom: 4, fontSize: 13 }}>Refyne</div>
-                  <div style={{ fontSize: 10, color: C.indigoLt, fontWeight: 500 }}>Complete system</div>
+                  Field
                 </th>
                 <th style={{
-                  padding: '16px',
-                  textAlign: 'center',
+                  padding: 16,
+                  textAlign: 'left',
                   fontSize: 11,
                   fontWeight: 600,
                   color: C.text3,
@@ -538,12 +401,11 @@ export default function HomePage() {
                   letterSpacing: '0.05em',
                   borderBottom: `1px solid ${C.border}`,
                 }}>
-                  <div style={{ marginBottom: 4 }}>Point Solutions</div>
-                  <div style={{ fontSize: 10, fontWeight: 500 }}>More setup</div>
+                  Before
                 </th>
                 <th style={{
-                  padding: '16px',
-                  textAlign: 'center',
+                  padding: 16,
+                  textAlign: 'left',
                   fontSize: 11,
                   fontWeight: 600,
                   color: C.text3,
@@ -551,240 +413,281 @@ export default function HomePage() {
                   letterSpacing: '0.05em',
                   borderBottom: `1px solid ${C.border}`,
                 }}>
-                  <div style={{ marginBottom: 4 }}>Enterprise Platforms</div>
-                  <div style={{ fontSize: 10, fontWeight: 500 }}>More cost</div>
-                </th>
-                <th style={{
-                  padding: '16px',
-                  textAlign: 'center',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: C.text3,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  borderBottom: `1px solid ${C.border}`,
-                }}>
-                  <div style={{ marginBottom: 4 }}>Spreadsheets & Scripts</div>
-                  <div style={{ fontSize: 10, fontWeight: 500 }}>More time</div>
+                  After
                 </th>
               </tr>
             </thead>
             <tbody>
               {[
-                { label: 'Time to value', refyne: 'Same day', insycle: 'Weeks', openprise: 'Months', manual: 'Never done' },
-                { label: 'Setup', refyne: '60 seconds', insycle: 'Hours', openprise: 'Months', manual: 'Ongoing' },
-                { label: 'HubSpot-native', refyne: '✓', insycle: 'Partial', openprise: 'No', manual: 'No' },
-                { label: 'Per-seat fees', refyne: 'Never', insycle: 'Yes', openprise: 'Yes', manual: 'N/A' },
-                { label: 'Record limits', refyne: 'Never', insycle: 'Yes', openprise: 'Yes', manual: 'N/A' },
+                { field: 'Company', before: 'acme corp.', after: 'Acme Corporation' },
+                { field: 'Phone', before: '4155551234', after: '+1 (415) 555-1234' },
+                { field: 'Industry', before: 'Software / SaaS', after: 'Software' },
+                { field: 'LinkedIn', before: 'linkedin.com/company/acme-corp/', after: 'linkedin.com/company/acme-corp' },
               ].map((row, i) => (
-                <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <td style={{
-                    padding: '14px 16px',
-                    fontSize: 13,
-                    color: C.text2,
-                    fontWeight: 500,
-                  }}>
-                    {row.label}
+                <tr key={i} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: C.text2, fontWeight: 600 }}>
+                    {row.field}
                   </td>
-                  <td style={{
-                    padding: '14px 16px',
-                    textAlign: 'center',
-                    fontSize: 13,
-                    color: row.refyne === '✓' ? '#2E6BA8' : C.text,
-                    background: 'rgba(46,107,168,0.08)',
-                  }}>
-                    {row.refyne}
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: C.text3, fontFamily: F.mono }}>
+                    {row.before}
                   </td>
-                  <td style={{
-                    padding: '14px 16px',
-                    textAlign: 'center',
-                    fontSize: 13,
-                    color: C.text3,
-                  }}>
-                    {row.insycle}
-                  </td>
-                  <td style={{
-                    padding: '14px 16px',
-                    textAlign: 'center',
-                    fontSize: 13,
-                    color: C.text3,
-                  }}>
-                    {row.openprise}
-                  </td>
-                  <td style={{
-                    padding: '14px 16px',
-                    textAlign: 'center',
-                    fontSize: 13,
-                    color: C.text3,
-                  }}>
-                    {row.manual}
+                  <td style={{ padding: '14px 16px', fontSize: 13, color: C.indigo, fontFamily: F.mono }}>
+                    {row.after}
                   </td>
                 </tr>
               ))}
-              <tr>
-                <td style={{
-                  padding: '14px 16px',
-                  fontSize: 13,
-                  color: C.text2,
-                  fontWeight: 500,
-                }}>
-                  Bottom line
-                </td>
-                <td style={{
-                  padding: '14px 16px',
-                  textAlign: 'center',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: C.text,
-                  background: 'rgba(46,107,168,0.15)',
-                  border: '1px solid rgba(46,107,168,0.4)',
-                  borderTop: '1px solid rgba(46,107,168,0.4)',
-                }}>
-                  Clean data.<br />Automatically.
-                </td>
-                <td style={{
-                  padding: '14px 16px',
-                  textAlign: 'center',
-                  fontSize: 13,
-                  color: C.text3,
-                }}>
-                  More config.
-                </td>
-                <td style={{
-                  padding: '14px 16px',
-                  textAlign: 'center',
-                  fontSize: 13,
-                  color: C.text3,
-                }}>
-                  Enterprise<br />pricing.
-                </td>
-                <td style={{
-                  padding: '14px 16px',
-                  textAlign: 'center',
-                  fontSize: 13,
-                  color: C.text3,
-                }}>
-                  Manual<br />forever.
-                </td>
-              </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      {/* ── How it works ─────────────────────────────────────────── */}
+      {/* ── Features ─────────────────────────────────────────────── */}
       <section style={{
-        maxWidth: 1100, margin: '0 auto',
-        padding: '72px 24px',
+        maxWidth: 1280, margin: '0 auto',
+        padding: '80px 48px',
         borderTop: `1px solid ${C.border}`,
       }}>
         <div style={{ textAlign: 'center', marginBottom: 52 }}>
-          <div style={{
-            fontSize: 11, color: C.indigoLt, fontWeight: 600,
-            letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14,
-          }}>
-            How it works
-          </div>
           <h2 style={{
-            fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700, color: C.text,
-            letterSpacing: '-0.03em', lineHeight: 1.15,
+            fontSize: 38,
+            fontWeight: 700,
+            fontFamily: F.serif,
+            color: C.text,
+            lineHeight: 1.15,
+            marginBottom: 16,
+            letterSpacing: '-0.03em',
           }}>
-            Up and running in minutes.
+            Everything your HubSpot data needs.
           </h2>
-          <h2 style={{
-            fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 700,
-            color: 'rgba(249,248,245,0.4)',
-            letterSpacing: '-0.03em', lineHeight: 1.15,
-            marginTop: 4,
+          <p style={{
+            fontSize: 18,
+            color: C.text2,
+            lineHeight: 1.6,
+            maxWidth: 600,
+            margin: '0 auto',
           }}>
-            Improving forever.
-          </h2>
+            One tool. No integrations required.
+          </p>
         </div>
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))',
-          gap: 16,
-          marginBottom: 64,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: 20,
         }}>
-          <StepCard
-            number="01"
-            title="Connect HubSpot"
-            description="OAuth connection in 60 seconds. No private app tokens, no manual configuration. Connect and Refyne reads your portal immediately."
-          />
-          <StepCard
-            number="02"
-            title="Set your data standards"
-            description="Choose from pre-built rules for phone formats, company names, and industry values - or define your own. Preview every change before anything touches your CRM."
-          />
-          <StepCard
-            number="03"
-            title="Watch it run"
-            description="Refyne scans nightly, surfaces issues, and writes clean values back to HubSpot. Your compliance score improves automatically."
-          />
-        </div>
-
-        {/* Staccato copy */}
-        <div style={{
-          textAlign: 'center',
-          maxWidth: 600,
-          margin: '0 auto',
-          fontFamily: 'Lora, serif',
-          fontStyle: 'italic',
-          fontSize: 24,
-          lineHeight: 1.5,
-          color: 'rgba(249,248,245,0.85)',
-        }}>
-          Your rules. Your formats.<br />
-          Applied to every record.<br />
-          Every night.<br />
-          Without you lifting a finger.
+          {[
+            {
+              title: 'Normalize',
+              description: 'Standardize formats across every field. Phone numbers, company names, industry values - all consistent, all automatic.',
+              badge: 'ACTIVE',
+              badgeColor: 'rgba(34,197,94,1)',
+            },
+            {
+              title: 'Dedup',
+              description: 'Find and merge duplicates with confidence scoring. Grade A matches merge automatically, lower grades queue for review.',
+              badge: 'NIGHTLY',
+              badgeColor: C.indigo,
+            },
+            {
+              title: 'Enrich',
+              description: 'Fill empty fields using Apollo, ZoomInfo, or Refyne Search. Bring your own API keys. No markup, pay providers directly.',
+              badge: 'ACTIVE',
+              badgeColor: 'rgba(34,197,94,1)',
+            },
+            {
+              title: 'Always On',
+              description: 'Nightly scans catch issues before they affect your pipeline. Weekly digest emails show what changed and what was fixed.',
+              badge: 'NIGHTLY',
+              badgeColor: C.indigo,
+            },
+          ].map((feature, i) => (
+            <div key={i} style={{
+              padding: 28,
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                <h3 style={{
+                  fontSize: 20,
+                  fontWeight: 600,
+                  color: C.text,
+                  fontFamily: F.serif,
+                }}>
+                  {feature.title}
+                </h3>
+                <div style={{
+                  padding: '4px 8px',
+                  background: `${feature.badgeColor}22`,
+                  border: `1px solid ${feature.badgeColor}66`,
+                  borderRadius: 0,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: feature.badgeColor,
+                  letterSpacing: '0.05em',
+                }}>
+                  {feature.badge}
+                </div>
+              </div>
+              <p style={{
+                fontSize: 14,
+                color: C.text2,
+                lineHeight: 1.6,
+              }}>
+                {feature.description}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* ── Pricing CTA ──────────────────────────────────────────── */}
+      {/* ── How it works ─────────────────────────────────────────── */}
       <section style={{
-        maxWidth: 1100, margin: '0 auto',
-        padding: '72px 24px 96px',
+        maxWidth: 1280, margin: '0 auto',
+        padding: '80px 48px',
+        borderTop: `1px solid ${C.border}`,
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 52 }}>
+          <h2 style={{
+            fontSize: 38,
+            fontWeight: 700,
+            fontFamily: F.serif,
+            color: C.text,
+            lineHeight: 1.15,
+            marginBottom: 16,
+            letterSpacing: '-0.03em',
+          }}>
+            Up and running in minutes.
+          </h2>
+          <p style={{
+            fontSize: 18,
+            color: C.text2,
+            lineHeight: 1.6,
+            maxWidth: 600,
+            margin: '0 auto',
+          }}>
+            No data team required. No manual configuration.
+          </p>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: 20,
+        }}>
+          {[
+            {
+              number: '01',
+              title: 'Connect HubSpot',
+              description: 'OAuth connection in 60 seconds. Refyne reads your portal schema and starts analyzing immediately.',
+            },
+            {
+              number: '02',
+              title: 'Review & approve',
+              description: 'See every proposed change before it touches your CRM. Preview exactly what will be normalized, merged, or enriched.',
+            },
+            {
+              number: '03',
+              title: 'Watch it run',
+              description: 'Refyne scans nightly, fixes issues automatically, and emails you a summary. Your data quality improves while you sleep.',
+            },
+          ].map((step, i) => (
+            <div key={i} style={{
+              padding: 28,
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+            }}>
+              <div style={{
+                fontSize: 48,
+                fontWeight: 700,
+                fontFamily: F.mono,
+                color: C.indigoBrd,
+                lineHeight: 1,
+                letterSpacing: '-0.04em',
+              }}>
+                {step.number}
+              </div>
+              <div>
+                <h3 style={{
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: C.text,
+                  marginBottom: 8,
+                  fontFamily: F.serif,
+                }}>
+                  {step.title}
+                </h3>
+                <p style={{
+                  fontSize: 14,
+                  color: C.text2,
+                  lineHeight: 1.6,
+                }}>
+                  {step.description}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Pricing Teaser ───────────────────────────────────────── */}
+      <section style={{
+        maxWidth: 1280, margin: '0 auto',
+        padding: '80px 48px 96px',
+        borderTop: `1px solid ${C.border}`,
       }}>
         <div style={{
-          padding: '52px 48px',
+          padding: 48,
           background: C.surface,
           border: `1px solid ${C.border}`,
-          borderRadius: 20,
-          display: 'flex', alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap', gap: 24,
+          borderRadius: 0,
+          textAlign: 'center',
         }}>
-          <div>
-            <h2 style={{
-              fontSize: 'clamp(22px, 3vw, 30px)', fontWeight: 700, color: C.text,
-              letterSpacing: '-0.03em', marginBottom: 4,
-            }}>
-              One price. Unlimited seats. Unlimited records.
-            </h2>
-            <h2 style={{
-              fontSize: 'clamp(22px, 3vw, 30px)', fontWeight: 700,
-              color: 'rgba(249,248,245,0.4)',
-              letterSpacing: '-0.03em', marginBottom: 10,
-            }}>
-              That's not a bug. That's the point.
-            </h2>
-            <p style={{ fontSize: 15, color: C.text2, lineHeight: 1.5 }}>
-              Most data tools charge per user or per record. Refyne charges per HubSpot portal. Starting at $149/mo.
-            </p>
-          </div>
-          <Link href="/pricing" style={{
-            display: 'inline-flex', alignItems: 'center',
-            padding: '12px 28px',
-            background: `linear-gradient(to bottom, ${C.indigo}, ${C.indigoDk})`,
-            color: '#fff', borderRadius: 9,
-            fontSize: 14, fontWeight: 600,
-            letterSpacing: '-0.01em',
-            flexShrink: 0,
-            boxShadow: '0 0 0 1px rgba(99,102,241,0.3), 0 1px 4px rgba(0,0,0,0.4)',
+          <h2 style={{
+            fontSize: 38,
+            fontWeight: 700,
+            fontFamily: F.serif,
+            color: C.text,
+            lineHeight: 1.15,
+            marginBottom: 16,
+            letterSpacing: '-0.03em',
           }}>
-            See pricing →
+            One price. Unlimited seats. Unlimited records.
+          </h2>
+          <p style={{
+            fontSize: 18,
+            color: C.text2,
+            lineHeight: 1.6,
+            marginBottom: 32,
+            maxWidth: 600,
+            margin: '0 auto 32px',
+          }}>
+            Most data tools charge per user or per record. Refyne charges per HubSpot portal. Starting at $149/mo.
+          </p>
+          <Link
+            href="/pricing"
+            style={{
+              display: 'inline-block',
+              padding: '14px 28px',
+              background: `linear-gradient(135deg, #7c7bff, #6260e6)`,
+              border: 'none',
+              borderRadius: 0,
+              fontSize: 15,
+              fontWeight: 600,
+              fontFamily: F.sans,
+              color: '#fff',
+              textDecoration: 'none',
+              boxShadow: '0 6px 18px rgba(98,96,230,.4)',
+            }}
+          >
+            View pricing
           </Link>
         </div>
       </section>
