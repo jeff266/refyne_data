@@ -466,7 +466,7 @@ export default function HomePage() {
             maxWidth: 600,
             margin: '0 auto',
           }}>
-            One tool. No integrations required.
+            Normalize, dedup, and enrich in one place.
           </p>
         </div>
 
