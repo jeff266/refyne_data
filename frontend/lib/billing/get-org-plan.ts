@@ -6,12 +6,15 @@
  */
 
 import { supabaseAdmin } from '@/lib/db/admin-client';
-
-export type Plan = 'trial' | 'starter' | 'growth' | 'scale' | 'internal' | 'exempt';
+import type { Plan } from './plan-features';
 
 /**
  * Get the effective plan for an organization.
  * Respects plan_override first, then falls back to subscription_tier.
+ *
+ * Maps database values to Plan type:
+ * - 'trial' -> 'trialing'
+ * - 'internal' | 'exempt' -> 'enterprise' (no limits)
  *
  * @param orgId - Organization ID
  * @returns Plan tier or null if org not found
@@ -32,11 +35,17 @@ export async function getOrgPlan(orgId: string): Promise<Plan | null> {
     return null;
   }
 
-  // plan_override takes precedence
-  if (data.plan_override) {
-    return data.plan_override as Plan;
-  }
+  // Get effective plan (plan_override takes precedence)
+  const effectivePlan = data.plan_override || data.subscription_tier;
 
-  // Fall back to subscription_tier
-  return data.subscription_tier as Plan;
+  // Map database values to Plan type
+  switch (effectivePlan) {
+    case 'trial':
+      return 'trialing';
+    case 'internal':
+    case 'exempt':
+      return 'enterprise'; // Exempt orgs get enterprise limits (unlimited)
+    default:
+      return effectivePlan as Plan;
+  }
 }

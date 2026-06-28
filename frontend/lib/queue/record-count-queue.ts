@@ -221,18 +221,17 @@ async function processRecordCountJob(
       throw new Error('Unable to determine org plan');
     }
 
-    // Enterprise and exempt plans have no limits
+    // Evaluate thresholds (enterprise plan has no limits)
     let isNearLimit = false;
     let isOverLimit = false;
     let overLimitFirstDetectedAt: string | null = null;
     let gracePeriodEndsAt: string | null = null;
     let gracePeriodExpired = false;
 
-    if (currentPlan !== 'internal' && currentPlan !== 'exempt') {
-      const planLimit = getRecordLimit(currentPlan);
+    const planLimit = getRecordLimit(currentPlan);
 
-      // Enterprise plan has no limit (Infinity)
-      if (planLimit !== Infinity) {
+    // Enterprise plan has no limit (Infinity), skip threshold checks
+    if (planLimit !== Infinity) {
         const pct = totalRecords / planLimit;
         isNearLimit = pct >= 0.90 && pct < 1.0;
         isOverLimit = pct >= 1.0;
@@ -295,25 +294,23 @@ async function processRecordCountJob(
     console.log(`[RecordCount] Stored record counts for org ${orgId}`);
 
     // Send notifications if needed (best-effort, don't fail job if notifications fail)
-    if (currentPlan !== 'internal' && currentPlan !== 'exempt') {
+    // Only send for plans with limits (enterprise/exempt orgs have planLimit = Infinity)
+    if (planLimit !== Infinity) {
       try {
         const { sendRecordLimitNotifications } = await import('@/lib/billing/record-limit-notifier');
-        const planLimit = getRecordLimit(currentPlan);
 
-        if (planLimit !== Infinity) {
-          await sendRecordLimitNotifications(
-            {
-              orgId,
-              totalRecords,
-              planLimit,
-              currentPlan,
-              gracePeriodEndsAt,
-            },
-            isNearLimit,
-            isOverLimit,
-            gracePeriodExpired
-          );
-        }
+        await sendRecordLimitNotifications(
+          {
+            orgId,
+            totalRecords,
+            planLimit,
+            currentPlan,
+            gracePeriodEndsAt,
+          },
+          isNearLimit,
+          isOverLimit,
+          gracePeriodExpired
+        );
       } catch (notificationError) {
         console.error(`[RecordCount] Failed to send notifications for org ${orgId}:`, notificationError);
         // Don't fail the job - notifications are best-effort
