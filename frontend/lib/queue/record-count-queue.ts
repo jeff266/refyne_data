@@ -266,7 +266,6 @@ async function processRecordCountJob(
         }
         // If NOT over limit, clear grace period fields (they upgraded or deleted records)
       }
-    }
 
     // Insert into hubspot_record_counts table with threshold fields
     const { error: insertError } = await supabaseAdmin
