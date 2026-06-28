@@ -17,6 +17,10 @@ interface Org {
   credits_total: number;
   hubspot_connected: boolean;
   member_count: number | null;
+  total_records: number | null;
+  is_near_limit: boolean;
+  is_over_limit: boolean;
+  grace_period_expired: boolean;
 }
 
 export default function OrgsTab() {
@@ -211,6 +215,8 @@ export default function OrgsTab() {
               <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Trial</th>
               <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Credits</th>
               <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>HubSpot</th>
+              <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Records</th>
+              <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Limit status</th>
               <th style={{ padding: 12, textAlign: 'left', color: C.text2, fontSize: 12, fontWeight: 500 }}>Actions</th>
             </tr>
           </thead>
@@ -256,6 +262,71 @@ export default function OrgsTab() {
                     height: 8,
                     background: org.hubspot_connected ? '#22c55e' : '#ef4444',
                   }} />
+                </td>
+                <td style={{ padding: 12, color: C.text2, fontSize: 14 }}>
+                  {org.total_records !== null ? org.total_records.toLocaleString() : '---'}
+                </td>
+                <td style={{ padding: 12 }}>
+                  {(() => {
+                    if (org.grace_period_expired) {
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{
+                            width: 8,
+                            height: 8,
+                            background: '#ef4444',
+                            borderRadius: '50%',
+                          }} />
+                          <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 500 }}>
+                            Paused
+                          </span>
+                        </div>
+                      );
+                    }
+                    if (org.is_over_limit) {
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{
+                            width: 8,
+                            height: 8,
+                            background: '#f97316',
+                            borderRadius: '50%',
+                          }} />
+                          <span style={{ fontSize: 12, color: '#f97316', fontWeight: 500 }}>
+                            Over limit
+                          </span>
+                        </div>
+                      );
+                    }
+                    if (org.is_near_limit) {
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{
+                            width: 8,
+                            height: 8,
+                            background: '#f59e0b',
+                            borderRadius: '50%',
+                          }} />
+                          <span style={{ fontSize: 12, color: '#f59e0b', fontWeight: 500 }}>
+                            Near limit
+                          </span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{
+                          width: 8,
+                          height: 8,
+                          background: '#22c55e',
+                          borderRadius: '50%',
+                        }} />
+                        <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 500 }}>
+                          OK
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td style={{ padding: 12, display: 'flex', gap: 8 }}>
                   <button

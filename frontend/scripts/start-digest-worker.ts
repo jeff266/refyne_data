@@ -168,6 +168,17 @@ async function main() {
     console.log('✅ Harmony scan worker started successfully\n');
   }
 
+  // Start the record count worker (HubSpot record count tracking)
+  console.log('Starting record count worker...');
+  const { startRecordCountWorker } = await import('../lib/queue/record-count-queue');
+  const recordCountWorker = startRecordCountWorker();
+
+  if (!recordCountWorker) {
+    console.log('⚠️  Record count worker disabled (Redis not configured)');
+  } else {
+    console.log('✅ Record count worker started successfully\n');
+  }
+
   // FIX: Fail all stalled jobs from previous crashes on startup
   // This prevents old jobs running for hours in the background and causing OOM
   console.log('Checking for stalled arrangement jobs from previous worker crashes...');
@@ -371,6 +382,47 @@ async function main() {
         console.error('Error running nightly dedup scans:', error);
       }
 
+      // Enqueue record count jobs for all active connections (nightly recount)
+      try {
+        const { data: connections, error: connError } = await supabase
+          .from('hubspot_connections')
+          .select('org_id, portal_id')
+          .eq('connection_status', 'active');
+
+        if (connError) {
+          console.error('Error fetching active connections for record count:', connError);
+        } else if (connections && connections.length > 0) {
+          console.log(`[${new Date().toISOString()}] Enqueuing record count jobs for ${connections.length} active connections`);
+
+          const { enqueueRecordCountJob } = await import('../lib/queue/record-count-queue');
+          const { getAccessToken } = await import('../lib/hubspot/repository');
+
+          for (const connection of connections) {
+            try {
+              // Get fresh access token for this org
+              const accessToken = await getAccessToken(connection.org_id);
+
+              const result = await enqueueRecordCountJob(
+                connection.org_id,
+                connection.portal_id,
+                accessToken
+              );
+
+              if (result.queued) {
+                console.log(`[${new Date().toISOString()}] Record count job enqueued for portal ${connection.portal_id}: jobId=${result.jobId}`);
+              } else {
+                console.warn(`[Nightly Recount] Failed to enqueue for portal ${connection.portal_id}: ${result.reason}`);
+              }
+            } catch (recountError) {
+              console.error(`[Nightly Recount] Error for portal ${connection.portal_id}:`, recountError);
+              // Continue with other connections
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error running nightly record count jobs:', error);
+      }
+
     } catch (error) {
       console.error('Error in nightly maintenance tasks:', error);
     }
@@ -445,6 +497,10 @@ async function main() {
     await cleanupWorker.close();
     if (harmonyScanWorker) {
       await harmonyScanWorker.close();
+    }
+    if (recordCountWorker) {
+      const { stopRecordCountWorker } = await import('../lib/queue/record-count-queue');
+      await stopRecordCountWorker();
     }
 
     console.log('[Shutdown] All workers stopped');

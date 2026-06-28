@@ -65,6 +65,31 @@ export async function GET() {
       creditsByOrg.set(grant.org_id, current + grant.credits);
     });
 
+    // Get latest record counts for all orgs
+    const { data: recordCounts } = await supabaseAdmin
+      .from('hubspot_record_counts')
+      .select('org_id, total_records, is_near_limit, is_over_limit, grace_period_expired')
+      .order('fetched_at', { ascending: false });
+
+    // Map org_id to latest record count
+    const recordCountsByOrg = new Map<string, {
+      totalRecords: number;
+      isNearLimit: boolean;
+      isOverLimit: boolean;
+      gracePeriodExpired: boolean;
+    }>();
+
+    recordCounts?.forEach((rc) => {
+      if (!recordCountsByOrg.has(rc.org_id)) {
+        recordCountsByOrg.set(rc.org_id, {
+          totalRecords: rc.total_records,
+          isNearLimit: rc.is_near_limit || false,
+          isOverLimit: rc.is_over_limit || false,
+          gracePeriodExpired: rc.grace_period_expired || false,
+        });
+      }
+    });
+
     // Fix 1: Fetch all Clerk orgs upfront
     const client = await clerkClient();
     const { data: clerkOrgs } = await client.organizations.getOrganizationList({
@@ -130,6 +155,9 @@ export async function GET() {
       const grantedCredits = creditsByOrg.get(billing.org_id) || 0;
       const totalCredits = baseCredits + grantedCredits;
 
+      // Get record count data
+      const recordCountData = recordCountsByOrg.get(billing.org_id);
+
       return {
         org_id: billing.org_id,
         name: orgName,
@@ -145,6 +173,10 @@ export async function GET() {
         hubspot_connected: connectedOrgIds.has(billing.org_id),
         member_count: memberCount,
         created_at: billing.created_at,
+        total_records: recordCountData?.totalRecords || null,
+        is_near_limit: recordCountData?.isNearLimit || false,
+        is_over_limit: recordCountData?.isOverLimit || false,
+        grace_period_expired: recordCountData?.gracePeriodExpired || false,
       };
     });
 

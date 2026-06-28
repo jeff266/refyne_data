@@ -112,6 +112,20 @@ export async function canPerformAction(
     return false;
   }
 
+  // Check record limit grace period (blocks write operations when exceeded)
+  const { data: recordCount } = await supabaseAdmin
+    .from('hubspot_record_counts')
+    .select('grace_period_expired')
+    .eq('org_id', orgId)
+    .order('fetched_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (recordCount?.grace_period_expired === true) {
+    console.warn(`[Billing] Record limit exceeded for org ${orgId} - grace period expired`);
+    return false; // Hard gate: block all write operations
+  }
+
   // Paid tiers (starter, growth, scale): no hard limits, metering only
   if (
     entitlements.subscription_tier === 'starter' ||

@@ -249,6 +249,25 @@ export async function GET(request: NextRequest) {
       metadata: { portal_id: portalId, scopes },
     });
 
+    // Enqueue record count job (background task to fetch HubSpot record counts)
+    try {
+      const { enqueueRecordCountJob } = await import('@/lib/queue/record-count-queue');
+      const enqueueResult = await enqueueRecordCountJob(
+        stateRecord.org_id,
+        portalId,
+        access_token
+      );
+
+      if (enqueueResult.queued) {
+        console.log(`[OAuth Callback] Record count job enqueued: ${enqueueResult.jobId}`);
+      } else {
+        console.warn(`[OAuth Callback] Record count job not enqueued: ${enqueueResult.reason}`);
+      }
+    } catch (recordCountError) {
+      console.error('[OAuth Callback] Record count job failed to enqueue (non-fatal):', recordCountError);
+      // Don't fail the connection - record count is best-effort
+    }
+
     // Auto-provision org_billing record on first HubSpot connection (trial start)
     try {
       const { data: existingBilling } = await supabaseAdmin

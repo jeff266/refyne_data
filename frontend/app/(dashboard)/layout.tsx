@@ -1,5 +1,6 @@
 import { Sidebar, TopBar } from '@/components/refyne';
 import { TrialBanner } from '@/components/billing/TrialBanner';
+import { RecordLimitBanner } from '@/components/billing/RecordLimitBanner';
 import { OrgUrlCleanup } from '@/components/OrgUrlCleanup';
 import { EnrichRunProvider } from '@/context/EnrichRunContext';
 import { AssistantWidget } from '@/components/AssistantWidget';
@@ -34,6 +35,7 @@ export default function DashboardLayout({
         >
           <TopBar />
           <TrialBanner />
+          <RecordLimitBanner />
           <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>
         </div>
         <AssistantWidget />

@@ -30,6 +30,7 @@
     "worker:normalize": "npx tsx scripts/start-normalize-worker.ts",
     "worker:jobs": "npx tsx scripts/start-job-segmentation-worker.ts",
     "worker:harmony-scan": "npx tsx scripts/start-harmony-scan-worker.ts",
+    "worker:record-count": "npx tsx scripts/start-record-count-worker.ts",
     "cleanup:cache": "npx tsx scripts/cleanup-cache.ts",
     "dummy:create": "npx tsx --env-file=.env.local scripts/create-dummy-companies.ts",
     "dummy:delete": "npx tsx --env-file=.env.local scripts/delete-dummy-companies.ts",
