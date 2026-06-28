@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrgContext, authError } from '@/lib/auth/context';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
 import { supabaseAdmin } from '@/lib/db/admin-client';
 import { enqueueRecordCountJob } from '@/lib/queue/record-count-queue';
-import { getAccessToken } from '@/lib/hubspot/repository';
+import { getAccessToken } from '@/lib/hubspot/get-access-token';
 
 export const dynamic = 'force-dynamic';
 
