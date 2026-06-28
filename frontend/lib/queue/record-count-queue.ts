@@ -66,7 +66,7 @@ let recordCountWorker: Worker<RecordCountJobData, RecordCountJobResult> | null =
 /**
  * Get or create the record count queue.
  */
-export function getRecordCountQueue(): Queue<RecordCountJobData, RecordCountJobResult> | null {
+export async function getRecordCountQueue(): Promise<Queue<RecordCountJobData, RecordCountJobResult> | null> {
   if (!isRedisConfigured()) {
     console.warn('Redis not configured - record count queue disabled');
     return null;
@@ -74,6 +74,29 @@ export function getRecordCountQueue(): Queue<RecordCountJobData, RecordCountJobR
 
   if (!recordCountQueue) {
     const connection = createRedisConnection();
+
+    // Wait for connection to be ready before creating queue
+    await new Promise<void>((resolve, reject) => {
+      if (connection.status === 'ready') {
+        resolve();
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        reject(new Error('Redis connection timeout'));
+      }, 5000);
+
+      connection.once('ready', () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+
+      connection.once('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+    });
+
     recordCountQueue = new Queue<RecordCountJobData, RecordCountJobResult>(QUEUE_NAME, {
       connection,
       defaultJobOptions: {
@@ -106,7 +129,7 @@ export async function enqueueRecordCountJob(
   portalId: string,
   accessToken: string
 ): Promise<{ queued: boolean; jobId?: string; reason?: string }> {
-  const queue = getRecordCountQueue();
+  const queue = await getRecordCountQueue();
 
   if (!queue) {
     return { queued: false, reason: 'Queue not configured' };
@@ -431,7 +454,7 @@ export async function getQueueStats(): Promise<{
   completed: number;
   failed: number;
 } | null> {
-  const queue = getRecordCountQueue();
+  const queue = await getRecordCountQueue();
   if (!queue) return null;
 
   const [waiting, active, completed, failed] = await Promise.all([
