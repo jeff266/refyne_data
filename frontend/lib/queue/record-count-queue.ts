@@ -257,7 +257,7 @@ async function processRecordCountJob(
           }
 
           // Calculate grace period end (14 days from first detection)
-          const firstDetected = new Date(overLimitFirstDetectedAt);
+          const firstDetected = new Date(overLimitFirstDetectedAt!);
           const gracePeriodEnd = new Date(firstDetected.getTime() + 14 * 24 * 60 * 60 * 1000);
           gracePeriodEndsAt = gracePeriodEnd.toISOString();
           gracePeriodExpired = new Date() > gracePeriodEnd;
