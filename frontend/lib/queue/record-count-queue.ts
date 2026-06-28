@@ -68,50 +68,61 @@ let recordCountWorker: Worker<RecordCountJobData, RecordCountJobResult> | null =
  */
 export async function getRecordCountQueue(): Promise<Queue<RecordCountJobData, RecordCountJobResult> | null> {
   if (!isRedisConfigured()) {
-    console.warn('Redis not configured - record count queue disabled');
+    console.warn('[RecordCount] Redis not configured - queue disabled');
     return null;
   }
 
   if (!recordCountQueue) {
-    const connection = createRedisConnection();
+    try {
+      const connection = createRedisConnection();
 
-    // Wait for connection to be ready before creating queue
-    await new Promise<void>((resolve, reject) => {
-      if (connection.status === 'ready') {
-        resolve();
-        return;
-      }
+      // Wait for connection to be ready before creating queue
+      await new Promise<void>((resolve, reject) => {
+        if (connection.status === 'ready') {
+          console.log('[RecordCount] Connection already ready');
+          resolve();
+          return;
+        }
 
-      const timeout = setTimeout(() => {
-        reject(new Error('Redis connection timeout'));
-      }, 5000);
+        const timeout = setTimeout(() => {
+          console.error('[RecordCount] Connection timeout after 5 seconds');
+          reject(new Error('Redis connection timeout after 5 seconds'));
+        }, 5000);
 
-      connection.once('ready', () => {
-        clearTimeout(timeout);
-        resolve();
+        connection.once('ready', () => {
+          clearTimeout(timeout);
+          console.log('[RecordCount] Connection ready');
+          resolve();
+        });
+
+        connection.once('error', (err) => {
+          clearTimeout(timeout);
+          console.error('[RecordCount] Connection error:', err.message);
+          reject(err);
+        });
       });
 
-      connection.once('error', (err) => {
-        clearTimeout(timeout);
-        reject(err);
+      recordCountQueue = new Queue<RecordCountJobData, RecordCountJobResult>(QUEUE_NAME, {
+        connection,
+        defaultJobOptions: {
+          attempts: RETRY_SETTINGS.attempts,
+          backoff: RETRY_SETTINGS.backoff,
+          removeOnComplete: {
+            count: 100, // Keep last 100 completed jobs
+            age: 7 * 24 * 60 * 60, // Remove after 7 days
+          },
+          removeOnFail: {
+            count: 500, // Keep last 500 failed jobs
+            age: 30 * 24 * 60 * 60, // Remove after 30 days
+          },
+        },
       });
-    });
 
-    recordCountQueue = new Queue<RecordCountJobData, RecordCountJobResult>(QUEUE_NAME, {
-      connection,
-      defaultJobOptions: {
-        attempts: RETRY_SETTINGS.attempts,
-        backoff: RETRY_SETTINGS.backoff,
-        removeOnComplete: {
-          count: 100, // Keep last 100 completed jobs
-          age: 7 * 24 * 60 * 60, // Remove after 7 days
-        },
-        removeOnFail: {
-          count: 500, // Keep last 500 failed jobs
-          age: 30 * 24 * 60 * 60, // Remove after 30 days
-        },
-      },
-    });
+      console.log('[RecordCount] Queue created successfully');
+    } catch (error) {
+      console.error('[RecordCount] Failed to create queue:', error instanceof Error ? error.message : error);
+      throw error; // Re-throw so caller knows it failed
+    }
   }
 
   return recordCountQueue;
