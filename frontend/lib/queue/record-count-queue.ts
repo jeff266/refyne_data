@@ -163,7 +163,8 @@ function calculateSuggestedPlan(totalRecords: number): 'starter' | 'growth' | 's
 }
 
 /**
- * Fetch record counts from HubSpot API.
+ * Fetch record counts from HubSpot API using search endpoint.
+ * The search endpoint returns accurate totals, unlike the objects GET endpoint.
  */
 async function fetchRecordCounts(
   accessToken: string,
@@ -172,15 +173,21 @@ async function fetchRecordCounts(
 ): Promise<{ companyCount: number; contactCount: number }> {
   console.log(`[RecordCount] Fetching counts for org ${orgId}, portal ${portalId}`);
 
-  // Fetch company count
-  const companyUrl = 'https://api.hubapi.com/crm/v3/objects/companies?limit=1';
-  console.log(`[RecordCount] Calling HubSpot API: ${companyUrl}`);
+  // Fetch company count using search endpoint
+  const companyUrl = 'https://api.hubapi.com/crm/v3/objects/companies/search';
+  console.log(`[RecordCount] Calling HubSpot Search API: ${companyUrl}`);
 
   const companyRes = await fetch(companyUrl, {
+    method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
+    body: JSON.stringify({
+      filterGroups: [],
+      limit: 1,
+      properties: ['hs_object_id'],
+    }),
   });
 
   console.log(`[RecordCount] Company API response status: ${companyRes.status} ${companyRes.statusText}`);
@@ -196,17 +203,23 @@ async function fetchRecordCounts(
 
   const companyData = JSON.parse(companyBody);
   const companyCount = companyData.total || 0;
-  console.log(`[RecordCount] Parsed company count: ${companyCount} (from total field: ${companyData.total})`);
+  console.log(`[RecordCount] Parsed company count: ${companyCount} (from response.total: ${companyData.total})`);
 
-  // Fetch contact count
-  const contactUrl = 'https://api.hubapi.com/crm/v3/objects/contacts?limit=1';
-  console.log(`[RecordCount] Calling HubSpot API: ${contactUrl}`);
+  // Fetch contact count using search endpoint
+  const contactUrl = 'https://api.hubapi.com/crm/v3/objects/contacts/search';
+  console.log(`[RecordCount] Calling HubSpot Search API: ${contactUrl}`);
 
   const contactRes = await fetch(contactUrl, {
+    method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
+    body: JSON.stringify({
+      filterGroups: [],
+      limit: 1,
+      properties: ['hs_object_id'],
+    }),
   });
 
   console.log(`[RecordCount] Contact API response status: ${contactRes.status} ${contactRes.statusText}`);
@@ -222,7 +235,7 @@ async function fetchRecordCounts(
 
   const contactData = JSON.parse(contactBody);
   const contactCount = contactData.total || 0;
-  console.log(`[RecordCount] Parsed contact count: ${contactCount} (from total field: ${contactData.total})`);
+  console.log(`[RecordCount] Parsed contact count: ${contactCount} (from response.total: ${contactData.total})`);
 
   return { companyCount, contactCount };
 }
