@@ -65,8 +65,9 @@ let recordCountWorker: Worker<RecordCountJobData, RecordCountJobResult> | null =
 
 /**
  * Get or create the record count queue.
+ * Note: In serverless environments, the queue instance is created per-invocation.
  */
-export async function getRecordCountQueue(): Promise<Queue<RecordCountJobData, RecordCountJobResult> | null> {
+export function getRecordCountQueue(): Queue<RecordCountJobData, RecordCountJobResult> | null {
   if (!isRedisConfigured()) {
     console.warn('[RecordCount] Redis not configured - queue disabled');
     return null;
@@ -75,32 +76,6 @@ export async function getRecordCountQueue(): Promise<Queue<RecordCountJobData, R
   if (!recordCountQueue) {
     try {
       const connection = createRedisConnection();
-
-      // Wait for connection to be ready before creating queue
-      await new Promise<void>((resolve, reject) => {
-        if (connection.status === 'ready') {
-          console.log('[RecordCount] Connection already ready');
-          resolve();
-          return;
-        }
-
-        const timeout = setTimeout(() => {
-          console.error('[RecordCount] Connection timeout after 5 seconds');
-          reject(new Error('Redis connection timeout after 5 seconds'));
-        }, 5000);
-
-        connection.once('ready', () => {
-          clearTimeout(timeout);
-          console.log('[RecordCount] Connection ready');
-          resolve();
-        });
-
-        connection.once('error', (err) => {
-          clearTimeout(timeout);
-          console.error('[RecordCount] Connection error:', err.message);
-          reject(err);
-        });
-      });
 
       recordCountQueue = new Queue<RecordCountJobData, RecordCountJobResult>(QUEUE_NAME, {
         connection,
@@ -121,7 +96,7 @@ export async function getRecordCountQueue(): Promise<Queue<RecordCountJobData, R
       console.log('[RecordCount] Queue created successfully');
     } catch (error) {
       console.error('[RecordCount] Failed to create queue:', error instanceof Error ? error.message : error);
-      throw error; // Re-throw so caller knows it failed
+      return null; // Return null instead of throwing in serverless
     }
   }
 
@@ -140,7 +115,7 @@ export async function enqueueRecordCountJob(
   portalId: string,
   accessToken: string
 ): Promise<{ queued: boolean; jobId?: string; reason?: string }> {
-  const queue = await getRecordCountQueue();
+  const queue = getRecordCountQueue();
 
   if (!queue) {
     return { queued: false, reason: 'Queue not configured' };
@@ -465,7 +440,7 @@ export async function getQueueStats(): Promise<{
   completed: number;
   failed: number;
 } | null> {
-  const queue = await getRecordCountQueue();
+  const queue = getRecordCountQueue();
   if (!queue) return null;
 
   const [waiting, active, completed, failed] = await Promise.all([
