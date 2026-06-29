@@ -127,8 +127,8 @@ export async function enqueueRecordCountJob(
     accessToken,
   };
 
-  // Use orgId:portalId as job ID for deduplication
-  const jobId = `${orgId}:${portalId}`;
+  // Use orgId-portalId as job ID for deduplication (BullMQ doesn't allow colons)
+  const jobId = `${orgId}-${portalId}`;
 
   try {
     const job = await queue.add('fetch-record-count', jobData, {
