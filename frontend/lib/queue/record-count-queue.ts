@@ -166,37 +166,63 @@ function calculateSuggestedPlan(totalRecords: number): 'starter' | 'growth' | 's
  * Fetch record counts from HubSpot API.
  */
 async function fetchRecordCounts(
-  accessToken: string
+  accessToken: string,
+  orgId: string,
+  portalId: string
 ): Promise<{ companyCount: number; contactCount: number }> {
+  console.log(`[RecordCount] Fetching counts for org ${orgId}, portal ${portalId}`);
+
   // Fetch company count
-  const companyRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies?limit=1', {
+  const companyUrl = 'https://api.hubapi.com/crm/v3/objects/companies?limit=1';
+  console.log(`[RecordCount] Calling HubSpot API: ${companyUrl}`);
+
+  const companyRes = await fetch(companyUrl, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
   });
 
+  console.log(`[RecordCount] Company API response status: ${companyRes.status} ${companyRes.statusText}`);
+
   if (!companyRes.ok) {
+    const errorBody = await companyRes.text();
+    console.error(`[RecordCount] Company API error body: ${errorBody}`);
     throw new Error(`Failed to fetch company count: ${companyRes.status} ${companyRes.statusText}`);
   }
 
-  const companyData = await companyRes.json();
+  const companyBody = await companyRes.text();
+  console.log(`[RecordCount] Company API raw response body: ${companyBody.substring(0, 500)}...`);
+
+  const companyData = JSON.parse(companyBody);
   const companyCount = companyData.total || 0;
+  console.log(`[RecordCount] Parsed company count: ${companyCount} (from total field: ${companyData.total})`);
 
   // Fetch contact count
-  const contactRes = await fetch('https://api.hubapi.com/crm/v3/objects/contacts?limit=1', {
+  const contactUrl = 'https://api.hubapi.com/crm/v3/objects/contacts?limit=1';
+  console.log(`[RecordCount] Calling HubSpot API: ${contactUrl}`);
+
+  const contactRes = await fetch(contactUrl, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
   });
 
+  console.log(`[RecordCount] Contact API response status: ${contactRes.status} ${contactRes.statusText}`);
+
   if (!contactRes.ok) {
+    const errorBody = await contactRes.text();
+    console.error(`[RecordCount] Contact API error body: ${errorBody}`);
     throw new Error(`Failed to fetch contact count: ${contactRes.status} ${contactRes.statusText}`);
   }
 
-  const contactData = await contactRes.json();
+  const contactBody = await contactRes.text();
+  console.log(`[RecordCount] Contact API raw response body: ${contactBody.substring(0, 500)}...`);
+
+  const contactData = JSON.parse(contactBody);
   const contactCount = contactData.total || 0;
+  console.log(`[RecordCount] Parsed contact count: ${contactCount} (from total field: ${contactData.total})`);
 
   return { companyCount, contactCount };
 }
@@ -213,7 +239,7 @@ async function processRecordCountJob(
 
   try {
     // Fetch counts from HubSpot
-    const { companyCount, contactCount } = await fetchRecordCounts(accessToken);
+    const { companyCount, contactCount } = await fetchRecordCounts(accessToken, orgId, portalId);
     const totalRecords = companyCount + contactCount;
     const suggestedPlan = calculateSuggestedPlan(totalRecords);
 
