@@ -1,646 +1,588 @@
-import { Suspense } from 'react';
-import { C, F } from '@/lib/design-tokens';
-import { Card, StatCard, HarmonyBar, InsightRow, StatusDot, OnboardingChecklist } from '@/components/refyne';
-import {
-  StatCardsSkeleton,
-  HarmonyBarsSkeleton,
-  TrendChartSkeleton,
-  InsightsSkeleton,
-  PortalsSkeleton,
-} from '@/components/refyne';
-import { TrendChart } from './TrendChart';
-import { OnboardingWrapper } from './OnboardingWrapper';
-import { DashboardClient } from './DashboardClient';
-import { ComplianceAIOverview } from './ComplianceAIOverview';
-import { DashboardTopSection } from '@/components/dashboard/DashboardTopSection';
-import { FieldCoverageSection } from '@/components/dashboard/FieldCoverageSection';
-import { NeedsAttentionSection } from '@/components/dashboard/NeedsAttentionSection';
-import { DashboardErrorBoundary } from '@/components/dashboard/DashboardErrorBoundary';
+import Link from 'next/link';
 import { auth } from '@clerk/nextjs/server';
-
-// ─────────────────────────────────────────────────────────────
-// Data Fetching Functions
-// ─────────────────────────────────────────────────────────────
-
-async function fetchScore(orgId: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  try {
-    const res = await fetch(`${baseUrl}/api/compliance/score?orgId=${orgId}`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
-}
-
-async function fetchBreakdown(orgId: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  try {
-    const res = await fetch(`${baseUrl}/api/compliance/breakdown?orgId=${orgId}&by=harmony`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return { items: [] };
-    return res.json();
-  } catch {
-    return { items: [] };
-  }
-}
-
-async function fetchTrend(orgId: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  try {
-    const res = await fetch(`${baseUrl}/api/compliance/trend?orgId=${orgId}&days=180`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return { trend: [] };
-    return res.json();
-  } catch {
-    return { trend: [] };
-  }
-}
-
-async function fetchInsights(orgId: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  try {
-    const res = await fetch(`${baseUrl}/api/compliance/insights?orgId=${orgId}`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return { insights: [] };
-    return res.json();
-  } catch {
-    return { insights: [] };
-  }
-}
-
-async function fetchConnections() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  try {
-    const res = await fetch(`${baseUrl}/api/connections`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return { connections: [] };
-    return res.json();
-  } catch {
-    return { connections: [] };
-  }
-}
-
-async function fetchActions(orgId: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  try {
-    const res = await fetch(`${baseUrl}/api/dashboard/actions?orgId=${orgId}`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return { actions: [] };
-    return res.json();
-  } catch {
-    return { actions: [] };
-  }
-}
-
-async function fetchDedupCounts(orgId: string) {
-  // Simplified - would need real API endpoint
-  return {
-    gradeA: 12,
-    gradeB: 14,
-    gradeC: 8,
-  };
-}
-
-async function fetchQuarantineData(orgId: string) {
-  // Simplified - would need real API endpoint
-  return {
-    count: 3,
-    oldestDays: 4,
-  };
-}
-
-// ─────────────────────────────────────────────────────────────
-// Server Components
-// ─────────────────────────────────────────────────────────────
-
-async function StatCards() {
-  const { orgId } = await auth();
-  if (!orgId) return null;
-
-  const scoreData = await fetchScore(orgId);
-  const connectionsData = await fetchConnections();
-
-  // Use actual data or null/0 (no mock fallbacks)
-  const score = scoreData?.score ?? 0;
-  const total = scoreData?.total ?? 0;
-  const trendDelta = scoreData?.trendDelta ?? 0;
-  const breakpoint = scoreData?.breakpoint || 'good';
-  const benchmark = scoreData?.benchmark;
-  const portalCount = connectionsData?.connections?.length ?? 0;
-  const lastScanMinutes = scoreData?.lastComputedAt
-    ? Math.floor((Date.now() - new Date(scoreData.lastComputedAt).getTime()) / 60000)
-    : null;
-
-  // Breakpoint label with color (Spec Step 7)
-  // Excellent 90-100, Good 80-89, Needs attention 70-79, At risk 60-69, Critical <60
-  const breakpointLabels: Record<string, { text: string; color: string }> = {
-    critical: { text: 'Critical', color: C.red },
-    at_risk: { text: 'At risk', color: C.amber },
-    needs_attention: { text: 'Needs attention', color: C.amber },
-    good: { text: 'Good', color: C.indigo },
-    excellent: { text: 'Excellent', color: C.green },
-  };
-  const breakpointInfo = breakpointLabels[breakpoint] || breakpointLabels.good;
-
-  const trendText = trendDelta !== null && trendDelta !== 0
-    ? `${trendDelta > 0 ? '↑' : '↓'} ${Math.abs(trendDelta)}pts from last scan`
-    : 'no change';
-
-  // Portal text (fixed bug)
-  const portalText = portalCount === 1
-    ? `from ${connectionsData?.connections?.[0]?.name || 'portal'}`
-    : `across ${portalCount} portals`;
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
-      <StatCard
-        label="Total records"
-        value={total.toLocaleString()}
-        sub={portalText}
-        accent={C.text}
-      />
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <StatCard
-          label="Compliance"
-          value={`${Math.round(score)}%`}
-          sub={trendText}
-          accent={breakpointInfo.color}
-        />
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, marginTop: 6 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: breakpointInfo.color }}>
-            {breakpointInfo.text}
-          </div>
-          {benchmark && benchmark.average && (
-            <div style={{ fontSize: 11, color: C.text3 }}>
-              {(() => {
-                const delta = Math.round(score - benchmark.average);
-                if (delta > 0) {
-                  return `+${delta}pts vs similar portals`;
-                } else if (delta < 0) {
-                  return `${delta}pts vs similar portals`;
-                } else {
-                  return 'At industry average';
-                }
-              })()}
-            </div>
-          )}
-        </div>
-      </div>
-      <StatCard
-        label="Active harmonies"
-        value="4"
-        sub="of 12 in library"
-        accent={C.text}
-      />
-      <StatCard
-        label="Last scan"
-        value={lastScanMinutes !== null && lastScanMinutes < 60 ? `${lastScanMinutes}m` : lastScanMinutes !== null ? `${Math.floor(lastScanMinutes / 60)}h` : 'Never'}
-        sub="auto-scan enabled"
-        accent={C.text}
-      />
-    </div>
-  );
-}
-
-async function HarmonyBarsSection() {
-  const { orgId } = await auth();
-  if (!orgId) return null;
-
-  const [breakdownData, scoreData] = await Promise.all([
-    fetchBreakdown(orgId),
-    fetchScore(orgId),
-  ]);
-
-  const total = scoreData?.total ?? 23100;
-
-  // Transform API data to component format with enhanced fields
-  const harmonies = (breakdownData?.items || []).map((item: {
-    harmonyId?: string;
-    harmonyName?: string;
-    description?: string;
-    rate?: number;
-    unprocessed?: number;
-    recordsAffected?: number;
-    delta?: number | null;
-    estimatedScoreImpact?: number;
-    actionable?: boolean;
-    actionRoute?: string | null;
-  }) => ({
-    name: item.harmonyName || item.harmonyId || 'unknown',
-    score: Math.round(item.rate || 0),
-    note: item.recordsAffected && item.recordsAffected > 10 ? `${item.recordsAffected} unmatched` : undefined,
-    delta: item.delta,
-    description: item.description,
-    recordsAffected: item.recordsAffected,
-    estimatedScoreImpact: item.estimatedScoreImpact,
-    actionable: item.actionable,
-    actionRoute: item.actionRoute,
-    harmonyId: item.harmonyId,
-  }));
-
-  // Fallback if no data
-  if (harmonies.length === 0) {
-    harmonies.push(
-      { name: 'company-name', score: 99 },
-      { name: 'phone-e164', score: 95 },
-      { name: 'company-industry', score: 82, note: '82 unmatched', delta: 2 },
-      { name: 'linkedin-url', score: 77, note: '12 missing', delta: -1 },
-      { name: 'person-title', score: 41, actionable: true },
-    );
-  }
-
-  return (
-    <Card style={{ padding: '20px 24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.text, letterSpacing: '-0.01em' }}>
-          Compliance by harmony
-        </span>
-        <span style={{ fontSize: 11, fontFamily: F.mono, color: C.text3 }}>
-          {total.toLocaleString()} records
-        </span>
-      </div>
-      {harmonies.map((h: any) => {
-        // Build tooltip text with description, failing records, and estimated impact
-        const tooltipParts = [];
-        if (h.description) tooltipParts.push(h.description);
-        if (h.recordsAffected) tooltipParts.push(`${h.recordsAffected} records failing`);
-        if (h.estimatedScoreImpact) tooltipParts.push(`+${h.estimatedScoreImpact}pts if fixed`);
-        const tooltipText = tooltipParts.join(' · ');
-
-        return (
-          <div key={h.name} style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <div
-                style={{ flex: 1, position: 'relative', cursor: 'help' }}
-                title={tooltipText || h.name}
-              >
-                <span style={{ fontSize: 12, fontFamily: F.mono, color: C.text3 }}>
-                  {h.name}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, fontFamily: F.mono, fontWeight: 500, color: C.text }}>
-                  {h.score}%
-                </span>
-                {h.delta !== null && h.delta !== undefined && h.delta !== 0 && (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      color: h.delta > 0 ? C.green : C.red,
-                      fontFamily: F.mono,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {h.delta > 0 ? '↑' : '↓'}{Math.abs(h.delta)}%
-                  </span>
-                )}
-                {h.actionable && h.score < 60 && (
-                  <a
-                    href={h.actionRoute || `/harmonies?harmony=${h.harmonyId}`}
-                    style={{
-                      padding: '2px 8px',
-                      background: C.indigoDim,
-                      border: `1px solid ${C.indigoBrd}`,
-                      borderRadius: 4,
-                      fontSize: 10,
-                      color: C.indigo,
-                      textDecoration: 'none',
-                      fontWeight: 600,
-                    }}
-                  >
-                    Fix this →
-                  </a>
-                )}
-              </div>
-            </div>
-            <HarmonyBar name={h.name} score={h.score} note={h.note} />
-          </div>
-        );
-      })}
-    </Card>
-  );
-}
-
-async function TrendChartSection() {
-  const { orgId } = await auth();
-  if (!orgId) return null;
-
-  const [trendData, scoreData] = await Promise.all([
-    fetchTrend(orgId),
-    fetchScore(orgId),
-  ]);
-
-  const benchmark = scoreData?.benchmark?.average;
-
-  // Transform API data to chart format (group by month)
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const trend = (trendData?.trend || [])
-    .slice(-6) // Last 6 data points
-    .map((point: { computedAt?: string; score?: number }) => {
-      const date = point.computedAt ? new Date(point.computedAt) : new Date();
-      return {
-        m: monthNames[date.getMonth()],
-        v: Math.round(point.score || 0),
-        date: `${monthNames[date.getMonth()]} ${date.getDate()}`,
-      };
-    });
-
-  // Fallback if no data
-  if (trend.length === 0) {
-    trend.push(
-      { m: 'Oct', v: 71, date: 'Oct 1' },
-      { m: 'Nov', v: 74, date: 'Nov 1' },
-      { m: 'Dec', v: 76, date: 'Dec 1' },
-      { m: 'Jan', v: 79, date: 'Jan 1' },
-      { m: 'Feb', v: 77, date: 'Feb 1' },
-      { m: 'Mar', v: 82, date: 'Mar 1' },
-    );
-  }
-
-  return (
-    <Card style={{ padding: '20px 24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.text, letterSpacing: '-0.01em' }}>Score trend</span>
-      </div>
-      <TrendChart data={trend} benchmark={benchmark} />
-    </Card>
-  );
-}
-
-async function InsightsSection() {
-  const { orgId } = await auth();
-  if (!orgId) return null;
-
-  const insightsData = await fetchInsights(orgId);
-
-  // Transform API data to component format
-  const insights = (insightsData?.insights || []).map((insight: {
-    harmonyId?: string;
-    field?: string;
-    message?: string;
-    type?: string;
-  }) => ({
-    type: insight.type === 'pattern_gap' ? 'warn' as const : 'ok' as const,
-    harmony: insight.harmonyId || insight.field || 'unknown',
-    text: insight.message || '',
-    action: insight.type === 'pattern_gap' ? 'Edit rule' : 'View records',
-  }));
-
-  // Fallback if no data
-  if (insights.length === 0) {
-    insights.push(
-      { type: 'warn' as const, harmony: 'company-industry', text: '82 records match "(Fintech)" pattern — no rule covers it', action: 'Edit rule' },
-      { type: 'warn' as const, harmony: 'linkedin-url', text: '12 records missing LinkedIn URL after March 14 import', action: 'View records' },
-      { type: 'ok' as const, harmony: 'phone-e164', text: 'Normalization run complete on GrowthBook — 1,247 updated', action: 'View run' },
-    );
-  }
-
-  return (
-    <Card>
-      <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}` }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.text, letterSpacing: '-0.01em' }}>Insights</span>
-      </div>
-      {insights.map((ins: { type: 'ok' | 'warn' | 'error'; harmony: string; text: string; action: string }, i: number) => (
-        <InsightRow key={i} {...ins} />
-      ))}
-    </Card>
-  );
-}
-
-async function PortalsSection() {
-  const { orgId } = await auth();
-  if (!orgId) return null;
-
-  const connectionsData = await fetchConnections();
-
-  // Transform API data with health scores - fetch in parallel
-  const portals = await Promise.all(
-    (connectionsData?.connections || []).map(async (conn: {
-      name?: string;
-      companyCount?: number;
-      lastSync?: string;
-      portalId?: string;
-    }) => {
-      // Fetch per-portal score if available, otherwise use mock
-      let score = 70 + Math.floor(Math.random() * 25);
-      if (conn.portalId) {
-        try {
-          const scoreData = await fetchScore(orgId);
-          if (scoreData?.score) {
-            score = Math.round(scoreData.score);
-          }
-        } catch {
-          // Use mock score on error
-        }
-      }
-
-      return {
-        name: conn.name || 'Unknown Portal',
-        count: conn.companyCount || 0,
-        sync: conn.lastSync || 'never',
-        score,
-        portalId: conn.portalId || '',
-      };
-    })
-  );
-
-  // Fallback if no data
-  if (portals.length === 0) {
-    portals.push(
-      { name: 'Frontera Health', count: 2798, sync: '2m ago', score: 82, portalId: 'portal1' },
-      { name: 'GrowthBook', count: 20302, sync: '14m ago', score: 71, portalId: 'portal2' },
-    );
-  }
-
-  return (
-    <Card style={{ padding: '16px 20px' }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 14, letterSpacing: '-0.01em' }}>
-        Portals
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {portals.map((p: any, i: number) => {
-          // Calculate health dots (5 dots based on score)
-          const filledDots = Math.round((p.score / 100) * 5);
-          return (
-            <div
-              key={i}
-              style={{
-                padding: '12px',
-                background: C.hover,
-                borderRadius: 8,
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{p.name}</div>
-                <span style={{ fontSize: 10, color: C.text3 }}>{p.sync}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ fontSize: 10, fontFamily: F.mono, color: C.text3 }}>
-                    {p.count.toLocaleString()} companies
-                  </div>
-                  <span style={{ color: C.text3 }}>·</span>
-                  <div style={{ fontSize: 11, fontFamily: F.mono, color: C.text }}>{p.score}%</div>
-                  <div style={{ display: 'flex', gap: 2 }}>
-                    {Array.from({ length: 5 }).map((_, dotIdx) => (
-                      <div
-                        key={dotIdx}
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: '50%',
-                          background: dotIdx < filledDots ? C.indigo : C.border2,
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <a
-                  href={`/dashboard?portal=${p.portalId}`}
-                  style={{
-                    fontSize: 10,
-                    color: C.indigo,
-                    textDecoration: 'none',
-                    fontWeight: 500,
-                  }}
-                >
-                  View →
-                </a>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </Card>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// Main Page Component
-// ─────────────────────────────────────────────────────────────
-
-async function ClientData() {
-  const { orgId } = await auth();
-  if (!orgId) return null;
-
-  const [connectionsData, actionsData, dedupData, quarantineData] = await Promise.all([
-    fetchConnections(),
-    fetchActions(orgId),
-    fetchDedupCounts(orgId),
-    fetchQuarantineData(orgId),
-  ]);
-
-  // Transform connections to portal format with scores
-  const portals = await Promise.all(
-    (connectionsData?.connections || []).map(async (conn: any) => {
-      // Fetch per-portal score if available
-      let score = 75; // Default score
-      if (conn.portalId) {
-        try {
-          const scoreData = await fetchScore(orgId);
-          if (scoreData?.score) {
-            score = Math.round(scoreData.score);
-          }
-        } catch {
-          // Use default score on error
-        }
-      }
-
-      return {
-        id: conn.portalId || conn.id || String(Math.random()),
-        name: conn.name || 'Unknown Portal',
-        recordCount: conn.companyCount || 0,
-        score,
-      };
-    })
-  );
-
-  return (
-    <DashboardClient
-      portals={portals}
-      initialActions={actionsData?.actions || []}
-      dedupCounts={dedupData}
-      quarantine={quarantineData}
-    />
-  );
-}
+import { C, F } from '@/lib/design-tokens';
 
 export default async function DashboardPage() {
-  const { orgId } = await auth();
-  if (!orgId) return null;
+  const { userId } = await auth();
+
+  if (!userId) {
+    return <div>Not authenticated</div>;
+  }
+
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
+  });
 
   return (
-    <div style={{ padding: '28px 32px', fontFamily: F.sans, position: 'relative' }}>
-      <Suspense fallback={<StatCardsSkeleton />}>
-        <StatCards />
-      </Suspense>
-
-      {/* Onboarding Checklist */}
-      <OnboardingWrapper />
-
-      {/* Always On Upsell OR Since Yesterday Section */}
-      <DashboardErrorBoundary>
-        <DashboardTopSection orgId={orgId} />
-      </DashboardErrorBoundary>
-
-      {/* Field Coverage Section */}
-      <DashboardErrorBoundary>
-        <FieldCoverageSection orgId={orgId} />
-      </DashboardErrorBoundary>
-
-      {/* Needs Your Attention Section */}
-      <DashboardErrorBoundary>
-        <NeedsAttentionSection />
-      </DashboardErrorBoundary>
-
-      <Suspense fallback={null}>
-        <ClientData />
-      </Suspense>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16, marginTop: 24 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Suspense fallback={<HarmonyBarsSkeleton />}>
-            <HarmonyBarsSection />
-          </Suspense>
-
-          <Suspense fallback={<TrendChartSkeleton />}>
-            <TrendChartSection />
-          </Suspense>
+    <div style={{ padding: 32, maxWidth: 1400 }}>
+      {/* Greeting */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <h2 style={{ fontSize: 24, fontWeight: 600, color: C.text, margin: 0 }}>
+            Good morning, Jeff
+          </h2>
+          <p style={{ fontSize: 14, color: C.text2, margin: 0 }}>{currentDate}</p>
         </div>
+        <p style={{ fontSize: 14, color: C.text2, margin: 0 }}>
+          Frontera Health · 2,835 companies · 8,199 contacts
+        </p>
+      </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Suspense fallback={<InsightsSkeleton />}>
-            <InsightsSection />
-          </Suspense>
+      {/* Data Health Cards */}
+      <div style={{
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: 10,
+        padding: 24,
+        marginBottom: 24
+      }}>
+        <h3 style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: C.text3,
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: 24
+        }}>
+          Data Health
+        </h3>
 
-          <Suspense fallback={<PortalsSkeleton />}>
-            <PortalsSection />
-          </Suspense>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          {/* Normalize Card */}
+          <div style={{
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            padding: 24
+          }}>
+            <h4 style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: C.text3,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: 16
+            }}>
+              Normalize
+            </h4>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{
+                fontSize: 28,
+                fontWeight: 600,
+                color: C.text,
+                letterSpacing: '-0.5px',
+                marginBottom: 4,
+                fontFamily: F.mono
+              }}>
+                1,204
+              </div>
+              <div style={{ fontSize: 13, color: C.text2 }}>
+                issues found
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 11, color: C.text3, margin: '0 0 4px 0' }}>Last run</p>
+              <p style={{ fontSize: 13, color: C.text, margin: 0 }}>May 30</p>
+            </div>
+            <Link
+              href="/normalize"
+              style={{
+                display: 'block',
+                padding: '8px 16px',
+                textAlign: 'center',
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 500,
+                color: C.text,
+                textDecoration: 'none',
+                background: 'transparent',
+                transition: 'all 0.15s'
+              }}
+            >
+              Normalize →
+            </Link>
+          </div>
+
+          {/* Dedup Card */}
+          <div style={{
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            padding: 24
+          }}>
+            <h4 style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: C.text3,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: 16
+            }}>
+              Dedup
+            </h4>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{
+                fontSize: 28,
+                fontWeight: 600,
+                color: C.text,
+                letterSpacing: '-0.5px',
+                marginBottom: 4,
+                fontFamily: F.mono
+              }}>
+                262
+              </div>
+              <div style={{ fontSize: 13, color: C.text2 }}>
+                open clusters
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 11, color: C.text3, margin: '0 0 4px 0' }}>Last scan</p>
+              <p style={{ fontSize: 13, color: C.text, margin: 0 }}>2h ago</p>
+            </div>
+            <Link
+              href="/dedup"
+              style={{
+                display: 'block',
+                padding: '8px 16px',
+                textAlign: 'center',
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 500,
+                color: C.text,
+                textDecoration: 'none',
+                background: 'transparent',
+                transition: 'all 0.15s'
+              }}
+            >
+              Review →
+            </Link>
+          </div>
+
+          {/* Enrich Card */}
+          <div style={{
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            padding: 24
+          }}>
+            <h4 style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: C.text3,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: 16
+            }}>
+              Enrich
+            </h4>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{
+                fontSize: 28,
+                fontWeight: 600,
+                color: C.text,
+                letterSpacing: '-0.5px',
+                marginBottom: 4,
+                fontFamily: F.mono
+              }}>
+                0
+              </div>
+              <div style={{ fontSize: 13, color: C.text2 }}>
+                credits used
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 13, color: C.text, margin: 0 }}>
+                500 / 500 trial
+              </p>
+            </div>
+            <Link
+              href="/enrich"
+              style={{
+                display: 'block',
+                padding: '8px 16px',
+                textAlign: 'center',
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 500,
+                color: C.text,
+                textDecoration: 'none',
+                background: 'transparent',
+                transition: 'all 0.15s'
+              }}
+            >
+              Enrich →
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* AI Overview moved to bottom and renamed to "Analysis" */}
-      <div style={{ marginTop: 24 }}>
-        <div
-          style={{
-            fontSize: 13,
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+        {/* Recent Activity */}
+        <div style={{
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderRadius: 10,
+          padding: 24
+        }}>
+          <h3 style={{
+            fontSize: 11,
             fontWeight: 600,
-            color: C.text,
-            marginBottom: 16,
-            letterSpacing: '-0.01em',
-          }}
-        >
-          Analysis
+            color: C.text3,
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            marginBottom: 16
+          }}>
+            Recent Activity
+          </h3>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ fontSize: 13, color: C.text2, width: 50 }}>Jun 6</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: C.text, margin: '0 0 4px 0' }}>
+                  Dedup scan ran
+                </p>
+                <p style={{ fontSize: 13, color: C.text2, margin: 0 }}>
+                  262 clusters found
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ fontSize: 13, color: C.text2, width: 50 }}>May 30</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: C.text, margin: '0 0 4px 0' }}>
+                  Normalize applied
+                </p>
+                <p style={{ fontSize: 13, color: C.text2, margin: 0 }}>
+                  847 companies
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ fontSize: 13, color: C.text2, width: 50 }}>May 29</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: C.text, margin: '0 0 4px 0' }}>
+                  Dedup scan ran
+                </p>
+                <p style={{ fontSize: 13, color: C.text2, margin: 0 }}>
+                  57 clusters found
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ fontSize: 13, color: C.text2, width: 50 }}>May 26</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: C.text, margin: '0 0 4px 0' }}>
+                  Enrich run applied
+                </p>
+                <p style={{ fontSize: 13, color: C.text2, margin: 0 }}>
+                  44 companies
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Link
+            href="/history"
+            style={{
+              display: 'inline-block',
+              marginTop: 16,
+              fontSize: 12,
+              color: C.indigo,
+              textDecoration: 'none'
+            }}
+          >
+            View all activity →
+          </Link>
         </div>
-        <ComplianceAIOverview />
+
+        {/* Trial Status */}
+        <div style={{
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderRadius: 10,
+          padding: 24
+        }}>
+          <h3 style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: C.text3,
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            marginBottom: 16
+          }}>
+            Trial Status
+          </h3>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 500, color: C.text, margin: '0 0 4px 0' }}>
+                Free Trial
+              </p>
+              <p style={{ fontSize: 13, color: C.text2, margin: 0 }}>
+                8 days remaining
+              </p>
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <p style={{ fontSize: 13, color: C.text, margin: 0 }}>Dedup merges</p>
+                <p style={{ fontSize: 13, color: C.text2, margin: 0 }}>0/10</p>
+              </div>
+              <div style={{ width: '100%', background: C.border, borderRadius: 999, height: 8 }}>
+                <div style={{ background: C.text3, height: 8, borderRadius: 999, width: '0%' }} />
+              </div>
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <p style={{ fontSize: 13, color: C.text, margin: 0 }}>Normalize writes</p>
+                <p style={{ fontSize: 13, color: C.text2, margin: 0 }}>0/500</p>
+              </div>
+              <div style={{ width: '100%', background: C.border, borderRadius: 999, height: 8 }}>
+                <div style={{ background: C.text3, height: 8, borderRadius: 999, width: '0%' }} />
+              </div>
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <p style={{ fontSize: 13, color: C.text, margin: 0 }}>Enrich credits</p>
+                <p style={{ fontSize: 13, color: C.text2, margin: 0 }}>500/500</p>
+              </div>
+              <div style={{ width: '100%', background: C.border, borderRadius: 999, height: 8 }}>
+                <div style={{ background: C.indigo, height: 8, borderRadius: 999, width: '100%' }} />
+              </div>
+              <p style={{ fontSize: 11, color: C.text3, marginTop: 4, margin: '4px 0 0 0' }}>← exhausted</p>
+            </div>
+
+            <Link
+              href="/upgrade"
+              style={{
+                width: '100%',
+                marginTop: 8,
+                padding: '10px 16px',
+                background: C.indigo,
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 13,
+                fontWeight: 500,
+                textAlign: 'center',
+                textDecoration: 'none',
+                display: 'block'
+              }}
+            >
+              Upgrade to Growth
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Top Issues */}
+      <div style={{
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: 10,
+        padding: 24
+      }}>
+        <h3 style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: C.text3,
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: 24
+        }}>
+          Top Issues to Fix
+        </h3>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Normalize Issues */}
+          <div>
+            <h4 style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: C.text3,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: 12
+            }}>
+              Normalize
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 13, fontFamily: F.mono, color: C.text }}>phone</span>
+                  <span style={{ fontSize: 13, color: C.text2, marginLeft: 16 }}>
+                    22 companies need formatting
+                  </span>
+                </div>
+                <Link
+                  href="/normalize?field=phone"
+                  style={{
+                    padding: '6px 12px',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: C.text,
+                    textDecoration: 'none',
+                    background: 'transparent'
+                  }}
+                >
+                  Fix →
+                </Link>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 13, fontFamily: F.mono, color: C.text }}>linkedin_url</span>
+                  <span style={{ fontSize: 13, color: C.text2, marginLeft: 16 }}>
+                    40 companies need normalization
+                  </span>
+                </div>
+                <Link
+                  href="/normalize?field=linkedin_url"
+                  style={{
+                    padding: '6px 12px',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: C.text,
+                    textDecoration: 'none',
+                    background: 'transparent'
+                  }}
+                >
+                  Fix →
+                </Link>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 13, fontFamily: F.mono, color: C.text }}>company_name</span>
+                  <span style={{ fontSize: 13, color: C.text2, marginLeft: 16 }}>
+                    3 companies need title case
+                  </span>
+                </div>
+                <Link
+                  href="/normalize?field=company_name"
+                  style={{
+                    padding: '6px 12px',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: C.text,
+                    textDecoration: 'none',
+                    background: 'transparent'
+                  }}
+                >
+                  Fix →
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Dedup Issues */}
+          <div>
+            <h4 style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: C.text3,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: 12
+            }}>
+              Dedup
+            </h4>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 13, color: C.text }}>
+                  262 open clusters · 17 Grade A · 245 Grade B
+                </span>
+              </div>
+              <Link
+                href="/dedup"
+                style={{
+                  padding: '6px 12px',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: C.text,
+                  textDecoration: 'none',
+                  background: 'transparent'
+                }}
+              >
+                Review →
+              </Link>
+            </div>
+          </div>
+
+          {/* Enrich Issues */}
+          <div>
+            <h4 style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: C.text3,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: 12
+            }}>
+              Enrich
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 13, color: C.text }}>
+                    Phone missing on 6,155 companies (25% coverage)
+                  </span>
+                </div>
+                <Link
+                  href="/enrich?field=phone"
+                  style={{
+                    padding: '6px 12px',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: C.text,
+                    textDecoration: 'none',
+                    background: 'transparent'
+                  }}
+                >
+                  Enrich →
+                </Link>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 13, color: C.text }}>
+                    City missing on 6,531 companies (20% coverage)
+                  </span>
+                </div>
+                <Link
+                  href="/enrich?field=city"
+                  style={{
+                    padding: '6px 12px',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: C.text,
+                    textDecoration: 'none',
+                    background: 'transparent'
+                  }}
+                >
+                  Enrich →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
