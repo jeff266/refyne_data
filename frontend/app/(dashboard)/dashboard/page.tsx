@@ -47,15 +47,17 @@ async function getDashboardData(orgId: string) {
     if (dedupError) console.error('[Dashboard] dedup count error:', dedupError);
     console.log('[Dashboard] Dedup clusters:', dedupClusters);
 
-    // 5. Get normalize issues - count pending normalization changes
-    const { count: normalizeIssues, error: normalizeError } = await supabaseAdmin
-      .from('normalization_run_progress')
+    // 5. Get normalize issues - count active harmonies with field assignments
+    // Note: Actual record count requires querying HubSpot in real-time (shown in normalize page)
+    // Dashboard shows count of active harmonies as a fast proxy
+    const { count: normalizeIssues, error: assignmentsError } = await supabaseAdmin
+      .from('harmony_field_assignments')
       .select('*', { count: 'exact', head: true })
       .eq('org_id', orgId)
-      .eq('status', 'pending');
+      .eq('is_active', true);
 
-    if (normalizeError) console.error('[Dashboard] normalize issues error:', normalizeError);
-    console.log('[Dashboard] Normalize issues:', normalizeIssues);
+    if (assignmentsError) console.error('[Dashboard] harmony assignments error:', assignmentsError);
+    console.log('[Dashboard] Active harmony assignments (normalize issues proxy):', normalizeIssues);
 
     // 6. Calculate data health score (simple formula based on data quality)
     const totalRecords = (companyCount || 0) + (contactCount || 0);
@@ -381,7 +383,7 @@ export default async function DashboardPage() {
             ))}
           </div>
           <div style={{ fontSize: 11, color: C.text3 }}>
-            issues found
+            active {data.normalizeIssues === 1 ? 'harmony' : 'harmonies'}
           </div>
         </div>
 
@@ -596,10 +598,10 @@ export default async function DashboardPage() {
                 {data.normalizeIssues > 0 && (
                   <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '12px', fontSize: 13, fontFamily: F.mono, color: C.text }}>normalize</td>
-                    <td style={{ padding: '12px', fontSize: 13, color: C.text2 }}>Fields need normalization</td>
+                    <td style={{ padding: '12px', fontSize: 13, color: C.text2 }}>Active harmonies to review</td>
                     <td style={{ padding: '12px', fontSize: 13, color: C.text, textAlign: 'right', fontFamily: F.mono }}>{data.normalizeIssues}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
-                      <Link href="/normalize" style={{ fontSize: 12, color: C.indigo, textDecoration: 'none' }}>Fix →</Link>
+                      <Link href="/normalize" style={{ fontSize: 12, color: C.indigo, textDecoration: 'none' }}>Review →</Link>
                     </td>
                   </tr>
                 )}
