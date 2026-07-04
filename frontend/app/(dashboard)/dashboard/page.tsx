@@ -1,22 +1,85 @@
 import Link from 'next/link';
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 import { C, F } from '@/lib/design-tokens';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 
-// TODO: Fetch real data from API
 async function getDashboardData(orgId: string) {
-  // This should call your API endpoints to get real data
-  return {
-    orgName: 'RevOps Impact', // TODO: Get from org settings
-    companyCount: 2835,
-    contactCount: 8199,
-    dataHealthScore: 74,
-    dataHealthDelta: 6,
-    normalizeIssues: 1204,
-    dedupClusters: 262,
-    enrichCreditsUsed: 500,
-    enrichCreditsTotal: 500,
-    trialDaysLeft: 8,
-  };
+  try {
+    // 1. Get org name from workspace_entitlements
+    const { data: orgData } = await supabaseAdmin
+      .from('workspace_entitlements')
+      .select('org_name')
+      .eq('clerk_org_id', orgId)
+      .single();
+
+    // 2. Get company count
+    const { count: companyCount } = await supabaseAdmin
+      .from('normalized_records')
+      .select('*', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .eq('record_type', 'company');
+
+    // 3. Get contact count
+    const { count: contactCount } = await supabaseAdmin
+      .from('normalized_records')
+      .select('*', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .eq('record_type', 'contact');
+
+    // 4. Get open dedup clusters
+    const { count: dedupClusters } = await supabaseAdmin
+      .from('dedup_clusters')
+      .select('*', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .eq('status', 'open');
+
+    // 5. Get normalize issues (count of normalization_run_progress with changes)
+    const { count: normalizeIssues } = await supabaseAdmin
+      .from('normalization_run_progress')
+      .select('*', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .eq('status', 'pending');
+
+    // 6. Calculate data health score (simple formula based on data quality)
+    const totalRecords = (companyCount || 0) + (contactCount || 0);
+    const issueRate = totalRecords > 0 ? ((normalizeIssues || 0) / totalRecords) : 0;
+    const dataHealthScore = Math.max(0, Math.min(100, Math.round(100 - (issueRate * 100))));
+
+    // 7. Get enrichment usage (placeholder - implement when enrichment tracking exists)
+    const enrichCreditsUsed = 0;
+    const enrichCreditsTotal = 500;
+
+    // 8. Trial info (placeholder - implement when billing/trial table exists)
+    const trialDaysLeft = 14;
+
+    return {
+      orgName: orgData?.org_name || 'Your Workspace',
+      companyCount: companyCount || 0,
+      contactCount: contactCount || 0,
+      dataHealthScore,
+      dataHealthDelta: 6, // TODO: Calculate week-over-week change
+      normalizeIssues: normalizeIssues || 0,
+      dedupClusters: dedupClusters || 0,
+      enrichCreditsUsed,
+      enrichCreditsTotal,
+      trialDaysLeft,
+    };
+  } catch (error) {
+    console.error('Failed to fetch dashboard data:', error);
+    // Return safe defaults on error
+    return {
+      orgName: 'Your Workspace',
+      companyCount: 0,
+      contactCount: 0,
+      dataHealthScore: 0,
+      dataHealthDelta: 0,
+      normalizeIssues: 0,
+      dedupClusters: 0,
+      enrichCreditsUsed: 0,
+      enrichCreditsTotal: 500,
+      trialDaysLeft: 14,
+    };
+  }
 }
 
 export default async function DashboardPage() {
@@ -34,7 +97,15 @@ export default async function DashboardPage() {
     day: 'numeric'
   });
 
-  const userName = 'Jeff'; // TODO: Get from user profile
+  // Get user's first name from Clerk
+  let userName = 'there';
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    userName = user.firstName || user.emailAddresses[0]?.emailAddress?.split('@')[0] || 'there';
+  } catch (error) {
+    console.error('Failed to fetch user name:', error);
+  }
 
   return (
     <div style={{ padding: 32, maxWidth: 1600, background: C.bg }}>
