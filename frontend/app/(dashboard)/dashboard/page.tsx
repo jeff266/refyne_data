@@ -130,8 +130,32 @@ async function getDashboardData(orgId: string) {
       .slice(0, 4);
 
     // 12. Calculate data health delta (week-over-week change)
-    // TODO: Implement historical tracking for accurate delta
-    const dataHealthDelta = 0; // Placeholder until historical data is tracked
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoDate = sevenDaysAgo.toISOString().split('T')[0];
+
+    const { data: historicalSnapshot, error: histError } = await supabaseAdmin
+      .from('data_health_snapshots')
+      .select('data_health_score')
+      .eq('org_id', orgId)
+      .lte('snapshot_date', sevenDaysAgoDate)
+      .order('snapshot_date', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (histError && histError.code !== 'PGRST116') {
+      console.error('[Dashboard] historical snapshot error:', histError);
+    }
+
+    const dataHealthDelta = historicalSnapshot
+      ? dataHealthScore - historicalSnapshot.data_health_score
+      : 0;
+
+    console.log('[Dashboard] Data health delta:', {
+      current: dataHealthScore,
+      historical: historicalSnapshot?.data_health_score,
+      delta: dataHealthDelta,
+    });
 
     const result = {
       orgName: orgData?.org_name || 'Your Workspace',
