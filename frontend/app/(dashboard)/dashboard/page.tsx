@@ -47,23 +47,15 @@ async function getDashboardData(orgId: string) {
     if (dedupError) console.error('[Dashboard] dedup count error:', dedupError);
     console.log('[Dashboard] Dedup clusters:', dedupClusters);
 
-    // 5. Get normalize issues - query harmony_field_assignments to count pending normalizations
-    const { data: harmonies, error: harmoniesError } = await supabaseAdmin
-      .from('harmony_field_assignments')
-      .select('canonical_field')
+    // 5. Get normalize issues - count pending normalization changes
+    const { count: normalizeIssues, error: normalizeError } = await supabaseAdmin
+      .from('normalization_run_progress')
+      .select('*', { count: 'exact', head: true })
       .eq('org_id', orgId)
-      .eq('is_active', true);
+      .eq('status', 'pending');
 
-    if (harmoniesError) console.error('[Dashboard] harmonies error:', harmoniesError);
-
-    // For each harmony, count companies that need normalization
-    let normalizeIssues = 0;
-    if (harmonies && harmonies.length > 0) {
-      // Simplified: just count total active harmonies as a proxy
-      // TODO: Actually count records that need normalization
-      normalizeIssues = harmonies.length * 10; // Rough estimate
-    }
-    console.log('[Dashboard] Normalize issues estimate:', normalizeIssues);
+    if (normalizeError) console.error('[Dashboard] normalize issues error:', normalizeError);
+    console.log('[Dashboard] Normalize issues:', normalizeIssues);
 
     // 6. Calculate data health score (simple formula based on data quality)
     const totalRecords = (companyCount || 0) + (contactCount || 0);
@@ -83,12 +75,70 @@ async function getDashboardData(orgId: string) {
       ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / 86400000))
       : null;
 
+    // 9. Get dedup merge count (completed merges)
+    const { count: dedupMerges, error: mergesError } = await supabaseAdmin
+      .from('dedup_merge_history')
+      .select('*', { count: 'exact', head: true })
+      .eq('org_id', orgId);
+
+    if (mergesError) console.error('[Dashboard] dedup merges error:', mergesError);
+    console.log('[Dashboard] Dedup merges:', dedupMerges);
+
+    // 10. Get normalize writes count (completed writes)
+    const { count: normalizeWrites, error: writesError } = await supabaseAdmin
+      .from('normalization_run_progress')
+      .select('*', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .eq('status', 'completed');
+
+    if (writesError) console.error('[Dashboard] normalize writes error:', writesError);
+    console.log('[Dashboard] Normalize writes:', normalizeWrites);
+
+    // 11. Get recent activity (last 5 events from each type)
+    const { data: recentNormalizeRuns, error: normRunsError } = await supabaseAdmin
+      .from('normalization_runs')
+      .select('id, created_at, records_processed')
+      .eq('org_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    if (normRunsError) console.error('[Dashboard] normalize runs error:', normRunsError);
+
+    const { data: recentDedupScans, error: dedupRunsError } = await supabaseAdmin
+      .from('dedup_scan_runs')
+      .select('id, started_at, clusters_found')
+      .eq('org_id', orgId)
+      .order('started_at', { ascending: false })
+      .limit(3);
+
+    if (dedupRunsError) console.error('[Dashboard] dedup scans error:', dedupRunsError);
+
+    // Combine and sort recent activity
+    const recentActivity = [
+      ...(recentNormalizeRuns || []).map(run => ({
+        type: 'normalize' as const,
+        count: run.records_processed || 0,
+        timestamp: run.created_at,
+      })),
+      ...(recentDedupScans || []).map(scan => ({
+        type: 'dedup' as const,
+        count: scan.clusters_found || 0,
+        timestamp: scan.started_at,
+      })),
+    ]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 4);
+
+    // 12. Calculate data health delta (week-over-week change)
+    // TODO: Implement historical tracking for accurate delta
+    const dataHealthDelta = 0; // Placeholder until historical data is tracked
+
     const result = {
       orgName: orgData?.org_name || 'Your Workspace',
       companyCount: companyCount || 0,
       contactCount: contactCount || 0,
       dataHealthScore,
-      dataHealthDelta: 6, // TODO: Calculate week-over-week change
+      dataHealthDelta,
       normalizeIssues: normalizeIssues || 0,
       dedupClusters: dedupClusters || 0,
       enrichCreditsUsed,
@@ -96,6 +146,9 @@ async function getDashboardData(orgId: string) {
       trialDaysLeft,
       plan: orgData?.plan || 'trialing',
       subscriptionStatus: orgData?.subscription_status || 'trialing',
+      dedupMerges: dedupMerges || 0,
+      normalizeWrites: normalizeWrites || 0,
+      recentActivity,
     };
 
     console.log('[Dashboard] Final result:', result);
@@ -108,14 +161,17 @@ async function getDashboardData(orgId: string) {
       companyCount: 0,
       contactCount: 0,
       dataHealthScore: 100,
-      dataHealthDelta: 6,
+      dataHealthDelta: 0,
       normalizeIssues: 0,
       dedupClusters: 0,
-      enrichCreditsUsed: 500,
+      enrichCreditsUsed: 0,
       enrichCreditsTotal: 500,
       trialDaysLeft: 14,
       plan: 'trialing',
       subscriptionStatus: 'trialing',
+      dedupMerges: 0,
+      normalizeWrites: 0,
+      recentActivity: [],
     };
   }
 }
@@ -244,18 +300,20 @@ export default async function DashboardPage() {
               </text>
             </svg>
           </div>
-          <div style={{
-            fontSize: 11,
-            color: '#10b981',
-            textAlign: 'center',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 4
-          }}>
-            <span>▲</span>
-            <span>+{data.dataHealthDelta} this week</span>
-          </div>
+          {data.dataHealthDelta !== 0 && (
+            <div style={{
+              fontSize: 11,
+              color: data.dataHealthDelta > 0 ? '#10b981' : '#ef4444',
+              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4
+            }}>
+              <span>{data.dataHealthDelta > 0 ? '▲' : '▼'}</span>
+              <span>{data.dataHealthDelta > 0 ? '+' : ''}{data.dataHealthDelta} this week</span>
+            </div>
+          )}
         </div>
 
         {/* Normalize */}
@@ -551,77 +609,41 @@ export default async function DashboardPage() {
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: '#10b981',
-                  flexShrink: 0
-                }} />
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Dedup scan</span>
-                    <span style={{ fontSize: 13, color: C.text3, margin: '0 6px' }}>·</span>
-                    <span style={{ fontSize: 13, color: C.text2 }}>262 clusters</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: C.text3 }}>Jun 6</div>
-                </div>
-              </div>
+              {data.recentActivity.length > 0 ? (
+                data.recentActivity.map((activity, idx) => {
+                  const date = new Date(activity.timestamp);
+                  const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  const isRecent = idx === 0;
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: C.text3,
-                  flexShrink: 0
-                }} />
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Normalize</span>
-                    <span style={{ fontSize: 13, color: C.text3, margin: '0 6px' }}>·</span>
-                    <span style={{ fontSize: 13, color: C.text2 }}>847 companies</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: C.text3 }}>May 30</div>
+                  return (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                      <div style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        background: isRecent ? '#10b981' : C.text3,
+                        flexShrink: 0
+                      }} />
+                      <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>
+                            {activity.type === 'normalize' ? 'Normalize' : 'Dedup scan'}
+                          </span>
+                          <span style={{ fontSize: 13, color: C.text3, margin: '0 6px' }}>·</span>
+                          <span style={{ fontSize: 13, color: C.text2 }}>
+                            {activity.count} {activity.type === 'normalize' ? 'records' : 'clusters'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 12, color: C.text3 }}>{formattedDate}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ padding: '24px', fontSize: 13, color: C.text2, textAlign: 'center' }}>
+                  No recent activity
                 </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: C.text3,
-                  flexShrink: 0
-                }} />
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Dedup scan</span>
-                    <span style={{ fontSize: 13, color: C.text3, margin: '0 6px' }}>·</span>
-                    <span style={{ fontSize: 13, color: C.text2 }}>57 clusters</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: C.text3 }}>May 29</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: C.text3,
-                  flexShrink: 0
-                }} />
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>Enrich</span>
-                    <span style={{ fontSize: 13, color: C.text3, margin: '0 6px' }}>·</span>
-                    <span style={{ fontSize: 13, color: C.text2 }}>44 companies</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: C.text3 }}>May 26</div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -676,10 +698,17 @@ export default async function DashboardPage() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <div style={{ fontSize: 12, color: C.text }}>Dedup merges</div>
-                <div style={{ fontSize: 12, color: C.text2, fontFamily: F.mono }}>0/10</div>
+                <div style={{ fontSize: 12, color: C.text2, fontFamily: F.mono }}>
+                  {data.dedupMerges}/∞
+                </div>
               </div>
               <div style={{ width: '100%', height: 6, background: C.border, borderRadius: 3 }}>
-                <div style={{ width: '0%', height: '100%', background: C.text3, borderRadius: 3 }} />
+                <div style={{
+                  width: data.dedupMerges > 0 ? '100%' : '0%',
+                  height: '100%',
+                  background: '#8b5cf6',
+                  borderRadius: 3
+                }} />
               </div>
             </div>
 
@@ -687,10 +716,17 @@ export default async function DashboardPage() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <div style={{ fontSize: 12, color: C.text }}>Normalize writes</div>
-                <div style={{ fontSize: 12, color: C.text2, fontFamily: F.mono }}>0/500</div>
+                <div style={{ fontSize: 12, color: C.text2, fontFamily: F.mono }}>
+                  {data.normalizeWrites}/∞
+                </div>
               </div>
               <div style={{ width: '100%', height: 6, background: C.border, borderRadius: 3 }}>
-                <div style={{ width: '0%', height: '100%', background: C.text3, borderRadius: 3 }} />
+                <div style={{
+                  width: data.normalizeWrites > 0 ? '100%' : '0%',
+                  height: '100%',
+                  background: '#10b981',
+                  borderRadius: 3
+                }} />
               </div>
             </div>
 
