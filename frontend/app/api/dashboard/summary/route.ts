@@ -201,10 +201,42 @@ export async function GET(_request: NextRequest) {
       creditsLimit: 500
     } : null;
 
+    // Calculate Data Health Score
+    const totalRecords = (companyCount || 0) + (contactCount || 0);
+    const totalIssues = (normalizeData.issueCount || 0) + (openClusters || 0);
+    let dataHealthScore = 100;
+
+    if (totalRecords > 0) {
+      const issueRate = totalIssues / totalRecords;
+      dataHealthScore = Math.max(0, Math.min(100, Math.round(100 - (issueRate * 100))));
+    }
+
+    // Get historical snapshot for week-over-week delta
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoDate = sevenDaysAgo.toISOString().split('T')[0];
+
+    const { data: historicalSnapshot } = await supabaseAdmin
+      .from('data_health_snapshots')
+      .select('data_health_score')
+      .eq('org_id', orgId)
+      .lte('snapshot_date', sevenDaysAgoDate)
+      .order('snapshot_date', { ascending: false })
+      .limit(1)
+      .single();
+
+    const dataHealthDelta = historicalSnapshot
+      ? dataHealthScore - historicalSnapshot.data_health_score
+      : 0;
+
     return NextResponse.json({
       portal: {
         companyCount: companyCount === 0 ? null : companyCount,
         contactCount: contactCount === 0 ? null : contactCount
+      },
+      dataHealth: {
+        score: dataHealthScore,
+        delta: dataHealthDelta
       },
       normalize: normalizeData,
       dedup: {
