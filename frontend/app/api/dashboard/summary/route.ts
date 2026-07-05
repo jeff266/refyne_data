@@ -1,19 +1,17 @@
-import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+import { getOrgContext, authError } from '@/lib/auth/clerk-helpers';
+import { supabaseAdmin } from '@/lib/db/admin-client';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export async function GET() {
+export async function GET(_request: NextRequest) {
+  let ctx;
   try {
-    const { orgId } = await auth();
+    ctx = await getOrgContext();
+  } catch (e) {
+    return authError(e) ?? NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
 
-    if (!orgId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  try {
+    const { orgId } = ctx;
 
     // Company count from company_dedup_index
     const { count: companyCount } = await supabaseAdmin
