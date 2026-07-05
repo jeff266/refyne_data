@@ -231,7 +231,7 @@ export function Sidebar() {
                     }}
                   >
                     <span>⚠</span>
-                    <span>{billingStatus.trial_days_remaining} days left</span>
+                    <span>{Math.ceil(billingStatus.trial_days_remaining)} days left</span>
                   </div>
                   <Link
                     href="/settings/billing"
