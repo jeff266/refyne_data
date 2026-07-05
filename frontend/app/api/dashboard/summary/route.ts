@@ -65,34 +65,41 @@ export async function GET() {
       .limit(1)
       .single();
 
-    // Normalize issue counts (call internal API)
+    // Normalize issue counts - query from most recent run
     let normalizeData = {
       issueCount: 0,
       lastRunAt: lastNormalize?.started_at || null,
       topIssues: [] as Array<{ field: string; label: string; count: number }>
     };
 
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-      const issueCountsRes = await fetch(`${baseUrl}/api/normalize/issue-counts`, {
-        headers: {
-          'Cookie': `__session=${(await auth()).sessionId}`
-        }
-      });
+    if (lastNormalize) {
+      // Query normalization_run_progress for pending issues from the last run
+      const { data: issuesByField } = await supabaseAdmin
+        .from('normalization_run_progress')
+        .select('field_key')
+        .eq('run_id', lastNormalize.id)
+        .eq('status', 'pending');
 
-      if (issueCountsRes.ok) {
-        const issueCountsData = await issueCountsRes.json();
-        normalizeData.issueCount = issueCountsData.total || 0;
-        normalizeData.topIssues = (issueCountsData.fields || [])
-          .slice(0, 5)
-          .map((f: any) => ({
-            field: f.field_name,
-            label: f.label || f.field_name,
-            count: f.issue_count
-          }));
+      if (issuesByField) {
+        // Count issues by field_key
+        const fieldCounts: Record<string, number> = {};
+        issuesByField.forEach((row: any) => {
+          fieldCounts[row.field_key] = (fieldCounts[row.field_key] || 0) + 1;
+        });
+
+        // Convert to array and sort by count
+        const topFields = Object.entries(fieldCounts)
+          .map(([field, count]) => ({
+            field,
+            label: field.replace(/_/g, ' '),
+            count
+          }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5);
+
+        normalizeData.issueCount = issuesByField.length;
+        normalizeData.topIssues = topFields;
       }
-    } catch (err) {
-      console.error('[Dashboard] Failed to fetch normalize issue counts:', err);
     }
 
     // Recent activity from audit_log
@@ -148,33 +155,43 @@ export async function GET() {
 
     const creditsUsed = usageData?.reduce((sum, row) => sum + (row.credits_used || 0), 0) || 0;
 
-    // Enrich gaps (call internal API)
+    // Enrich gaps - query from cache
     let enrichData = {
       creditsUsed,
       creditsIncluded: 500,
       topGaps: [] as Array<{ field: string; missing: number; coverage: number }>
     };
 
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-      const enrichGapsRes = await fetch(`${baseUrl}/api/enrich/gaps`, {
-        headers: {
-          'Cookie': `__session=${(await auth()).sessionId}`
-        }
-      });
+    // Get portal_id for cache lookup
+    const { data: connection } = await supabaseAdmin
+      .from('hubspot_connections')
+      .select('portal_id')
+      .eq('org_id', orgId)
+      .single();
 
-      if (enrichGapsRes.ok) {
-        const enrichGapsData = await enrichGapsRes.json();
-        enrichData.topGaps = (enrichGapsData.gaps || [])
+    if (connection) {
+      const cacheKey = `${orgId}:${connection.portal_id}:enrich:gaps:company`;
+      const { data: cached } = await supabaseAdmin
+        .from('cache')
+        .select('value, expires_at')
+        .eq('key', cacheKey)
+        .single();
+
+      const isCached = cached && new Date(cached.expires_at) > new Date();
+
+      if (isCached && cached.value?.field_gaps) {
+        // Sort by missing count and take top 3
+        const topGaps = (cached.value.field_gaps || [])
+          .sort((a: any, b: any) => b.missing - a.missing)
           .slice(0, 3)
-          .map((g: any) => ({
-            field: g.field_name,
-            missing: g.missing_count,
-            coverage: g.coverage_percent
+          .map((gap: any) => ({
+            field: gap.field,
+            missing: gap.missing,
+            coverage: gap.coverage
           }));
+
+        enrichData.topGaps = topGaps;
       }
-    } catch (err) {
-      console.error('[Dashboard] Failed to fetch enrich gaps:', err);
     }
 
     // Trial limits

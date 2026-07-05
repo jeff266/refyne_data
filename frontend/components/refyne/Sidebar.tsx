@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
@@ -56,6 +56,18 @@ export function Sidebar() {
   const [showHelpMenu, setShowHelpMenu] = useState(false);
   const enrichRunContext = useEnrichRun();
   const { resetConsent } = useCookieConsent();
+  const [billingStatus, setBillingStatus] = useState<{
+    subscription_tier: string;
+    trial_days_remaining: number | null;
+  } | null>(null);
+
+  // Fetch billing status for trial badge
+  useEffect(() => {
+    fetch('/api/billing/status')
+      .then(res => res.json())
+      .then(data => setBillingStatus(data))
+      .catch(err => console.error('Failed to fetch billing status:', err));
+  }, []);
 
   // Fetch feature flags for beta-gated nav items
   const { isEnabled } = useFeatureFlags([FEATURE_FLAGS.EVENT_LIST_IMPORT]);
@@ -191,6 +203,89 @@ export function Sidebar() {
       <div style={{ borderTop: `1px solid ${C.border}`, padding: '8px 8px' }}>
         {/* Always On Status Indicator */}
         <AlwaysOnStatus />
+
+        {/* Trial Badge */}
+        {billingStatus && billingStatus.subscription_tier === 'trial' && (
+          <div style={{ marginBottom: 12 }}>
+            <div
+              style={{
+                borderTop: `1px solid ${C.border}`,
+                paddingTop: 12,
+                marginTop: 8,
+              }}
+            >
+              {billingStatus.trial_days_remaining !== null && billingStatus.trial_days_remaining > 0 ? (
+                <>
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      background: '#f59e0b',
+                      color: '#000',
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      marginBottom: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span>⚠</span>
+                    <span>{billingStatus.trial_days_remaining} days left</span>
+                  </div>
+                  <Link
+                    href="/settings/billing"
+                    style={{
+                      display: 'block',
+                      padding: '8px 12px',
+                      background: C.surface3,
+                      color: C.text,
+                      borderRadius: 4,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textAlign: 'center',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Upgrade
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      background: '#ef4444',
+                      color: '#fff',
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      marginBottom: 8,
+                    }}
+                  >
+                    Trial ended
+                  </div>
+                  <Link
+                    href="/settings/billing"
+                    style={{
+                      display: 'block',
+                      padding: '8px 12px',
+                      background: '#ef4444',
+                      color: '#fff',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textAlign: 'center',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Upgrade to continue
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <CreditsWidget />
         <div
