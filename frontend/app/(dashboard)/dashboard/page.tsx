@@ -403,8 +403,8 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Trial Status / Credits */}
-        {data.billing.planType === 'trial' && data.billing.trialLimits ? (
+        {/* Trial Status / Credits - only show for trial users */}
+        {data.billing.trialLimits && data.billing.planType === 'trial' ? (
           <div style={{
             background: C.surface,
             border: `1px solid ${C.border}`,

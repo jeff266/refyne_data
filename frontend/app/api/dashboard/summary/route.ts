@@ -113,7 +113,7 @@ export async function GET() {
     // Billing from org_billing
     let { data: billing } = await supabaseAdmin
       .from('org_billing')
-      .select('plan_type, trial_ends_at, trial_merges_used, trial_normalize_writes_used, trial_enrich_credits_used, trial_override_unlimited, current_period_start')
+      .select('subscription_tier, trial_ends_at, trial_merges_used, trial_normalize_writes_used, trial_enrich_credits_used, current_period_start')
       .eq('org_id', orgId)
       .single();
 
@@ -123,19 +123,18 @@ export async function GET() {
       fourteenDaysFromNow.setDate(fourteenDaysFromNow.getDate() + 14);
 
       billing = {
-        plan_type: 'trial',
+        subscription_tier: 'trial',
         trial_ends_at: fourteenDaysFromNow.toISOString(),
         trial_merges_used: 0,
         trial_normalize_writes_used: 0,
         trial_enrich_credits_used: 0,
-        trial_override_unlimited: false,
         current_period_start: new Date().toISOString()
       };
     }
 
     // Calculate days remaining
     let daysRemaining: number | null = null;
-    if (billing.plan_type === 'trial' && billing.trial_ends_at) {
+    if (billing.subscription_tier === 'trial' && billing.trial_ends_at) {
       const now = new Date();
       const trialEnd = new Date(billing.trial_ends_at);
       const diffTime = trialEnd.getTime() - now.getTime();
@@ -194,8 +193,8 @@ export async function GET() {
       }
     }
 
-    // Trial limits
-    const trialLimits = billing.plan_type === 'trial' ? {
+    // Trial limits (only for trial tier, not exempt)
+    const trialLimits = billing.subscription_tier === 'trial' ? {
       mergesUsed: billing.trial_merges_used || 0,
       mergesLimit: 10,
       writesUsed: billing.trial_normalize_writes_used || 0,
@@ -224,7 +223,7 @@ export async function GET() {
         createdAt: a.created_at
       })),
       billing: {
-        planType: billing.plan_type || 'trial',
+        planType: billing.subscription_tier || 'trial',
         daysRemaining,
         trialLimits
       }

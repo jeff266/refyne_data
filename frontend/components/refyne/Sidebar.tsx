@@ -204,7 +204,7 @@ export function Sidebar() {
         {/* Always On Status Indicator */}
         <AlwaysOnStatus />
 
-        {/* Trial Badge */}
+        {/* Trial Badge - only show for trial tier */}
         {billingStatus && billingStatus.subscription_tier === 'trial' && (
           <div style={{ marginBottom: 12 }}>
             <div
