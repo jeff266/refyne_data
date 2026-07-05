@@ -211,7 +211,7 @@ export default function DashboardPage() {
           <div style={{
             fontSize: 32,
             fontWeight: 600,
-            color: C.text1,
+            color: C.text,
             fontFamily: F.mono,
             marginBottom: 16
           }}>
@@ -236,7 +236,7 @@ export default function DashboardPage() {
             style={{
               display: 'inline-block',
               padding: '8px 16px',
-              background: C.surface3,
+              background: C.hover,
               color: C.text,
               borderRadius: 4,
               fontSize: 12,
@@ -268,7 +268,7 @@ export default function DashboardPage() {
           <div style={{
             fontSize: 32,
             fontWeight: 600,
-            color: C.text1,
+            color: C.text,
             fontFamily: F.mono,
             marginBottom: 16
           }}>
@@ -289,7 +289,7 @@ export default function DashboardPage() {
             style={{
               display: 'inline-block',
               padding: '8px 16px',
-              background: C.surface3,
+              background: C.hover,
               color: C.text,
               borderRadius: 4,
               fontSize: 12,
@@ -321,7 +321,7 @@ export default function DashboardPage() {
           <div style={{
             fontSize: 32,
             fontWeight: 600,
-            color: C.text1,
+            color: C.text,
             fontFamily: F.mono,
             marginBottom: 16
           }}>
@@ -335,7 +335,7 @@ export default function DashboardPage() {
             style={{
               display: 'inline-block',
               padding: '8px 16px',
-              background: C.surface3,
+              background: C.hover,
               color: C.text,
               borderRadius: 4,
               fontSize: 12,
@@ -432,7 +432,7 @@ export default function DashboardPage() {
                     {data.billing.trialLimits.mergesUsed} / {data.billing.trialLimits.mergesLimit}
                   </div>
                 </div>
-                <div style={{ width: '100%', height: 6, background: C.surface3, borderRadius: 0 }}>
+                <div style={{ width: '100%', height: 6, background: C.hover, borderRadius: 0 }}>
                   <div style={{
                     width: `${(data.billing.trialLimits.mergesUsed / data.billing.trialLimits.mergesLimit) * 100}%`,
                     height: '100%',
@@ -450,7 +450,7 @@ export default function DashboardPage() {
                     {data.billing.trialLimits.writesUsed} / {data.billing.trialLimits.writesLimit}
                   </div>
                 </div>
-                <div style={{ width: '100%', height: 6, background: C.surface3, borderRadius: 0 }}>
+                <div style={{ width: '100%', height: 6, background: C.hover, borderRadius: 0 }}>
                   <div style={{
                     width: `${(data.billing.trialLimits.writesUsed / data.billing.trialLimits.writesLimit) * 100}%`,
                     height: '100%',
@@ -468,7 +468,7 @@ export default function DashboardPage() {
                     {data.billing.trialLimits.creditsUsed} / {data.billing.trialLimits.creditsLimit}
                   </div>
                 </div>
-                <div style={{ width: '100%', height: 6, background: C.surface3, borderRadius: 0 }}>
+                <div style={{ width: '100%', height: 6, background: C.hover, borderRadius: 0 }}>
                   <div style={{
                     width: `${(data.billing.trialLimits.creditsUsed / data.billing.trialLimits.creditsLimit) * 100}%`,
                     height: '100%',
@@ -515,7 +515,7 @@ export default function DashboardPage() {
               CREDITS THIS PERIOD
             </div>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ width: '100%', height: 6, background: C.surface3, borderRadius: 0 }}>
+              <div style={{ width: '100%', height: 6, background: C.hover, borderRadius: 0 }}>
                 <div style={{
                   width: `${(data.enrich.creditsUsed / data.enrich.creditsIncluded) * 100}%`,
                   height: '100%',

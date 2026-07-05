@@ -238,7 +238,7 @@ export function Sidebar() {
                     style={{
                       display: 'block',
                       padding: '8px 12px',
-                      background: C.surface3,
+                      background: C.hover,
                       color: C.text,
                       borderRadius: 4,
                       fontSize: 12,
