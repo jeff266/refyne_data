@@ -691,7 +691,7 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
         const urlObjectType = searchParams?.get('objectType') || 'company';
         setNavObjectType(urlObjectType as 'company' | 'contact' | 'deal');
 
-        const res = await fetch(`/api/dedup/clusters?status=pending&objectType=${urlObjectType}`);
+        const res = await fetch(`/api/dedup/clusters?status=pending&objectType=${urlObjectType}&per_page=200`);
         if (res.ok) {
           const data = await res.json();
           const ids = data.clusters.map((c: any) => c.id);
