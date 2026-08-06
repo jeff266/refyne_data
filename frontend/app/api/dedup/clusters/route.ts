@@ -150,9 +150,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get counts for sidebar
+    // Get counts for sidebar filtered by current status
+    let gradeCountsQuery = supabase
+      .from('dedup_clusters')
+      .select('grade')
+      .eq('org_id', orgId)
+      .eq('object_type', objectType);
+
+    // Apply status filter to grade counts so "All 148" shows "All pending" not "All ever"
+    if (status !== 'all') {
+      gradeCountsQuery = gradeCountsQuery.eq('status', status);
+    }
+
     const [gradeCountsResult, statusCountsResult] = await Promise.all([
-      supabase.from('dedup_clusters').select('grade').eq('org_id', orgId).eq('object_type', objectType),
+      gradeCountsQuery,
       supabase.from('dedup_clusters').select('status').eq('org_id', orgId).eq('object_type', objectType),
     ]);
 
