@@ -95,8 +95,10 @@ export async function PUT(request: NextRequest) {
 
     const { error } = await supabase
       .from('org_policies')
-      .update({ dedup_display_fields: fields })
-      .eq('org_id', ctx.orgId);
+      .upsert(
+        { org_id: ctx.orgId, dedup_display_fields: fields },
+        { onConflict: 'org_id' }
+      );
 
     if (error) {
       throw error;
