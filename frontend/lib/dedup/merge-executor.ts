@@ -653,6 +653,9 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
   }
 
   // Execute HubSpot merge API for each duplicate
+  const successfullyMerged: string[] = [];
+  const skippedRecords: Array<{ id: string; reason: string }> = [];
+
   for (const duplicateId of effectiveDuplicateIds) {
     const mergeRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies/merge', {
       method: 'POST',
@@ -667,19 +670,57 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
     });
 
     if (!mergeRes.ok) {
-      const error = await mergeRes.text();
-      console.error(`[Merge Executor] HubSpot merge failed for ${duplicateId}:`, error);
+      const errorText = await mergeRes.text();
+      console.error(`[Merge Executor] HubSpot merge failed for ${duplicateId}:`, errorText);
+
+      // Parse error JSON if possible
+      let errorData: any = {};
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { message: errorText };
+      }
+
+      // Check if this is a "forward reference" error (record already merged)
+      const isAlreadyMerged =
+        errorData.message?.includes('forward reference') ||
+        errorData.message?.includes('Only canonical objects can be merged') ||
+        errorData.category === 'VALIDATION_ERROR' && errorData.message?.includes('because it has a forward reference');
+
+      if (isAlreadyMerged) {
+        console.warn(`[Merge Executor] Skipping ${duplicateId} - already merged in HubSpot`);
+        skippedRecords.push({
+          id: duplicateId,
+          reason: 'already_merged',
+        });
+        continue; // Skip this record and continue with others
+      }
+
+      // For other errors, fail the entire merge
       return {
         success: false,
         masterId: effectiveMasterId,
-        mergedIds: [],
+        mergedIds: successfullyMerged,
         appliedRules: {},
-        error: `HubSpot merge API failed: ${error}`,
+        error: `HubSpot merge API failed: ${errorData.message || errorText}`,
       };
     }
+
+    successfullyMerged.push(duplicateId);
   }
 
-  console.log('[Merge Executor] HubSpot merge completed');
+  if (successfullyMerged.length === 0 && skippedRecords.length > 0) {
+    // All records were already merged
+    return {
+      success: false,
+      masterId: effectiveMasterId,
+      mergedIds: [],
+      appliedRules: {},
+      error: `All ${skippedRecords.length} records were already merged in HubSpot`,
+    };
+  }
+
+  console.log(`[Merge Executor] HubSpot merge completed: ${successfullyMerged.length} merged, ${skippedRecords.length} skipped`);
 
   // Build merged properties using field rules
   const masterSnapshot = preMergeSnapshots[effectiveMasterId] || {};
@@ -697,8 +738,8 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
     Object.keys(snapshot).forEach(field => allFields.add(field));
   }
 
-  // Apply field rules for each duplicate (in order)
-  for (const duplicateId of effectiveDuplicateIds) {
+  // Apply field rules for each successfully merged duplicate (in order)
+  for (const duplicateId of successfullyMerged) {
     const duplicateSnapshot = preMergeSnapshots[duplicateId] || {};
 
     for (const field of Array.from(allFields)) {
@@ -731,7 +772,7 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
   for (const complianceField of policy.compliance_fields) {
     let mostRestrictive: any = masterSnapshot[complianceField];
 
-    for (const duplicateId of effectiveDuplicateIds) {
+    for (const duplicateId of successfullyMerged) {
       const dupValue = preMergeSnapshots[duplicateId]?.[complianceField];
 
       // For opt-out/bounce fields, true is more restrictive
@@ -775,8 +816,10 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
     orgId,
     metadata: {
       master_id: effectiveMasterId,
-      duplicate_ids: effectiveDuplicateIds,
-      duplicate_count: effectiveDuplicateIds.length,
+      duplicate_ids: successfullyMerged,
+      duplicate_count: successfullyMerged.length,
+      skipped_count: skippedRecords.length,
+      skipped_reasons: skippedRecords,
       fields_updated: Object.keys(mergedProperties).length,
       group_resolution: groupResolution,
     },
@@ -785,7 +828,7 @@ export async function executeMerge(options: MergeOptions): Promise<MergeResult> 
   return {
     success: true,
     masterId: effectiveMasterId,
-    mergedIds: effectiveDuplicateIds,
+    mergedIds: successfullyMerged,
     appliedRules,
   };
 }

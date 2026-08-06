@@ -20,6 +20,7 @@ import { autoSelectFields } from '@/lib/dedup/select-master';
 import { MergeHistory } from '@/components/dedup/MergeHistory';
 import { useRole } from '@/hooks/useRole';
 import { AdminOnlyNotice } from '@/components/auth/AdminOnlyNotice';
+import { LimitReachedBanner } from '@/components/billing/LimitReachedBanner';
 import {
   DndContext,
   closestCenter,
@@ -1360,34 +1361,40 @@ export default function ClusterReviewPage({ params }: { params: { id: string } }
       )}
 
       {error && mergeState === 'idle' && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: 12,
-            marginBottom: 16,
-            background: `${C.red}15`,
-            border: `0.5px solid ${C.red}30`,
-            borderRadius: 0,
-            color: C.red,
-            fontSize: 13,
-          }}
-        >
-          {error}
-          <button
-            onClick={() => setError(null)}
-            style={{
-              marginLeft: 'auto',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: C.red,
-            }}
-          >
-            <X size={14} />
-          </button>
-        </div>
+        <>
+          {error === 'billing_limit_exceeded' || error.includes('billing_limit') ? (
+            <LimitReachedBanner limitType="merge" />
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: 12,
+                marginBottom: 16,
+                background: `${C.red}15`,
+                border: `0.5px solid ${C.red}30`,
+                borderRadius: 0,
+                color: C.red,
+                fontSize: 13,
+              }}
+            >
+              {error}
+              <button
+                onClick={() => setError(null)}
+                style={{
+                  marginLeft: 'auto',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: C.red,
+                }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Master selector */}

@@ -164,7 +164,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         throw new Error(mergeResult.error || 'Merge failed');
       }
 
-      console.log(`[Merge Cluster] Merged ${mergeResult.mergedIds.length} records using policy`);
+      console.log(`[Merge Cluster] Merged ${mergeResult.mergedIds.length} of ${recordsToMerge.length} records using policy`);
+
+      // Warn if some records were skipped
+      const skippedCount = recordsToMerge.length - mergeResult.mergedIds.length;
+      if (skippedCount > 0) {
+        console.warn(`[Merge Cluster] ${skippedCount} records were skipped (already merged in HubSpot)`);
+      }
 
       // Convert appliedRules to survivorshipDecisions format for history
       const survivorshipDecisions: Record<
@@ -336,7 +342,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       // Step 7: Invalidate cache
       revalidatePath('/dedup');
 
-      return NextResponse.json({ success: true, masterId });
+      const skippedCount = recordsToMerge.length - mergeResult.mergedIds.length;
+      return NextResponse.json({
+        success: true,
+        masterId,
+        mergedCount: mergeResult.mergedIds.length,
+        skippedCount,
+        warning: skippedCount > 0
+          ? `${skippedCount} record(s) were already merged in HubSpot and were skipped`
+          : undefined,
+      });
     } catch (error) {
       captureWithOrgContext(error, ctx.orgId, {
         route: '/api/dedup/clusters/[id]/merge',

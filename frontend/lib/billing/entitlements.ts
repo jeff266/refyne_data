@@ -126,11 +126,12 @@ export async function canPerformAction(
     return false; // Hard gate: block all write operations
   }
 
-  // Paid tiers (starter, growth, scale): no hard limits, metering only
+  // Paid tiers (starter, growth, scale, enterprise): no hard limits, metering only
   if (
     entitlements.subscription_tier === 'starter' ||
     entitlements.subscription_tier === 'growth' ||
-    entitlements.subscription_tier === 'scale'
+    entitlements.subscription_tier === 'scale' ||
+    entitlements.subscription_tier === 'enterprise'
   ) {
     // Allow if status is active or past_due (grace period)
     if (
@@ -195,11 +196,12 @@ export async function getLimitStatus(
     return 'Subscription cancelled. Upgrade to continue using Refyne.';
   }
 
-  // New paid tiers (starter, growth, scale): no hard limits
+  // New paid tiers (starter, growth, scale, enterprise): no hard limits
   if (
     entitlements.subscription_tier === 'starter' ||
     entitlements.subscription_tier === 'growth' ||
-    entitlements.subscription_tier === 'scale'
+    entitlements.subscription_tier === 'scale' ||
+    entitlements.subscription_tier === 'enterprise'
   ) {
     if (entitlements.subscription_status === 'past_due') {
       return 'Payment past due. Please update your payment method.';
