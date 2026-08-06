@@ -898,11 +898,27 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
               clusters.map((cluster) => (
                 <div
                   key={cluster.id}
-                  onClick={() => {
-                    // Store cluster IDs in sessionStorage for navigation
-                    const clusterIds = clusters.map(c => c.id);
-                    sessionStorage.setItem('dedupClusterIds', JSON.stringify(clusterIds));
-                    sessionStorage.setItem('dedupObjectType', objectType);
+                  onClick={async () => {
+                    // Fetch ALL cluster IDs matching current filters for navigation
+                    const params = new URLSearchParams();
+                    params.set('grade', gradeFilter);
+                    params.set('status', statusFilter);
+                    params.set('size', sizeFilter);
+                    params.set('per_page', '500'); // Fetch all for navigation
+                    params.set('objectType', objectType);
+
+                    try {
+                      const res = await fetch(`/api/dedup/clusters?${params}`);
+                      if (res.ok) {
+                        const data = await res.json();
+                        const allClusterIds = data.clusters.map((c: any) => c.id);
+                        sessionStorage.setItem('dedupClusterIds', JSON.stringify(allClusterIds));
+                        sessionStorage.setItem('dedupObjectType', objectType);
+                      }
+                    } catch (err) {
+                      console.error('Failed to fetch cluster IDs for navigation:', err);
+                    }
+
                     router.push(`/dedup/clusters/${cluster.id}?objectType=${objectType}`);
                   }}
                   style={{
@@ -1133,12 +1149,28 @@ export function ClusterQueue({ orgId = 'default' }: ClusterQueueProps) {
                               marginTop: 4,
                               cursor: 'pointer',
                             }}
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              // Store cluster IDs in sessionStorage for navigation
-                              const clusterIds = clusters.map(c => c.id);
-                              sessionStorage.setItem('dedupClusterIds', JSON.stringify(clusterIds));
-                              sessionStorage.setItem('dedupObjectType', objectType);
+                              // Fetch ALL cluster IDs matching current filters for navigation
+                              const params = new URLSearchParams();
+                              params.set('grade', gradeFilter);
+                              params.set('status', statusFilter);
+                              params.set('size', sizeFilter);
+                              params.set('per_page', '500'); // Fetch all for navigation
+                              params.set('objectType', objectType);
+
+                              try {
+                                const res = await fetch(`/api/dedup/clusters?${params}`);
+                                if (res.ok) {
+                                  const data = await res.json();
+                                  const allClusterIds = data.clusters.map((c: any) => c.id);
+                                  sessionStorage.setItem('dedupClusterIds', JSON.stringify(allClusterIds));
+                                  sessionStorage.setItem('dedupObjectType', objectType);
+                                }
+                              } catch (err) {
+                                console.error('Failed to fetch cluster IDs for navigation:', err);
+                              }
+
                               router.push(`/dedup/clusters/${cluster.id}?objectType=${objectType}`);
                             }}
                           >
