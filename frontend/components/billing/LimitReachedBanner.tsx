@@ -52,7 +52,7 @@ export function LimitReachedBanner({
   return (
     <div
       style={{
-        background: `linear-gradient(135deg, ${C.indigo}08 0%, ${C.purple}08 100%)`,
+        background: `linear-gradient(135deg, ${C.indigo}08 0%, ${C.indigo}15 100%)`,
         border: `1.5px solid ${C.indigoBrd}`,
         borderRadius: 8,
         padding: '24px 28px',
