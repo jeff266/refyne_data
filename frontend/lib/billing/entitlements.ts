@@ -19,7 +19,7 @@ import { supabaseAdmin } from '@/lib/db/admin-client';
 
 export interface OrgEntitlements {
   org_id: string;
-  subscription_tier: 'trial' | 'starter' | 'growth' | 'scale' | 'internal' | 'exempt';
+  subscription_tier: 'trial' | 'starter' | 'growth' | 'scale' | 'enterprise' | 'internal' | 'exempt';
   subscription_status: 'active' | 'past_due' | 'cancelled' | 'paused';
 
   // Trial limits
