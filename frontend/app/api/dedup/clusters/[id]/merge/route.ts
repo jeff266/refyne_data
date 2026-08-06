@@ -342,7 +342,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       // Step 7: Invalidate cache
       revalidatePath('/dedup');
 
-      const skippedCount = recordsToMerge.length - mergeResult.mergedIds.length;
       return NextResponse.json({
         success: true,
         masterId,
